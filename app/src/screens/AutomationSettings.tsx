@@ -1,26 +1,24 @@
 // **What the automation holds as a whole, down the build screen's right** (`./AutomationBuildScreen`):
-// how many of its runs may go at once, who a failed round is filed to, and its trigger. The roles stand
-// down the left and what is built for the picked one in the middle; these three are about none of the
-// roles in particular, so they stand beside both, always in view.
+// who a failed round is filed to, and its trigger. The roles stand down the left and what is built for
+// the picked one in the middle; these two are about none of the roles in particular, so they stand
+// beside both, always in view, each in a box of its own. How many go at once is no longer the
+// automation's to say: it is to be said role by role, by how many each has (`AMB-D-1123`).
 //
 // **Every press here writes at once**, the way the "Edit" panel's fields do (`./AutomationAboutPanel`).
 // The trigger is a setting kept apart from the saved versions (`AMB-D-1119`), so the head's "Save" and
 // "Discard changes" neither keep nor undo it. A refusal is drawn once, at the top of the column, in the
 // words core wrote.
 //
-// **The most runs at once is a stepper from 1 to `MAX_CONCURRENT_RUNS`.** It is 1 until somebody
-// changes it, and there is no "no limit" (`AMB-D-947` as `AMB-D-1119` rewrote it). A press past either
-// end cannot be made, so nothing outside the range is ever written.
-//
 // **Who failures are filed to is marked required.** A launch is refused while nobody is chosen
 // (`not_ready_automation_no_failures_to`), so a definition with none opens on "Choose one", which cannot
 // be picked back once something else is. The roles offered are this automation's own, in their order.
 //
-// **An automation has one trigger** (`AMB-D-1119`). Without one the column says so and offers "+ Add a
-// trigger"; with one it draws what it files and when, and pressing it opens the same dialog to change
-// it or take it away (`./AutomationTrigger`).
+// **The column draws the automation's first trigger** (`AMB-D-1119`); an automation may have more,
+// and listing them all is still to come. Without one the column says so and offers "+ Add a trigger";
+// with one it draws what it files and when, and pressing it opens the same dialog to change it or take
+// it away (`./AutomationTrigger`).
 import { useState } from "react";
-import { editAutomation, MAX_CONCURRENT_RUNS } from "../core/automations";
+import { editAutomation } from "../core/automations";
 import { errText, t, tf } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
 import { AutomationTrigger } from "./AutomationTrigger";
@@ -73,9 +71,9 @@ function taskLine(trigger: AutomationTriggerDto): string {
 export function AutomationSettings({ automation }: { automation: AutomationDetailDto }) {
   const [refused, setRefused] = useState<string | null>(null);
   const [triggering, setTriggering] = useState(false);
-  const most = automation.maxConcurrentRuns;
   const failures = failuresValue(automation.failuresTo);
-  const trigger = automation.trigger;
+  // The first of its triggers, as the dialog writes it.
+  const trigger = automation.triggers[0];
   const triggerRoleId = trigger?.roleId;
   const triggerRole =
     triggerRoleId === undefined ? undefined : automation.roles.find((one) => one.id === triggerRoleId);
@@ -89,33 +87,6 @@ export function AutomationSettings({ automation }: { automation: AutomationDetai
     <div className="autoside">
       <span className="actbuild__sec">{t("auto.side.title")}</span>
       {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
-
-      <div className="autoside__group">
-        <span className="autostep__label" id="autoside-most">{t("auto.side.mostRuns")}</span>
-        <div className="autoside__stepline">
-          <span className="autoside__stepper" role="group" aria-labelledby="autoside-most">
-            <button
-              type="button"
-              aria-label={t("auto.side.fewer")}
-              disabled={most <= 1}
-              onClick={() => write({ maxConcurrentRuns: most - 1 })}
-            >
-              −
-            </button>
-            <output aria-live="polite">{most}</output>
-            <button
-              type="button"
-              aria-label={t("auto.side.more")}
-              disabled={most >= MAX_CONCURRENT_RUNS}
-              onClick={() => write({ maxConcurrentRuns: most + 1 })}
-            >
-              ＋
-            </button>
-          </span>
-          <span className="autostep__hint">{tf("auto.side.cap", { n: MAX_CONCURRENT_RUNS })}</span>
-        </div>
-        <span className="autostep__hint">{t("auto.side.mostRunsHint")}</span>
-      </div>
 
       <label className="autoside__group">
         <span className="autostep__label">

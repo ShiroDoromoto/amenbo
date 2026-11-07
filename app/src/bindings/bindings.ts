@@ -519,7 +519,15 @@ export type AutomationCarrierDto = { agent: string,
 /**
  * Absent leaves the agent's own default model.
  */
-model?: string, chosenAt: AutomationChosenAtDto, };
+model?: string, chosenAt: AutomationChosenAtDto, 
+/**
+ * Is the agent the step's own, set apart from what it falls back to? The build screen marks it ●.
+ */
+agentByStep: boolean, 
+/**
+ * Is the model the step's own, set apart from what it falls back to? The build screen marks it ●.
+ */
+modelByStep: boolean, };
 
 /**
  * **A setting, and the answer written for it while building.** An action declares and the placement
@@ -561,10 +569,10 @@ entryPlacementId?: number, archived: boolean,
  */
 maxConcurrentRuns: number, 
 /**
- * What files a task on its own and starts a run with it — the first of the automation's triggers.
- * Absent for an automation only a person starts.
+ * **What files a task on its own and starts a run with it**, every one of the automation's
+ * triggers in the order they are written in. Empty for an automation only a person starts.
  */
-trigger?: AutomationTriggerDto, 
+triggers: Array<AutomationTriggerDto>, 
 /**
  * Who a failed round is filed to. Absent while nobody is chosen, which the launch check refuses.
  */
@@ -890,7 +898,11 @@ export type AutomationPlacementStepDto = { stepId: number,
 /**
  * What the step is called, on the action's own screen.
  */
-name: string, agent?: string, 
+name: string, 
+/**
+ * Whether the step may stop and ask a person (`automation_action_step.interactive`).
+ */
+interactive: boolean, agent?: string, 
 /**
  * Absent leaves the agent's own default model.
  */
@@ -1448,16 +1460,30 @@ exit: string, };
 
 /**
  * **The tasks a trigger looks at before it files one** ([`amenbo_core::model::TriggerCondition`]): it
- * files one only while fewer than `below` tasks of the project match `filter`.
+ * files one only while fewer than `below` tasks of the project match `filter` — and, where `roleId`
+ * is given, are worked under that role.
  */
-export type AutomationTriggerConditionDto = { filter: string, below: number, };
+export type AutomationTriggerConditionDto = { filter: string, 
+/**
+ * The role of the same automation the tasks counted are worked under. Absent to count them
+ * whatever their role.
+ */
+roleId?: number, below: number, };
 
 /**
  * **An automation's trigger** — the wire form of [`amenbo_core::model::AutomationTrigger`]: whether
  * to file a task now (`when`, with its `condition` and `script`), what the task says (`task`), and
  * the role it is worked under. The words for each kind are the GUI's (`AMB-D-396`).
  */
-export type AutomationTriggerDto = { name: string, 
+export type AutomationTriggerDto = { 
+/**
+ * What its rewriting, taking away and switching name it by.
+ */
+id: number, 
+/**
+ * Is it asked? One that is not files nothing.
+ */
+enabled: boolean, name: string, 
 /**
  * The role of the same automation the task it files is worked under. Absent for none.
  */
@@ -1470,7 +1496,12 @@ script?: AutomationStepScriptDto, task: AutomationTriggerTaskDto,
  * When it is next asked whether to file a task, as an RFC3339 instant. Read only: it is counted
  * from the write.
  */
-nextAt: string, };
+nextAt: string, 
+/**
+ * When it last filed a task, as an RFC3339 instant. Absent where it has filed none since it was
+ * written.
+ */
+lastFiledAt?: string, };
 
 /**
  * **A trigger as a screen writes it** ([`amenbo_core::ops::automation::NewTrigger`]) —

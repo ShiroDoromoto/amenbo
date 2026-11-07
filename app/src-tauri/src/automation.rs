@@ -209,16 +209,50 @@ pub fn automation_edit(
     Ok(WriteAck::new(&["automations"]))
 }
 
-/// **Have an automation's triggers be the one given, or none** (`None`) — what files a task on its own
-/// and starts a run of this automation with it ([`amenbo_core::ops::automation::trigger_set`]).
+/// **Add a trigger to an automation**, after the ones it already has and enabled — what files a task on
+/// its own and starts a run of this automation with it ([`amenbo_core::ops::automation::trigger_add`]).
 ///
 /// When it is next asked is not the screen's to say: core counts it from the write. What is refused
 /// — a wait under a minute, a task with no title, a role of another automation and the rest — is
 /// core's refusal, passed on as it is.
 #[tauri::command]
-pub fn automation_trigger_set(id: i64, trigger: Option<AutomationTriggerInputDto>) -> Result<WriteAck, CmdError> {
+pub fn automation_trigger_add(automation_id: i64, trigger: AutomationTriggerInputDto) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_trigger_set(id, trigger.map(Into::into))?;
+        store.automation_trigger_add(automation_id, trigger.into())?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Write one trigger afresh**, named by its id ([`amenbo_core::ops::automation::trigger_update`]). It
+/// keeps its place among the automation's triggers, whether it is enabled and when it last filed a
+/// task; when it is next asked is counted afresh from the write. Core's refusals pass on as they are.
+#[tauri::command]
+pub fn automation_trigger_update(trigger_id: i64, trigger: AutomationTriggerInputDto) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_trigger_update(trigger_id, trigger.into())?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Take one trigger away from its automation** ([`amenbo_core::ops::automation::trigger_delete`]).
+/// The others stay as they are, and so do the tasks it filed.
+#[tauri::command]
+pub fn automation_trigger_delete(trigger_id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_trigger_delete(trigger_id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Have one trigger be asked, or not** ([`amenbo_core::ops::automation::trigger_set_enabled`]). One
+/// that is not files nothing; its `nextAt` stays where it was either way.
+#[tauri::command]
+pub fn automation_trigger_set_enabled(trigger_id: i64, enabled: bool) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_trigger_set_enabled(trigger_id, enabled)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations"]))
@@ -3166,7 +3200,7 @@ fn detail_dto(
         entry_placement_id: a.entry_placement_id,
         archived: a.archived,
         max_concurrent_runs: a.max_concurrent_runs,
-        trigger: a.triggers.into_iter().next().map(Into::into),
+        triggers: a.triggers.into_iter().map(Into::into).collect(),
         failures_to: a.failures_to.map(Into::into),
         edges: view.edges.into_iter().map(|e| edge_dto(e, &names)).collect(),
         wires,
@@ -3330,6 +3364,7 @@ fn placement_dto(view: automation_view::PlacementView, who: &mut Who) -> Automat
                 carrier: who.carriers.remove(&(placement.id, one.step.id)).map(carrier_dto),
                 step_id: one.step.id,
                 name: one.step.name,
+                interactive: one.step.interactive,
                 agent: one.chosen.as_ref().map(|c| c.agent.clone()),
                 model: one.chosen.and_then(|c| c.model),
             })
@@ -3370,7 +3405,13 @@ fn role_dto(
 }
 
 fn carrier_dto(carrier: Carrier) -> AutomationCarrierDto {
-    AutomationCarrierDto { agent: carrier.agent, model: carrier.model, chosen_at: carrier.at.into() }
+    AutomationCarrierDto {
+        agent: carrier.agent,
+        model: carrier.model,
+        chosen_at: carrier.at.into(),
+        agent_by_step: carrier.agent_by_step,
+        model_by_step: carrier.model_by_step,
+    }
 }
 
 fn exit_dto(view: automation_view::ExitView) -> AutomationExitDto {
@@ -3445,12 +3486,27 @@ mod tests {
     fn where_a_carrier_was_chosen_goes_out_as_its_kind_and_role() {
         use amenbo_core::ops::automation_run::ChosenAt;
         let json = |at: ChosenAt| {
-            serde_json::to_value(carrier_dto(Carrier { agent: "claude".into(), model: None, at })).expect("json")
+            let carrier =
+                Carrier { agent: "claude".into(), model: None, at, agent_by_step: false, model_by_step: false };
+            serde_json::to_value(carrier_dto(carrier)).expect("json")
         };
-        assert_eq!(json(ChosenAt::Step), serde_json::json!({ "agent": "claude", "chosenAt": { "kind": "step" } }));
+        assert_eq!(
+            json(ChosenAt::Step),
+            serde_json::json!({
+                "agent": "claude",
+                "chosenAt": { "kind": "step" },
+                "agentByStep": false,
+                "modelByStep": false,
+            }),
+        );
         assert_eq!(
             json(ChosenAt::Role { role_id: 7 }),
-            serde_json::json!({ "agent": "claude", "chosenAt": { "kind": "role", "roleId": 7 } }),
+            serde_json::json!({
+                "agent": "claude",
+                "chosenAt": { "kind": "role", "roleId": 7 },
+                "agentByStep": false,
+                "modelByStep": false,
+            }),
         );
         assert_eq!(json(ChosenAt::Amenbo)["chosenAt"], serde_json::json!({ "kind": "amenbo" }));
     }
@@ -3570,9 +3626,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
-    /// **A trigger goes out as bare values** (`AMB-D-396`): each kind of `when` and `task` by its
-    /// `kind`, with its own fields, the script and condition where it has them, and `nextAt` as an
-    /// RFC3339 instant. What is absent is left out rather than sent as `null`.
+    /// **A trigger goes out as bare values** (`AMB-D-396`): its `id` and `enabled`, each kind of `when`
+    /// and `task` by its `kind`, with its own fields, the script and condition where it has them, and
+    /// `nextAt` and `lastFiledAt` as RFC3339 instants. What is absent is left out rather than sent as
+    /// `null`.
     #[test]
     fn a_trigger_goes_out_as_its_kinds_and_values() {
         use amenbo_core::model::{AutomationTrigger, StepScript, TriggerCondition, TriggerTask, TriggerWhen};
@@ -3599,6 +3656,8 @@ mod tests {
         assert_eq!(
             json(base.clone()),
             serde_json::json!({
+                "id": 1,
+                "enabled": true,
                 "name": "受信箱",
                 "when": { "kind": "every", "minutes": 60 },
                 "task": { "kind": "fixed", "title": "見る", "notes": "メモ" },
@@ -3608,12 +3667,16 @@ mod tests {
         let full = json(AutomationTrigger {
             role_id: Some(7),
             when: TriggerWhen::Tasks,
-            condition: Some(TriggerCondition { filter: "status:todo".into(), below: 3 }),
+            condition: Some(TriggerCondition { filter: "status:todo".into(), role_id: None, below: 3 }),
             script: Some(script.clone()),
             task: TriggerTask::Script { script },
             ..base.clone()
         });
         assert_eq!(full["roleId"], 7);
+        let filed_at = amenbo_core::time::Timestamp::now();
+        let filed = json(AutomationTrigger { enabled: false, last_filed_at: Some(filed_at), ..base.clone() });
+        assert_eq!(filed["enabled"], false);
+        assert_eq!(filed["lastFiledAt"], filed_at.to_rfc3339_z());
         assert_eq!(full["when"], serde_json::json!({ "kind": "tasks" }));
         assert_eq!(full["condition"], serde_json::json!({ "filter": "status:todo", "below": 3 }));
         let program = serde_json::json!({ "program": "/bin/check", "args": ["-q"], "timeoutMinutes": 5 });
@@ -3674,7 +3737,7 @@ mod tests {
             "task": { "kind": "script", "script": { "program": "/bin/write" } },
         }));
         assert_eq!((full.name.as_str(), full.role_id, full.when), ("整える", Some(4), TriggerWhen::Script));
-        assert_eq!(full.condition, Some(TriggerCondition { filter: "status:todo".into(), below: 2 }));
+        assert_eq!(full.condition, Some(TriggerCondition { filter: "status:todo".into(), role_id: None, below: 2 }));
         assert_eq!(
             full.script,
             Some(NewScript { program: "/bin/ask".into(), args: vec!["a b".into()], timeout_minutes: Some(3) }),
@@ -3696,11 +3759,13 @@ mod tests {
         );
     }
 
-    /// **The trigger door writes through core and reads back on the detail.** One is written and read
-    /// back with its `nextAt`, written again as another kind, and taken away with `None`. A wait under a
-    /// minute is core's refusal, passed on, and leaves the one written before.
+    /// **The trigger commands write through core and read back on the detail.** Two are added and read
+    /// back in the order they were added, each with its `id`, enabled and with no `lastFiledAt`. One is
+    /// written again as another kind and keeps its id and place; one is switched off and on; one is taken
+    /// away and the other stays. A wait under a minute is core's refusal, passed on, and leaves what was
+    /// written before.
     #[test]
-    fn a_trigger_is_written_read_back_and_taken_away() {
+    fn triggers_are_added_rewritten_switched_and_taken_away() {
         let _env = env_guard();
         let tmp = amenbo_scratch::scratch("automation-trigger");
         std::env::set_var("AMENBO_HOME", &tmp);
@@ -3716,54 +3781,80 @@ mod tests {
                 .unwrap();
             store.automation_add(project.id, NewAutomation { name: "Dev".into(), ..Default::default() }).unwrap().id
         };
-        let trigger = || automation_detail(automation_id).unwrap().expect("the automation").trigger;
+        let triggers = || automation_detail(automation_id).unwrap().expect("the automation").triggers;
         let input = |v: serde_json::Value| serde_json::from_value::<AutomationTriggerInputDto>(v).expect("reads");
-        assert!(trigger().is_none(), "born with none");
+        assert!(triggers().is_empty(), "born with none");
 
-        automation_trigger_set(
+        automation_trigger_add(
             automation_id,
-            Some(input(serde_json::json!({
+            input(serde_json::json!({
                 "name": "受信箱",
                 "when": { "kind": "every", "minutes": 60 },
                 "task": { "kind": "fixed", "title": "受信箱を見る", "notes": "メモ" },
-            }))),
+            })),
         )
         .unwrap();
-        let read_back = serde_json::to_value(trigger().expect("written")).expect("json");
-        assert_eq!(read_back["name"], "受信箱");
-        assert_eq!(read_back["when"], serde_json::json!({ "kind": "every", "minutes": 60 }));
-        assert_eq!(read_back["task"], serde_json::json!({ "kind": "fixed", "title": "受信箱を見る", "notes": "メモ" }));
-        let next_at = read_back["nextAt"].as_str().expect("an instant");
+        automation_trigger_add(
+            automation_id,
+            input(serde_json::json!({
+                "name": "点検",
+                "when": { "kind": "idle" },
+                "task": { "kind": "fixed", "title": "点検する", "notes": "" },
+            })),
+        )
+        .unwrap();
+        let read_back = serde_json::to_value(triggers()).expect("json");
+        assert_eq!(read_back.as_array().map(Vec::len), Some(2));
+        assert_eq!(read_back[0]["name"], "受信箱");
+        assert_eq!(read_back[1]["name"], "点検");
+        assert_eq!(read_back[0]["enabled"], true);
+        assert!(read_back[0].get("lastFiledAt").is_none(), "none filed yet");
+        assert_eq!(read_back[0]["when"], serde_json::json!({ "kind": "every", "minutes": 60 }));
+        assert_eq!(read_back[0]["task"], serde_json::json!({ "kind": "fixed", "title": "受信箱を見る", "notes": "メモ" }));
+        let next_at = read_back[0]["nextAt"].as_str().expect("an instant");
         assert!(chrono::DateTime::parse_from_rfc3339(next_at).is_ok(), "{next_at} is RFC3339");
+        let (inbox, check) = (triggers()[0].id, triggers()[1].id);
+        assert_ne!(inbox, check);
 
         assert!(
-            automation_trigger_set(
-                automation_id,
-                Some(input(serde_json::json!({
+            automation_trigger_update(
+                inbox,
+                input(serde_json::json!({
                     "when": { "kind": "every", "minutes": 0 },
                     "task": { "kind": "fixed", "title": "見る", "notes": "" },
-                }))),
+                })),
             )
             .is_err(),
             "a wait under a minute is refused"
         );
-        assert!(matches!(trigger().map(|t| t.when), Some(AutomationTriggerWhenDto::Every { minutes: 60 })));
+        assert!(matches!(triggers()[0].when, AutomationTriggerWhenDto::Every { minutes: 60 }));
 
-        automation_trigger_set(
-            automation_id,
-            Some(input(serde_json::json!({
+        automation_trigger_set_enabled(inbox, false).unwrap();
+        assert!(!triggers()[0].enabled, "switched off");
+        assert!(triggers()[1].enabled, "the other is left as it was");
+
+        automation_trigger_update(
+            inbox,
+            input(serde_json::json!({
                 "when": { "kind": "tasks" },
                 "condition": { "filter": "status:todo", "below": 2 },
                 "task": { "kind": "file", "path": std::env::temp_dir().join("next.md") },
-            }))),
+            })),
         )
         .unwrap();
-        let read_back = trigger().expect("rewritten");
-        assert!(matches!(read_back.when, AutomationTriggerWhenDto::Tasks));
-        assert_eq!(read_back.condition, Some(AutomationTriggerConditionDto { filter: "status:todo".into(), below: 2 }));
+        let read_back = triggers();
+        assert_eq!((read_back[0].id, read_back[1].id), (inbox, check), "it keeps its id and its place");
+        assert!(matches!(read_back[0].when, AutomationTriggerWhenDto::Tasks));
+        assert_eq!(read_back[0].condition, Some(AutomationTriggerConditionDto { filter: "status:todo".into(), role_id: None, below: 2 }));
+        assert!(!read_back[0].enabled, "rewriting it leaves it switched off");
 
-        automation_trigger_set(automation_id, None).unwrap();
-        assert!(trigger().is_none(), "taken away");
+        automation_trigger_set_enabled(inbox, true).unwrap();
+        assert!(triggers()[0].enabled, "switched on again");
+
+        automation_trigger_delete(inbox).unwrap();
+        let left: Vec<i64> = triggers().iter().map(|t| t.id).collect();
+        assert_eq!(left, [check], "the other stays");
+        assert!(automation_trigger_delete(inbox).is_err(), "a trigger that is gone is not found");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

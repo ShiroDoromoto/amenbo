@@ -167,17 +167,41 @@ export async function editAutomation(
 }
 
 /**
- * **Write an automation's trigger, or take it away** (`null`) — what files a task on its own and
- * starts a run of this automation with it. When it is next asked is counted from the write, so it is
- * not passed. What core refuses — a wait under a minute, a task with no title, a role of another
- * automation — reaches the caller as core's own sentence.
+ * **Add a trigger to an automation**, after the ones it already has and enabled — what files a task
+ * on its own and starts a run of this automation with it. When it is next asked is counted from the
+ * write, so it is not passed. What core refuses — a wait under a minute, a task with no title, a role
+ * of another automation — reaches the caller as core's own sentence.
  */
-export async function setAutomationTrigger(
-  id: number,
-  trigger: AutomationTriggerInputDto | null,
+export async function addAutomationTrigger(
+  automationId: number,
+  trigger: AutomationTriggerInputDto,
 ): Promise<void> {
   if (!inTauri()) return;
-  return ack("automation_trigger_set", { id, trigger });
+  return ack("automation_trigger_add", { automationId, trigger });
+}
+
+/**
+ * **Write one trigger afresh**, named by its id. It keeps its place among the automation's triggers,
+ * whether it is enabled and when it last filed a task. Core's refusals reach the caller as they are.
+ */
+export async function updateAutomationTrigger(
+  triggerId: number,
+  trigger: AutomationTriggerInputDto,
+): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_trigger_update", { triggerId, trigger });
+}
+
+/** **Take one trigger away from its automation.** The others stay as they are. */
+export async function removeAutomationTrigger(triggerId: number): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_trigger_delete", { triggerId });
+}
+
+/** **Have one trigger be asked, or not.** One that is not files nothing. */
+export async function setAutomationTriggerEnabled(triggerId: number, enabled: boolean): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_trigger_set_enabled", { triggerId, enabled });
 }
 
 /**
@@ -743,18 +767,20 @@ export async function addAutomationRole(automationId: number, name: string): Pro
 }
 
 /**
- * **Rename a role, or choose the agent and model its steps fall back to** where a step chose none
- * (`AMB-D-960`). `agent` / `model` take `null` to clear; clearing the agent clears the model with it,
- * and a model is only named beside an agent.
+ * **Rename a role, give it a new icon seed, or choose the agent and model its steps fall back to**
+ * where a step chose none (`AMB-D-960`). `icon` / `agent` / `model` take `null` to clear; clearing
+ * the agent clears the model with it, and a model is only named beside an agent.
  */
 export async function editAutomationRole(
   id: number,
-  patch: { name?: string; agent?: string | null; model?: string | null },
+  patch: { name?: string; icon?: string | null; agent?: string | null; model?: string | null },
 ): Promise<void> {
   if (!inTauri()) return;
   return ack("automation_role_edit", {
     id,
     name: patch.name ?? null,
+    icon: patch.icon ?? null,
+    clearIcon: patch.icon === null,
     agent: patch.agent ?? null,
     clearAgent: patch.agent === null,
     model: patch.model ?? null,

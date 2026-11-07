@@ -1932,6 +1932,11 @@ pub enum AutomationCmd {
         /// how few tasks matching --if-tasks let it file one (1 or more)
         #[arg(long, value_name = "N", requires = "if_tasks", value_parser = clap::value_parser!(u32).range(1..))]
         fewer_than: Option<u32>,
+        /// count only the tasks matching --if-tasks that are worked under this role — the id
+        /// `automation role-list` shows, of one of this automation's own roles. Left out, it counts them
+        /// whatever their role
+        #[arg(long, value_name = "ROLE_ID", requires = "if_tasks")]
+        if_tasks_role: Option<i64>,
         /// file a task only once this program, by its full path, says so: it writes
         /// {"version":1,"file":true} (or false) to the file named in AMENBO_OUTPUT, and its exit code says
         /// only whether it ran to the end. On its own, with no --every, --when-idle or --if-tasks, it is
@@ -1979,14 +1984,14 @@ pub enum AutomationCmd {
         #[arg(long, value_name = "ROLE_ID")]
         role: Option<i64>,
         /// take the --trigger trigger away; the automation's other triggers stay — confirms unless -y
-        #[arg(long, requires = "trigger", conflicts_with_all = ["id", "on", "off", "every", "when_idle", "if_tasks", "fewer_than", "if_script", "script_args", "script_timeout_minutes", "title", "notes", "task_from_file", "task_from_script", "task_script_args", "task_script_timeout_minutes", "name", "role"])]
+        #[arg(long, requires = "trigger", conflicts_with_all = ["id", "on", "off", "every", "when_idle", "if_tasks", "fewer_than", "if_tasks_role", "if_script", "script_args", "script_timeout_minutes", "title", "notes", "task_from_file", "task_from_script", "task_script_args", "task_script_timeout_minutes", "name", "role"])]
         rm: bool,
         /// have the --trigger trigger asked again
-        #[arg(long, requires = "trigger", conflicts_with_all = ["id", "off", "every", "when_idle", "if_tasks", "fewer_than", "if_script", "script_args", "script_timeout_minutes", "title", "notes", "task_from_file", "task_from_script", "task_script_args", "task_script_timeout_minutes", "name", "role"])]
+        #[arg(long, requires = "trigger", conflicts_with_all = ["id", "off", "every", "when_idle", "if_tasks", "fewer_than", "if_tasks_role", "if_script", "script_args", "script_timeout_minutes", "title", "notes", "task_from_file", "task_from_script", "task_script_args", "task_script_timeout_minutes", "name", "role"])]
         on: bool,
         /// have the --trigger trigger asked no more, kept as it is: it files nothing, and its next time
         /// stays where it was
-        #[arg(long, requires = "trigger", conflicts_with_all = ["id", "every", "when_idle", "if_tasks", "fewer_than", "if_script", "script_args", "script_timeout_minutes", "title", "notes", "task_from_file", "task_from_script", "task_script_args", "task_script_timeout_minutes", "name", "role"])]
+        #[arg(long, requires = "trigger", conflicts_with_all = ["id", "every", "when_idle", "if_tasks", "fewer_than", "if_tasks_role", "if_script", "script_args", "script_timeout_minutes", "title", "notes", "task_from_file", "task_from_script", "task_script_args", "task_script_timeout_minutes", "name", "role"])]
         off: bool,
     },
     /// Stop an automation from starting new rounds, or let it start them again with --off. While it is
@@ -2043,6 +2048,10 @@ pub enum AutomationCmd {
         /// make_task comes set to take the task it files, the one way a run can start from it
         #[arg(long, value_name = "KEY")]
         builtin: Option<String>,
+        /// the axis `split_by_dim` splits by (name or ID) — one a task holds one value of. Its ways out
+        /// are that axis's values, and the one for a task with none
+        #[arg(long, value_name = "AXIS", requires = "builtin")]
+        axis: Option<String>,
     },
     /// Take a placement off its automation with the answers and lines hanging on it — confirms unless -y
     PlaceRm {

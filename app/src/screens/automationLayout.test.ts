@@ -87,6 +87,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
     notes: "",
     archived: false,
     maxConcurrentRuns: 1,
+    triggers: [],
     roles: [],
     placements: [],
     edges: [],
@@ -2297,6 +2298,7 @@ describe("one role's round, as the build screen draws it", () => {
     entryPlacementId: 1,
     archived: false,
     maxConcurrentRuns: 1,
+    triggers: [],
     roles,
     placements: [
       step({
@@ -2315,8 +2317,8 @@ describe("one role's round, as the build screen draws it", () => {
         roleId: 20,
         inputs: [port("notes", "value")],
         steps: [
-          { stepId: 1, name: "案を考える" },
-          { stepId: 2, name: "設計を書く" },
+          { stepId: 1, name: "案を考える", interactive: false },
+          { stepId: 2, name: "設計を書く", interactive: false },
         ],
       }),
       step({

@@ -614,6 +614,7 @@ pub fn automation_trigger(t: &AutomationTrigger) -> Record {
                 ("next_at", tsv(&t.next_at)),
                 ("last_filed_at", tsov(&t.last_filed_at)),
                 ("order_key", tv(&t.order_key)),
+                ("condition_role_id", kv_opt(&t.condition.as_ref().and_then(|c| c.role_id))),
             ],
             &t.created_at,
             &t.updated_at,

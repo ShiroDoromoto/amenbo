@@ -1310,6 +1310,10 @@ datasets! {
         // When it last filed one, NULL until it has.
         last_filed_at: ts_opt,
         order_key: col(ORDER_KEY),
+        // The role the tasks its condition counts are worked under, one of the same automation's own —
+        // NULL to count them whatever their role, and always NULL where there is no condition.
+        // `RESTRICT`, as `role_id` is, so a role that goes lets go of it first (`ops::automation`).
+        condition_role_id: fk_opt("automation_role", "RESTRICT"),
     }
 
     // **A setting, declared by an action and answered where it is placed.** The action's row is the

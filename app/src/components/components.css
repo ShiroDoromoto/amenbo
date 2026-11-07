@@ -1881,6 +1881,23 @@ button.feed__target:hover { color: var(--c-accent); }
 .actseg__one + .actseg__one { border-inline-start: var(--border-w) var(--border-style) var(--c-edge); }
 .actseg__one:hover { color: var(--c-text); }
 .actseg__one--on, .actseg__one--on:hover { background: var(--c-accent-weak); color: var(--c-accent); }
+/* Who a new task is handed to: a person or the AI, side by side, each led by the dot of its colour.
+   Neither is lit until one is pressed. */
+.ownerseg {
+  display: inline-flex; overflow: hidden;
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
+}
+.ownerseg__one {
+  font: inherit; font-size: var(--fs-xs); padding: 4px 14px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 0; background: var(--c-surface-pic) var(--c-surface); color: var(--c-text);
+}
+.ownerseg__one + .ownerseg__one { border-inline-start: var(--border-w) var(--border-style) var(--c-edge); }
+.ownerseg__one[aria-pressed="true"] { background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-medium); }
+.ownerseg__one:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.ownerseg__dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.ownerseg__dot--human { background: var(--c-human); }
+.ownerseg__dot--ai { background: var(--c-ai); }
 .actchip {
   font: inherit; font-size: var(--fs-xs); padding: 2px var(--s-2); border-radius: 999px; cursor: pointer;
   border: var(--border-w) var(--border-style) var(--c-edge); background: none; color: var(--c-text-muted);
@@ -2034,19 +2051,13 @@ button.feed__target:hover { color: var(--c-accent); }
   flex: 0 0 240px; display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-3);
   background: var(--c-sunken-pic) var(--c-sunken); border-inline-start: var(--border-w) var(--border-style) var(--c-rule);
 }
-.autoside__group { display: flex; flex-direction: column; gap: var(--s-1); }
+/* Each thing the column holds is a box of its own, so where one ends and the next begins can be seen.
+   The box is not pressed; what is pressed inside it keeps its own fill or edge (`AMB-D-841`). */
+.autoside__group {
+  display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3);
+  background: var(--c-surface-pic) var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
+}
 .autoside__group > select { min-width: 0; }
-.autoside__stepline { display: flex; align-items: center; gap: var(--s-2); }
-.autoside__stepper {
-  display: inline-flex; align-items: center;
-  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
-}
-.autoside__stepper > button {
-  width: 28px; height: 26px; font: inherit; color: inherit; background: none; border: 0; cursor: pointer;
-}
-.autoside__stepper > button:hover:not(:disabled) { background: var(--c-hover); }
-.autoside__stepper > button:disabled { color: var(--c-text-faint); cursor: default; }
-.autoside__stepper > output { min-width: 2ch; text-align: center; font-variant-numeric: tabular-nums; }
 .autoside__add { align-self: flex-start; }
 .autoside__trigger {
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: var(--s-2);
@@ -2072,6 +2083,9 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .autorole__who { display: grid; grid-template-columns: auto minmax(0, 20rem); align-items: center; gap: var(--s-1) var(--s-3); font-size: var(--fs-md); }
 .autorole__who > select { min-width: 0; }
+/* The role's agent and model stand under its picture, and the table of who carries out each step
+   goes on from them with no heading of its own. */
+.autorole--who { padding-block-end: var(--s-3); }
 /* The picture. Its panel is not beside it here but in the shell's right-pane column
    (`../shell/paneSlot`), so the picture has the whole width of `.main` and only as much height as it
    draws. */
@@ -2092,7 +2106,7 @@ button.feed__target:hover { color: var(--c-accent); }
 /* An empty picture draws nothing, and the "+ first …" is all the place holds: it stands in the middle,
    with room above and below where the picture would be. */
 .actbuild__canvas > .btn:only-child { margin-block: var(--s-6); }
-/* The table of who carries out each step of the picked role's round, under the picture
+/* The table of who carries out each step of the picked role's round, under the role's agent and model
    (`../screens/AutomationRoleCarriers`). */
 .autocarriers { display: flex; flex-direction: column; gap: var(--s-2); padding: 0 var(--s-3) var(--s-5); }
 .autocarriers__table { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); }
@@ -2100,7 +2114,10 @@ button.feed__target:hover { color: var(--c-accent); }
   text-align: start; padding: 4px 6px; border-block-end: var(--border-w) var(--border-style) var(--c-rule);
 }
 .autocarriers__table th { color: var(--c-text-muted); font-weight: var(--fw-medium); }
-.autocarriers__row--step td:not(:first-child) { color: var(--c-accent); }
+/* A cell the step set apart is in the AI's colour; a cell that falls back to the role's or Amenbo's
+   default is muted. */
+.autocarriers__cell--step { color: var(--c-ai); font-weight: var(--fw-medium); }
+.autocarriers__cell--fallen { color: var(--c-text-muted); }
 .autocarriers__hint { margin: 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* The panel fills the right pane (`.rightpane`), which holds the border, the ground and the one scroll.
    The head stays at the top of that scroll, so the close is in reach under a long body. */

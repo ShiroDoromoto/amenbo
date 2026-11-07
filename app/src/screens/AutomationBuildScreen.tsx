@@ -5,9 +5,10 @@
 // right. The two screens are one move a layer apart (`AMB-D-949`), and a reader going between them
 // should not have to learn a second arrangement.
 //
-// **Two places, each named on the screen**: "build", the picture of the placements
-// (`./AutomationPicture`); and "placement", what the pressed spot holds (`./AutomationStepPanel`),
-// which is the panel's reading of a press on a box. The press that starts a run is not a place of its
+// **Two places, each named on the screen**: "how it works", the picture of the placements
+// (`./AutomationPicture`), which stands between the picked role's head and its agent and model; and
+// "placement", what the pressed spot holds (`./AutomationStepPanel`), which is the panel's reading of
+// a press on a box. The press that starts a run is not a place of its
 // own: it stands at the far end of the head (`AMB-T-5523`).
 //
 // **Everything else the screen asks is the panel too.** A `+` on a line, the press at the end of a way
@@ -91,12 +92,13 @@
 // **The roles stand down the left** (`./AutomationRoles`): the list with each one's step count and
 // the press that adds one, and over the picture the head of the one picked — its name, where it stands
 // in the list, and the agent and model its steps fall back to (`AMB-D-960`). They are written to the
-// draft like the rest. Under the picture, each step of the round with the agent and model that carry
-// it out, the ones a step chose for itself marked (`./AutomationRoleCarriers`).
+// draft like the rest. Under the picture, each step of the round an agent works through on its own —
+// not a script step nor one that asks a person — with the agent and model that carry it out, the ones
+// a step chose for itself marked (`./AutomationRoleCarriers`).
 //
-// **What the automation holds as a whole stands down the right** (`./AutomationSettings`): how many
-// of its runs may go at once, who a failed round is filed to, and its trigger, which opens its own
-// dialog (`./AutomationTrigger`). They are about none of the roles in particular, so they stand beside
+// **What the automation holds as a whole stands down the right** (`./AutomationSettings`): who a
+// failed round is filed to, and its trigger, which opens its own dialog (`./AutomationTrigger`), each
+// in a box of its own. They are about none of the roles in particular, so they stand beside
 // the left and the middle rather than in either.
 //
 // **The head says what is saved** (`./AutomationSaved`, `AMB-D-1005`): nothing yet, changes not
@@ -106,7 +108,7 @@ import { AutomationAboutPanel, AutomationNameField } from "./AutomationAboutPane
 import { Panel } from "./AutomationActionBuildScreen";
 import { AutomationLibraryPanel, placeKey, type PlaceTarget } from "./AutomationLibraryPanel";
 import { AutomationPicture } from "./AutomationPicture";
-import { AutomationRoleHead, AutomationRoleList } from "./AutomationRoles";
+import { AutomationRoleHead, AutomationRoleList, AutomationRoleWho } from "./AutomationRoles";
 import { AutomationRoleCarriers } from "./AutomationRoleCarriers";
 import { automationGraph, pictureOrder } from "./automationLayout";
 import { AutomationActionMake } from "./AutomationActionMake";
@@ -499,7 +501,10 @@ export function AutomationBuildScreen({
               )}
             </div>
             {automation !== null && role !== undefined && (
-              <AutomationRoleCarriers automation={automation} graph={roundGraph} />
+              <>
+                <AutomationRoleWho key={role.id} automation={automation} role={role} />
+                <AutomationRoleCarriers automation={automation} graph={roundGraph} />
+              </>
             )}
           </div>
           {automation !== null && <AutomationSettings automation={automation} />}

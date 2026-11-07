@@ -503,6 +503,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             when_idle,
             if_tasks,
             fewer_than,
+            if_tasks_role,
             if_script,
             script_args,
             script_timeout_minutes,
@@ -542,7 +543,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 return Ok(0);
             }
             let condition = match (if_tasks, fewer_than) {
-                (Some(filter), Some(below)) => Some(TriggerCondition { filter, below }),
+                (Some(filter), Some(below)) => Some(TriggerCondition { filter, role_id: if_tasks_role, below }),
                 // clap asks for both or neither.
                 _ => None,
             };
@@ -632,14 +633,25 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let resource = json!({ "id": v.id, "automation_id": v.automation_id, "version": v.version });
             write_envelope(flags, "automation.discard", "automation_version", resource, None, !unsaved, line);
         }
-        AutomationCmd::PlaceAdd { automation, action, builtin } => {
+        AutomationCmd::PlaceAdd { automation, action, builtin, axis } => {
             // clap holds exactly one of the two: `--action` is required unless `--builtin` is given.
             let (p, what) = match (action, builtin) {
                 (_, Some(key)) => {
-                    let p = store.automation_builtin_place(automation, &key, None).map_err(CliError::from)?;
+                    let axis = match axis {
+                        Some(axis) => Some(store.resolve_dimension(None, &axis).map_err(CliError::from)?),
+                        None => None,
+                    };
+                    let p = store.automation_builtin_place(automation, &key, axis).map_err(CliError::from)?;
                     (p, format!("the built-in '{key}'"))
                 }
                 (Some(action), None) => {
+                    // clap cannot hold this one: it skips `requires` for an argument whose counterpart
+                    // conflicts with one that is there, so `--axis` would be dropped without a word.
+                    if axis.is_some() {
+                        return Err(CliError::from(amenbo_core::Error::invalid(
+                            "--axis names the axis the built-in 'split_by_dim' splits by — a library action takes none",
+                        )));
+                    }
                     (store.automation_placement_add(automation, action).map_err(CliError::from)?, format!("action {action}"))
                 }
                 (None, None) => unreachable!("clap requires --action or --builtin"),
@@ -1618,9 +1630,12 @@ fn render_automation(
 /// filed a task.
 fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
     use amenbo_core::model::{TriggerTask, TriggerWhen};
-    let fewer = trigger.condition.as_ref().map(|c| match c.filter.as_str() {
-        "" => format!("fewer than {} task(s) are in its project", c.below),
-        filter => format!("fewer than {} task(s) match \"{filter}\"", c.below),
+    let fewer = trigger.condition.as_ref().map(|c| {
+        let of_role = c.role_id.map(|role| format!(" under role {role}")).unwrap_or_default();
+        match c.filter.as_str() {
+            "" => format!("fewer than {} task(s){of_role} are in its project", c.below),
+            filter => format!("fewer than {} task(s){of_role} match \"{filter}\"", c.below),
+        }
     });
     let says = trigger.script.as_ref().map(|s| format!("\"{}\" says so", s.program));
     let (when, next) = match trigger.when {

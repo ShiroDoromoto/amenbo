@@ -37,6 +37,7 @@ const automation: AutomationDetailDto = {
   notes: "",
   archived: false,
   maxConcurrentRuns: 1,
+  triggers: [],
   roles: [],
   placements: [],
   edges: [],

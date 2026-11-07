@@ -1,6 +1,7 @@
 // The roles of one automation, on its build screen: the list down the left with the press that adds
-// one, and the head of the role picked from it — its icon, its name, and the agent and model its steps
-// fall back to where a step chose none (`AMB-D-960`).
+// one, the head of the role picked from it — its icon and the press that draws it anew, and its name —
+// and the agent and model its steps fall back to where a step chose none (`AMB-D-960`). The head and
+// the agent and model are two pieces, because the picture of how the role works stands between them.
 //
 // **Every write here goes to the draft** (`AMB-D-1005`): a role is in the version the next save makes,
 // and "Discard changes" takes it back the way it takes back a box.
@@ -32,7 +33,7 @@ export function roleStepCount(automation: AutomationDetailDto, roleId: number): 
     .reduce((sum, one) => sum + one.steps.length, 0);
 }
 
-/** A role's picture. Nothing chooses one yet, so it is drawn from what the role is called. */
+/** A role's picture, drawn from its icon seed, or from what the role is called until one is written. */
 function RoleIcon({ role, size }: { role: AutomationRoleDto; size: number }) {
   return <Identicon seed={role.icon ?? role.name} size={size} />;
 }
@@ -93,7 +94,7 @@ export function AutomationRoleList({
   );
 }
 
-/** The picked role's head: its icon and name, where it stands in the list, and its default agent and model. */
+/** The picked role's head: its icon and name, where it stands in the list, and the press that removes it. */
 export function AutomationRoleHead({
   automation,
   role,
@@ -105,8 +106,6 @@ export function AutomationRoleHead({
 }) {
   const [name, setName] = useDraft(role.name);
   const [refused, setRefused] = useState<string | null>(null);
-  const agents = useAgents(automation.projectId);
-  const models = useModels(role.agent ?? "");
   const run = (write: Promise<void>) => {
     setRefused(null);
     write.catch((e: unknown) => setRefused(errText(e)));
@@ -150,6 +149,13 @@ export function AutomationRoleHead({
         <button
           type="button"
           className="btn"
+          onClick={() => run(editAutomationRole(role.id, { icon: crypto.randomUUID() }))}
+        >
+          {t("auto.build.roleIconRedo")}
+        </button>
+        <button
+          type="button"
+          className="btn"
           disabled={before === undefined}
           onClick={() => before !== undefined && run(moveAutomationRole(role.id, "before", before.id))}
         >
@@ -168,6 +174,27 @@ export function AutomationRoleHead({
         </button>
       </div>
       {refused !== null && <span className="actpanel__refused" role="alert">{refused}</span>}
+    </div>
+  );
+}
+
+/** The picked role's default agent and model, under the picture of how it works. */
+export function AutomationRoleWho({
+  automation,
+  role,
+}: {
+  automation: AutomationDetailDto;
+  role: AutomationRoleDto;
+}) {
+  const [refused, setRefused] = useState<string | null>(null);
+  const agents = useAgents(automation.projectId);
+  const models = useModels(role.agent ?? "");
+  const run = (write: Promise<void>) => {
+    setRefused(null);
+    write.catch((e: unknown) => setRefused(errText(e)));
+  };
+  return (
+    <div className="autorole autorole--who">
       <span className="actbuild__sec">{t("auto.build.roleWho")}</span>
       <div className="autorole__who">
         <label htmlFor={`role-agent-${role.id}`}>{t("auto.build.roleAgent")}</label>
@@ -206,6 +233,7 @@ export function AutomationRoleHead({
           ))}
         </select>
       </div>
+      {refused !== null && <span className="actpanel__refused" role="alert">{refused}</span>}
     </div>
   );
 }

@@ -51,6 +51,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
     entryPlacementId: 1,
     archived: false,
     maxConcurrentRuns: 1,
+    triggers: [],
     roles: [],
     placements: [step({ id: 1, name: "Take the next task" })],
     edges: [],
@@ -369,7 +370,7 @@ describe("the picture of the steps", () => {
     const one = detail({
       placements: [
         step({ id: 1, name: "hollow" }),
-        step({ id: 2, name: "full", steps: [{ stepId: 5, name: "do" }] }),
+        step({ id: 2, name: "full", steps: [{ stepId: 5, name: "do", interactive: false }] }),
         step({ id: 3, name: "take_task", builtin: "take_task" }),
       ],
     });
@@ -616,6 +617,7 @@ describe("one role's round, as the build screen draws it", () => {
       entryPlacementId: 1,
       archived: false,
       maxConcurrentRuns: 1,
+      triggers: [],
       roles: [
         { id: 10, name: "Research", entryPlacementId: 1, passes: [] },
         { id: 20, name: "Design", entryPlacementId: 2, passes: [] },
@@ -636,8 +638,8 @@ describe("one role's round, as the build screen draws it", () => {
           inputs: [{ name: "notes", kind: "value", required: true }],
           exits: [{ id: 20, name: "完了", outputs: [{ name: "design", kind: "value", required: true }] }],
           steps: [
-            { stepId: 1, name: "案を考える" },
-            { stepId: 2, name: "設計を書く" },
+            { stepId: 1, name: "案を考える", interactive: false },
+            { stepId: 2, name: "設計を書く", interactive: false },
           ],
         }),
         step({

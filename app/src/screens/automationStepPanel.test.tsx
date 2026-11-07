@@ -119,6 +119,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     entryPlacementId: 1,
     archived: false,
     maxConcurrentRuns: 1,
+    triggers: [],
     roles: [],
     placements: [spot()],
     edges: [],
@@ -259,8 +260,8 @@ describe("the panel of one spot", () => {
       placements: [
         spot({
           steps: [
-            { stepId: 11, name: "取る", agent: "claude-code", model: "opus" },
-            { stepId: 12, name: "見直す" },
+            { stepId: 11, name: "取る", interactive: false, agent: "claude-code", model: "opus" },
+            { stepId: 12, name: "見直す", interactive: false },
           ],
         }),
       ],

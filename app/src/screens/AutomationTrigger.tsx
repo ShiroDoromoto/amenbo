@@ -10,10 +10,11 @@
 // nor ② asks an AI: both are decided mechanically, and the AI works only inside the run the task
 // starts.
 //
-// **An automation has one trigger.** The dialog writes that one, or takes it away. It is a setting, not
-// part of the definition: the save writes it at once, and the build screen's "Save" and "Discard
-// changes" neither keep nor undo it. When it is next asked is counted by core from the write, so
-// nothing here sends it.
+// **It writes the automation's first trigger**, adding it where there is none, or takes that one away.
+// An automation may have more than one; the others are left as they are, and listing them is the
+// build screen's to do. It is a setting, not part of the definition: the save writes it at once, and
+// the build screen's "Save" and "Discard changes" neither keep nor undo it. When it is next asked is
+// counted by core from the write, so nothing here sends it.
 //
 // **A condition and a script can go with any ①**, on top of it. "While fewer than N tasks match" is
 // the condition with nothing else, and "when a script says so" the script with nothing else, so there
@@ -26,7 +27,7 @@
 // backdrop or Escape would throw away what was typed.
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { setAutomationTrigger } from "../core/automations";
+import { addAutomationTrigger, removeAutomationTrigger, updateAutomationTrigger } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf } from "../core/i18n";
 import { asTyped } from "../core/keys";
@@ -261,7 +262,8 @@ export function AutomationTrigger({
   onSaved?: () => void;
   onClose: () => void;
 }) {
-  const [form, setForm] = useState<TriggerForm>(() => formOf(automation.trigger));
+  const first = automation.triggers[0];
+  const [form, setForm] = useState<TriggerForm>(() => formOf(first));
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
   const put = (patch: Partial<TriggerForm>) => setForm((now) => ({ ...now, ...patch }));
@@ -270,7 +272,13 @@ export function AutomationTrigger({
     setBusy(true);
     setRefused(null);
     try {
-      await setAutomationTrigger(automation.id, trigger);
+      if (trigger === null) {
+        if (first !== undefined) await removeAutomationTrigger(first.id);
+      } else if (first === undefined) {
+        await addAutomationTrigger(automation.id, trigger);
+      } else {
+        await updateAutomationTrigger(first.id, trigger);
+      }
       onClose();
       onSaved?.();
     } catch (e) {
@@ -284,7 +292,7 @@ export function AutomationTrigger({
   };
 
   const remove = async () => {
-    const name = automation.trigger?.name ?? "";
+    const name = first?.name ?? "";
     if (await confirmDialog(tf("auto.trigger.removeConfirm", { name }))) void write(null);
   };
 
@@ -461,7 +469,7 @@ export function AutomationTrigger({
           <button type="button" className="btn" disabled={busy} onClick={onClose}>
             {t("auto.add.cancel")}
           </button>
-          {automation.trigger !== undefined && (
+          {first !== undefined && (
             <button type="button" className="btn" disabled={busy} onClick={() => void remove()}>
               {t("auto.trigger.remove")}
             </button>

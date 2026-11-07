@@ -70,6 +70,7 @@ function run(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto {
     waiting: false,
     waitsForRoom: false,
     stepsDone: 2,
+    passes: [],
     reportWithheld: [],
     acknowledged: false,
     ...over,

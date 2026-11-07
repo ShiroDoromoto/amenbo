@@ -10,8 +10,7 @@
 //! saved, and a placement on an action nobody has saved, are refused.
 //!
 //! **A built-in is named, not written out.** Its rows are Amenbo's own definition, so the file carries its
-//! key and the version it was placed at — and, for `split_by_dim`, which an automation written before
-//! automations had roles may still place, the axis it split by, by name.
+//! key and the version it was placed at — and, for the one that splits by an axis, the axis's name.
 
 use std::collections::BTreeMap;
 
@@ -86,9 +85,8 @@ pub enum StandsOn {
 pub struct BuiltinFile {
     pub key: String,
     pub version: i64,
-    /// The axis it split by, by name, for `split_by_dim` on an automation written before automations had
-    /// roles; `None` on every other one, and on one whose axis has been deleted. That built-in is gone,
-    /// so a file naming it is refused where it is imported.
+    /// The axis it splits by, by name, for the built-in whose ways out are an axis's values; `None` on
+    /// every other one, and on one whose axis has been deleted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dimension: Option<String>,
 }

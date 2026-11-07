@@ -424,6 +424,7 @@ function heldRun(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto
     waiting: false,
     waitsForRoom: false,
     stepsDone: 1,
+    passes: [],
     reportWithheld: [],
     acknowledged: false,
     ...over,

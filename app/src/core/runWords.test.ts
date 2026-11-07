@@ -21,6 +21,7 @@ function card(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto {
     stepName: "build",
     placement: 7,
     stepsDone: 2,
+    passes: [],
     reportWithheld: [],
     acknowledged: false,
     ...over,

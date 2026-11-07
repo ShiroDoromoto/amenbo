@@ -6622,10 +6622,40 @@ pub fn automation_action_builtin(
         .next())
 }
 
-/// **Every library action written for a built-in**, oldest first — one per version (`AMB-D-1000`).
+/// **Every library action written for a built-in**, oldest first — one per version (`AMB-D-1000`), and
+/// for the built-in that splits by an axis, one per axis of each (`AMB-D-972`).
 pub fn automation_actions_builtin(conn: &Connection, key: &str) -> Result<Vec<crate::model::AutomationAction>> {
     const A: col::automation_action::Cols = col::automation_action::ALL;
     let pred = Pred::eq(A.builtin, key);
+    automation_rows(conn, A.table, &pred, &[Sort::by(A.id)], super::hydrate::automation_action_row)
+}
+
+/// **The library action a built-in that splits by an axis keeps for that axis** (`AMB-D-972`), or
+/// `None` where nobody has placed one on it yet. There is one per axis, since its ways out are the
+/// axis's values; the oldest is taken if a race ever wrote two.
+pub fn automation_action_builtin_on(
+    conn: &Connection,
+    key: &str,
+    dimension_id: i64,
+    version: i64,
+) -> Result<Option<crate::model::AutomationAction>> {
+    const A: col::automation_action::Cols = col::automation_action::ALL;
+    let pred = Pred::eq(A.builtin, key)
+        .and(Pred::eq(A.builtin_dimension_id, dimension_id))
+        .and(Pred::eq(A.builtin_version, version));
+    Ok(automation_rows(conn, A.table, &pred, &[Sort::by(A.id)], super::hydrate::automation_action_row)?
+        .into_iter()
+        .next())
+}
+
+/// **Every library action that splits by this axis** (`AMB-D-972`) — what has to follow when the axis's
+/// values change.
+pub fn automation_actions_splitting(
+    conn: &Connection,
+    dimension_id: i64,
+) -> Result<Vec<crate::model::AutomationAction>> {
+    const A: col::automation_action::Cols = col::automation_action::ALL;
+    let pred = Pred::eq(A.builtin_dimension_id, dimension_id);
     automation_rows(conn, A.table, &pred, &[Sort::by(A.id)], super::hydrate::automation_action_row)
 }
 
@@ -7579,6 +7609,27 @@ pub fn automation_run_def_ids(conn: &Connection, run_id: i64) -> Result<Vec<i64>
 pub fn automation_run_task_ids(conn: &Connection, run_id: i64) -> Result<Vec<i64>> {
     const T: col::automation_run_task::Cols = col::automation_run_task::ALL;
     select_ids(conn, T.id, Some(&Pred::eq(T.run_id, run_id)))
+}
+
+/// The tasks one run's rounds passed to another role, as rows of the run.
+pub fn automation_run_pass_ids(conn: &Connection, run_id: i64) -> Result<Vec<i64>> {
+    const P: col::automation_run_pass::Cols = col::automation_run_pass::ALL;
+    select_ids(conn, P.id, Some(&Pred::eq(P.run_id, run_id)))
+}
+
+/// **The tasks one run's rounds passed to another role**, in the order they were filed.
+pub fn automation_run_passes_of(
+    conn: &Connection,
+    run_id: i64,
+) -> Result<Vec<crate::model::AutomationRunPass>> {
+    const P: col::automation_run_pass::Cols = col::automation_run_pass::ALL;
+    automation_rows(
+        conn,
+        P.table,
+        &Pred::eq(P.run_id, run_id),
+        &[Sort::by(P.id)],
+        super::hydrate::automation_run_pass_row,
+    )
 }
 
 /// The step executions of one run.

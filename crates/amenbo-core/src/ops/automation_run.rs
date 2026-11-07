@@ -62,6 +62,7 @@ use crate::model::{
 };
 use crate::ops::automation::{ActionDef, Picture};
 use crate::ops::automation_script;
+use crate::ops::automation_builtin_split::SPLIT_BY_DIM;
 use crate::ops::automation_builtin_take::TAKE_TASK;
 use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
@@ -160,7 +161,8 @@ pub enum Unmet {
     MisansweredCfg { step: String, cfg: String, why: String, builtin: Option<String>, placement: i64 },
     /// A setting whose answer names something this automation's project does not have — `line` being
     /// the line of it that does (`AMB-D-987`): a task or a decision by a number, a folder, an axis or a
-    /// value. The built-in would refuse it when a run reached it and halt the run there.
+    /// value, or a role by a name that is not exactly one of the automation's roles. The built-in would
+    /// refuse it when a run reached it and halt the run there.
     CfgNotFound { step: String, cfg: String, line: String, builtin: Option<String>, placement: i64 },
     /// A setting whose answer names a value this automation's project has but has closed — `line` being
     /// the line of it that does (`AMB-D-987`). The built-in files no task under a closed value, and would
@@ -214,6 +216,11 @@ pub enum Unmet {
     ///
     /// `step` names the action, or the step inside it, whose way out `exit` is.
     HandsOnTaskTaken { step: String, exit: String, placement: i64 },
+    /// The built-in that splits by an axis, placed while its axis was there, whose axis has been deleted
+    /// since (`AMB-D-987`). A run reaching it would have nothing to split by and halt, so the launch is
+    /// refused here instead. `step` is the action's name, which every split shares, so the placement is
+    /// named in the sentence too.
+    SplitAxisGone { step: String, placement: i64 },
 }
 
 impl Unmet {
@@ -327,6 +334,12 @@ impl Unmet {
                     named(exit)
                 )
             }
+            Unmet::SplitAxisGone { step, placement } => {
+                format!(
+                    "'{step}' on placement {placement} splits by an axis that has been deleted — take the \
+                     placement off and place the split again on an axis that is there"
+                )
+            }
         }
     }
 }
@@ -361,6 +374,7 @@ impl Unmet {
             Unmet::LeavesTaskOpen { to: Some(_), .. } => ErrorCode::NotReadyAutomationTaskLeftOpen,
             Unmet::LeavesTaskOpen { to: None, .. } => ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd,
             Unmet::HandsOnTaskTaken { .. } => ErrorCode::NotReadyAutomationHandsOnTaskTaken,
+            Unmet::SplitAxisGone { .. } => ErrorCode::NotReadyAutomationSplitAxisGone,
         }
     }
 
@@ -424,6 +438,7 @@ impl Unmet {
                 }
             }
             Unmet::HandsOnTaskTaken { step, exit, .. } => msg.with("step", step).with("exit", exit),
+            Unmet::SplitAxisGone { step, .. } => msg.with("step", step),
         }
     }
 
@@ -449,7 +464,8 @@ impl Unmet {
             | Unmet::ScriptMissing { placement, .. }
             | Unmet::ScriptNotExecutable { placement, .. }
             | Unmet::LeavesTaskOpen { placement, .. }
-            | Unmet::HandsOnTaskTaken { placement, .. } => Some(*placement),
+            | Unmet::HandsOnTaskTaken { placement, .. }
+            | Unmet::SplitAxisGone { placement, .. } => Some(*placement),
         }
     }
 
@@ -477,6 +493,7 @@ impl Unmet {
             | Unmet::CfgValueClosed { builtin, .. }
             | Unmet::FolderUnchosen { builtin, .. }
             | Unmet::LeavesTaskOpen { builtin, .. } => builtin.as_deref(),
+            Unmet::SplitAxisGone { .. } => Some(SPLIT_BY_DIM.key),
             _ => None,
         }
     }
@@ -743,6 +760,77 @@ pub fn rounds_by_placement(conn: &Connection, automation_id: i64, reads: ReadsFr
         .collect())
 }
 
+/// **One task a role's round files for another role**, as the build screen draws it beside the role:
+/// the placement of the built-in that files it ([`crate::ops::automation_builtin_make`]), inside the
+/// round of `from_role_id`, answered with `to_role_id` as the role the task is worked under.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct RolePass {
+    pub from_role_id: i64,
+    pub to_role_id: i64,
+    pub placement_id: i64,
+    /// Whether the task it files is set to depend on another
+    /// ([`crate::ops::automation_builtin_make::answered_depends`]).
+    pub depends: bool,
+}
+
+/// **What each role's round passes to another role**, for the definition `reads` names, in the order
+/// the placements are — every placement of the built-in that files a task whose round is one role's
+/// ([`rounds_by_placement`]) and whose role setting names exactly one other role. A placement filing
+/// under its own round's role, or under a role its name does not settle, passes nothing.
+pub fn passes_by_role(conn: &Connection, automation_id: i64, reads: ReadsFrom) -> Result<Vec<RolePass>> {
+    let automation = read::automation(conn, automation_id)?
+        .ok_or_else(|| not_found("automation", automation_id))?;
+    let (pic, _) = definition(conn, &automation, reads)?;
+    let by_id: BTreeMap<i64, &AutomationPlacement> = pic.placements.iter().map(|p| (p.id, p)).collect();
+    let defs = defs_of(conn, &pic.placements)?;
+    let rounds = first_round_reaching(&pic, &by_id, &defs, pic.roles().iter());
+    let mut passes = Vec::new();
+    for placement in &pic.placements {
+        if action_builtin(conn, placement.action_id)?.as_deref() != Some(crate::ops::automation_builtin_make::KEY) {
+            continue;
+        }
+        let Some(from) = rounds.get(&placement.id) else { continue };
+        let settings = answers(&pic, placement, &defs[&placement.id]);
+        let Some((_, Some(to))) = crate::ops::automation_builtin_make::answered_role(&settings, pic.roles()) else {
+            continue;
+        };
+        if to != from.id {
+            let depends = crate::ops::automation_builtin_make::answered_depends(&settings);
+            passes.push(RolePass { from_role_id: from.id, to_role_id: to, placement_id: placement.id, depends });
+        }
+    }
+    Ok(passes)
+}
+
+/// **One task a round of a run passed to another role** ([`crate::model::AutomationRunPass`]), with the
+/// role it was passed from read off the round — what the run's pane draws a line between two roles by.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct RunPass {
+    /// The round that passed it.
+    pub run_task_id: i64,
+    /// The round's role. `None` where that role has since been taken out.
+    pub from_role_id: Option<i64>,
+    /// The role it was filed under. `None` where that role has since been taken out.
+    pub to_role_id: Option<i64>,
+    /// The task. `None` where it has since been deleted.
+    pub task_id: Option<i64>,
+}
+
+/// **Every task one run's rounds passed to another role**, in the order they were filed.
+pub fn passes_of_run(conn: &Connection, run_id: i64) -> Result<Vec<RunPass>> {
+    let rounds: BTreeMap<i64, Option<i64>> =
+        read::automation_run_tasks_of(conn, run_id)?.into_iter().map(|r| (r.id, r.role_id)).collect();
+    Ok(read::automation_run_passes_of(conn, run_id)?
+        .into_iter()
+        .map(|pass| RunPass {
+            run_task_id: pass.run_task_id,
+            from_role_id: rounds.get(&pass.run_task_id).copied().flatten(),
+            to_role_id: pass.to_role_id,
+            task_id: pass.task_id,
+        })
+        .collect())
+}
+
 /// **The placements one round reaches** — walked from where it starts, as [`reachable`] walks, but not
 /// on into a placement in `starts` other than its own: that is where the automation's entry or another
 /// role's round begins, and a line going there has left this round.
@@ -941,7 +1029,9 @@ fn check_picture(
             }
         }
         if builtin.as_deref() == Some(crate::ops::automation_builtin_make::KEY) {
-            for (cfg, line) in crate::ops::automation_builtin_make::unfound(conn, &settings, automation.project_id)? {
+            let unfound = crate::ops::automation_builtin_make::unfound(conn, &settings, automation.project_id)?;
+            let role = crate::ops::automation_builtin_make::unfound_role(&settings, pic.roles());
+            for (cfg, line) in unfound.into_iter().chain(role) {
                 unmet.push(Unmet::CfgNotFound {
                     step: name.clone(),
                     cfg: cfg.to_string(),
@@ -972,6 +1062,9 @@ fn check_picture(
                     placement: placement.id,
                 });
             }
+        }
+        if crate::ops::automation_builtin_split::lost_its_axis(conn, placement.action_id)? {
+            unmet.push(Unmet::SplitAxisGone { step: name.clone(), placement: placement.id });
         }
         let steps = steps_opened_by(def);
         if builtin.is_none() {

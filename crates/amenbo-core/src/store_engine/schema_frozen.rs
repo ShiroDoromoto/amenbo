@@ -142,8 +142,9 @@
 //! | v114 | `4f4244d82` | |
 //! | v115 | `126c11964` | |
 //! | v116 | `eca9de7cf` | |
-//! | v117 | `8d4cb92fc` | |
-//! | v118 | this commit | held equal to the live registry by the test below |
+//! | v117 | `b12f8fb15` | |
+//! | v118 | `d14931d3a` | |
+//! | v119 | this commit | held equal to the live registry by the test below |
 //!
 //! [`super::migrate::BASELINE_VERSION`] itself is **not** here: this repository's history begins with the
 //! chain already at [`OLDEST_FROZEN_VERSION`], so no build in it ever emitted a v2 store and there is no
@@ -283,6 +284,7 @@ pub fn frozen(version: i64) -> Option<&'static str> {
         116 => include_str!("schema_frozen/v116.sql"),
         117 => include_str!("schema_frozen/v117.sql"),
         118 => include_str!("schema_frozen/v118.sql"),
+        119 => include_str!("schema_frozen/v119.sql"),
         _ => return None,
     })
 }

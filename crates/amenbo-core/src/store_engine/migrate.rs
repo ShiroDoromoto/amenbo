@@ -1381,6 +1381,13 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 118,
+        name: "add automation_run_pass, the tasks a round filed for another role to work",
+        // **Seeded with nothing.** No round filed a task under another role before this, so there is no
+        // task passed from one role to another to record.
+        apply: Apply::Custom(let_a_round_pass_a_task_on),
+    },
+    Step {
+        to: 119,
         name: "move an automation's trigger out of its automation.trigger_* columns into automation_trigger, so an automation can hold more than one",
         // **Seeded from what is there.** The trigger an automation already had becomes its first row:
         // asked, as it was, and with nothing filed yet, since no time it filed one was kept.
@@ -1388,7 +1395,7 @@ pub const STEPS: &[Step] = &[
     },
 ];
 
-/// v118: `automation_trigger`, an automation's triggers, one row each — and the `automation.trigger_*`
+/// v119: `automation_trigger`, an automation's triggers, one row each — and the `automation.trigger_*`
 /// columns that held the one trigger an automation had, gone.
 ///
 /// The trigger already written becomes its automation's first row, under the same answers, `enabled`
@@ -1446,7 +1453,28 @@ fn give_the_triggers_a_table_of_their_own(ctx: &Ctx<'_>) -> Result<()> {
     Ok(())
 }
 
+/// v118: `automation_run_pass`, the tasks a round filed for another role to work.
+///
+/// **The table is laid down here in frozen text** as well as by genesis, for the reason v53's are.
+fn let_a_round_pass_a_task_on(ctx: &Ctx<'_>) -> Result<()> {
+    ctx.tx.execute_batch(AUTOMATION_RUN_PASS_TABLE)?;
+    Ok(())
+}
+
 /// The table v118 lays down — frozen text, like every step's.
+const AUTOMATION_RUN_PASS_TABLE: &str = r"
+CREATE TABLE IF NOT EXISTS automation_run_pass (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    run_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_run(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    run_task_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_run_task(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    to_role_id BIGINT REFERENCES automation_role(id) ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    task_id BIGINT REFERENCES task(id) ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+";
+
+/// The table v119 lays down — frozen text, like every step's.
 const AUTOMATION_TRIGGER_TABLE: &str = r"
 CREATE TABLE IF NOT EXISTS automation_trigger (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -11800,12 +11828,12 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v118: the trigger an automation had becomes its first `automation_trigger` row, asked and with
+    /// v119: the trigger an automation had becomes its first `automation_trigger` row, asked and with
     /// nothing filed, an automation with none gets no row, and the `automation.trigger_*` columns are gone.
     #[test]
-    fn a_trigger_written_before_v118_becomes_the_first_row_of_its_automation() {
+    fn a_trigger_written_before_v119_becomes_the_first_row_of_its_automation() {
         let dir = scratch("automation-trigger-table");
-        let engine = store_at(&dir, 117);
+        let engine = store_at(&dir, 118);
         engine
             .conn()
             .execute_batch(
@@ -11906,6 +11934,39 @@ mod tests {
         let role: Option<i64> =
             engine.conn().query_row("SELECT role_id FROM automation_run_task WHERE id = 1", [], |r| r.get(0)).unwrap();
         assert_eq!(role, None, "no round was worked under a role");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v118: a run written before the step passed no task to another role, and a round can record one.
+    #[test]
+    fn a_run_written_before_v118_passed_nothing_on() {
+        let dir = scratch("run-pass");
+        let engine = store_at(&dir, 117);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO task (id, title, status, project_id) VALUES (1, 'work', 'done', 1), (2, 'test', 'todo', 1);
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_role (id, automation_id, name) VALUES (1, 1, 'Alice'), (2, 1, 'Bob');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'completed');
+                 INSERT INTO automation_run_task (id, run_id, seq, task_id, role_id) VALUES (1, 1, 1, 1, 1);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let passed: i64 =
+            engine.conn().query_row("SELECT COUNT(*) FROM automation_run_pass", [], |r| r.get(0)).unwrap();
+        assert_eq!(passed, 0, "no round passed a task on before");
+        engine
+            .conn()
+            .execute(
+                "INSERT INTO automation_run_pass (run_id, run_task_id, to_role_id, task_id) VALUES (1, 1, 2, 2)",
+                [],
+            )
+            .unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

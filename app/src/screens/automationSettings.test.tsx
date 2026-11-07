@@ -45,8 +45,8 @@ const automation: AutomationDetailDto = {
   archived: false,
   maxConcurrentRuns: 1,
   roles: [
-    { id: 1, name: "Alice" },
-    { id: 2, name: "Bob" },
+    { id: 1, name: "Alice", passes: [] },
+    { id: 2, name: "Bob", passes: [] },
   ],
   placements: [],
   edges: [],

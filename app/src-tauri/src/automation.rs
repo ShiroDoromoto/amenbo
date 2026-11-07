@@ -69,8 +69,9 @@ use crate::dto::{
     AutomationHeldByRecordDto, AutomationHeldByValueDto, AutomationLaunchAsksDto,
     AutomationCarrierDto, AutomationLaunchAxisDto, AutomationLaunchBlockDto,
     AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto,
-    AutomationPlacementStepDto, AutomationPortDto, AutomationRoleDto, AutomationRunCardDto, AutomationRunEndingsDto,
-    AutomationRunHistoryDto, AutomationRunIncidentDto, AutomationRunStartedDto,
+    AutomationPlacementStepDto, AutomationPortDto, AutomationRoleDto, AutomationRolePassDto, AutomationRunCardDto,
+    AutomationRunEndingsDto,
+    AutomationRunHistoryDto, AutomationRunIncidentDto, AutomationRunPassDto, AutomationRunStartedDto,
     AutomationRunTaskDto,
     AutomationSavedDto, AutomationStepDto, AutomationTriggerInputDto,
     AutomationStepOpenDto, AutomationStepRunDto, AutomationTestRunDto, AutomationTestStepDto,
@@ -328,7 +329,8 @@ pub fn automation_builtin_page() -> Result<Vec<AutomationBuiltinDto>, CmdError> 
     let conn = store.read_model().conn();
     let mut out = Vec::new();
     for one in automation_builtin::all() {
-        // One action per version of it, and an automation placing two of them is still one automation.
+        // One action per version of it, and per axis for the one that splits by an axis — an automation
+        // placing two of them is still one automation.
         let mut placing = std::collections::BTreeSet::new();
         for action in read::automation_actions_builtin(conn, one.key)? {
             placing.extend(automation_view::automations_placing(conn, action.id)?);
@@ -377,7 +379,7 @@ fn builtin_port_dto(port: &automation_builtin::BuiltinPort) -> AutomationPortDto
 #[tauri::command]
 pub fn automation_builtin_place(automation_id: i64, key: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_place(automation_id, &key)?;
+        store.automation_builtin_place(automation_id, &key, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
@@ -389,7 +391,7 @@ pub fn automation_builtin_place(automation_id: i64, key: String) -> Result<Write
 #[tauri::command]
 pub fn automation_builtin_insert(edge_id: i64, key: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_insert(edge_id, &key)?;
+        store.automation_builtin_insert(edge_id, &key, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
@@ -404,7 +406,7 @@ pub fn automation_builtin_insert_at_exit(
     key: String,
 ) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_insert_at_exit(from_id, exit_name.as_deref(), &key)?;
+        store.automation_builtin_insert_at_exit(from_id, exit_name.as_deref(), &key, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
@@ -1612,6 +1614,7 @@ pub fn automation_detail(id: i64) -> Result<Option<AutomationDetailDto>, CmdErro
     let who = Who {
         carriers: automation_run::carriers(conn, id, ReadsFrom::Draft, default_agent.as_deref())?,
         rounds: automation_run::rounds_by_placement(conn, id, ReadsFrom::Draft)?,
+        passes: automation_run::passes_by_role(conn, id, ReadsFrom::Draft)?,
     };
     Ok(Some(detail_dto(view, held_by, &save_blocks, who)))
 }
@@ -2012,6 +2015,7 @@ fn run_card(
         role: stretch.as_ref().and_then(|one| one.role_id),
         role_started_at: stretch.as_ref().and_then(|one| one.started_at).map(|at| at.to_rfc3339_z()),
         incident: incident_of(store, stretch.as_ref().and_then(|one| one.incident_task_id))?,
+        passes: passes_of(store, run.id)?,
         report_withheld,
         acknowledged: run.acknowledged_at.is_some(),
         acknowledged_by: run.acknowledged_by_kind.map(|by| by.as_str()),
@@ -2876,6 +2880,27 @@ fn incident_of(
     }))
 }
 
+/// **The tasks one run's rounds passed to another role**, each with its task's reference and title.
+fn passes_of(store: &amenbo_core::Store, run_id: i64) -> Result<Vec<AutomationRunPassDto>, CmdError> {
+    let conn = store.read_model().conn();
+    let mut out = Vec::new();
+    for pass in automation_run::passes_of_run(conn, run_id)? {
+        let title = match pass.task_id {
+            Some(id) => read::task_title(conn, id)?,
+            None => None,
+        };
+        let task = pass.task_id.filter(|_| title.is_some());
+        out.push(AutomationRunPassDto {
+            from_role: pass.from_role_id,
+            to_role: pass.to_role_id,
+            task,
+            task_ref: task.map(amenbo_core::idref::task),
+            task_title: title,
+        });
+    }
+    Ok(out)
+}
+
 /// **Force-cancel a run** — stop it now, whatever it is in the middle of (`AMB-D-1002`). What the
 /// force-cancel of a running run presses, once the person has said yes to what it may leave behind.
 /// Closing the pane a run is drawn in does not stop it: that press is offered only once the run is
@@ -2949,6 +2974,8 @@ struct Who {
     carriers: BTreeMap<(i64, i64), Carrier>,
     /// Placement id → the role whose round reaches it ([`automation_run::rounds_by_placement`]).
     rounds: BTreeMap<i64, i64>,
+    /// What each role's round files for another role ([`automation_run::passes_by_role`]).
+    passes: Vec<automation_run::RolePass>,
 }
 
 /// One automation's whole definition, under the names the build screen draws it by.
@@ -2961,6 +2988,14 @@ fn detail_dto(
     let names = exit_names(view.placements.iter().flat_map(|p| p.exits.iter()));
     let wires = view.wires.iter().map(|w| wire_dto(w, &names, |id| view.port_name(id))).collect();
     let a = view.automation;
+    // What the build screen labels a task a role passes on by: the action standing on the spot that
+    // files it.
+    let spot_names: BTreeMap<i64, String> = view
+        .placements
+        .iter()
+        .map(|p| (p.placement.id, p.action.as_ref().map(|one| one.name.clone()).unwrap_or_default()))
+        .collect();
+    let roles = view.roles.into_iter().map(|role| role_dto(role, &who.passes, &spot_names)).collect();
     AutomationDetailDto {
         id: a.id,
         project_id: a.project_id,
@@ -2973,7 +3008,7 @@ fn detail_dto(
         failures_to: a.failures_to.map(Into::into),
         edges: view.edges.into_iter().map(|e| edge_dto(e, &names)).collect(),
         wires,
-        roles: view.roles.into_iter().map(role_dto).collect(),
+        roles,
         placements: view.placements.into_iter().map(|p| placement_dto(p, &mut who)).collect(),
         held_by,
         saved: view.saved.map(saved_dto),
@@ -3140,7 +3175,21 @@ fn placement_dto(view: automation_view::PlacementView, who: &mut Who) -> Automat
     }
 }
 
-fn role_dto(role: AutomationRole) -> AutomationRoleDto {
+fn role_dto(
+    role: AutomationRole,
+    passes: &[automation_run::RolePass],
+    spot_names: &BTreeMap<i64, String>,
+) -> AutomationRoleDto {
+    let passes = passes
+        .iter()
+        .filter(|pass| pass.from_role_id == role.id)
+        .map(|pass| AutomationRolePassDto {
+            to_role: pass.to_role_id,
+            placement: pass.placement_id,
+            name: spot_names.get(&pass.placement_id).cloned().unwrap_or_default(),
+            depends: pass.depends,
+        })
+        .collect();
     AutomationRoleDto {
         id: role.id,
         name: role.name,
@@ -3148,6 +3197,7 @@ fn role_dto(role: AutomationRole) -> AutomationRoleDto {
         entry_placement_id: role.entry_placement_id,
         agent: role.agent,
         model: role.model,
+        passes,
     }
 }
 
@@ -3235,6 +3285,49 @@ mod tests {
             serde_json::json!({ "agent": "claude", "chosenAt": { "kind": "role", "roleId": 7 } }),
         );
         assert_eq!(json(ChosenAt::Amenbo)["chosenAt"], serde_json::json!({ "kind": "amenbo" }));
+    }
+
+    /// **A role carries what its own round passes on, and nothing of another's** — each to the role it
+    /// is filed under, labelled with the action standing on the spot that files it, and marked where
+    /// the task depends on another.
+    #[test]
+    fn a_role_carries_what_its_own_round_passes_on() {
+        use amenbo_core::ops::automation_run::RolePass;
+        let role = |id: i64, name: &str| AutomationRole { id, name: name.into(), ..Default::default() };
+        let passes = [
+            RolePass { from_role_id: 1, to_role_id: 2, placement_id: 10, depends: true },
+            RolePass { from_role_id: 2, to_role_id: 3, placement_id: 20, depends: false },
+        ];
+        let spots = BTreeMap::from([(10, "テストのタスクを起票する".to_string()), (20, "Report".to_string())]);
+        let json = |id: i64, name: &str| {
+            serde_json::to_value(role_dto(role(id, name), &passes, &spots)).expect("json")["passes"].clone()
+        };
+        assert_eq!(
+            json(1, "Alice"),
+            serde_json::json!([{ "toRole": 2, "placement": 10, "name": "テストのタスクを起票する", "depends": true }]),
+        );
+        assert_eq!(json(3, "Carol"), serde_json::json!([]), "a role whose round passes nothing");
+    }
+
+    /// **A task passed on goes out with the roles at both ends and the task**, and leaves out what has
+    /// since gone — a role taken out, a task deleted.
+    #[test]
+    fn a_task_passed_on_goes_out_with_its_roles_and_its_task() {
+        let whole = AutomationRunPassDto {
+            from_role: Some(1),
+            to_role: Some(2),
+            task: Some(7),
+            task_ref: Some("AMB-T-7".into()),
+            task_title: Some("Add the tests".into()),
+        };
+        assert_eq!(
+            serde_json::to_value(&whole).expect("json"),
+            serde_json::json!({
+                "fromRole": 1, "toRole": 2, "task": 7, "taskRef": "AMB-T-7", "taskTitle": "Add the tests",
+            }),
+        );
+        let gone = AutomationRunPassDto { from_role: None, to_role: Some(2), task: None, task_ref: None, task_title: None };
+        assert_eq!(serde_json::to_value(&gone).expect("json"), serde_json::json!({ "toRole": 2 }));
     }
 
     /// **The four role doors write through core and read back on the detail.** A role is added with

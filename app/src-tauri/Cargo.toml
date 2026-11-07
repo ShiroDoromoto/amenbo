@@ -159,7 +159,7 @@ tempfile = "3"
 # `seed_handover` writes the handover account onto `store_meta` itself — core opens no write path to that
 # row from outside, and no test here stands up the older store the migration would write it from. Match
 # core's version and features.
-rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl"] }
+rusqlite = { version = "0.41", features = ["bundled-sqlcipher-vendored-openssl"] }
 
 # Asks `statfs(2)` whether the store's directory sits on a network filesystem (`store_watch`). On NFS
 # an inotify watch attaches happily and then never reports another host's writes, so the filesystem

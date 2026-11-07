@@ -1997,7 +1997,7 @@ fn json_rows(
 ) -> Result<Vec<serde_json::Map<String, serde_json::Value>>> {
     use rusqlite::types::ValueRef;
     let mut stmt = tx.prepare(sql)?;
-    let names: Vec<String> = stmt.column_names().into_iter().map(String::from).collect();
+    let names: Vec<String> = stmt.column_names().map(String::from).collect();
     let rows = stmt
         .query_map(params, |r| {
             let mut row = serde_json::Map::new();

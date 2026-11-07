@@ -9,7 +9,8 @@
 // them.
 //
 // **A role with a round is a card, and the rest are icons on the bar** — the cards in the order the
-// roles are defined in, whatever the round is doing.
+// roles are defined in, whatever the round is doing. **A card draws a line only to a role it touches**,
+// and where that role has no card it says "→ role" instead.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,7 +19,7 @@ import type { TaskRoleDto } from "../bindings/bindings";
 import type { BuiltinRun } from "../talk/automationStep";
 import { TerminalPane } from "./TerminalPane";
 import { t, tf } from "../core/i18n";
-import { filedLine, roleCards } from "./RunPicture";
+import { filedLine, handsAway, handsOf, roleCards } from "./RunPicture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -233,6 +234,21 @@ describe("the roles of a run", () => {
     expect(container.querySelector(".runroles__filed")?.textContent).toBe(
       tf("auto.run.roles.filedRole", { role: "Bob", to: "Dave", ref: "AMB-T-99" }),
     );
+    // Dave has no card, so the failed card names him instead of drawing a line to him.
+    const hands = cards()[0]!.querySelectorAll<HTMLElement>(".runroles__hand");
+    expect([...hands].map((one) => [one.dataset.to, one.textContent])).toEqual([["14", "→ Dave"]]);
+    expect(container.querySelector(".runroles__strokes")).toBeNull();
+  });
+
+  it("names nobody on the card where the failure went to a person", async () => {
+    roles = [role(12, "Bob"), role(14, "Dave")];
+    await pane({
+      ...RUNNING,
+      run: 46,
+      round: { role: 12, startedAt: null, incident: { ref: "AMB-T-99", role: null, person: true } },
+      state: FAILED.state,
+    });
+    expect(cards()[0]!.querySelector(".runroles__hand")).toBeNull();
   });
 
   it("draws no card for a run that is over, or waiting for its next task", async () => {
@@ -304,5 +320,33 @@ describe("filedLine", () => {
       state: { ...FAILED.state!, status: "running", word: "Running" },
     };
     expect(line(running)).toBeNull();
+  });
+});
+
+describe("handsOf and handsAway", () => {
+  const roles = [role(2, "B"), role(4, "D")];
+  const failed = (incident: { ref: string; role: number | null; person: boolean } | undefined): Say => ({
+    ...FAILED,
+    round: { role: 2, startedAt: null, ...(incident === undefined ? {} : { incident }) },
+  });
+  const hands = (run: Say) => handsOf(roleCards(run, roles).cards, run, roles);
+
+  it("draws a line from a failed card to the role it was filed to", () => {
+    expect(hands(failed({ ref: "AMB-T-9", role: 4, person: false }))).toEqual([{ from: 2, to: 4, name: "D", filed: true }]);
+  });
+
+  it("draws none where the failure went to a person, to a role since gone, or nowhere", () => {
+    expect(hands(failed({ ref: "AMB-T-9", role: null, person: true }))).toEqual([]);
+    expect(hands(failed({ ref: "AMB-T-9", role: 77, person: false }))).toEqual([]);
+    expect(hands(failed(undefined))).toEqual([]);
+  });
+
+  it("names the other end only where it has no card, and every end on a row of the list", () => {
+    const one = { from: 2, to: 4, name: "D", filed: true } as const;
+    const card = (id: number) => ({ role: id, name: "", icon: "person", state: "running" }) as const;
+    expect(handsAway(2, [one], [card(2)])).toEqual([one]);
+    expect(handsAway(2, [one], [card(2), card(4)])).toEqual([]);
+    expect(handsAway(2, [one], [])).toEqual([one]);
+    expect(handsAway(4, [one], [])).toEqual([]);
   });
 });

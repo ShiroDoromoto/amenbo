@@ -1,5 +1,6 @@
-// The table under the build screen's picture: every step the picked role's round reaches, with the
-// agent and model that carry it out there (`AMB-D-960`).
+// The table under the picked role's default agent and model on the build screen: every step the role's
+// round reaches, with the agent and model that carry it out there (`AMB-D-960`). It has no heading of
+// its own; it goes on from the "Agent and model" one above it.
 //
 // **The rows go in the picture's order** (`pictureOrder`), placement by placement, and each
 // placement's steps in their display order. A reader can then go down the table and along the
@@ -52,7 +53,6 @@ export function AutomationRoleCarriers({
   const mark = <span className="autocarriers__mark" title={t("auto.build.carrierByStep")}> ●</span>;
   return (
     <div className="autocarriers">
-      <span className="actbuild__sec">{t("auto.build.carriers")}</span>
       <table className="autocarriers__table">
         <thead>
           <tr>

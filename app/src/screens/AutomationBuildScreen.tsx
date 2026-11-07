@@ -5,9 +5,10 @@
 // right. The two screens are one move a layer apart (`AMB-D-949`), and a reader going between them
 // should not have to learn a second arrangement.
 //
-// **Two places, each named on the screen**: "build", the picture of the placements
-// (`./AutomationPicture`); and "placement", what the pressed spot holds (`./AutomationStepPanel`),
-// which is the panel's reading of a press on a box. The press that starts a run is not a place of its
+// **Two places, each named on the screen**: "how it works", the picture of the placements
+// (`./AutomationPicture`), which stands between the picked role's head and its agent and model; and
+// "placement", what the pressed spot holds (`./AutomationStepPanel`), which is the panel's reading of
+// a press on a box. The press that starts a run is not a place of its
 // own: it stands at the far end of the head (`AMB-T-5523`).
 //
 // **Everything else the screen asks is the panel too.** A `+` on a line, the press at the end of a way
@@ -106,7 +107,7 @@ import { AutomationAboutPanel, AutomationNameField } from "./AutomationAboutPane
 import { Panel } from "./AutomationActionBuildScreen";
 import { AutomationLibraryPanel, placeKey, type PlaceTarget } from "./AutomationLibraryPanel";
 import { AutomationPicture } from "./AutomationPicture";
-import { AutomationRoleHead, AutomationRoleList } from "./AutomationRoles";
+import { AutomationRoleHead, AutomationRoleList, AutomationRoleWho } from "./AutomationRoles";
 import { AutomationRoleCarriers } from "./AutomationRoleCarriers";
 import { automationGraph, pictureOrder } from "./automationLayout";
 import { AutomationActionMake } from "./AutomationActionMake";
@@ -499,7 +500,10 @@ export function AutomationBuildScreen({
               )}
             </div>
             {automation !== null && role !== undefined && (
-              <AutomationRoleCarriers automation={automation} graph={roundGraph} />
+              <>
+                <AutomationRoleWho key={role.id} automation={automation} role={role} />
+                <AutomationRoleCarriers automation={automation} graph={roundGraph} />
+              </>
             )}
           </div>
           {automation !== null && <AutomationSettings automation={automation} />}

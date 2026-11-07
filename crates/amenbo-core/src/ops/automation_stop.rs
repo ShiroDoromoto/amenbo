@@ -42,6 +42,14 @@
 //! task is closed is the one that would have, and starts it from the first step. A run a person
 //! canceled gives the task to the human instead, with the report of the step it stopped on.
 //!
+//! **A launch is paused, picked up and stopped as one** ([`pause_launch`] and the ops beside it). Each
+//! acts on every run of the launch still under way, one at a time, through the op for one run — so a
+//! pause still waits for the action under way, a cancel is still for a paused run only, and a run
+//! paused before its next task is still copied down afresh when picked up (`AMB-D-1002`, `AMB-D-1015`).
+//! Only that launch's runs are touched, never another launch's (`AMB-D-1019`). A paused launch starts no
+//! run until it is picked up again. **A launch ends** once no run of it is under way and its automation
+//! is not waiting for a task to start one on ([`settle_launch`]), or where a person cancels or stops it.
+//!
 //! **A crash is told to core, or read at startup.** A step's program that ends before its step has
 //! reported is seen by the app that started it, which says so here ([`step_ended`], `AMB-D-961`). An
 //! app that went away took its steps with it and can say nothing; what is left is the fact that a
@@ -51,7 +59,8 @@
 use crate::error::{Error, ErrorCode, Result};
 use rusqlite::Connection;
 use crate::model::{
-    ActorKind, AutomationPauseKind, AutomationRun, AutomationRunDef, AutomationRunStatus, AutomationRunStepStatus,
+    ActorKind, AutomationLaunch, AutomationLaunchStatus, AutomationPauseKind, AutomationRun, AutomationRunDef,
+    AutomationRunStatus, AutomationRunStepStatus,
     AutomationRunTask, AutomationStoppedReason, FailuresTo, TaskStatus,
 };
 use crate::run_wording::Reached;
@@ -151,6 +160,9 @@ fn under_way(status: AutomationRunStatus) -> bool {
 /// picture that way means nothing closed the task, and a completed run would leave it reserved by
 /// nobody. It fails instead, with [`AutomationStoppedReason::LeftTaskOpen`], and the task is handed back
 /// as any failure's is.
+///
+/// **The launch it was started in ends with it** where it was the last of that launch under way and
+/// nothing waits to start another ([`settle_launch`]).
 pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<Ended> {
     // Read before the stretch is closed below: whether it was already ended is what says the run
     // handed its task back on the way.
@@ -177,6 +189,7 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
         false => None,
     };
     close_stretch(tx, stretch.as_ref(), now, incident)?;
+    settle_launch(tx, after.launch_id)?;
     Ok(Ended { run: after })
 }
 
@@ -708,6 +721,203 @@ pub fn stop(tx: &WriteTx<'_>, run_id: i64, ending: Ending) -> Result<Ended> {
         )));
     }
     ended(tx, before, ending)
+}
+
+// ───────────────────────────── a launch, taken as one ─────────────────────────────
+
+/// **What acting on a launch did** — the launch as it stands now, and each run of it that was acted on,
+/// as that run stands now.
+#[derive(Clone, Debug)]
+pub struct LaunchActed {
+    pub launch: AutomationLaunch,
+    pub runs: Vec<AutomationRun>,
+}
+
+fn live_launch(tx: &WriteTx<'_>, launch_id: i64) -> Result<AutomationLaunch> {
+    read::automation_launch(tx.conn(), launch_id)?.ok_or_else(|| not_found("launch", launch_id))
+}
+
+/// A launch that has ended is refused by every op that acts on one: nothing of it is under way.
+fn going(launch: &AutomationLaunch, doing: &str) -> Result<()> {
+    match launch.status {
+        AutomationLaunchStatus::Ended => {
+            Err(Error::invalid(format!("launch '{}' has ended, and only a launch still going can be {doing}", launch.id)))
+        }
+        AutomationLaunchStatus::Running | AutomationLaunchStatus::Paused => Ok(()),
+    }
+}
+
+/// Write a launch's status — `ended` with the time it ended. One already there is answered as it stands.
+fn set_launch_status(
+    tx: &WriteTx<'_>,
+    before: AutomationLaunch,
+    status: AutomationLaunchStatus,
+) -> Result<AutomationLaunch> {
+    if before.status == status {
+        return Ok(before);
+    }
+    let now = Timestamp::now();
+    let mut after = before.clone();
+    after.status = status;
+    if status == AutomationLaunchStatus::Ended {
+        after.ended_at = Some(now);
+    }
+    after.updated_at = now;
+    crate::ops::emit_update(tx, record::automation_launch(&before), record::automation_launch(&after))?;
+    Ok(after)
+}
+
+/// **End a launch nothing more will come of** — one not ended yet, with no run under way, whose
+/// automation is not waiting for a task: the run started once one turns up would join it
+/// ([`crate::ops::automation_run::start_waiting`]). Anything else is left as it stands. `None` is a run
+/// that belongs to no launch.
+pub(crate) fn settle_launch(tx: &WriteTx<'_>, launch_id: Option<i64>) -> Result<()> {
+    let Some(launch_id) = launch_id else { return Ok(()) };
+    let Some(before) = read::automation_launch(tx.conn(), launch_id)? else { return Ok(()) };
+    if before.status == AutomationLaunchStatus::Ended
+        || !read::automation_launch_run_ids_under_way(tx.conn(), launch_id)?.is_empty()
+    {
+        return Ok(());
+    }
+    let waiting = read::automation(tx.conn(), before.automation_id)?.is_some_and(|a| a.waits_for_task_since.is_some());
+    if waiting {
+        return Ok(());
+    }
+    set_launch_status(tx, before, AutomationLaunchStatus::Ended)?;
+    Ok(())
+}
+
+/// [`settle_launch`] for the launch standing for an automation — where its wait has just been ended.
+pub(crate) fn settle_standing_launch(tx: &WriteTx<'_>, automation_id: i64) -> Result<()> {
+    let standing = read::automation_launch_standing(tx.conn(), automation_id)?;
+    settle_launch(tx, standing.map(|launch| launch.id))
+}
+
+/// **Pause a launch** — ask each of its runs still going to pause ([`pause`]), and start no run in it
+/// until it is picked up again. A run settles at the end of the action under way, as one paused alone
+/// does (`AMB-D-1002`); one already paused is left as it is. A launch already paused is answered as it
+/// stands, and one that has ended is refused.
+pub fn pause_launch(tx: &WriteTx<'_>, launch_id: i64) -> Result<LaunchActed> {
+    let before = live_launch(tx, launch_id)?;
+    going(&before, "paused")?;
+    let mut runs = Vec::new();
+    for run_id in read::automation_launch_run_ids_under_way(tx.conn(), launch_id)? {
+        runs.push(match pause(tx, run_id)? {
+            Paused::Asked(run) => run,
+            Paused::Now(ended) => ended.run,
+        });
+    }
+    let launch = set_launch_status(tx, before, AutomationLaunchStatus::Paused)?;
+    Ok(LaunchActed { launch, runs })
+}
+
+/// **Pause a launch before each of its runs takes its next task** (`AMB-D-1019`) — ask each run still
+/// going to ([`pause_run_before_next_task`]), and start no run in it until it is picked up again. Only
+/// this launch's runs are asked. A run that takes no tasks has no task boundary to stop at, and is
+/// refused as it is alone: the whole launch is refused with it, and nothing is written.
+pub fn pause_launch_before_next_task(tx: &WriteTx<'_>, launch_id: i64) -> Result<LaunchActed> {
+    let before = live_launch(tx, launch_id)?;
+    going(&before, "paused")?;
+    let mut runs = Vec::new();
+    for run_id in read::automation_launch_run_ids_under_way(tx.conn(), launch_id)? {
+        runs.push(match pause_run_before_next_task(tx, run_id)? {
+            Paused::Asked(run) => run,
+            Paused::Now(ended) => ended.run,
+        });
+    }
+    let launch = set_launch_status(tx, before, AutomationLaunchStatus::Paused)?;
+    Ok(LaunchActed { launch, runs })
+}
+
+/// **Pick a launch up again** — each of its paused runs is picked up as one alone is ([`resume`]), by
+/// the pause it stopped at (`AMB-D-1015`), and a run still asked to pause is asked no longer. The launch
+/// is running again, and starts runs where there is room. A launch already running is answered as it
+/// stands, and one that has ended is refused.
+///
+/// A run that cannot be picked up refuses the whole launch, as it refuses alone, and nothing is
+/// written. `startable`, `models` and `default_agent` are a launch's
+/// ([`crate::ops::automation_run::Launcher`]), for the runs copied down afresh.
+pub fn resume_launch(
+    tx: &WriteTx<'_>,
+    launch_id: i64,
+    startable: Option<&[String]>,
+    models: &crate::ops::automation_run::ModelsHere,
+    default_agent: Option<&str>,
+) -> Result<LaunchActed> {
+    let before = live_launch(tx, launch_id)?;
+    going(&before, "picked up again")?;
+    let mut runs = Vec::new();
+    for run_id in read::automation_launch_run_ids_under_way(tx.conn(), launch_id)? {
+        let run = live_run(tx, run_id)?;
+        match run.status {
+            AutomationRunStatus::Paused => runs.push(resume(tx, run_id, startable, models, default_agent)?.run),
+            AutomationRunStatus::Running if run.pause_requested || run.pause_before_next_task => {
+                let mut after = run.clone();
+                after.pause_requested = false;
+                after.pause_before_next_task = false;
+                after.updated_at = Timestamp::now();
+                crate::ops::emit_update(tx, record::automation_run(&run), record::automation_run(&after))?;
+                runs.push(after);
+            }
+            _ => {}
+        }
+    }
+    let launch = set_launch_status(tx, before, AutomationLaunchStatus::Running)?;
+    Ok(LaunchActed { launch, runs })
+}
+
+/// **Cancel a paused launch** (`AMB-D-1002`) — each of its runs is canceled as one alone is ([`cancel`]),
+/// and the launch ends, its automation no longer waiting for a task to start a run on.
+///
+/// **Only a launch none of whose runs is running is canceled here**, for the reason a running run is not:
+/// pause the launch and cancel it once its runs have stopped, or stop it ([`stop_launch`]). The refusal
+/// names the runs still running, and nothing is written.
+pub fn cancel_launch(tx: &WriteTx<'_>, launch_id: i64) -> Result<LaunchActed> {
+    let before = live_launch(tx, launch_id)?;
+    going(&before, "canceled")?;
+    let under_way = read::automation_launch_run_ids_under_way(tx.conn(), launch_id)?;
+    let mut running = Vec::new();
+    for run_id in &under_way {
+        if live_run(tx, *run_id)?.status == AutomationRunStatus::Running {
+            running.push(run_id.to_string());
+        }
+    }
+    if !running.is_empty() {
+        return Err(Error::invalid(format!(
+            "launch '{launch_id}' has run(s) still running ({}), and only a launch whose runs have all \
+             stopped is canceled. Pause it first and cancel it once they have stopped, or force-cancel it \
+             to end them where they stand",
+            running.join(", ")
+        )));
+    }
+    let mut runs = Vec::new();
+    for run_id in under_way {
+        runs.push(cancel(tx, run_id)?.run);
+    }
+    let launch = close_launch(tx, launch_id)?;
+    Ok(LaunchActed { launch, runs })
+}
+
+/// **Stop a launch now** — the force-cancel (`AMB-D-1002`): each run still going ends where it stands
+/// ([`stop`], [`Ending::Canceled`]), and the launch ends, its automation no longer waiting for a task to
+/// start a run on.
+pub fn stop_launch(tx: &WriteTx<'_>, launch_id: i64) -> Result<LaunchActed> {
+    let before = live_launch(tx, launch_id)?;
+    going(&before, "stopped")?;
+    let mut runs = Vec::new();
+    for run_id in read::automation_launch_run_ids_under_way(tx.conn(), launch_id)? {
+        runs.push(stop(tx, run_id, Ending::Canceled)?.run);
+    }
+    let launch = close_launch(tx, launch_id)?;
+    Ok(LaunchActed { launch, runs })
+}
+
+/// End a launch a person canceled or stopped, its runs ended already: the wait for a task its automation
+/// was in is the launch's too, so it ends with it, and nothing starts a run in the launch again.
+fn close_launch(tx: &WriteTx<'_>, launch_id: i64) -> Result<AutomationLaunch> {
+    let launch = live_launch(tx, launch_id)?;
+    crate::ops::automation_run::stop_waiting(tx, launch.automation_id)?;
+    set_launch_status(tx, live_launch(tx, launch_id)?, AutomationLaunchStatus::Ended)
 }
 
 /// **Say a failed run has been seen** (`AMB-D-955`). It leaves the top of the runs tab for the

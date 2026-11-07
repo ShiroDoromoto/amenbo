@@ -1966,6 +1966,78 @@ impl Store {
         })
     }
 
+    /// **Pause a launch** — each of its runs still going is asked to pause, and no run is started in it
+    /// until it is picked up again ([`crate::ops::automation_stop::pause_launch`]). The reach is the
+    /// launch's.
+    pub fn automation_launch_pause(&mut self, launch_id: i64) -> Result<crate::ops::automation_stop::LaunchActed> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Launch, launch_id)], |tx| {
+            crate::ops::automation_stop::pause_launch(tx, launch_id)
+        })
+    }
+
+    /// **Pause a launch before each of its runs takes its next task**
+    /// ([`crate::ops::automation_stop::pause_launch_before_next_task`]).
+    pub fn automation_launch_pause_before_next_task(
+        &mut self,
+        launch_id: i64,
+    ) -> Result<crate::ops::automation_stop::LaunchActed> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Launch, launch_id)], |tx| {
+            crate::ops::automation_stop::pause_launch_before_next_task(tx, launch_id)
+        })
+    }
+
+    /// **Pick a paused launch up again** ([`crate::ops::automation_stop::resume_launch`]). `startable`
+    /// and `models` are a launch's, as [`Self::automation_resume`]'s are, with this store's default agent
+    /// for the launch's automation.
+    pub fn automation_launch_resume(
+        &mut self,
+        launch_id: i64,
+        startable: Option<&[String]>,
+        models: &crate::ops::automation_run::ModelsHere,
+    ) -> Result<crate::ops::automation_stop::LaunchActed> {
+        let agent = match crate::store_engine::read::automation_launch(self.engine.conn(), launch_id)? {
+            Some(launch) => default_agent(self.engine.conn(), &self.config, launch.automation_id)?,
+            None => None,
+        };
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Launch, launch_id)], |tx| {
+            crate::ops::automation_stop::resume_launch(tx, launch_id, startable, models, agent.as_deref())
+        })
+    }
+
+    /// **Cancel a paused launch** ([`crate::ops::automation_stop::cancel_launch`], `AMB-D-1002`). One with
+    /// a run still running is refused.
+    pub fn automation_launch_cancel(&mut self, launch_id: i64) -> Result<crate::ops::automation_stop::LaunchActed> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Launch, launch_id)], |tx| {
+            crate::ops::automation_stop::cancel_launch(tx, launch_id)
+        })
+    }
+
+    /// **Stop a launch now** — the force-cancel of every run of it still going
+    /// ([`crate::ops::automation_stop::stop_launch`]).
+    pub fn automation_launch_stop(&mut self, launch_id: i64) -> Result<crate::ops::automation_stop::LaunchActed> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Launch, launch_id)], |tx| {
+            crate::ops::automation_stop::stop_launch(tx, launch_id)
+        })
+    }
+
+    /// **Start one more run in a running launch**, where there is room and a task to take — or nothing
+    /// (one operation = one transaction) — [`crate::ops::automation_run::top_up`]. A launch its checks
+    /// refuse takes the whole transaction with it.
+    pub fn automation_launch_top_up(
+        &mut self,
+        launch_id: i64,
+        by: &crate::ops::automation_run::Launcher<'_>,
+    ) -> Result<Option<crate::model::AutomationRun>> {
+        let agent = match crate::store_engine::read::automation_launch(self.engine.conn(), launch_id)? {
+            Some(launch) => default_agent(self.engine.conn(), &self.config, launch.automation_id)?,
+            None => None,
+        };
+        let by = crate::ops::automation_run::Launcher { default_agent: agent.as_deref(), ..*by };
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Launch, launch_id)], |tx| {
+            crate::ops::automation_run::top_up(tx, launch_id, &by)
+        })
+    }
+
     /// **A step's program ended before the step reported** — fail its run as a crash, where the step
     /// is still the one the run is on (one operation = one transaction). The reach is the run's.
     pub fn automation_step_ended(

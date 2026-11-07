@@ -2403,7 +2403,68 @@ pub struct AutomationVersion {
 
 // ───────────────────────── automation: what ran ─────────────────────────
 
-/// Where one launch of one automation stands (`AMB-D-955`).
+/// Where one launch of an automation stands — the runs it started side by side, taken together
+/// ([`AutomationLaunch`]).
+///
+/// `Running` keeps its runs topped up to the automation's `max_concurrent_runs` while there are tasks
+/// to take. `Paused` starts no run: a person paused it, and each run under way was asked to pause too.
+/// `Ended` is over — no run of it is under way and none is started in it again.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutomationLaunchStatus {
+    #[default]
+    Running,
+    Paused,
+    Ended,
+}
+
+impl AutomationLaunchStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AutomationLaunchStatus::Running => "running",
+            AutomationLaunchStatus::Paused => "paused",
+            AutomationLaunchStatus::Ended => "ended",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<AutomationLaunchStatus> {
+        match s {
+            "running" => Some(AutomationLaunchStatus::Running),
+            "paused" => Some(AutomationLaunchStatus::Paused),
+            "ended" => Some(AutomationLaunchStatus::Ended),
+            _ => None,
+        }
+    }
+}
+
+/// **One launch of an automation — the runs it starts side by side, taken as one.**
+///
+/// A person launches an automation once, and the launch runs up to the automation's
+/// `max_concurrent_runs` at once while there are tasks to take: where one run ends, the next is started
+/// in the same launch ([`crate::ops::automation_run::top_up`]). A run its trigger starts, or one started
+/// once a task turns up for an automation waiting on one, joins the launch standing; where none is
+/// standing, it opens one. An automation has at most one launch that has not ended.
+///
+/// Pausing, picking up and stopping a launch acts on each run under way in it
+/// ([`crate::ops::automation_stop::pause_launch`] and the ops beside it). It ends once no run of it is
+/// under way and nothing is waiting to start one — or where a person stopped it.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationLaunch {
+    pub id: i64,
+    pub automation_id: i64,
+    /// The project the automation was launched from, as its runs carry it.
+    pub project_id: i64,
+    pub status: AutomationLaunchStatus,
+    /// Who pressed launch. `None` for one a trigger, or a task turning up, opened.
+    #[serde(default)]
+    pub started_by_kind: Option<ActorKind>,
+    #[serde(default)]
+    pub ended_at: Option<Timestamp>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// Where one run of one automation stands (`AMB-D-955`).
 ///
 /// `Running` is where every launch begins, so a launch never waits (`AMB-D-947`): one past the
 /// automation's `max_concurrent_runs` is refused rather than queued. `Paused` keeps the place. The
@@ -2541,7 +2602,7 @@ impl AutomationPauseKind {
     }
 }
 
-/// **One launch of one automation.**
+/// **One run of one automation** — one of the runs a launch starts side by side ([`AutomationLaunch`]).
 ///
 /// `pause_requested` is the gap between the button and the pause: an action is under way and is not cut
 /// in half, so the request is recorded and the run reaches `paused` when that action ends
@@ -2559,6 +2620,10 @@ pub struct AutomationRun {
     /// The project the automation was launched from, carried here so a run can be found without
     /// walking back through a definition that may since have been archived.
     pub project_id: i64,
+    /// The launch it was started in ([`AutomationLaunch`]). `None` for a run written before launches
+    /// were kept, and for a test run, which is thrown away and belongs to none.
+    #[serde(default)]
+    pub launch_id: Option<i64>,
     pub status: AutomationRunStatus,
     pub pause_requested: bool,
     /// Asked to pause before it takes its next task

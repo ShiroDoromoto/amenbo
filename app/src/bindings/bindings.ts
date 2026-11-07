@@ -556,7 +556,8 @@ export type AutomationDetailDto = { id: number, projectId: number, name: string,
  */
 entryPlacementId?: number, archived: boolean, 
 /**
- * How many runs of it may be going at once, from 1 up to the cap; a launch past it is refused.
+ * How many runs of it may be going at once, from 1 up to the cap. One launch runs up to it side by
+ * side, and a start past it is refused.
  */
 maxConcurrentRuns: number, 
 /**
@@ -932,6 +933,11 @@ export type AutomationRunCardDto = { run: number,
  */
 project: number, projectName: string, automation: number, 
 /**
+ * **The launch it was started in** ([`amenbo_core::model::AutomationLaunch`]) — the runs of one
+ * press that go side by side, by its id. Absent on a run written before launches were kept.
+ */
+launch?: number, 
+/**
  * What the automation was called at launch. Read from the run's own copy of the entry step's
  * automation where the definition has since been deleted, and empty where neither is left.
  */
@@ -1153,7 +1159,13 @@ taskTitle?: string, };
  * ([`AutomationStepOpenDto`]). No run (`null`) where the entry would have waited for a task with none
  * to take: the automation waits for one instead, and a run is started once it turns up (`AMB-D-969`).
  */
-export type AutomationRunStartedDto = { run: number | null, };
+export type AutomationRunStartedDto = { run: number | null, 
+/**
+ * **The launch the press started or joined** ([`amenbo_core::model::AutomationLaunch`]) — the
+ * runs it keeps going side by side, and where a run started once a task turns up goes. Set
+ * whether or not a run was made.
+ */
+launch: number | null, };
 
 /**
  * **The task a run is working**, as the row above its pane says so (`app/src/talk/nameplate.ts`).

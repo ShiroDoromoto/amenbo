@@ -377,6 +377,23 @@ pub fn turned_up(
     }
 }
 
+/// **Whether there is something for the built-in `key` to take now** in `project_id`, for a run
+/// starting rounds of `roles` ([`Waits::turned_up`]), whether or not it is set to wait for it — `None`
+/// for a built-in that has nothing it could wait for. What a launch asks before starting one more run
+/// beside those under way ([`crate::ops::automation_run::top_up`]).
+pub fn there_to_take(
+    conn: &Connection,
+    project_id: i64,
+    roles: &[i64],
+    key: Option<&str>,
+    cfg: &[RunDefCfg],
+) -> Result<Option<bool>> {
+    match waits_of(key) {
+        Some(waits) => Ok(Some((waits.turned_up)(conn, project_id, roles, cfg)?)),
+        None => Ok(None),
+    }
+}
+
 /// **What the built-in `key` looks for while it waits** ([`Waits::looks_for`]), or `None` for one that
 /// never waits.
 pub fn looks_for(key: Option<&str>, cfg: &[RunDefCfg]) -> Option<String> {

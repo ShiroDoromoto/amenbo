@@ -243,6 +243,7 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
         "automation_action" => "project_id = ?1",
         "automation" => "project_id = ?1",
         "automation_run" => "project_id = ?1",
+        "automation_launch" => "project_id = ?1",
 
         "automation_placement" | "automation_version" | "automation_role" | "automation_trigger" => {
             "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)"
@@ -1160,12 +1161,18 @@ mod tests {
             rusqlite::params![automation, placement, at, exit, out_port, in_port],
         );
 
+        let launch = put(
+            "INSERT INTO automation_launch \
+                 (automation_id, project_id, status, started_by_kind, ended_at, created_at, updated_at) \
+             VALUES (?1, ?2, 'ended', 'ai', ?3, ?3, ?3)",
+            rusqlite::params![automation, project, at],
+        );
         let run = put(
             "INSERT INTO automation_run \
                  (automation_id, project_id, status, pause_requested, started_by_kind, \
-                  started_at, ended_at, created_at, updated_at) \
-             VALUES (?1, ?2, 'completed', 0, 'ai', ?3, ?3, ?3, ?3)",
-            rusqlite::params![automation, project, at],
+                  started_at, ended_at, created_at, updated_at, launch_id) \
+             VALUES (?1, ?2, 'completed', 0, 'ai', ?3, ?3, ?3, ?3, ?4)",
+            rusqlite::params![automation, project, at, launch],
         );
         // What was handed over at launch hangs off the run itself (`AMB-D-970`).
         put(

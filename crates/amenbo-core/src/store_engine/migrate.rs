@@ -1393,6 +1393,13 @@ pub const STEPS: &[Step] = &[
         // asked, as it was, and with nothing filed yet, since no time it filed one was kept.
         apply: Apply::Custom(give_the_triggers_a_table_of_their_own),
     },
+    Step {
+        to: 120,
+        name: "add automation_launch and automation_run.launch_id, the runs one launch starts side by side",
+        // **Seeded.** Before this every run was a launch of its own, so each run still under way is
+        // given a launch of its own, running or paused as it is. A run that is over is left in none.
+        apply: Apply::Custom(let_a_launch_hold_its_runs),
+    },
 ];
 
 /// v119: `automation_trigger`, an automation's triggers, one row each — and the `automation.trigger_*`
@@ -1449,6 +1456,74 @@ fn give_the_triggers_a_table_of_their_own(ctx: &Ctx<'_>) -> Result<()> {
         if cols.iter().any(|c| c == column) {
             tx.execute_batch(&format!("ALTER TABLE automation DROP COLUMN {column};"))?;
         }
+    }
+    Ok(())
+}
+
+/// v120: the `automation_launch` table, and `automation_run.launch_id`, the launch a run was started in.
+///
+/// **The table is `CREATE TABLE IF NOT EXISTS` over frozen text**, for v50's reason. **The column is
+/// appended only where missing**, v68's guard and for v53's reason; it may be added by `ALTER TABLE`
+/// because it has no default but NULL.
+///
+/// Each run `running` or `paused` is given a launch of its own, with its status, its project and who
+/// started it, and its time as the launch's. A run that is over is left in none: nothing pauses or
+/// stops it again, and nothing joins it.
+fn let_a_launch_hold_its_runs(ctx: &Ctx<'_>) -> Result<()> {
+    const TS: &str = "'[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'";
+    let tx = ctx.tx;
+    tx.execute_batch(&format!(
+        "CREATE TABLE IF NOT EXISTS automation_launch (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    project_id BIGINT NOT NULL DEFAULT 0 REFERENCES project(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    status TEXT NOT NULL DEFAULT '' CHECK(status IN ('', 'running', 'paused', 'ended')),
+    started_by_kind TEXT CHECK(started_by_kind IN ('human', 'ai')),
+    ended_at TEXT CHECK(ended_at GLOB {TS}),
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB {TS}),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB {TS})
+);"
+    ))?;
+    if !column_names(tx, "automation_run")?.iter().any(|c| c == "launch_id") {
+        tx.execute_batch(
+            "ALTER TABLE automation_run ADD COLUMN launch_id BIGINT REFERENCES automation_launch(id) \
+                 ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED;",
+        )?;
+    }
+    let mut stmt = tx.prepare(
+        "SELECT id, automation_id, project_id, status, started_by_kind, created_at, updated_at \
+         FROM automation_run WHERE status IN ('running', 'paused') AND launch_id IS NULL ORDER BY id",
+    )?;
+    struct UnderWay {
+        run: i64,
+        automation: i64,
+        project: i64,
+        status: String,
+        by: Option<String>,
+        created: String,
+        updated: String,
+    }
+    let under_way: Vec<UnderWay> = stmt
+        .query_map([], |r| {
+            Ok(UnderWay {
+                run: r.get(0)?,
+                automation: r.get(1)?,
+                project: r.get(2)?,
+                status: r.get(3)?,
+                by: r.get(4)?,
+                created: r.get(5)?,
+                updated: r.get(6)?,
+            })
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    for u in under_way {
+        tx.execute(
+            "INSERT INTO automation_launch (automation_id, project_id, status, started_by_kind, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![u.automation, u.project, u.status, u.by, u.created, u.updated],
+        )?;
+        let launch = tx.last_insert_rowid();
+        tx.execute("UPDATE automation_run SET launch_id = ?1 WHERE id = ?2", rusqlite::params![launch, u.run])?;
     }
     Ok(())
 }
@@ -11999,6 +12074,48 @@ mod tests {
             .conn()
             .execute("UPDATE automation SET waits_for_task_since = '2026-11-07T00:00:00Z' WHERE id = 1", [])
             .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v120: each run under way is given a launch of its own, running or paused as it is, and a run that
+    /// is over is left in none.
+    #[test]
+    fn each_run_under_way_before_v120_is_a_launch_of_its_own() {
+        let dir = scratch("automation-launch");
+        let engine = store_at(&dir, 119);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_run (id, automation_id, project_id, status, started_by_kind) VALUES
+                     (1, 1, 1, 'running', 'human'), (2, 1, 1, 'paused', NULL), (3, 1, 1, 'completed', 'human');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let launch_of = |run: i64| -> Option<(String, i64, i64, Option<String>)> {
+            engine
+                .conn()
+                .query_row(
+                    "SELECT l.status, l.automation_id, l.project_id, l.started_by_kind \
+                     FROM automation_run r JOIN automation_launch l ON l.id = r.launch_id WHERE r.id = ?1",
+                    [run],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                )
+                .optional()
+                .unwrap()
+        };
+        assert_eq!(launch_of(1), Some(("running".into(), 1, 1, Some("human".into()))));
+        assert_eq!(launch_of(2), Some(("paused".into(), 1, 1, None)));
+        assert_eq!(launch_of(3), None, "a run that is over is in no launch");
+        let launches: i64 =
+            engine.conn().query_row("SELECT COUNT(*) FROM automation_launch", [], |r| r.get(0)).unwrap();
+        assert_eq!(launches, 2, "one launch per run under way");
+        let refused = engine.conn().execute("UPDATE automation_launch SET status = 'waiting' WHERE id = 1", []);
+        assert!(refused.is_err(), "only running, paused and ended are admitted");
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -119,6 +119,8 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   // A wire is made on either picture — between two spots of an automation, or between two steps
   // inside one action (`AMB-D-949`) — and what it feeds is marked on both, so it moves both surfaces.
   automation_wire: ["automationActions", "automations"],
+  // A launch opening, pausing or ending moves what the "running" tab says of the runs it holds.
+  automation_launch: ["automationRuns"],
   // A run being launched, moving on or ending moves the row the "running" tab draws for it.
   automation_run: ["automationRuns"],
   // The steps a run copied at launch. Written once, in the same transaction as the run, and read only

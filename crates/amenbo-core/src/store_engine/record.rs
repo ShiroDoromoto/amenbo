@@ -22,7 +22,7 @@ use rusqlite::types::Value;
 use crate::model::{
     ActorKind, Attachment, Automation, AutomationAction, AutomationActionVersion, AutomationCfg,
     AutomationEdge, AutomationExit, AutomationPlacement, AutomationPlacementStep, AutomationPort,
-    AutomationRole, AutomationRun, AutomationRunDef,
+    AutomationLaunch, AutomationRole, AutomationRun, AutomationRunDef,
     AutomationRunPass, AutomationRunStep, AutomationRunTask, AutomationRunValue,
     AutomationStep, AutomationTrigger, AutomationVersion, TriggerTask, TriggerWhen,
     AutomationWire, Database, Decision, DecisionComment, DecisionDimensionValue,
@@ -806,8 +806,9 @@ pub fn automation_wire(w: &AutomationWire) -> Record {
 }
 
 // ───────────────────────── automation: what ran ─────────────────────────
-// All five of the run side's tables. The first two are written when a run is launched; the other three
-// are written as its steps are opened and reported on.
+// All six of the run side's tables — the launch, and the five a run writes. The launch and the first two
+// of the five are written when a run is launched; the other three are written as its steps are opened
+// and reported on.
 
 pub fn automation_run(r: &AutomationRun) -> Record {
     Record::new(
@@ -829,9 +830,28 @@ pub fn automation_run(r: &AutomationRun) -> Record {
                 ("handed_task", ov(&r.handed_task)),
                 ("acknowledged_by_kind", kov(&r.acknowledged_by_kind)),
                 ("stopped_detail", ov(&r.stopped_detail)),
+                ("launch_id", kv_opt(&r.launch_id)),
             ],
             &r.created_at,
             &r.updated_at,
+        ),
+    )
+}
+
+pub fn automation_launch(l: &AutomationLaunch) -> Record {
+    Record::new(
+        "automation_launch",
+        l.id,
+        with_audit(
+            vec![
+                ("automation_id", kv(l.automation_id)),
+                ("project_id", kv(l.project_id)),
+                ("status", tv(l.status.as_str())),
+                ("started_by_kind", kov(&l.started_by_kind)),
+                ("ended_at", tsov(&l.ended_at)),
+            ],
+            &l.created_at,
+            &l.updated_at,
         ),
     )
 }

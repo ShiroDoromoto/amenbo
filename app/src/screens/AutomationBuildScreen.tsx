@@ -103,7 +103,7 @@
 //
 // **The head says what is saved** (`./AutomationSaved`, `AMB-D-1005`): nothing yet, changes not
 // saved, or the version saved last and when. A write still marks the field it came from.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AutomationAboutPanel, AutomationNameField } from "./AutomationAboutPanel";
 import { Panel } from "./AutomationActionBuildScreen";
 import { AutomationLibraryPanel, placeKey, type PlaceTarget } from "./AutomationLibraryPanel";
@@ -174,6 +174,41 @@ function mendedIn(
   return MENDED_IN_ACTION.has(block.code) ? { action: box.actionId } : null;
 }
 
+/**
+ * **Whether the screen's three places go one under another** — the roles over the middle, what the
+ * automation holds as a whole under it — because the picked role's row (`needs`, from the picture)
+ * does not fit the middle beside them. The mock puts them so where the screen is narrow; here narrow
+ * is narrower than the round needs, so its actions are read left to right in one row across the whole
+ * width rather than scrolled. The width the two sides take is measured while they stand beside the
+ * middle and kept for while they do not, so the screen goes back beside them once that width is there.
+ */
+function useStacked(needs: number | undefined) {
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const [stacked, setStacked] = useState(false);
+  const stackedNow = useRef(false);
+  const sides = useRef(0);
+  useEffect(() => {
+    const frame = frameRef.current;
+    const canvas = canvasRef.current;
+    if (frame === null || canvas === null || needs === undefined || typeof ResizeObserver === "undefined") return;
+    const decide = () => {
+      const style = getComputedStyle(canvas);
+      const room = canvas.clientWidth - (Number.parseFloat(style.paddingLeft) || 0) - (Number.parseFloat(style.paddingRight) || 0);
+      if (!stackedNow.current) sides.current = frame.clientWidth - room;
+      stackedNow.current = frame.clientWidth - sides.current < needs;
+      setStacked(stackedNow.current);
+    };
+    decide();
+    // The middle is watched too: once the sides stand beside it again, what they take is measured anew.
+    const sized = new ResizeObserver(decide);
+    sized.observe(frame);
+    sized.observe(canvas);
+    return () => sized.disconnect();
+  }, [needs]);
+  return { frameRef, canvasRef, stacked };
+}
+
 /** What the panel is showing, if anything. */
 type Showing =
   | { kind: "box"; id: number }
@@ -236,6 +271,10 @@ export function AutomationBuildScreen({
   // The picture in the middle is that role's round (`automationGraph`), laid out again only when the
   // definition or the role changes.
   const roundGraph = useMemo(() => automationGraph(automation, role?.id), [automation, role?.id]);
+  // How wide that round's row has to be, as the picture tells it, and whether the three places go one
+  // under another to give it that.
+  const [rowNeeds, setRowNeeds] = useState<number | undefined>(undefined);
+  const { frameRef, canvasRef, stacked } = useStacked(rowNeeds);
   // A role just added is picked once it is in the list: it goes after the roles already there, so it
   // is the last once the list is longer than it was at the press.
   const [addedAt, setAddedAt] = useState<number | null>(null);
@@ -464,8 +503,8 @@ export function AutomationBuildScreen({
         />
       )}
 
-      <div className="actbuild__frame">
-        <div className="actbuild__body">
+      <div className="actbuild__frame" ref={frameRef}>
+        <div className={stacked ? "actbuild__body actbuild__body--stacked" : "actbuild__body"}>
           {automation !== null && (
             <AutomationRoleList
               automation={automation}
@@ -481,9 +520,10 @@ export function AutomationBuildScreen({
             <div className="actbuild__canvashead">
               <span className="actbuild__sec">{t("auto.build.picture")}</span>
             </div>
-            <div className="actbuild__canvas">
+            <div className="actbuild__canvas" ref={canvasRef}>
               <AutomationPicture
                 graph={roundGraph}
+                onRowNeeds={setRowNeeds}
                 selectedBoxId={testing !== null ? test.marked : pressed?.id}
                 placedForYou={forYou}
                 onPickBox={(box) => setShowing({ kind: "box", id: box })}

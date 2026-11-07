@@ -664,13 +664,24 @@ describe("one role's round, as the build screen draws it", () => {
     };
   }
 
-  it("says over the round where it receives its task from, and under it whom it hands on to", async () => {
+  it("says in one row where the round receives its task from, the actions, and whom it hands on to", async () => {
     await render({ graph: automationGraph(rounds(), 20) });
     const ends = [...container.querySelectorAll(".autopic__end")].map((one) => one.textContent);
     expect(ends).toEqual([
       t("auto.pic.receives") + tf("auto.pic.fromRole", { role: "Research" }),
       t("auto.pic.handsOn") + "Build",
     ]);
+    // Receives, then the picture, then hands on, from left to right with an arrow between each, in one
+    // frame; the legend stays under it.
+    const flow = container.querySelector(".autopic__flow")!;
+    expect([...flow.children].map((one) => one.className)).toEqual([
+      "autopic__end",
+      "autopic__flowarrow",
+      "autopic",
+      "autopic__flowarrow",
+      "autopic__end",
+    ]);
+    expect(flow.nextElementSibling?.className).toBe("autopic__legend");
     expect(nodes().map((one) => one.querySelector(".autopic__nodename")!.textContent)).toEqual(["書く", "確かめる"]);
   });
 
@@ -733,5 +744,14 @@ describe("one role's round, as the build screen draws it", () => {
     await render({ graph: automationGraph(rounds(), 40) });
     expect(nodes()).toHaveLength(0);
     expect(container.textContent).toBe(t("auto.pic.roundEmpty"));
+  });
+
+  it("tells the screen how wide its row has to be, and that a round with no row needs nothing", async () => {
+    const onRowNeeds = vi.fn();
+    await render({ graph: automationGraph(rounds(), 20), onRowNeeds });
+    expect(onRowNeeds).toHaveBeenCalledTimes(1);
+    expect(onRowNeeds).toHaveBeenLastCalledWith(expect.any(Number));
+    await render({ graph: automationGraph(rounds(), 40), onRowNeeds });
+    expect(onRowNeeds).toHaveBeenLastCalledWith(0);
   });
 });

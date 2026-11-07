@@ -2392,6 +2392,72 @@ describe("one role's round, as the build screen draws it", () => {
     expect(automationGraph(automation, 99)!.boxes).toHaveLength(5);
   });
 
+  it("lays the actions out from left to right, each line out of a box's right edge into the next one's left", () => {
+    const picture = layOut(automationGraph(automation, 20));
+    const [write, check, design] = [at(picture, 3), at(picture, 4), at(picture, 2)];
+    expect(design.x + design.w).toBeLessThan(write.x);
+    expect(write.x + write.w).toBeLessThan(check.x);
+    expect(new Set([design.y, write.y, check.y]).size).toBe(1);
+    const line = picture.lines.find((one) => one.key === "edge-2")!;
+    expect(line.points[0]!.x).toBe(design.x + design.w);
+    expect(line.points[line.points.length - 1]).toEqual({ x: write.x, y: write.y + write.h / 2 });
+    // Its `+` is on the leg into the next box, between the two.
+    const plus = picture.inserts.find((one) => one.edgeId === 2)!;
+    expect(plus.x).toBeGreaterThan(design.x + design.w);
+    expect(plus.x).toBeLessThan(write.x);
+    // The whole automation's picture is still laid out down.
+    const whole = layOut(automationGraph(automation));
+    expect(at(whole, 3).y).toBeGreaterThan(at(whole, 2).y);
+  });
+
+  it("sizes each action's box to what it says, so the actions of a round are seen side by side", () => {
+    const picture = layOut(automationGraph(automation, 20));
+    const whole = layOut(automationGraph(automation));
+    for (const node of picture.nodes) {
+      // Narrower than a box on the whole automation's picture, the names here being short.
+      expect(node.w).toBeLessThan(at(whole, node.boxId).w);
+      expect(node.w).toBeGreaterThanOrEqual(132);
+      // As tall as its lines: the name, and the steps under it at the least.
+      expect(node.h).toBeLessThan(100);
+      expect(node.h % 2).toBe(0);
+    }
+  });
+
+  it("stands the boxes the round branches to one under another in the same column", () => {
+    const branched: AutomationDetailDto = {
+      ...automation,
+      placements: [
+        ...automation.placements.filter((one) => one.id !== 2),
+        step({
+          id: 2,
+          name: "設計",
+          roleId: 20,
+          exits: [
+            { id: 201, name: "完了", outputs: [] },
+            { id: 202, name: "short", outputs: [] },
+            { id: 203, name: "*", outputs: [] },
+          ],
+        }),
+      ],
+      edges: [...automation.edges, edge({ id: 6, fromId: 2, exitName: "short", toId: 4 })],
+    };
+    const picture = layOut(automationGraph(branched, 20));
+    const [design, write, check] = [at(picture, 2), at(picture, 3), at(picture, 4)];
+    // The checking box is reached past the writing one, so it stands a column further on, and the line
+    // to it runs under them.
+    expect(check.x).toBeGreaterThan(write.x);
+    const skip = picture.lines.find((one) => one.key === "edge-6")!;
+    expect(skip.points[0]!.y).toBe(design.y + design.h);
+    expect(skip.points[1]!.y).toBeGreaterThan(Math.max(write.y + write.h, check.y + check.h));
+    expect(skip.points[skip.points.length - 1]!.y).toBe(check.y + check.h);
+    expect(picture.inserts.some((one) => one.edgeId === 6)).toBe(true);
+    // It lands left of the line the checking box hands on by, and runs through none of its name.
+    const out = picture.lines.find((one) => one.key === "edge-5")!;
+    const landX = skip.points[skip.points.length - 1]!.x;
+    expect(landX).toBeLessThan(out.points[0]!.x);
+    for (const piece of pieces(skip)) expect(overlaps(piece, wordBox(out), true)).toBe(false);
+  });
+
   it("hangs the line out of the round as one that goes nowhere, naming the role it hands on to", () => {
     const picture = layOut(automationGraph(automation, 20));
     const out = picture.lines.find((line) => line.key === "edge-5")!;

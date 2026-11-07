@@ -493,6 +493,7 @@ pub fn run() {
       automation::automation_add,
       automation::automation_import,
       automation::automation_edit,
+      automation::automation_trigger_set,
       automation::automation_entry_replace,
       automation::automation_remove,
       automation::automation_action_page,

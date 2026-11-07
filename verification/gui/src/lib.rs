@@ -7084,9 +7084,15 @@ const BUILTIN_WORDS: &[BuiltinWords] = &[
             ("未着手のまま、出口「起票した」へ進む", "the choice that leaves the task not started"),
             ("進行中にして、出口「起票して着手した」へ進む", "the choice that takes the task it files"),
             ("タイトル", "the input for the new task's title"),
+            ("役割", "the setting naming the role the task it files is worked under, by the role's name"),
             ("起票した", "the way out for having filed a task"),
             ("起票して着手した", "the way out for having filed a task and taken it"),
         ],
+    },
+    BuiltinWords {
+        key: "split_by_dim",
+        called: "the built-in that splits the task by its value on one axis",
+        words: &[("分類なし", "the way out for a task with no value on that axis")],
     },
     BuiltinWords {
         key: "wait",

@@ -260,6 +260,7 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
         ),
         "automation_run_def" => "run_id IN (SELECT id FROM automation_run WHERE project_id = ?1)",
         "automation_run_task" => "run_id IN (SELECT id FROM automation_run WHERE project_id = ?1)",
+        "automation_run_pass" => "run_id IN (SELECT id FROM automation_run WHERE project_id = ?1)",
         "automation_run_step" => "run_id IN (SELECT id FROM automation_run WHERE project_id = ?1)",
         "automation_run_value" => concat!(
             "run_step_id IN (SELECT id FROM automation_run_step WHERE run_id IN",
@@ -1102,7 +1103,7 @@ mod tests {
              VALUES (?1, ?2, 'claude-code', 'opus', ?3, ?3)",
             rusqlite::params![placement, step, at],
         );
-        put(
+        let role = put(
             "INSERT INTO automation_role \
                  (automation_id, name, icon, entry_placement_id, agent, model, order_key, created_at, \
                   updated_at) \
@@ -1153,12 +1154,18 @@ mod tests {
             rusqlite::params![automation, placement, at, exit, out_port, in_port],
         );
 
+        let launch = put(
+            "INSERT INTO automation_launch \
+                 (automation_id, project_id, status, started_by_kind, ended_at, created_at, updated_at) \
+             VALUES (?1, ?2, 'ended', 'ai', ?3, ?3, ?3)",
+            rusqlite::params![automation, project, at],
+        );
         let run = put(
             "INSERT INTO automation_run \
                  (automation_id, project_id, status, pause_requested, started_by_kind, \
-                  started_at, ended_at, created_at, updated_at) \
-             VALUES (?1, ?2, 'completed', 0, 'ai', ?3, ?3, ?3, ?3)",
-            rusqlite::params![automation, project, at],
+                  started_at, ended_at, created_at, updated_at, launch_id) \
+             VALUES (?1, ?2, 'completed', 0, 'ai', ?3, ?3, ?3, ?3, ?4)",
+            rusqlite::params![automation, project, at, launch],
         );
         // What was handed over at launch hangs off the run itself (`AMB-D-970`).
         put(
@@ -1181,6 +1188,12 @@ mod tests {
                  (run_id, seq, task_id, started_at, ended_at, created_at, updated_at) \
              VALUES (?1, 1, ?2, ?3, ?3, ?3, ?3)",
             rusqlite::params![run, task, at],
+        );
+        put(
+            "INSERT INTO automation_run_pass \
+                 (run_id, run_task_id, to_role_id, task_id, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
+            rusqlite::params![run, run_task, role, task, at],
         );
         let run_step = put(
             "INSERT INTO automation_run_step \

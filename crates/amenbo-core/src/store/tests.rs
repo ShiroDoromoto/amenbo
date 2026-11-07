@@ -1620,7 +1620,7 @@ fn amenbos_default_agent_is_read_and_not_written_at_placing() {
     );
 
     // The first thing placed is the entry, a built-in (`AMB-D-977`); the action goes on after it.
-    s.automation_builtin_place(automation.id, "take_task").unwrap();
+    s.automation_builtin_place(automation.id, "take_task", None).unwrap();
     let placed = s.automation_placement_add(automation.id, action.id).unwrap();
     assert_eq!(chosen(&s, placed.id, step), None, "placing writes nobody onto the step");
     let added = s.automation_step_add(action.id, NewStep::new("直す", "fix it")).unwrap();
@@ -1641,12 +1641,16 @@ fn a_builtin_put_in_on_a_line_leaves_its_own_ways_out_saying_nothing() {
 
     let (mut s, dir) = fresh_store("builtin-insert");
     let p = s.project_add(project("PJ")).unwrap();
+    let axis = s
+        .dimension_add(p.id, crate::ops::dimension::NewDimension { name: "作業種別".into(), ..Default::default() })
+        .unwrap();
+    s.dimension_value_add(axis.id, "実装", None, None).unwrap();
     let action = s.automation_action_from_prompt(Some(p.id), NewStep::new("実装する", "do it"), &[], &[]).unwrap();
 
-    for key in ["take_task", "make_task", "fetch"] {
+    for (key, on) in [("take_task", None), ("make_task", None), ("fetch", None), ("split_by_dim", Some(axis.id))] {
         let automation =
             s.automation_add(p.id, NewAutomation { name: format!("回す {key}"), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
-        let first = s.automation_builtin_place(automation.id, "take_task").unwrap();
+        let first = s.automation_builtin_place(automation.id, "take_task", None).unwrap();
         let next = s.automation_placement_add(automation.id, action.id).unwrap();
         let go = s
             .automation_edge_add(AutomationPictureOwner::Automation, first.id, Some(TAKEN), EdgeTarget::Go(next.id), None)
@@ -1656,7 +1660,7 @@ fn a_builtin_put_in_on_a_line_leaves_its_own_ways_out_saying_nothing() {
 
         for edge in [go, done] {
             let put = s
-                .automation_builtin_insert(edge.id, key)
+                .automation_builtin_insert(edge.id, key, on)
                 .unwrap_or_else(|e| panic!("{key} put in on a {:?} line: {e}", edge.ends));
             let conn = s.engine.conn();
             let pressed = read::automation_edge(conn, edge.id).unwrap().unwrap();
@@ -1689,9 +1693,9 @@ fn a_builtin_put_on_after_a_way_out_that_says_nothing_is_pointed_at_by_it() {
     let p = s.project_add(project("PJ")).unwrap();
     let automation =
         s.automation_add(p.id, NewAutomation { name: "回す".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
-    let first = s.automation_builtin_place(automation.id, "take_task").unwrap();
+    let first = s.automation_builtin_place(automation.id, "take_task", None).unwrap();
 
-    let put = s.automation_builtin_insert_at_exit(first.id, Some(ERROR_EXIT), "take_task").unwrap();
+    let put = s.automation_builtin_insert_at_exit(first.id, Some(ERROR_EXIT), "take_task", None).unwrap();
 
     let conn = s.engine.conn();
     let exit = read::automation_exit_by_name(conn, AutomationOwner::Action, first.action_id, Some(ERROR_EXIT))

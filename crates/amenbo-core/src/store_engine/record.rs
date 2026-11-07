@@ -23,7 +23,7 @@ use crate::model::{
     ActorKind, Attachment, Automation, AutomationAction, AutomationActionVersion, AutomationCfg,
     AutomationEdge, AutomationExit, AutomationPlacement, AutomationPlacementStep, AutomationPort,
     AutomationLaunch, AutomationRole, AutomationRun, AutomationRunDef,
-    AutomationRunStep, AutomationRunTask, AutomationRunValue,
+    AutomationRunPass, AutomationRunStep, AutomationRunTask, AutomationRunValue,
     AutomationStep, AutomationVersion, TriggerTask, TriggerWhen,
     AutomationWire, Database, Decision, DecisionComment, DecisionDimensionValue,
     DecisionEdge, DecisionMadeIn, DecisionTaskLink,
@@ -975,6 +975,23 @@ pub fn automation_run_task(t: &AutomationRunTask) -> Record {
             ],
             &t.created_at,
             &t.updated_at,
+        ),
+    )
+}
+
+pub fn automation_run_pass(p: &AutomationRunPass) -> Record {
+    Record::new(
+        "automation_run_pass",
+        p.id,
+        with_audit(
+            vec![
+                ("run_id", kv(p.run_id)),
+                ("run_task_id", kv(p.run_task_id)),
+                ("to_role_id", kv_opt(&p.to_role_id)),
+                ("task_id", kv_opt(&p.task_id)),
+            ],
+            &p.created_at,
+            &p.updated_at,
         ),
     )
 }

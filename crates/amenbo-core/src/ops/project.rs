@@ -255,6 +255,10 @@ mod tests {
         let run_task = read::next_id(tx.conn(), "automation_run_task").unwrap();
         tx.put_record("automation_run_task", run_task, &[("run_id", int(run)), ("seq", int(1))])
             .unwrap();
+        // A task the round passed on names the round, so the delete has to take it first.
+        let pass = read::next_id(tx.conn(), "automation_run_pass").unwrap();
+        tx.put_record("automation_run_pass", pass, &[("run_id", int(run)), ("run_task_id", int(run_task))])
+            .unwrap();
         let mut steps = Vec::new();
         for seq in 1..=2 {
             let step = read::next_id(tx.conn(), "automation_run_step").unwrap();

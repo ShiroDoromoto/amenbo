@@ -31,6 +31,8 @@
 //! does its work first ([`work_outside`]), reading the store only to find its way, and the transaction
 //! that opens the step writes down what came of it.
 
+use std::borrow::Cow;
+
 use rusqlite::Connection;
 use serde::Serialize;
 
@@ -49,6 +51,7 @@ use crate::ops::automation_builtin_fetch::FETCH;
 use crate::ops::automation_builtin_fold::FOLD_WORKTREE;
 use crate::ops::automation_builtin_hand_back::HAND_BACK_TASK;
 use crate::ops::automation_builtin_make::MAKE_TASK;
+use crate::ops::automation_builtin_split::SPLIT_BY_DIM;
 use crate::ops::automation_builtin_take::TAKE_TASK;
 use crate::ops::automation_builtin_wait::WAIT;
 use crate::ops::automation_report::{self, Next, Produced};
@@ -111,11 +114,23 @@ pub enum Work {
     /// A built-in of this kind takes no input, never waits and takes no task: those are what the
     /// opening decides after this work is done, so none of them could hold it back.
     Outside(fn(&Outside<'_>) -> Result<Worked>),
+    /// Inside that transaction too, but **leaving by a way out the data names** rather than one the code
+    /// holds ([`Named`]) — the ways out of the built-in that splits by an axis are that axis's values
+    /// (`AMB-D-972`), written onto its action from the axis rather than from [`Builtin::exits`].
+    Named(fn(&Carry<'_, '_>) -> Result<Named>),
     /// **Nothing carried out: its step is held open** for as long as the answers where it was placed
     /// say ([`hold`]), and ended by the watch once that time has passed ([`time_up`]) — the built-in that
     /// waits (`AMB-D-983`). The step stands under way in the meantime, as an agent's does while it works,
     /// so a pause or a stop acts on it as on any other.
     Holds(fn(&[RunDefCfg]) -> Result<chrono::Duration>),
+}
+
+/// **How a built-in leaving by a way out the data names finished** — [`Carried`], with a name that is
+/// not the code's.
+#[derive(Debug)]
+pub struct Named {
+    pub exit: String,
+    pub report: String,
 }
 
 /// **What a built-in working outside the store is handed**: the store to read, the run, and the task the
@@ -493,6 +508,7 @@ const BUILTINS: &[Builtin] = &[
     HAND_BACK_TASK,
     DEFER_TASK,
     FETCH,
+    SPLIT_BY_DIM,
     WAIT,
 ];
 #[cfg(test)]
@@ -505,6 +521,7 @@ const BUILTINS: &[Builtin] = &[
     HAND_BACK_TASK,
     DEFER_TASK,
     FETCH,
+    SPLIT_BY_DIM,
     WAIT,
     tests::STAMP,
     tests::FALLS,
@@ -617,15 +634,40 @@ fn step_of(tx: &WriteTx<'_>, action_id: i64, builtin: &Builtin) -> Result<crate:
 /// wired in.
 pub fn action(tx: &WriteTx<'_>, key: &str) -> Result<AutomationAction> {
     let builtin = known(key)?;
+    if builtin.key == SPLIT_BY_DIM.key {
+        return Err(Error::invalid(format!(
+            "the built-in '{key}' splits by an axis, and there is one of it per axis — name the axis"
+        )));
+    }
     if let Some(written) = read::automation_action_builtin(tx.conn(), key, builtin.version)? {
         return Ok(written);
     }
-    write_action(tx, builtin)
+    write_action(tx, builtin, None, None)
 }
 
-/// **Write a built-in's library action** from its definition, in the device's library.
-fn write_action(tx: &WriteTx<'_>, builtin: &Builtin) -> Result<AutomationAction> {
-    let action = automation::action_add(tx, None, builtin.name, builtin.does)?;
+/// **The library action for a built-in, on an axis where it splits by one** — [`action`] for any other,
+/// and for the built-in that splits by an axis, the one written for that axis
+/// ([`crate::ops::automation_builtin_split::action`]). An axis named for any other is refused rather
+/// than dropped.
+pub fn action_on(tx: &WriteTx<'_>, key: &str, axis: Option<i64>) -> Result<AutomationAction> {
+    match (key == SPLIT_BY_DIM.key, axis) {
+        (true, Some(axis)) => crate::ops::automation_builtin_split::action(tx, axis),
+        (false, Some(_)) => Err(Error::invalid(format!(
+            "the built-in '{key}' does not split by an axis, so it takes none"
+        ))),
+        (_, None) => action(tx, key),
+    }
+}
+
+/// **Write a built-in's library action** from its definition — in the device's library, or in the
+/// project's where it splits by that project's axis (`AMB-D-972`), marked with the axis too.
+pub(crate) fn write_action(
+    tx: &WriteTx<'_>,
+    builtin: &Builtin,
+    project_id: Option<i64>,
+    axis: Option<i64>,
+) -> Result<AutomationAction> {
+    let action = automation::action_add(tx, project_id, builtin.name, builtin.does)?;
     unborn_unless_declared(tx, builtin, AutomationOwner::Action, action.id)?;
     let step = step_of(tx, action.id, builtin)?;
     for exit in builtin.exits {
@@ -694,6 +736,7 @@ fn write_action(tx: &WriteTx<'_>, builtin: &Builtin) -> Result<AutomationAction>
     let entered = automation::action_set_entry(tx, action.id, Some(step.id))?;
     let mut marked = entered.clone();
     marked.builtin = Some(builtin.key.to_string());
+    marked.builtin_dimension_id = axis;
     marked.builtin_version = Some(builtin.version);
     marked.updated_at = Timestamp::now();
     emit_update(tx, record::automation_action(&entered), record::automation_action(&marked))?;
@@ -749,13 +792,14 @@ pub(crate) fn carry_out(
     let carried = known(key).and_then(|builtin| {
         let carry = Carry { tx, run, run_step, task_id, exits, ins, cfg: &cfg, version: version_of(def) };
         match &builtin.work {
-            Work::InStore(work) => work(&carry).map(|c| (c.exit, c.report)),
+            Work::InStore(work) => work(&carry).map(|c| (Cow::Borrowed(c.exit), c.report)),
+            Work::Named(work) => work(&carry).map(|n| (Cow::Owned(n.exit), n.report)),
             Work::Outside(_) => match outside.filter(|done| done.run_def_id == def.id) {
                 Some(done) => done.worked.and_then(|worked| {
                     for (port, value) in &worked.hands {
                         carry.put(worked.exit, port, Produced::Value(value))?;
                     }
-                    Ok((worked.exit, worked.report))
+                    Ok((Cow::Borrowed(worked.exit), worked.report))
                 }),
                 None => Err(Error::invalid(say("outsideNotDone"))),
             },
@@ -766,10 +810,10 @@ pub(crate) fn carry_out(
         Ok(carried) => carried,
         // Worded for the reader: a refusal from another operation is said from the screen's template for
         // its code, and one of the built-in's own already is (`AMB-D-976`).
-        Err(e) => (ERROR_EXIT, crate::run_wording::error(tx.language(), &e)),
+        Err(e) => (Cow::Borrowed(ERROR_EXIT), crate::run_wording::error(tx.language(), &e)),
     };
     let leaves_by = |name: &str| exits.iter().find(|e| e.name == name).map(|e| e.id);
-    let Some(exit_id) = leaves_by(exit) else {
+    let Some(exit_id) = leaves_by(&exit) else {
         return fell_over(tx, run_step, exits, &say("undeclaredExit"));
     };
     match automation_report::done(tx, run_step.id, Some(exit_id), &report) {

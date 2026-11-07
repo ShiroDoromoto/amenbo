@@ -2284,10 +2284,10 @@ describe("one role's round, as the build screen draws it", () => {
   // Research hands Design its task; Design writes, checks, goes back to writing on "again", and hands
   // Build the rest. What Design writes takes the notes Research wrote, by a wire from its box.
   const roles = [
-    { id: 10, name: "Research", entryPlacementId: 1 },
-    { id: 20, name: "Design", entryPlacementId: 2 },
-    { id: 30, name: "Build", entryPlacementId: 5 },
-    { id: 40, name: "Upkeep" },
+    { id: 10, name: "Research", entryPlacementId: 1, passes: [] },
+    { id: 20, name: "Design", entryPlacementId: 2, passes: [] },
+    { id: 30, name: "Build", entryPlacementId: 5, passes: [] },
+    { id: 40, name: "Upkeep", passes: [] },
   ];
   const automation: AutomationDetailDto = {
     id: 7,

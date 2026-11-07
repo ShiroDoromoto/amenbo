@@ -57,6 +57,7 @@ function run(id: number): AutomationRunCardDto {
     waiting: false,
     waitsForRoom: false,
     stepsDone: 3,
+    passes: [],
     reportWithheld: id === 1000 ? hoisted.withheld : [],
     acknowledged: false,
     endedAt: "2026-09-23T00:00:00Z",

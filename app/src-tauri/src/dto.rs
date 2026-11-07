@@ -3588,6 +3588,28 @@ pub struct AutomationRoleDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) model: Option<String>,
+    /// **The tasks its round files for another role**, in the order the spots are
+    /// ([`amenbo_core::ops::automation_run::passes_by_role`]) — what the build screen draws beside the
+    /// role as what it passes on. Empty where it passes nothing, and its round ends with the task done.
+    pub(crate) passes: Vec<AutomationRolePassDto>,
+}
+
+/// **One task a role's round files for another role** — the spot of the built-in that files it, and
+/// the role it is filed under.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRolePassDto {
+    /// The role it is filed under, by its id.
+    #[ts(type = "number")]
+    pub(crate) to_role: i64,
+    /// The spot on the picture that files it, by the placement's id.
+    #[ts(type = "number")]
+    pub(crate) placement: i64,
+    /// The action standing on that spot, by name — what the build screen labels the task by.
+    pub(crate) name: String,
+    /// Whether the task it files is set to depend on another — what the build screen marks it with.
+    pub(crate) depends: bool,
 }
 
 /// **Who carries one step out at one spot, and where that was chosen** — the step at the spot, the
@@ -4615,6 +4637,36 @@ pub struct AutomationRunIncidentDto {
     pub(crate) person: bool,
 }
 
+/// **One task a round of a run passed to another role** — the role of the round that filed it, the
+/// role it was filed under, and the task ([`amenbo_core::ops::automation_run::RunPass`]). What the
+/// run's pane draws a line between two role cards by, labelled with the task's title.
+#[derive(Serialize, TS, Clone, PartialEq)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRunPassDto {
+    /// The role of the round that passed it, by its id. Absent where that role has since been taken
+    /// out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) from_role: Option<i64>,
+    /// The role it was filed under, by its id. Absent where that role has since been taken out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) to_role: Option<i64>,
+    /// The task, by its id. Absent where it has since been deleted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) task: Option<i64>,
+    /// The task's reference. Absent where it has since been deleted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) task_ref: Option<String>,
+    /// The task's title. Absent where it has since been deleted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) task_title: Option<String>,
+}
+
 /// **One thing standing in the way of a launch**, as core named it
 /// ([`amenbo_core::ops::automation_run::Unmet`]) — written in the shape a refusal's own reasons travel
 /// in (`CmdErrorPart`): the code naming the sentence, the values it is built from, and the English it
@@ -4813,6 +4865,9 @@ pub struct AutomationRunCardDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) incident: Option<AutomationRunIncidentDto>,
+    /// **The tasks its rounds passed to another role**, in the order they were filed
+    /// ([`amenbo_core::ops::automation_run::passes_of_run`]). Empty where no round passed one.
+    pub(crate) passes: Vec<AutomationRunPassDto>,
     /// **The steps whose report was kept off the task**, by name, in the order they ran: each was
     /// built to carry its report onto the task, and the task was closed by then (`AMB-D-963`). Empty
     /// where every report went where it was owed.

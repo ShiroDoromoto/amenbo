@@ -39,7 +39,7 @@ use crate::model::{
     AutomationLaunch, AutomationLaunchStatus, AutomationPauseKind, AutomationPlacementStep, AutomationRole,
     AutomationPort, AutomationPortDirection, AutomationPortKind,
     AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
-    AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
+    AutomationRunPass, AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
     AutomationStep, AutomationStoppedReason, AutomationTrigger, AutomationVersion, AutomationWire, Database,
     TriggerCondition, TriggerTask, TriggerWhen,
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
@@ -912,6 +912,20 @@ pub(super) fn automation_run_task_row(r: &Row) -> rusqlite::Result<AutomationRun
         ended_at: ts_opt(r, C.ended_at)?,
         role_id: get(r, C.role_id)?,
         incident_task_id: get(r, C.incident_task_id)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn automation_run_pass_row(r: &Row) -> rusqlite::Result<AutomationRunPass> {
+    const C: col::automation_run_pass::Cols = col::automation_run_pass::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationRunPass {
+        id: get(r, C.id)?,
+        run_id: get(r, C.run_id)?,
+        run_task_id: get(r, C.run_task_id)?,
+        to_role_id: get(r, C.to_role_id)?,
+        task_id: get(r, C.task_id)?,
         created_at,
         updated_at,
     })

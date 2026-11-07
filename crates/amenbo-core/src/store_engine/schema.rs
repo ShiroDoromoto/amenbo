@@ -1096,9 +1096,10 @@ datasets! {
         // and never edited: the ways out and the outputs they declare have to be the ones the code
         // leaves by.
         builtin: col(OPT),
-        // The axis the built-in `split_by_dim` split by (`AMB-D-972`), on an action of it an automation
-        // written before automations had roles still places, or NULL for every other action. That
-        // built-in is gone and such an automation is only exported, which writes the axis out by name.
+        // The axis a built-in that splits by one splits by (`AMB-D-972`), or NULL for every other
+        // action. Its ways out are that axis's values, so there is one such action per axis rather than
+        // one per key. An axis deleted from under it leaves it with none, and carrying it out then falls
+        // over rather than guess.
         builtin_dimension_id: fk_opt("dimension", "SET NULL"),
         // The version of the built-in's definition the rows were written from (`AMB-D-1000`), or NULL
         // for an action a person wrote. One action per version: a placement points at the one it was
@@ -1526,7 +1527,7 @@ datasets! {
         // What a run failed with `failed_check` did not pass, as the refusal said it. Set with that
         // reason and only then.
         stopped_detail: col(OPT),
-        // The launch the run was started in. NULL on a run written before launches were kept (v118
+        // The launch the run was started in. NULL on a run written before launches were kept (v119
         // gives each run then under way one of its own) and on a test run, which belongs to none.
         launch_id: fk_opt("automation_launch", "RESTRICT"),
     }
@@ -1622,6 +1623,21 @@ datasets! {
         // The task filed to whoever the automation sends a failed round to, where this round failed —
         // the round's task waits on it. `SET NULL` for the reason `task_id` is.
         incident_task_id: fk_opt("task", "SET NULL"),
+    }
+
+    // **One task a round filed for another role to work** — the round (`run_task_id`) whose role
+    // passed it, the role it was filed under (`to_role_id`) and the task itself. Written where the task
+    // is filed (`automation_builtin_make`), so it stands whether or not this run goes on to take it. A
+    // round passing more than one task has a row per task, in the order it filed them.
+    //
+    // The role it was passed from is the round's own (`automation_run_task.role_id`), read from there
+    // rather than kept twice. `to_role_id` and `task_id` are `SET NULL` for the reason the round's
+    // `task_id` is.
+    automation_run_pass {
+        run_id: fk("automation_run", "RESTRICT"),
+        run_task_id: fk("automation_run_task", "RESTRICT"),
+        to_role_id: fk_opt("automation_role", "SET NULL"),
+        task_id: fk_opt("task", "SET NULL"),
     }
 
     // **One step, run once.** `seq` is the move number within the run, so a step the run comes back

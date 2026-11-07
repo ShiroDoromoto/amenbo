@@ -817,7 +817,9 @@ fn one_trigger_is_rewritten_switched_and_taken_away_by_its_id() {
 
 /// **A trigger is named and files its task under one of its automation's roles**: `--name` and
 /// `--role` are read back by `show`, both left out leave it blank and under no role, another
-/// automation's role is refused, and neither goes beside `--rm`, `--on` or `--off`.
+/// automation's role is refused, and neither goes beside `--rm`, `--on` or `--off`. Its condition
+/// counts the tasks of one of those roles with `--if-tasks-role`, which is refused for another
+/// automation's role, with no `--if-tasks`, and beside `--off`.
 #[test]
 fn a_trigger_is_named_and_files_under_a_role_of_its_own() {
     let cli = Cli::new();
@@ -848,10 +850,31 @@ fn a_trigger_is_named_and_files_under_a_role_of_its_own() {
     assert_ne!(code, 0, "another automation's role is refused: {err}");
     assert!(err.contains("belongs to another automation"), "{err}");
 
+    let counted = cli.json(&[
+        "automation", "trigger", &a, "--when-idle", "--if-tasks", "status:todo", "--fewer-than", "3", "--if-tasks-role", &role,
+        "--role", &role, "--title", "Look over the inbox", "--json",
+    ]);
+    let condition = &counted["automation_trigger"]["condition"];
+    assert_eq!(id_str(&condition["role_id"]), role, "{counted}");
+    assert_eq!(condition["below"], serde_json::json!(3), "{counted}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(
+        text.contains(&format!("whenever none of its runs is under way while fewer than 3 task(s) under role {role} match \"status:todo\"")),
+        "{text}"
+    );
+    let (err, code) = cli.run_err(&[
+        "automation", "trigger", &a, "--when-idle", "--if-tasks", "status:todo", "--fewer-than", "3", "--if-tasks-role", &theirs,
+        "--title", "x", "--json",
+    ]);
+    assert_ne!(code, 0, "another automation's role is refused for the condition too: {err}");
+    assert!(err.contains("belongs to another automation"), "{err}");
+
     for wrong in [
         vec!["automation", "trigger", "--trigger", named.as_str(), "--off", "--name", "Inbox"],
         vec!["automation", "trigger", "--trigger", named.as_str(), "--on", "--role", role.as_str()],
         vec!["automation", "trigger", "--trigger", named.as_str(), "--rm", "--role", role.as_str()],
+        vec!["automation", "trigger", a.as_str(), "--when-idle", "--if-tasks-role", role.as_str(), "--title", "x"],
+        vec!["automation", "trigger", "--trigger", named.as_str(), "--off", "--if-tasks-role", role.as_str()],
     ] {
         let (_, code) = cli.run_err(&wrong);
         assert_ne!(code, 0, "{wrong:?} is refused");
@@ -947,6 +970,41 @@ fn an_action_moves_between_libraries_and_is_refused_where_another_project_places
 
     let back = cli.json(&["automation", "action-scope-set", &action, "--project", &p, "--json"]);
     assert_eq!(back["automation_action"]["project_id"].to_string(), p, "every placement is in this project");
+}
+
+/// `--axis` belongs to the built-in that splits by one. Passed with a library action it is refused
+/// rather than dropped, and nothing is placed.
+#[test]
+fn an_axis_given_with_a_library_action_is_refused() {
+    let cli = Cli::new();
+    let (p, a, action, _) = an_automation(&cli);
+    let before = cli.json(&["automation", "show", &a, "--json"]);
+    let (refused, code) = cli.run_err(&["automation", "place-add", &a, "--action", &action, "--axis", "x", "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("--axis"), "{refused}");
+    let after = cli.json(&["automation", "show", &a, "--json"]);
+    assert_eq!(before, after, "nothing was placed in project {p}");
+}
+
+/// **`split_by_dim` is placed on the axis `--axis` names** (`AMB-D-973`): its ways out are that axis's
+/// values and the one for a task with none, so a line hangs off each of them by its name.
+#[test]
+fn split_by_dim_is_placed_on_the_axis_given_and_leaves_by_its_values() {
+    let cli = Cli::new();
+    let p = cli.a_project();
+    cli.json(&["dimension", "add", "--project", &p, "--name", "Kind", "--json"]);
+    cli.json(&["dimension", "value-add", "Kind", "--name", "build", "--json"]);
+    cli.json(&["dimension", "value-add", "Kind", "--name", "investigate", "--json"]);
+    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--failures-to", "human", "--json"]), "automation");
+    an_entry(&cli, &a, "take_task");
+
+    let split = id_of(
+        &cli.json(&["automation", "place-add", &a, "--builtin", "split_by_dim", "--axis", "Kind", "--json"]),
+        "automation_placement",
+    );
+    cli.json(&["automation", "edge-add", "--from", &format!("{split}:build"), "--done", "--json"]);
+    cli.json(&["automation", "edge-add", "--from", &format!("{split}:investigate"), "--halt", "--json"]);
+    cli.json(&["automation", "edge-add", "--from", &format!("{split}:分類なし"), "--halt", "--json"]);
 }
 
 /// An id naming nothing is a refusal, not an empty account — the same road `run show` takes.

@@ -6685,11 +6685,11 @@ pub fn automation_triggers_of(conn: &Connection, automation_id: i64) -> Result<V
     )
 }
 
-/// The triggers whose task is worked under this role, ascending — what has to let go of it before the
-/// role goes, the key being `RESTRICT`.
+/// The triggers whose task is worked under this role, or whose condition counts the tasks worked under
+/// it, ascending — what has to let go of it before the role goes, both keys being `RESTRICT`.
 pub fn automation_trigger_ids_with_role(conn: &Connection, role_id: i64) -> Result<Vec<i64>> {
     const T: col::automation_trigger::Cols = col::automation_trigger::ALL;
-    select_ids(conn, T.id, Some(&Pred::eq(T.role_id, role_id)))
+    select_ids(conn, T.id, Some(&Pred::eq(T.role_id, role_id).or(Pred::eq(T.condition_role_id, role_id))))
 }
 
 /// The `automation_placement` record with this id.

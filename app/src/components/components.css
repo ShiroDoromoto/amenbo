@@ -1980,6 +1980,40 @@ button.feed__target:hover { color: var(--c-accent); }
 .actport--cfg { --tone: var(--c-heed); }
 .actport--exit { --tone: var(--c-accent); color: var(--c-text); background: var(--c-surface-pic) var(--c-surface); }
 .actport--error { --tone: var(--c-stop); color: var(--c-stop); border-style: dashed; background: none; }
+/* The roles down the left of the build screen, and what is built for the picked one beside them
+   (`../screens/AutomationRoles`). Narrow is the screen's own width, not the window's, for the reason
+   `autoruns` gives: the list then goes across the top and its rows stand side by side. */
+.actbuild__body { container: actbody / inline-size; display: flex; align-items: stretch; }
+.actbuild__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.autoroles {
+  flex: 0 0 200px; display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3);
+  background: var(--c-sunken-pic) var(--c-sunken); border-inline-end: var(--border-w) var(--border-style) var(--c-rule);
+}
+.autoroles__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.autoroles__row {
+  width: 100%; display: flex; align-items: center; gap: var(--s-2); padding: 5px 6px;
+  font: inherit; color: inherit; text-align: start; background: none; border: 0; border-radius: var(--r-sm); cursor: pointer;
+}
+.autoroles__row:hover { background: var(--c-hover); }
+.autoroles__row[aria-current] { background: var(--c-accent-weak); color: var(--c-accent); }
+.autoroles__name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-weight: var(--fw-medium); }
+.autoroles__count { font-size: var(--fs-xs); color: var(--c-text-muted); }
+.autoroles__add { align-self: flex-start; }
+@container actbody (max-width: 40rem) {
+  .actbuild__body { flex-direction: column; }
+  .autoroles { flex-basis: auto; border-inline-end: 0; border-block-end: var(--border-w) var(--border-style) var(--c-rule); }
+  .autoroles__list { flex-direction: row; flex-wrap: wrap; }
+  .autoroles__row { width: auto; }
+}
+.autorole { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-3) 0; }
+.autorole__head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
+.autorole__name {
+  flex: 1 1 10rem; min-width: 0; max-width: none; padding: 0; border: 0; border-radius: 0;
+  border-block-end: var(--border-w) dashed var(--c-edge); background: none;
+  font: inherit; font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--c-text);
+}
+.autorole__who { display: grid; grid-template-columns: auto minmax(0, 20rem); align-items: center; gap: var(--s-1) var(--s-3); font-size: var(--fs-md); }
+.autorole__who > select { min-width: 0; }
 /* The picture. Its panel is not beside it here but in the shell's right-pane column
    (`../shell/paneSlot`), so the picture has the whole width of `.main` and only as much height as it
    draws. */

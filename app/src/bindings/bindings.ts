@@ -2635,6 +2635,20 @@ runs?: "running" | "history",
 dimension?: number, };
 
 /**
+ * The two license files the app ships beside itself, for the credits screen: Amenbo's own and the
+ * notices for the third-party software and data compiled or bundled into it.
+ */
+export type LicensesDto = { 
+/**
+ * The text of `LICENSE` (Apache-2.0).
+ */
+license: string, 
+/**
+ * The text of `THIRD-PARTY-NOTICES`, as `scripts/gen-third-party-notices.mjs` wrote it.
+ */
+thirdPartyNotices: string, };
+
+/**
  * A reference to a task a decision spawned. A [`DecisionRefDto`] plus **status**, so the screen can
  * answer "is this decision's work finished yet?". Completed ones are muted on the screen side.
  */

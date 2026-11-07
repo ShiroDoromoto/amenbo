@@ -821,6 +821,18 @@ pub struct StoreLocationsDto {
     pub(crate) root: String,
 }
 
+/// The two license files the app ships beside itself, for the credits screen: Amenbo's own and the
+/// notices for the third-party software and data compiled or bundled into it.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct LicensesDto {
+    /// The text of `LICENSE` (Apache-2.0).
+    pub(crate) license: String,
+    /// The text of `THIRD-PARTY-NOTICES`, as `scripts/gen-third-party-notices.mjs` wrote it.
+    pub(crate) third_party_notices: String,
+}
+
 /// The one font a skin carries, on the way to the window. The bytes ride as base64 with the
 /// wrapping already taken out — the window decodes once and hands the buffer to `FontFace`, which
 /// is measurably quicker than a `data:` URI and touches no CSP directive.

@@ -3531,8 +3531,8 @@ pub struct AutomationDetailDto {
     pub(crate) archived: bool,
     /// How many runs of it may be going at once, from 1 up to the cap; a launch past it is refused.
     pub(crate) max_concurrent_runs: u32,
-    /// What files a task on its own and starts a run with it. Absent for an automation only a person
-    /// starts.
+    /// What files a task on its own and starts a run with it — the first of the automation's triggers.
+    /// Absent for an automation only a person starts.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) trigger: Option<AutomationTriggerDto>,

@@ -1282,7 +1282,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
         max_concurrent_runs: DEFAULT_MAX_CONCURRENT_RUNS,
         failures_to: new.failures_to,
         export_only: false,
-        trigger: None,
+        triggers: Vec::new(),
         stopped: false,
         waits_for_task_since: None,
         order_key,
@@ -1391,8 +1391,9 @@ pub enum NewTriggerTask {
     Script(NewScript),
 }
 
-/// **Write an automation's trigger** (`Some`), or take it away (`None`) — what files a task on its own
-/// and starts a run of this automation with it ([`AutomationTrigger`]).
+/// **Have an automation's triggers be the one given** (`Some`), **or none** (`None`) — what files a task
+/// on its own and starts a run of this automation with it ([`AutomationTrigger`]). Every trigger the
+/// automation had is taken away, and the one given is written as its only one, enabled.
 ///
 /// The first time it is asked is counted from now, so writing one files nothing on the spot; writing
 /// it again counts afresh. A trigger asks no question of the picture here: a run it starts is checked
@@ -1406,10 +1407,10 @@ pub enum NewTriggerTask {
 /// `script` with none is refused; it is not run here. What the task says is refused the same way: a
 /// file not named by its full path, and a program that writes it as a script is; neither is read or
 /// run here, so one missing now is only found out when the task is filed. A role that is not this
-/// automation's own is refused. Taking a trigger away that is not there writes nothing.
+/// automation's own is refused. Taking triggers away from an automation that has none writes nothing.
 pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Result<Automation> {
     let before = live_automation(tx, id)?;
-    if before.trigger.is_none() && trigger.is_none() {
+    if before.triggers.is_empty() && trigger.is_none() {
         return Ok(before);
     }
     if before.export_only && trigger.is_some() {
@@ -1419,76 +1420,94 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
         )));
     }
     let now = Timestamp::now();
-    let mut after = before.clone();
-    after.trigger = match trigger {
-        None => None,
-        Some(NewTrigger { name, role_id, when, condition, script, task }) => {
-            checked_trigger_role(tx, id, role_id)?;
-            match when {
-                TriggerWhen::Every { minutes } if minutes < MIN_TRIGGER_EVERY_MINUTES => {
-                    return Err(Error::invalid(format!(
-                        "a trigger waits at least {MIN_TRIGGER_EVERY_MINUTES} minute(s) between tasks, not {minutes}"
-                    )));
-                }
-                TriggerWhen::Tasks if condition.is_none() => {
-                    return Err(Error::invalid("a trigger that files on its condition alone needs a condition"));
-                }
-                TriggerWhen::Script if script.is_none() => {
-                    return Err(Error::invalid("a trigger that files on its script's say alone needs a script"));
-                }
-                TriggerWhen::Every { .. } | TriggerWhen::Idle | TriggerWhen::Tasks | TriggerWhen::Script => {}
-            }
-            let script = script.map(checked_script).transpose()?;
-            let condition = match condition {
-                None => None,
-                Some(TriggerCondition { filter, below }) => {
-                    if below == 0 {
-                        return Err(Error::invalid(
-                            "a trigger's condition files a task while fewer than N tasks match, N being 1 or more, not 0",
-                        ));
-                    }
-                    let filter = filter.trim().to_string();
-                    if crate::query::Filter::parse(&filter, crate::time::today())?.project_ref.is_some() {
-                        return Err(Error::invalid(
-                            "a trigger's condition counts the tasks of its own automation's project, so it names no `project:`",
-                        ));
-                    }
-                    crate::query::count(tx.conn(), crate::reach::Reach::binding(before.project_id), &filter)?;
-                    Some(TriggerCondition { filter, below })
-                }
-            };
-            let task = match task {
-                NewTriggerTask::Fixed { title, notes } => {
-                    let title = title.trim();
-                    if title.is_empty() {
-                        return Err(Error::invalid("the task a trigger files needs a title"));
-                    }
-                    TriggerTask::Fixed { title: title.to_string(), notes }
-                }
-                NewTriggerTask::File { path } => {
-                    if !std::path::Path::new(&path).is_absolute() {
-                        return Err(Error::invalid(format!(
-                            "the file a trigger's task is read from is named by its full path, and '{path}' is not one"
-                        )));
-                    }
-                    TriggerTask::File { path }
-                }
-                NewTriggerTask::Script(script) => TriggerTask::Script { script: checked_script(script)? },
-            };
-            Some(AutomationTrigger {
-                name: name.trim().to_string(),
-                role_id,
-                when,
-                condition,
-                script,
-                task,
-                next_at: when.after(now),
-            })
+    let written = trigger.map(|new| checked_trigger(tx, &before, new, now)).transpose()?;
+    for old in &before.triggers {
+        tx.delete_record("automation_trigger", old.id)?;
+    }
+    let mut after = before;
+    after.triggers = match written {
+        None => Vec::new(),
+        Some(trigger) => {
+            emit_create(tx, record::automation_trigger(&trigger))?;
+            vec![trigger]
         }
     };
-    after.updated_at = now;
-    emit_update(tx, record::automation(&before), record::automation(&after))?;
     Ok(after)
+}
+
+/// **A trigger as it is written** on `automation`, checked as [`trigger_set`] says, its first time to
+/// be asked counted from `now`. It is given the next id, and the first place among the automation's
+/// triggers, which [`trigger_set`] has it be the only one of.
+fn checked_trigger(tx: &WriteTx<'_>, automation: &Automation, new: NewTrigger, now: Timestamp) -> Result<AutomationTrigger> {
+    let NewTrigger { name, role_id, when, condition, script, task } = new;
+    checked_trigger_role(tx, automation.id, role_id)?;
+    match when {
+        TriggerWhen::Every { minutes } if minutes < MIN_TRIGGER_EVERY_MINUTES => {
+            return Err(Error::invalid(format!(
+                "a trigger waits at least {MIN_TRIGGER_EVERY_MINUTES} minute(s) between tasks, not {minutes}"
+            )));
+        }
+        TriggerWhen::Tasks if condition.is_none() => {
+            return Err(Error::invalid("a trigger that files on its condition alone needs a condition"));
+        }
+        TriggerWhen::Script if script.is_none() => {
+            return Err(Error::invalid("a trigger that files on its script's say alone needs a script"));
+        }
+        TriggerWhen::Every { .. } | TriggerWhen::Idle | TriggerWhen::Tasks | TriggerWhen::Script => {}
+    }
+    let script = script.map(checked_script).transpose()?;
+    let condition = match condition {
+        None => None,
+        Some(TriggerCondition { filter, below }) => {
+            if below == 0 {
+                return Err(Error::invalid(
+                    "a trigger's condition files a task while fewer than N tasks match, N being 1 or more, not 0",
+                ));
+            }
+            let filter = filter.trim().to_string();
+            if crate::query::Filter::parse(&filter, crate::time::today())?.project_ref.is_some() {
+                return Err(Error::invalid(
+                    "a trigger's condition counts the tasks of its own automation's project, so it names no `project:`",
+                ));
+            }
+            crate::query::count(tx.conn(), crate::reach::Reach::binding(automation.project_id), &filter)?;
+            Some(TriggerCondition { filter, below })
+        }
+    };
+    let task = match task {
+        NewTriggerTask::Fixed { title, notes } => {
+            let title = title.trim();
+            if title.is_empty() {
+                return Err(Error::invalid("the task a trigger files needs a title"));
+            }
+            TriggerTask::Fixed { title: title.to_string(), notes }
+        }
+        NewTriggerTask::File { path } => {
+            if !std::path::Path::new(&path).is_absolute() {
+                return Err(Error::invalid(format!(
+                    "the file a trigger's task is read from is named by its full path, and '{path}' is not one"
+                )));
+            }
+            TriggerTask::File { path }
+        }
+        NewTriggerTask::Script(script) => TriggerTask::Script { script: checked_script(script)? },
+    };
+    Ok(AutomationTrigger {
+        id: read::next_id(tx.conn(), "automation_trigger")?,
+        automation_id: automation.id,
+        enabled: true,
+        name: name.trim().to_string(),
+        role_id,
+        when,
+        condition,
+        script,
+        task,
+        next_at: when.after(now),
+        last_filed_at: None,
+        order_key: place(&[], &Position::Bottom)?,
+        created_at: now,
+        updated_at: now,
+    })
 }
 
 /// **What stopping an automation did** ([`stop`]): the automation as it now stands, and the runs of it
@@ -1930,6 +1949,10 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     }
     for edge in read::automation_edge_ids(tx.conn(), AutomationPictureOwner::Automation, id)? {
         tx.delete_record("automation_edge", edge)?;
+    }
+    // The triggers point at the automation and at its roles, so they go before either.
+    for trigger in &automation.triggers {
+        tx.delete_record("automation_trigger", trigger.id)?;
     }
     // The roles and the entry are references into the placements that are about to go, so they are
     // dropped before them.
@@ -2643,22 +2666,22 @@ pub fn role_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     rewritable(tx, Def::Automation(role.automation_id))?;
     take_role_off_tasks(tx, id)?;
     stop_filing_failures_to(tx, &role)?;
-    take_role_off_trigger(tx, &role)?;
+    take_role_off_triggers(tx, &role)?;
     tx.delete_record("automation_role", id)?;
     Ok(())
 }
 
-/// Where a role that is about to go is the one its automation's trigger files tasks under, have the
-/// trigger file them under none. `automation.trigger_role_id` is `RESTRICT`, so this goes before the
-/// role's row does. The trigger keeps its `next_at`.
-fn take_role_off_trigger(tx: &WriteTx<'_>, role: &AutomationRole) -> Result<()> {
-    let before = live_automation(tx, role.automation_id)?;
-    let Some(trigger) = before.trigger.as_ref().filter(|t| t.role_id == Some(role.id)) else {
-        return Ok(());
-    };
-    let trigger = AutomationTrigger { role_id: None, ..trigger.clone() };
-    let after = Automation { trigger: Some(trigger), updated_at: Timestamp::now(), ..before.clone() };
-    emit_update(tx, record::automation(&before), record::automation(&after))
+/// Where a role that is about to go is the one some of its automation's triggers file tasks under, have
+/// each of them file them under none. `automation_trigger.role_id` is `RESTRICT`, so this goes before the
+/// role's row does. Each trigger keeps its `next_at`.
+fn take_role_off_triggers(tx: &WriteTx<'_>, role: &AutomationRole) -> Result<()> {
+    let now = Timestamp::now();
+    for id in read::automation_trigger_ids_with_role(tx.conn(), role.id)? {
+        let before = read::automation_trigger(tx.conn(), id)?.ok_or_else(|| not_found("automation trigger", id))?;
+        let after = AutomationTrigger { role_id: None, updated_at: now, ..before.clone() };
+        emit_update(tx, record::automation_trigger(&before), record::automation_trigger(&after))?;
+    }
+    Ok(())
 }
 
 /// Where a role that is about to go is where its automation files failed rounds, leave that unsaid.
@@ -4319,6 +4342,12 @@ mod tests {
         });
     }
 
+    /// **The one trigger an automation has**, or `None` for none — [`trigger_set`] leaves it no more.
+    fn only(automation: Automation) -> Option<AutomationTrigger> {
+        assert!(automation.triggers.len() <= 1, "more than one trigger: {:?}", automation.triggers);
+        automation.triggers.into_iter().next()
+    }
+
     /// **A trigger is written, counted from the write, and taken away** — an `every`, an `idle`, a
     /// `tasks` or a `script`, with or without a condition or a script. A wait under a minute, a task with
     /// no title, a condition whose filter does not read or names a project, one below 0, a `tasks` with
@@ -4338,40 +4367,43 @@ mod tests {
         };
         with_tx(|tx| {
             let automation = mk_automation(tx);
-            assert_eq!(automation.trigger, None, "born with none");
+            assert!(automation.triggers.is_empty(), "born with none");
             let untouched = trigger_set(tx, automation.id, None).expect("nothing to take away");
             assert_eq!(untouched.updated_at, automation.updated_at, "and nothing is written");
 
             let before = Timestamp::now();
             let set = trigger_set(tx, automation.id, Some(hourly("  受信箱を見る "))).expect("write one");
-            let trigger = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
+            let trigger = only(live_automation(tx, automation.id).expect("read")).expect("kept");
             assert_eq!(trigger.task, TriggerTask::Fixed { title: "受信箱を見る".into(), notes: "メモ".into() });
             assert_eq!(trigger.when, TriggerWhen::Every { minutes: 60 });
             assert!(trigger.next_at > before, "the first is counted from the write, not due at once");
-            assert_eq!(set.trigger.map(|t| t.task), Some(trigger.task.clone()));
+            assert!(trigger.enabled, "written to be asked");
+            assert_eq!(trigger.last_filed_at, None, "nothing filed yet");
+            assert_eq!(only(set).map(|t| t.task), Some(trigger.task.clone()));
 
             let zero = NewTrigger { when: TriggerWhen::Every { minutes: 0 }, ..hourly("見る") };
             for wrong in [zero, hourly("   ")] {
                 let refused = trigger_set(tx, automation.id, Some(wrong.clone()));
                 assert!(matches!(refused, Err(Error::Invalid(_))), "{wrong:?} is refused");
             }
-            assert_eq!(live_automation(tx, automation.id).expect("read").trigger.map(|t| t.task), Some(trigger.task));
+            assert_eq!(only(live_automation(tx, automation.id).expect("read")).map(|t| t.task), Some(trigger.task));
 
             let idle = NewTrigger { when: TriggerWhen::Idle, ..hourly("見る") };
             let set = trigger_set(tx, automation.id, Some(idle)).expect("an idle one");
-            let read_back = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
+            let read_back = only(live_automation(tx, automation.id).expect("read")).expect("kept");
             assert_eq!(read_back.when, TriggerWhen::Idle, "kept with no minutes");
-            assert_eq!(set.trigger, Some(read_back));
+            assert_ne!(read_back.id, trigger.id, "the one written stands in place of the one before");
+            assert_eq!(only(set), Some(read_back));
 
             let below = |filter: &str, below: u32| Some(TriggerCondition { filter: filter.into(), below });
             let counted = NewTrigger { condition: below(" status:todo,in_progress ", 3), ..hourly("見る") };
             let set = trigger_set(tx, automation.id, Some(counted)).expect("an every with a condition");
-            let read_back = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
+            let read_back = only(live_automation(tx, automation.id).expect("read")).expect("kept");
             assert_eq!(read_back.condition, below("status:todo,in_progress", 3), "kept trimmed");
-            assert_eq!(set.trigger, Some(read_back));
+            assert_eq!(only(set), Some(read_back));
             let alone = NewTrigger { when: TriggerWhen::Tasks, condition: below("", 1), ..hourly("見る") };
             let set = trigger_set(tx, automation.id, Some(alone)).expect("a condition alone, over every task");
-            assert_eq!(set.trigger.map(|t| (t.when, t.condition)), Some((TriggerWhen::Tasks, below("", 1))));
+            assert_eq!(only(set).map(|t| (t.when, t.condition)), Some((TriggerWhen::Tasks, below("", 1))));
 
             for wrong in [
                 NewTrigger { condition: below("status:nope", 3), ..hourly("見る") },
@@ -4382,7 +4414,7 @@ mod tests {
                 let refused = trigger_set(tx, automation.id, Some(wrong.clone()));
                 assert!(refused.is_err(), "{wrong:?} is refused");
             }
-            assert_eq!(live_automation(tx, automation.id).expect("read").trigger.map(|t| t.when), Some(TriggerWhen::Tasks));
+            assert_eq!(only(live_automation(tx, automation.id).expect("read")).map(|t| t.when), Some(TriggerWhen::Tasks));
 
             let program = |program: &str, timeout_minutes: Option<i64>| {
                 Some(NewScript { program: program.into(), args: vec!["--quiet".into()], timeout_minutes })
@@ -4390,7 +4422,7 @@ mod tests {
             let judge = a_program();
             let asked = NewTrigger { when: TriggerWhen::Script, script: program(&judge, None), ..hourly("見る") };
             let set = trigger_set(tx, automation.id, Some(asked)).expect("a script alone");
-            let read_back = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
+            let read_back = only(live_automation(tx, automation.id).expect("read")).expect("kept");
             assert_eq!(read_back.when, TriggerWhen::Script);
             assert_eq!(
                 read_back.script,
@@ -4401,10 +4433,10 @@ mod tests {
                 }),
                 "kept with the timeout it is given unless written"
             );
-            assert_eq!(set.trigger, Some(read_back));
+            assert_eq!(only(set), Some(read_back));
             let laid = NewTrigger { script: program(&judge, Some(5)), ..hourly("見る") };
             let set = trigger_set(tx, automation.id, Some(laid)).expect("an every with a script");
-            assert_eq!(set.trigger.and_then(|t| t.script).map(|s| s.timeout_minutes), Some(5));
+            assert_eq!(only(set).and_then(|t| t.script).map(|s| s.timeout_minutes), Some(5));
 
             for wrong in [
                 NewTrigger { when: TriggerWhen::Script, ..hourly("見る") },
@@ -4420,13 +4452,13 @@ mod tests {
             let path = std::env::temp_dir().join("trigger-task.md").to_string_lossy().into_owned();
             let from_file = NewTrigger { task: NewTriggerTask::File { path: path.clone() }, ..hourly("") };
             let set = trigger_set(tx, automation.id, Some(from_file)).expect("a task read from a file");
-            let read_back = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
+            let read_back = only(live_automation(tx, automation.id).expect("read")).expect("kept");
             assert_eq!(read_back.task, TriggerTask::File { path });
-            assert_eq!(set.trigger, Some(read_back));
+            assert_eq!(only(set), Some(read_back));
             let written = NewTriggerTask::Script(NewScript { program: judge.clone(), args: Vec::new(), timeout_minutes: None });
             let set = trigger_set(tx, automation.id, Some(NewTrigger { task: written, ..hourly("") }))
                 .expect("a task a program writes");
-            let read_back = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
+            let read_back = only(live_automation(tx, automation.id).expect("read")).expect("kept");
             assert_eq!(
                 read_back.task,
                 TriggerTask::Script {
@@ -4434,7 +4466,7 @@ mod tests {
                 },
                 "kept with the timeout it is given unless written"
             );
-            assert_eq!(set.trigger, Some(read_back));
+            assert_eq!(only(set), Some(read_back));
 
             for task in [
                 NewTriggerTask::File { path: "trigger-task.md".into() },
@@ -4447,8 +4479,8 @@ mod tests {
             }
 
             let off = trigger_set(tx, automation.id, None).expect("take it away");
-            assert_eq!(off.trigger, None);
-            assert_eq!(live_automation(tx, automation.id).expect("read").trigger, None);
+            assert!(off.triggers.is_empty());
+            assert!(live_automation(tx, automation.id).expect("read").triggers.is_empty());
 
             let old = Automation { export_only: true, ..off.clone() };
             emit_update(tx, record::automation(&off), record::automation(&old)).expect("mark it");

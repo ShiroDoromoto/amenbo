@@ -1925,61 +1925,69 @@ pub fn launch_handing_past_the_limit(
     hand(tx, automation_id, by, handed, reads, false, false)?.run()
 }
 
-/// **What the triggers say on one look** ([`triggers_due`]): the automations whose trigger is due now,
-/// the ones due but for what their scripts say, and when the soonest of the rest is.
+/// **What the triggers say on one look** ([`triggers_due`]): the triggers due now, the ones due but for
+/// what their scripts say, and when the soonest of the rest is. Each is named by its own id — an
+/// automation may have several, and each is asked and fired on its own.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TriggersDue {
-    /// The automations to [`fire`], oldest first.
+    /// The triggers to [`fire`], oldest automation first and then in their order.
     pub due: Vec<i64>,
-    /// The automations whose trigger is due but for its scripts, oldest first, each with them: run them
-    /// outside any write ([`ask_trigger`]), and [`fire`] the automation only where they said to file a
-    /// task, handing it what they said.
+    /// The triggers due but for their scripts, in the same order, each with them: run them outside any
+    /// write ([`ask_trigger`]), and [`fire`] the trigger only where they said to file a task, handing it
+    /// what they said.
     pub ask: Vec<(i64, TriggerScripts)>,
     /// When the next trigger not yet due is, or `None` where there is none — so a look can sleep no
     /// longer than that.
     pub next_at: Option<Timestamp>,
 }
 
-/// **Which triggers are due at `now`** — the first part of each, asked of every automation that may be
-/// started by one ([`read::automations_triggered`]), which leaves out a stopped one. One whose runs
-/// under way say no ([`has_room`]), or whose condition does not hold ([`condition_holds`]), is not
-/// due: it would decide not to file a task, so a look need not open a write to hear it say so. One
-/// with a script — one that asks whether to file a task, or one that writes what it says — is put in
-/// `ask` rather than `due`: its program may run for hours, so it is not run here. It writes nothing:
-/// [`fire`] asks all of it again, in the transaction it writes in.
+/// **Which triggers are due at `now`** — the first part of each, asked of every enabled trigger of an
+/// automation that may be started by one ([`read::automations_triggered`]), which leaves out a stopped
+/// one. One whose automation's runs under way say no ([`has_room`]), or whose condition does not hold
+/// ([`condition_holds`]), is not due: it would decide not to file a task, so a look need not open a
+/// write to hear it say so. One with a script — one that asks whether to file a task, or one that
+/// writes what it says — is put in `ask` rather than `due`: its program may run for hours, so it is not
+/// run here. It writes nothing: [`fire`] asks all of it again, in the transaction it writes in.
 pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
     let mut found = TriggersDue::default();
     for automation in read::automations_triggered(conn)? {
-        let Some(trigger) = &automation.trigger else { continue };
-        if trigger.next_at <= now {
-            let under_way = read::automation_run_ids_under_way(conn, automation.id)?;
-            // A condition that no longer reads (an axis it names gone since) is left for `fire` to
-            // refuse, as a launch refused is, rather than stopping every other trigger on this look.
-            if has_room(&trigger.when, under_way.len(), automation.max_concurrent_runs)
-                && condition_holds(conn, automation.project_id, trigger).unwrap_or(true)
-            {
-                match TriggerScripts::of(trigger) {
-                    Some(scripts) => found.ask.push((automation.id, scripts)),
-                    None => found.due.push(automation.id),
+        let enabled = || automation.triggers.iter().filter(|t| t.enabled);
+        let under_way = if enabled().any(|t| t.next_at <= now) {
+            read::automation_run_ids_under_way(conn, automation.id)?.len()
+        } else {
+            0
+        };
+        for trigger in enabled() {
+            if trigger.next_at <= now {
+                // A condition that no longer reads (an axis it names gone since) is left for `fire` to
+                // refuse, as a launch refused is, rather than stopping every other trigger on this look.
+                if has_room(&trigger.when, under_way, automation.max_concurrent_runs)
+                    && condition_holds(conn, automation.project_id, trigger).unwrap_or(true)
+                {
+                    match TriggerScripts::of(trigger) {
+                        Some(scripts) => found.ask.push((trigger.id, scripts)),
+                        None => found.due.push(trigger.id),
+                    }
                 }
+            } else if found.next_at.is_none_or(|soonest| trigger.next_at < soonest) {
+                found.next_at = Some(trigger.next_at);
             }
-        } else if found.next_at.is_none_or(|soonest| trigger.next_at < soonest) {
-            found.next_at = Some(trigger.next_at);
         }
     }
     Ok(found)
 }
 
-/// **Fire an automation's trigger** at `now`: decide whether to file a task, write what it says, and
-/// start a run of the automation on it — `Some(run)` when it did, `None` when it decided not to.
+/// **Fire one trigger of an automation** at `now`: decide whether to file a task, write what it says,
+/// and start a run of the automation on it — `Some(run)` when it did, `None` when it decided not to.
 ///
-/// 1. **Whether to file one.** Not before the trigger's `next_at`, and not while its runs under way say
-///    no ([`has_room`]): an `every` or a `tasks` waits while the automation has its most runs under way
-///    (`max_concurrent_runs`), where a task filed would have no run to go to, and an `idle` waits until
-///    it has none at all. Nor while its condition does not hold ([`condition_holds`]). One with a
-///    script files one only where `said` was heard from those very scripts — the ones [`ask_trigger`]
-///    ran outside this write — so one rewritten since they were asked files nothing. An archived
-///    automation, a stopped one, one kept for export only and one with no trigger file none either.
+/// 1. **Whether to file one.** Not before the trigger's `next_at`, and not while the automation's runs
+///    under way say no ([`has_room`]): an `every` or a `tasks` waits while the automation has its most
+///    runs under way (`max_concurrent_runs`), where a task filed would have no run to go to, and an
+///    `idle` waits until it has none at all. Nor while its condition does not hold
+///    ([`condition_holds`]). One with a script files one only where `said` was heard from those very
+///    scripts — the ones [`ask_trigger`] ran outside this write — so one rewritten since they were asked
+///    files nothing. A trigger not enabled files none, nor does one of an archived automation, a stopped
+///    one or one kept for export only, nor one taken away since it was found due.
 /// 2. **What it says** ([`crate::model::TriggerTask`]): the title and notes written on the trigger, the
 ///    ones read from its file now ([`task_from_file`]), or the ones its program wrote in `said`. A file
 ///    that says nothing it can file is an error, as a launch refused is.
@@ -1991,24 +1999,28 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 ///
 /// **A time it decides no leaves nothing**: no task, no run, and `next_at` where it was, so the next
 /// look asks again. A launch refused by its checks is an error, and the transaction it is written in
-/// takes nothing with it either. Only a task filed moves `next_at` on, counted from `now` rather than
-/// from when it was due, so an app that was closed for a day files one task when it comes back rather
-/// than a day's worth.
+/// takes nothing with it either. Only a task filed moves this trigger's `next_at` on, counted from
+/// `now` rather than from when it was due, so an app that was closed for a day files one task when it
+/// comes back rather than a day's worth, and sets its `last_filed_at` to `now`. The automation's other
+/// triggers are left as they were.
 pub fn fire(
     tx: &WriteTx<'_>,
-    automation_id: i64,
+    trigger_id: i64,
     by: &Launcher<'_>,
     now: Timestamp,
     said: Option<&ScriptsSaid>,
 ) -> Result<Option<AutomationRun>> {
-    let before = read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
-    let Some(trigger) = before.trigger.clone() else { return Ok(None) };
-    if before.archived || before.stopped || before.export_only || now < trigger.next_at {
+    let Some(trigger) = read::automation_trigger(tx.conn(), trigger_id)? else { return Ok(None) };
+    let automation_id = trigger.automation_id;
+    let automation =
+        read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    if !trigger.enabled || automation.archived || automation.stopped || automation.export_only || now < trigger.next_at
+    {
         return Ok(None);
     }
     let under_way = read::automation_run_ids_under_way(tx.conn(), automation_id)?;
-    if !has_room(&trigger.when, under_way.len(), before.max_concurrent_runs)
-        || !condition_holds(tx.conn(), before.project_id, &trigger)?
+    if !has_room(&trigger.when, under_way.len(), automation.max_concurrent_runs)
+        || !condition_holds(tx.conn(), automation.project_id, &trigger)?
         || TriggerScripts::of(&trigger).is_some_and(|scripts| said.map(|said| &said.scripts) != Some(&scripts))
     {
         return Ok(None);
@@ -2029,9 +2041,13 @@ pub fn fire(
         ..Default::default()
     };
     let run = launch_handing(tx, automation_id, by, &handed, ReadsFrom::Saved)?;
-    let mut after = before.clone();
-    after.trigger = Some(crate::model::AutomationTrigger { next_at: trigger.when.after(now), ..trigger });
-    crate::ops::emit_update(tx, record::automation(&before), record::automation(&after))?;
+    let after = crate::model::AutomationTrigger {
+        next_at: trigger.when.after(now),
+        last_filed_at: Some(now),
+        updated_at: now,
+        ..trigger.clone()
+    };
+    crate::ops::emit_update(tx, record::automation_trigger(&trigger), record::automation_trigger(&after))?;
     Ok(Some(run))
 }
 

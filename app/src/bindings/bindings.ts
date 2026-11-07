@@ -560,8 +560,8 @@ entryPlacementId?: number, archived: boolean,
  */
 maxConcurrentRuns: number, 
 /**
- * What files a task on its own and starts a run with it. Absent for an automation only a person
- * starts.
+ * What files a task on its own and starts a run with it — the first of the automation's triggers.
+ * Absent for an automation only a person starts.
  */
 trigger?: AutomationTriggerDto, 
 /**

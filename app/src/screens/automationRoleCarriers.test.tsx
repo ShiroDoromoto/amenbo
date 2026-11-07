@@ -61,11 +61,10 @@ function detail(): AutomationDetailDto {
     name: "Morning round",
     notes: "",
     archived: false,
-    maxConcurrentRuns: 1,
     triggers: [],
     roles: [
-      { id: 1, name: "Alice", agent: "claude-code", model: "opus", entryPlacementId: 2, passes: [] },
-      { id: 2, name: "Bob", agent: "codex", passes: [] },
+      { id: 1, name: "Alice", headcount: 1, agent: "claude-code", model: "opus", entryPlacementId: 2, passes: [] },
+      { id: 2, name: "Bob", headcount: 1, agent: "codex", passes: [] },
     ],
     placements: [
       placement(1, 1, [

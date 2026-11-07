@@ -3529,9 +3529,6 @@ pub struct AutomationDetailDto {
     #[ts(optional, type = "number")]
     pub(crate) entry_placement_id: Option<i64>,
     pub(crate) archived: bool,
-    /// How many runs of it may be going at once, from 1 up to the cap. One launch runs up to it side by
-    /// side, and a start past it is refused.
-    pub(crate) max_concurrent_runs: u32,
     /// **What files a task on its own and starts a run with it**, every one of the automation's
     /// triggers in the order they are written in. Empty for an automation only a person starts.
     pub(crate) triggers: Vec<AutomationTriggerDto>,
@@ -3570,6 +3567,8 @@ pub struct AutomationRoleDto {
     #[ts(type = "number")]
     pub(crate) id: i64,
     pub(crate) name: String,
+    /// How many are in it — how many of its tasks may be under way at once, from 1 up to the cap.
+    pub(crate) headcount: u32,
     /// The icon it is drawn with, by the name the GUI knows it under. Absent for none chosen.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

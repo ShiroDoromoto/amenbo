@@ -1415,7 +1415,63 @@ pub const STEPS: &[Step] = &[
         // whatever their role, as it did.
         apply: Apply::Custom(let_a_condition_count_one_role),
     },
+    Step {
+        to: 123,
+        name: "add automation_role.headcount, how many are in a role, and drop automation.max_concurrent_runs",
+        // **Every role is one, and so is every role a saved version holds.** The roles in a saved
+        // version are written one too, so a draft read back is not taken for one changed since. How
+        // many runs an automation had going at once is not carried over: it is the roles' headcount
+        // from here on.
+        apply: Apply::Custom(give_each_role_a_headcount),
+    },
 ];
+
+/// v123: `automation_role.headcount`, how many are in a role, `1` on every row already there — and
+/// `automation.max_concurrent_runs` gone, since how many tasks go at once is the roles' headcount now.
+///
+/// **The roles a saved version holds are given the same `1`.** A draft is told apart from its newest
+/// version by comparing the two as JSON (`ops::automation::unsaved`), and a role read back with a
+/// headcount next to one saved without would make every automation look changed. A version that holds
+/// no role (`[]`) is not touched, so a store with no automation in it only has its empty tables' columns
+/// added and dropped.
+///
+/// **Added and dropped only where needed**, v68's guard and for v53's reason.
+fn give_each_role_a_headcount(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_role")?.iter().any(|c| c == "headcount") {
+        tx.execute_batch("ALTER TABLE automation_role ADD COLUMN headcount BIGINT NOT NULL DEFAULT 1;")?;
+    }
+    if column_names(tx, "automation")?.iter().any(|c| c == "max_concurrent_runs") {
+        tx.execute_batch("ALTER TABLE automation DROP COLUMN max_concurrent_runs;")?;
+    }
+
+    let mut versions: Vec<(i64, String)> = Vec::new();
+    {
+        let mut stmt = tx.prepare("SELECT id, roles FROM automation_version WHERE roles NOT IN ('', '[]')")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        for row in rows {
+            versions.push(row?);
+        }
+    }
+    for (version_id, roles) in versions {
+        let Ok(mut roles) = serde_json::from_str::<Vec<serde_json::Value>>(&roles) else { continue };
+        let mut changed = false;
+        for role in roles.iter_mut() {
+            let Some(map) = role.as_object_mut() else { continue };
+            if !map.contains_key("headcount") {
+                map.insert("headcount".to_string(), serde_json::Value::from(1));
+                changed = true;
+            }
+        }
+        if changed {
+            tx.execute(
+                "UPDATE automation_version SET roles = ?1 WHERE id = ?2",
+                rusqlite::params![serde_json::Value::Array(roles).to_string(), version_id],
+            )?;
+        }
+    }
+    Ok(())
+}
 
 /// v122: `automation_trigger.condition_role_id`, the role the tasks a trigger's condition counts are
 /// worked under. NULL on every row already there: a condition counted every role's tasks until now.
@@ -11798,9 +11854,10 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        // Stop at v106: v123 takes the column away, for the roles' headcount.
+        run(&engine, &dir, steps_through(106), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 106);
         let limit = |id: i64| -> i64 {
             engine
                 .conn()
@@ -12225,6 +12282,66 @@ mod tests {
         assert_eq!(role(&engine), None, "no condition named a role before");
         engine.conn().execute("UPDATE automation_trigger SET condition_role_id = 1 WHERE id = 1", []).unwrap();
         assert_eq!(role(&engine), Some(1));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v123: every role already there, and every role a saved version holds, is one; a version that
+    /// holds no role is left as it was; the draft still reads as its newest version; and the most runs
+    /// an automation had going at once is gone.
+    #[test]
+    fn every_role_written_before_v123_is_one() {
+        let dir = scratch("automation-role-headcount");
+        let engine = store_at(&dir, 122);
+        let role = r#"{"id":1,"automation_id":1,"name":"reviewer","icon":null,"entry_placement_id":null,"agent":null,"model":null,"order_key":"m","created_at":"2026-11-07T00:00:00Z","updated_at":"2026-11-07T00:00:00Z"}"#;
+        engine
+            .conn()
+            .execute_batch(&format!(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, max_concurrent_runs, order_key, created_at, updated_at)
+                 VALUES (1, 1, 'work', 3, 'm', '{at}', '{at}'), (2, 1, 'none', 1, 'n', '{at}', '{at}');
+                 INSERT INTO automation_role (id, automation_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 1, 'reviewer', 'm', '{at}', '{at}');
+                 INSERT INTO automation_version (id, automation_id, version, placements, cfgs, placement_steps, edges, wires, roles, created_at, updated_at)
+                 VALUES (1, 1, 1, '[]', '[]', '[]', '[]', '[]', '[{role}]', '{at}', '{at}'),
+                        (2, 2, 1, '[]', '[]', '[]', '[]', '[]', '[]', '{at}', '{at}');",
+                at = "2026-11-07T00:00:00Z"
+            ))
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let headcount: i64 =
+            engine.conn().query_row("SELECT headcount FROM automation_role WHERE id = 1", [], |r| r.get(0)).unwrap();
+        assert_eq!(headcount, 1);
+        let saved = |id: i64| -> serde_json::Value {
+            let roles: String = engine
+                .conn()
+                .query_row("SELECT roles FROM automation_version WHERE id = ?1", [id], |r| r.get(0))
+                .unwrap();
+            serde_json::from_str(&roles).unwrap()
+        };
+        assert_eq!(saved(1)[0]["headcount"], serde_json::json!(1), "the role the version holds is one too");
+        assert_eq!(saved(1)[0]["name"], serde_json::json!("reviewer"), "the rest of it is kept");
+        assert_eq!(saved(2), serde_json::json!([]), "a version with no role is left as it was");
+        assert!(
+            !crate::ops::automation::unsaved(engine.conn(), 1).unwrap(),
+            "the draft still reads as its newest version"
+        );
+        let gone: i64 = engine
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('automation') WHERE name = 'max_concurrent_runs'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(gone, 0, "the most runs at once is gone");
+        // The cap is the ops' to check, not the store's: no `CHECK` turns ten away.
+        engine
+            .conn()
+            .execute("INSERT INTO automation_role (automation_id, name, headcount) VALUES (1, 'さくら', 10)", [])
+            .unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

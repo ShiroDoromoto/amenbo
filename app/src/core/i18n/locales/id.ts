@@ -626,6 +626,8 @@ export const id: Translation = {
     "quit.confirmNotAll": "Keluar dari Amenbo? Semua terminal yang terbuka berakhir. Percakapannya kembali saat dijalankan lagi, kecuali di panel yang menjalankan {names}. Yang sedang berjalan di dalamnya juga tidak kembali.",
 
     "face.ended": "Program di terminal ini telah berhenti.",
+    "face.endedCode": "Proses telah berakhir (kode keluar {code}).",
+    "face.endedNoCode": "Proses telah berakhir.",
 
     "face.endedGeminiUnset": "Gemini CLI belum memiliki metode autentikasi. Jalur yang disebutkan hanya milik panel ini dan ikut terhapus — yang perlu diatur adalah ~/.gemini/settings.json milik Anda sendiri.",
     "face.noWayBack": "Percakapan ini tidak bisa dibuka lagi.",
@@ -1474,6 +1476,10 @@ export const id: Translation = {
     "auto.run.viewList": "Daftar",
     "auto.run.backToRoles": "← Kembali ke peran",
     "auto.run.otherRounds": "Putaran lain:",
+    "auto.run.stepFailed": "{step} (gagal)",
+    "auto.run.term.filedRole": "Amenbo mencatat kegagalan sebagai tugas untuk {to}.",
+    "auto.run.term.filedPerson": "Amenbo mencatat kegagalan sebagai tugas untuk seseorang.",
+    "auto.run.term.filed": "Amenbo mencatat kegagalan sebagai tugas.",
     "auto.run.roundTerminal": "Terminal {name}",
     "auto.run.roundTerminalOf": "Terminal {name} ({which})",
     "auto.run.turnedForStep": "Langkah ini perlu masukan Anda, jadi panel beralih ke terminal {role}.",

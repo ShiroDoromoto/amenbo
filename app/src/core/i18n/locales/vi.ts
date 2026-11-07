@@ -626,6 +626,8 @@ export const vi: Translation = {
     "quit.confirmNotAll": "Thoát Amenbo? Mọi terminal đang mở sẽ kết thúc. Các cuộc trò chuyện sẽ trở lại ở lần chạy sau, trừ các khung đang chạy {names}. Những gì đang chạy trong đó cũng không trở lại.",
 
     "face.ended": "Chương trình trong terminal này đã kết thúc.",
+    "face.endedCode": "Tiến trình đã kết thúc (mã thoát {code}).",
+    "face.endedNoCode": "Tiến trình đã kết thúc.",
 
     "face.endedGeminiUnset": "Gemini CLI chưa được đặt phương thức xác thực. Đường dẫn được nêu chỉ thuộc về khung này và sẽ mất theo nó — tệp cần đặt là ~/.gemini/settings.json của riêng bạn.",
     "face.noWayBack": "Không thể mở lại cuộc trò chuyện này.",
@@ -1474,6 +1476,10 @@ export const vi: Translation = {
     "auto.run.viewList": "Danh sách",
     "auto.run.backToRoles": "← Quay lại vai trò",
     "auto.run.otherRounds": "Các vòng khác:",
+    "auto.run.stepFailed": "{step} (thất bại)",
+    "auto.run.term.filedRole": "Amenbo đã ghi sự cố thành tác vụ cho {to}.",
+    "auto.run.term.filedPerson": "Amenbo đã ghi sự cố thành tác vụ cho một người.",
+    "auto.run.term.filed": "Amenbo đã ghi sự cố thành tác vụ.",
     "auto.run.roundTerminal": "Terminal của {name}",
     "auto.run.roundTerminalOf": "Terminal của {name} ({which})",
     "auto.run.turnedForStep": "Bước này cần bạn nhập, nên đã chuyển sang terminal của {role}.",

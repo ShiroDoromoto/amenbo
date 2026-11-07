@@ -1671,7 +1671,11 @@ datasets! {
     //
     // `output_tail` is the last of what a script step wrote to its standard output and its standard
     // error, in the order it was written and without its escape sequences, kept so a failed run can be
-    // read (`AMB-D-1016`). Only a script step writes it; every other step leaves it at ''.
+    // read (`AMB-D-1016`). An agent's step that failed its run keeps its terminal's screen as it stood
+    // there instead (`ops::automation_stop::keep_failed_screen`). Every other step leaves it at ''.
+    //
+    // `exit_code` is what the program in that agent's step exited with, kept beside its screen where
+    // the program ended by itself and the code was heard. NULL on every other step.
     automation_run_step {
         run_id: fk("automation_run", "RESTRICT"),
         run_def_id: fk("automation_run_def", "RESTRICT"),
@@ -1684,6 +1688,7 @@ datasets! {
         status: enum_col("running", "done", "failed", "stopped"),
         started_at: ts_opt,
         ended_at: ts_opt,
+        exit_code: col(INT_OPT),
     }
 
     // **One value that went in or came out of a step execution**, under the port it went through —

@@ -205,6 +205,10 @@ input[type="color"] {
 /* What the face holds: the frame the agent question is put in, and the pane once one is running
    (`app/src/talk/agent.ts`). It takes the room the bar above it leaves. */
 .workspace__face { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+/* A failed round's terminal, out of sight under the screen kept from it once its program has ended
+   (`../shell/TerminalPane`). `display: flex` above is an author rule and would beat the user agent's
+   `[hidden]`. */
+.workspace__face[hidden] { display: none; }
 
 /* The terminal's box: the edge, the ground and the room around the text. The terminal is opened in
    `.workspace__screen` inside it, which is what decides how many columns and rows the program inside

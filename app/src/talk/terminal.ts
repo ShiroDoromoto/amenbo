@@ -1431,15 +1431,25 @@ export async function mountTerminal(
   };
 }
 
+/** The lines `after` as they are written under `tail`: each on a row of its own, dimmed. */
+export function saidUnder(tail: string, after: readonly string[]): string {
+  return after.map((line, at) => `${at === 0 && tail === "" ? "" : "\r\n"}\x1b[2m${line}\x1b[22m`).join("");
+}
+
 /**
- * **What a script step wrote, drawn from what was kept of it** (`AMB-D-1016`) — for a run's pane come
- * back with the app, whose terminal went down with it. The tail is text, its escape sequences taken
- * out when it was kept (`amenbo_core::ops::automation_script::tail_of`), so each line is put on a row
- * of its own; nothing reads a keyboard here and no cursor is drawn.
+ * **What a run's step left to be read, drawn from what was kept of it** — what a script wrote
+ * (`AMB-D-1016`), or the screen of an agent's step that failed its run — for a run's pane whose
+ * terminal is gone. The tail is text — a script's with its escape sequences taken out when it was kept
+ * (`amenbo_core::ops::automation_script::tail_of`), an agent's the rows of its screen as drawn
+ * (`amenbo_core::ops::automation_stop::keep_failed_screen`) — so each line is put on a row of its own;
+ * nothing reads a keyboard here and no cursor is drawn.
+ *
+ * `after` are lines Amenbo says under it, dimmed, as the terminal's last lines: how a failed round's
+ * program ended and where its failure was filed (`../shell/RunPicture` `useRoundFellLines`).
  *
  * What comes back takes it away again.
  */
-export function mountTail(host: HTMLElement, tail: string): () => void {
+export function mountTail(host: HTMLElement, tail: string, after: readonly string[] = []): () => void {
   const term = new Terminal({
     fontFamily: paneFont(),
     fontSize: 13,
@@ -1453,7 +1463,7 @@ export function mountTail(host: HTMLElement, tail: string): () => void {
   term.open(screen);
   holdSelectionOffscreen(term);
   void refit(fitting, screen);
-  fitting.write(`\x1b[?25l${tail.replace(/\r?\n/g, "\r\n")}`);
+  fitting.write(`\x1b[?25l${tail.replace(/\r?\n/g, "\r\n")}${saidUnder(tail, after)}`);
   const resize = new ResizeObserver(() => void refit(fitting, screen));
   resize.observe(screen);
   return () => {

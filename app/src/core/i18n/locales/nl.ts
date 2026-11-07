@@ -624,6 +624,8 @@ export const nl: Translation = {
     "quit.confirmNotAll": "Amenbo stoppen? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, behalve in de deelvensters met {names}. Wat erin liep, komt ook niet terug.",
 
     "face.ended": "Het programma in deze terminal is gestopt.",
+    "face.endedCode": "Het proces is beëindigd (exitcode {code}).",
+    "face.endedNoCode": "Het proces is beëindigd.",
 
     "face.endedGeminiUnset": "Voor Gemini CLI is geen authenticatiemethode ingesteld. Het genoemde pad hoort alleen bij dit deelvenster en verdwijnt ermee — in te stellen in uw eigen ~/.gemini/settings.json.",
     "face.noWayBack": "Dit gesprek kan niet meer worden geopend.",
@@ -1473,6 +1475,10 @@ export const nl: Translation = {
     "auto.run.viewList": "Lijst",
     "auto.run.backToRoles": "← Terug naar de rollen",
     "auto.run.otherRounds": "Andere rondes:",
+    "auto.run.stepFailed": "{step} (mislukt)",
+    "auto.run.term.filedRole": "Amenbo heeft de storing als taak gemeld bij {to}.",
+    "auto.run.term.filedPerson": "Amenbo heeft de storing als taak gemeld bij een persoon.",
+    "auto.run.term.filed": "Amenbo heeft de storing als taak gemeld.",
     "auto.run.roundTerminal": "Terminal van {name}",
     "auto.run.roundTerminalOf": "Terminal van {name} ({which})",
     "auto.run.turnedForStep": "Deze stap heeft je invoer nodig, dus is overgeschakeld naar de terminal van {role}.",

@@ -624,6 +624,8 @@ export const tr: Translation = {
     "quit.confirmNotAll": "Amenbo'dan çıkılsın mı? Açık olan tüm terminaller sonlandırılır. Konuşmalar bir dahaki açılışta geri gelir, {names} çalıştıran bölmeler hariç. İçlerinde çalışanlar da geri gelmez.",
 
     "face.ended": "Bu terminaldeki program sona erdi.",
+    "face.endedCode": "İşlem sona erdi (çıkış kodu {code}).",
+    "face.endedNoCode": "İşlem sona erdi.",
 
     "face.endedGeminiUnset": "Gemini CLI için bir kimlik doğrulama yöntemi ayarlanmamış. Belirtilen yol yalnızca bu bölmeye aittir ve onunla birlikte silinir — ayarlamanız gereken kendi ~/.gemini/settings.json dosyanızdır.",
     "face.noWayBack": "Bu konuşma artık açılamıyor.",
@@ -1473,6 +1475,10 @@ export const tr: Translation = {
     "auto.run.viewList": "Liste",
     "auto.run.backToRoles": "← Rollere dön",
     "auto.run.otherRounds": "Diğer turlar:",
+    "auto.run.stepFailed": "{step} (başarısız)",
+    "auto.run.term.filedRole": "Amenbo arızayı {to} için görev olarak kaydetti.",
+    "auto.run.term.filedPerson": "Amenbo arızayı bir kişi için görev olarak kaydetti.",
+    "auto.run.term.filed": "Amenbo arızayı görev olarak kaydetti.",
     "auto.run.roundTerminal": "{name} terminali",
     "auto.run.roundTerminalOf": "{name} terminali ({which})",
     "auto.run.turnedForStep": "Bu adım girdinizi bekliyor, bu yüzden {role} terminaline geçildi.",

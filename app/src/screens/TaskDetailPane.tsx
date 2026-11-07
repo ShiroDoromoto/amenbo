@@ -28,7 +28,7 @@ import { ErrorNote } from "../components/ErrorNote";
 import { RoleField, ROLE_NONE } from "../components/RoleField";
 import { useProjectRoles } from "../core/projectRoles";
 import { Icon } from "../components/Icon";
-import { useLiveRuns } from "../core/automations";
+import { useRunOfIncident } from "../core/automations";
 import { showTerminalOf } from "../shell/runFaces";
 
 // The placement to display. The Tauri DTO already carries task.placement (name included); the mock
@@ -98,11 +98,11 @@ export function TaskDetailPane({
   const [dimValues, setDimValues] = useState<Record<number, number[]>>({});
   const task = useTask(taskId);
   const madeIn = useTaskMadeIn(taskId);
-  // **The run whose failed round this task was filed as**, while it is still on the "running" tab
-  // (`../shell/RunPicture`). Its pane keeps the terminal the round fell in, which is what a person
-  // reading the failure wants to read next.
-  const liveRuns = useLiveRuns();
-  const fellIn = liveRuns.find((one) => one.status === "failed" && one.incident?.id === taskId) ?? null;
+  // **The run whose failed round this task was filed as**, whatever it stands at — acknowledged and
+  // on the "history" tab too (`AMB-D-955`). Its pane opens on the terminal the round fell in, or on
+  // the screen kept from it once that terminal is gone, which is what a person reading the failure
+  // wants to read next (`../shell/RunPicture`).
+  const fellIn = useRunOfIncident(taskId);
   const commentCount = task?.comments ?? 0; // Grows on a post, which is what triggers the refetch
   useEffect(() => {
     if (!inTauri()) { setTaskActivity(null); return; }

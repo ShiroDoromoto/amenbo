@@ -623,6 +623,8 @@ export const zhHant: Translation = {
     "quit.confirmNotAll": "要結束 Amenbo 嗎？開啟的終端機都會結束。下次啟動時對話會回來，但跑著 {names} 的窗格不會。正在跑的東西也不會。",
 
     "face.ended": "此終端機中的程式已結束。",
+    "face.endedCode": "程序已結束（結束代碼 {code}）",
+    "face.endedNoCode": "程序已結束。",
 
     "face.endedGeminiUnset": "Gemini CLI 尚未設定驗證方式。它列出的路徑只屬於此窗格，會隨之捨棄——要設定的是你自己的 ~/.gemini/settings.json。",
     "face.noWayBack": "這段對話已經打不開了。",
@@ -1475,6 +1477,10 @@ export const zhHant: Translation = {
     "auto.run.viewList": "列表",
     "auto.run.backToRoles": "← 返回角色檢視",
     "auto.run.otherRounds": "其他輪次：",
+    "auto.run.stepFailed": "{step}（失敗）",
+    "auto.run.term.filedRole": "Amenbo 已將故障任務提交給{to}。",
+    "auto.run.term.filedPerson": "Amenbo 已將故障任務提交給人員。",
+    "auto.run.term.filed": "Amenbo 已提交故障任務。",
     "auto.run.roundTerminal": "{name}的終端機",
     "auto.run.roundTerminalOf": "{name}的終端機（{which}）",
     "auto.run.turnedForStep": "此步驟需要你的輸入，因此已切換到{role}的終端機。",

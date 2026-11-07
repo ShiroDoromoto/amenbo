@@ -628,6 +628,8 @@ export const de: Translation = {
     "quit.confirmNotAll": "Amenbo beenden? Alle offenen Terminals werden beendet. Die Gespräche kommen beim nächsten Start zurück, außer in den Bereichen mit {names}. Was in ihnen lief, kommt ebenfalls nicht zurück.",
 
     "face.ended": "Das Programm in diesem Terminal wurde beendet.",
+    "face.endedCode": "Der Prozess wurde beendet (Exit-Code {code}).",
+    "face.endedNoCode": "Der Prozess wurde beendet.",
 
     "face.endedGeminiUnset": "Für Gemini CLI ist keine Authentifizierungsmethode festgelegt. Der genannte Pfad gehört nur zu diesem Bereich und verschwindet mit ihm — festzulegen ist sie in deiner eigenen ~/.gemini/settings.json.",
     "face.noWayBack": "Dieses Gespräch lässt sich nicht mehr öffnen.",
@@ -1477,6 +1479,10 @@ export const de: Translation = {
     "auto.run.viewList": "Liste",
     "auto.run.backToRoles": "← Zurück zu den Rollen",
     "auto.run.otherRounds": "Andere Runden:",
+    "auto.run.stepFailed": "{step} (fehlgeschlagen)",
+    "auto.run.term.filedRole": "Amenbo hat die Störung als Aufgabe an {to} gemeldet.",
+    "auto.run.term.filedPerson": "Amenbo hat die Störung als Aufgabe an eine Person gemeldet.",
+    "auto.run.term.filed": "Amenbo hat die Störung als Aufgabe gemeldet.",
     "auto.run.roundTerminal": "Terminal von {name}",
     "auto.run.roundTerminalOf": "Terminal von {name} ({which})",
     "auto.run.turnedForStep": "Dieser Schritt braucht deine Eingabe, daher wurde zum Terminal von {role} gewechselt.",

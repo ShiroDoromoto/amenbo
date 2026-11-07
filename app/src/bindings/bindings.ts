@@ -1136,12 +1136,21 @@ acknowledged: boolean,
  */
 acknowledgedBy?: "human" | "ai" | null, 
 /**
- * **What the last step wrote, where it was a script that has ended** (`AMB-D-1016`) — the tail
- * kept on the step ([`amenbo_core::model::AutomationRunStep::output_tail`]), for the run's pane
- * to show once the app has come back and the terminal it ran on is gone. Read only for the panes
- * ([`crate::automation::automation_run_cards`]); absent on the tabs' rows, and on every other step.
+ * **What the last step left to be read** — what a script printed once it ended (`AMB-D-1016`), or
+ * the screen an agent's step had as it failed the run — kept on the step
+ * ([`amenbo_core::model::AutomationRunStep::output_tail`]), for the run's pane to show once the
+ * terminal it ran on is gone. Read only for the panes ([`crate::automation::automation_run_cards`],
+ * [`crate::automation::automation_run_of_incident`]); absent on the tabs' rows, and on every other
+ * step.
  */
-outputTail?: string, };
+outputTail?: string, 
+/**
+ * **What the program of that last step exited with**, kept beside its screen where an agent's step
+ * failed the run by its program ending on its own
+ * ([`amenbo_core::model::AutomationRunStep::exit_code`]) — what the kept screen says its program
+ * ended with. Read where [`Self::output_tail`] is; absent everywhere else.
+ */
+exitCode?: number, };
 
 /**
  * How many runs of the history ended each way.

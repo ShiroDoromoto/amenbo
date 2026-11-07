@@ -624,6 +624,8 @@ export const hi: Translation = {
     "quit.confirmNotAll": "Amenbo छोड़ें? खुले हुए सभी टर्मिनल समाप्त हो जाएँगे। बातचीत अगली बार वापस आ जाएगी, पर {names} वाले पैन वापस नहीं आएँगे। उनमें जो चल रहा था वह भी वापस नहीं आएगा।",
 
     "face.ended": "इस टर्मिनल का प्रोग्राम समाप्त हो गया।",
+    "face.endedCode": "प्रक्रिया समाप्त हो गई (निकास कोड {code})।",
+    "face.endedNoCode": "प्रक्रिया समाप्त हो गई।",
 
     "face.endedGeminiUnset": "Gemini CLI के लिए कोई प्रमाणीकरण विधि सेट नहीं है। जो पथ दिखाया गया है वह केवल इसी पैन का है और इसके साथ हट जाता है — सेट करनी है आपकी अपनी ~/.gemini/settings.json में।",
     "face.noWayBack": "यह बातचीत अब नहीं खोली जा सकती।",
@@ -1473,6 +1475,10 @@ export const hi: Translation = {
     "auto.run.viewList": "सूची",
     "auto.run.backToRoles": "← भूमिकाओं पर वापस",
     "auto.run.otherRounds": "अन्य राउंड:",
+    "auto.run.stepFailed": "{step} (विफल)",
+    "auto.run.term.filedRole": "Amenbo ने विफलता को {to} के लिए कार्य के रूप में दर्ज किया।",
+    "auto.run.term.filedPerson": "Amenbo ने विफलता को किसी व्यक्ति के लिए कार्य के रूप में दर्ज किया।",
+    "auto.run.term.filed": "Amenbo ने विफलता को कार्य के रूप में दर्ज किया।",
     "auto.run.roundTerminal": "{name} का टर्मिनल",
     "auto.run.roundTerminalOf": "{name} का टर्मिनल ({which})",
     "auto.run.turnedForStep": "इस चरण को आपके इनपुट की ज़रूरत है, इसलिए {role} के टर्मिनल पर स्विच किया गया।",

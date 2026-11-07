@@ -668,6 +668,7 @@ fn new_execution(
         status: AutomationRunStepStatus::Running,
         started_at: Some(now),
         ended_at: None,
+        exit_code: None,
         created_at: now,
         updated_at: now,
     };

@@ -1740,6 +1740,10 @@ export function WorkspaceFace({
                 const builtin = step === undefined ? builtins.get(frame.id) : undefined;
                 // Whichever of the two the row above the pane is about.
                 const on = step ?? builtin;
+                // The run's card, where what its last step left to be read goes to this pane
+                // (`tail` below): a pane with no step arrived, or one whose run failed.
+                const card = frame.run === null ? undefined : runCardOf.get(frame.run);
+                const kept = on === undefined || card?.status === "failed" ? card : undefined;
                 return (
                 <TerminalPane
                   // A run's pane is keyed by the step as well as by the place, which is what swaps
@@ -1791,9 +1795,12 @@ export function WorkspaceFace({
                   }}
                   run={sayOf(frame)}
                   builtin={builtin ?? null}
-                  // What a script step wrote, kept on the run, for a pane come back with the app
-                  // with no step arrived and its terminal gone (`AMB-D-1016`).
-                  tail={frame.run !== null && on === undefined ? runCardOf.get(frame.run)?.outputTail ?? null : null}
+                  // What the run's last step left to be read — a script's output (`AMB-D-1016`), or
+                  // the screen of an agent's step that failed the run — kept on the run, for a pane
+                  // with no step arrived and its terminal gone. A failed run's goes to the pane with
+                  // its step's terminal up too: it stands in for that terminal once its program ends.
+                  tail={kept?.outputTail ?? null}
+                  tailCode={kept?.exitCode ?? null}
                   // A place that came back holding a way into what was running in it is opened
                   // without being pressed — that press is what `AMB-D-869` is about.
                   // A run's pane is never pressed to open: the step arrived by itself, and a way

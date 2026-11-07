@@ -2078,6 +2078,7 @@ fn run_card(
         acknowledged: run.acknowledged_at.is_some(),
         acknowledged_by: run.acknowledged_by_kind.map(|by| by.as_str()),
         output_tail: None,
+        exit_code: None,
     })
 }
 
@@ -2105,9 +2106,25 @@ pub fn automation_run_cards(run_ids: Vec<i64>) -> Result<Vec<AutomationRunCardDt
     let store = open_store_read()?;
     let mut cards = run_cards(&store, run_ids)?;
     for card in &mut cards {
-        card.output_tail = script_tail(&store, card.run)?;
+        (card.output_tail, card.exit_code) = last_tail(&store, card.run)?;
     }
     Ok(cards)
+}
+
+/// **The run whose failed round the task `task_id` was filed as**
+/// ([`read::automation_run_task_of_incident`]) — what the task's pane opens the round's terminal by.
+/// `None` for a task no failed round was filed as, and where the run is gone.
+///
+/// Read whatever the run stands at, an acknowledged failure on the "history" tab included
+/// (`AMB-D-955`): the task is the way back to the round that fell for as long as it stands.
+#[tauri::command]
+pub fn automation_run_of_incident(task_id: i64) -> Result<Option<AutomationRunCardDto>, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_run_of_incident");
+    let store = open_store_read()?;
+    let Some(round) = read::automation_run_task_of_incident(store.read_model().conn(), task_id)? else {
+        return Ok(None);
+    };
+    Ok(run_cards(&store, vec![round.run_id])?.into_iter().next())
 }
 
 /// **The failed rounds' tasks waiting in one launch for the role each was filed to**, in the order they
@@ -2136,12 +2153,19 @@ pub fn automation_launch_incidents(launch_id: i64) -> Result<Vec<AutomationLaunc
     Ok(out)
 }
 
-/// **What a run's last step wrote, where that step was a script that has ended** (`AMB-D-1016`). Only
-/// a script's step keeps a tail, and only once its program has ended, so an empty one is every other
-/// step — and a script still running, or failed as a crash on the way back up (`AMB-D-961`).
-fn script_tail(store: &amenbo_core::Store, run_id: i64) -> Result<Option<String>, CmdError> {
+/// **What a run's last step left to be read** — what a script printed, once its program has ended
+/// (`AMB-D-1016`), or the screen an agent's step had as it failed its run
+/// ([`amenbo_core::ops::automation_stop::keep_failed_screen`]). An empty one is every other step — a
+/// script still running among them, and a step failed as a crash on the way back up (`AMB-D-961`).
+///
+/// Beside it, what the agent's program exited with, where that was kept with its screen.
+fn last_tail(store: &amenbo_core::Store, run_id: i64) -> Result<(Option<String>, Option<i64>), CmdError> {
     let steps = read::automation_run_steps_of(store.read_model().conn(), run_id)?;
-    Ok(steps.into_iter().last().map(|last| last.output_tail).filter(|tail| !tail.is_empty()))
+    Ok(steps
+        .into_iter()
+        .last()
+        .filter(|last| !last.output_tail.is_empty())
+        .map_or((None, None), |last| (Some(last.output_tail), last.exit_code)))
 }
 
 /// **What is keeping a run waiting** (`AMB-D-999`) — the tasks the built-in it waits on could take but
@@ -2917,7 +2941,12 @@ fn project_folder(store: &amenbo_core::Store, project: i64) -> Option<String> {
 /// **The program carrying out a step ended by itself** (`crate::pty`). Where the step never
 /// reported, its run fails as a crash ([`amenbo_core::ops::automation_stop::step_ended`]); where it
 /// did, or the run is over, nothing moves. The screens drawing the run follow the change feed.
-pub fn step_program_ended(run_step: i64) {
+///
+/// `screen` is what its terminal had on it as it ended, and `code` what its program exited with where
+/// that could be asked. Where the run has failed — here, or by the step's own error way out before its
+/// program ended — both are kept on the step ([`keep_failed_screen`]): the terminal leaves with its
+/// program, and the task the round was filed as is read long after.
+pub fn step_program_ended(run_step: i64, screen: &str, code: Option<i32>) {
     let ended = crate::commands::open_store().and_then(|mut store| {
         store.automation_step_ended(run_step).map_err(CmdError::from)
     });
@@ -2925,6 +2954,24 @@ pub fn step_program_ended(run_step: i64) {
         Ok(Some(ended)) => log::info!("run {} failed: step {run_step} ended without reporting", ended.run.id),
         Ok(None) => {}
         Err(e) => log::warn!("could not settle step {run_step} whose program ended: {e:?}"),
+    }
+    keep_failed_screen(run_step, screen, code);
+}
+
+/// **Keep the screen an agent's step had on its terminal, where the step failed its run**
+/// ([`amenbo_core::ops::automation_stop::keep_failed_screen`]) — asked as the terminal goes, by its
+/// program ending ([`step_program_ended`]) or by the app ending it for a run that is over
+/// (`crate::automation_watch`). `code` is what the program exited with where it ended by itself, and
+/// `None` where the app is ending it. A step whose run did not fail keeps nothing, and only the log
+/// hears of a write that did not go through: the terminal is going either way.
+pub(crate) fn keep_failed_screen(run_step: i64, screen: &str, code: Option<i32>) {
+    let kept = crate::commands::open_store().and_then(|mut store| {
+        store.automation_keep_failed_screen(run_step, screen, code.map(i64::from)).map_err(CmdError::from)
+    });
+    match kept {
+        Ok(true) => log::info!("kept the screen of step {run_step}, which failed its run"),
+        Ok(false) => {}
+        Err(e) => log::warn!("could not keep the screen of step {run_step}: {e:?}"),
     }
 }
 

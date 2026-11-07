@@ -42,7 +42,7 @@ const LOCKFILE = join(ROOT, 'app', 'package-lock.json')
 // package must still declare nothing. The moment upstream adds a license field, the entry is a
 // waiver suppressing a question that answers itself — so the gate says to drop it (the same reason
 // guards/check-audit-ignores.sh exists: an ignore nobody revisits is an ignore nobody notices).
-const NO_LICENSE_FIELD = {
+export const NO_LICENSE_FIELD = {
   khroma: {
     license: 'MIT',
     licenseFile: 'license',
@@ -53,7 +53,7 @@ const NO_LICENSE_FIELD = {
 // A gate that cannot say why it stopped is a gate nobody fixes. `main` turns this into an exit;
 // the pure functions below throw it, so their refusals are observable (and testable) rather than
 // killing the process from the inside.
-class GateError extends Error {}
+export class GateError extends Error {}
 const refuse = (msg) => {
   throw new GateError(msg)
 }
@@ -155,13 +155,15 @@ export function allowed(node, allow) {
 
 // --- the shipped tree --------------------------------------------------------------------------
 
+// scripts/gen-third-party-notices.mjs imports this too, so what is judged here and what
+// THIRD-PARTY-NOTICES carries are the same set.
 export function shippedPackages(lock) {
   if (!(lock.lockfileVersion >= 3)) {
     // v1 lockfiles record no licenses at all, so a gate reading one would pass everything.
     refuse(`app/package-lock.json is lockfileVersion ${lock.lockfileVersion}; this gate needs 3+ (npm 7+)`)
   }
 
-  const found = new Map() // "node_modules/..." path -> {name, version, license}
+  const found = new Map() // "node_modules/..." path -> {name, version, license, platform}
   for (const [path, entry] of Object.entries(lock.packages ?? {})) {
     if (path === '') continue // the root package: amenbo's own GUI, licensed by us
     // `dev` = reachable only through devDependencies. `devOptional` = only through dev and/or
@@ -173,6 +175,8 @@ export function shippedPackages(lock) {
       name: path.replace(/^.*node_modules\//, ''),
       version: entry.version,
       license: entry.license,
+      // Pinned to one os/cpu/libc: npm installs it only on that platform (a prebuilt binary).
+      platform: Boolean(entry.os || entry.cpu || entry.libc),
     })
   }
 

@@ -841,10 +841,20 @@ jobs:
       - name: Check the verification harness's licenses
         run: cargo deny --config deny.toml --manifest-path verification/Cargo.toml check licenses
 
-      # cargo deny judges whether a crate may ship; it neither carries the notices nor sees past a
-      # crate's own declaration — sqlcipher-src vendors SQLCipher (BSD-3-Clause) and keeps its text
-      # beside the sources, and openssl-src builds OpenSSL (Apache-2.0). THIRD-PARTY-NOTICES carries
-      # them, and these steps hold it to the two shipped lockfiles (verification/ never ships).
+  # The license gates judge whether a package may ship; they neither carry the notices nor see past
+  # a crate's own declaration — sqlcipher-src vendors SQLCipher (BSD-3-Clause) and keeps its text
+  # beside the sources, and openssl-src builds OpenSSL (Apache-2.0). THIRD-PARTY-NOTICES carries
+  # them and the GUI's shipped npm packages, and this job holds it to the three shipped lockfiles
+  # (verification/ never ships). It runs on either side's change, since a bump on either side can
+  # leave the file stale — and Dependabot bumps are auto-merged.
+  third-party-notices:
+    name: THIRD-PARTY-NOTICES
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.cargo_deps == 'true' || needs.changes.outputs.npm_deps == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
@@ -854,8 +864,15 @@ jobs:
       - name: Test the notices gate's judgment
         run: node --test guards/check-third-party-notices.test.mjs
 
-      # Fetches the crate sources through `cargo metadata --locked` and regenerates the file in
-      # memory; red when a vendored-source carrier moved or the committed file is stale.
+      # package-lock.json records each package's license but not its text, so the texts are read
+      # from an install. No scripts: only the files on disk are read, nothing is built or run.
+      - name: Install the GUI's npm packages (for their license texts)
+        working-directory: app
+        run: npm ci --ignore-scripts
+
+      # Fetches the crate sources through `cargo metadata --locked`, reads app/node_modules, and
+      # regenerates the file in memory; red when a vendored-source carrier moved or the committed
+      # file is stale.
       - name: Check THIRD-PARTY-NOTICES against the lockfiles
         run: node guards/check-third-party-notices.mjs
 
@@ -885,7 +902,8 @@ jobs:
         run: node --test "guards/**/*.test.mjs"
 
       # No `npm ci`: npm records each resolved package's license in the lockfile, so the check reads
-      # a file rather than an install.
+      # a file rather than an install. (The license TEXTS are not in the lockfile; the
+      # third-party-notices job installs to read them.)
       - name: Check the shipped npm dependencies' licenses
         run: node guards/check-npm-licenses.mjs
 
@@ -1316,6 +1334,7 @@ jobs:
       - go
       - rot-gates
       - cargo-license
+      - third-party-notices
       - npm-license
       - app-rust
       - app-rust-mac-win

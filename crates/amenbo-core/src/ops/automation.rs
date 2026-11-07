@@ -1640,10 +1640,6 @@ pub fn stop(tx: &WriteTx<'_>, id: i64, stopped: bool) -> Result<Stopped> {
         true => crate::ops::automation_stop::pause_the_waiting(tx, id)?,
         false => Vec::new(),
     };
-    if stopped {
-        // Its wait has ended, so a launch standing with no run under way has nothing left to start.
-        crate::ops::automation_stop::settle_standing_launch(tx, id)?;
-    }
     Ok(Stopped { automation: after, paused })
 }
 

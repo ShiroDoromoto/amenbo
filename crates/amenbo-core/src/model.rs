@@ -1765,7 +1765,7 @@ pub const DEFAULT_ROLE_HEADCOUNT: u32 = 1;
 /// (`ops::automation`), not by the store, so changing it needs no migration.
 pub const MAX_ROLE_HEADCOUNT: u32 = 10;
 
-fn default_role_headcount() -> u32 {
+pub(crate) fn default_role_headcount() -> u32 {
     DEFAULT_ROLE_HEADCOUNT
 }
 

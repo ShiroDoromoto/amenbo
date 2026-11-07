@@ -97,9 +97,10 @@
 // a step chose for itself marked (`./AutomationRoleCarriers`).
 //
 // **What the automation holds as a whole stands down the right** (`./AutomationSettings`): who a
-// failed round is filed to, and its triggers, each opening its own dialog (`./AutomationTrigger`), each
-// in a box of its own. They are about none of the roles in particular, so they stand beside
-// the left and the middle rather than in either.
+// failed round is filed to, its triggers, each opening its own dialog (`./AutomationTrigger`), and how
+// many each role has, each in a box of its own. They are about none of the roles in particular, or
+// about all of them at once, so they stand beside the left and the middle rather than in either. The
+// headcount box ends on the head's own "Save" and "Discard changes", held back on the same terms.
 //
 // **The head says what is saved** (`./AutomationSaved`, `AMB-D-1005`): nothing yet, changes not
 // saved, or the version saved last and when. A write still marks the field it came from.
@@ -547,7 +548,17 @@ export function AutomationBuildScreen({
               </>
             )}
           </div>
-          {automation !== null && <AutomationSettings automation={automation} />}
+          {automation !== null && (
+            <AutomationSettings
+              automation={automation}
+              draft={{
+                save,
+                discard: () => void discard(),
+                canSave: automation.unsaved && saveBlocks.length === 0 && !keeping,
+                canDiscard: automation.saved !== undefined && automation.unsaved && !keeping,
+              }}
+            />
+          )}
         </div>
       </div>
 

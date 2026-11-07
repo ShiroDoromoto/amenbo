@@ -7,7 +7,9 @@
 //   screen's own "Save" press is what makes it a version. A refused write turns it red with core's
 //   reason, until the next write lands.
 // - **Beside the field, for a moment.** "Written" stands next to the field the write came from for two
-//   seconds, then goes.
+//   seconds, then goes. A field made of several controls — a stepper's "−", number and "+" — marks
+//   itself `data-saved-field` and is one field: the mark stands beside the whole of it, and where the
+//   window ends, to its left rather than inside it, so the number just written stays in sight.
 //
 // The lists say the saved state too, shorter (`SavedMark`): the version saved last, and a mark where the
 // draft holds more — a draft left unsaved does not launch, so the list is where it is noticed.
@@ -39,11 +41,20 @@ type Capture = {
   onKeyDownCapture: (e: SyntheticEvent) => void;
 };
 
-/** "Written" beside this field: to its right, or just inside its right edge where the window ends. */
-function markBeside(field: Element, key: number): Mark {
+/** The field an event is on: the control itself, or the whole of the field it is one control of. */
+export function fieldOf(target: Element): Element {
+  return target.closest("[data-saved-field]") ?? target;
+}
+
+/**
+ * "Written" beside this field: to its right, or where the window ends, just inside its right edge —
+ * to its left for a field of several controls, which has a number to keep in sight.
+ */
+export function markBeside(field: Element, key: number): Mark {
   const box = field.getBoundingClientRect();
   const inside = box.right + 80 > window.innerWidth;
-  return { key, left: inside ? box.right - 6 : box.right + 6, top: box.top + box.height / 2, inside };
+  const left = !inside ? box.right + 6 : field.hasAttribute("data-saved-field") ? box.left - 6 : box.right - 6;
+  return { key, left, top: box.top + box.height / 2, inside };
 }
 
 /** When a version was saved, as the head says it — it may be another day's. */
@@ -134,11 +145,12 @@ export function useSaved(state: SavedState | null): {
 
   const note = (e: SyntheticEvent) => {
     if (!(e.target instanceof Element)) return;
-    touched.current = e.target;
+    const field = fieldOf(e.target);
+    touched.current = field;
     // Once the event is over. Not a microtask: React hears the capture and the bubble as two
     // listeners, and a microtask would run between them — before the handler that writes.
     setTimeout(() => {
-      if (touched.current === e.target) touched.current = null;
+      if (touched.current === field) touched.current = null;
     }, 0);
   };
   const capture: Capture = {

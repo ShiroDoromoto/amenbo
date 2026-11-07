@@ -129,6 +129,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     placements: [],
     edges: [],
     wires: [],
+    maxHeadcount: 10,
     heldBy: [],
     unsaved: false,
     saveBlocks: [],

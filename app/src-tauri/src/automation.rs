@@ -209,8 +209,8 @@ pub fn automation_edit(
     Ok(WriteAck::new(&["automations"]))
 }
 
-/// **Write an automation's trigger, or take it away** (`None`) — what files a task on its own and
-/// starts a run of this automation with it ([`amenbo_core::ops::automation::trigger_set`]).
+/// **Have an automation's triggers be the one given, or none** (`None`) — what files a task on its own
+/// and starts a run of this automation with it ([`amenbo_core::ops::automation::trigger_set`]).
 ///
 /// When it is next asked is not the screen's to say: core counts it from the write. What is refused
 /// — a wait under a minute, a task with no title, a role of another automation and the rest — is
@@ -3083,7 +3083,7 @@ fn detail_dto(
         entry_placement_id: a.entry_placement_id,
         archived: a.archived,
         max_concurrent_runs: a.max_concurrent_runs,
-        trigger: a.trigger.map(Into::into),
+        trigger: a.triggers.into_iter().next().map(Into::into),
         failures_to: a.failures_to.map(Into::into),
         edges: view.edges.into_iter().map(|e| edge_dto(e, &names)).collect(),
         wires,
@@ -3477,6 +3477,9 @@ mod tests {
         let next_at = amenbo_core::time::Timestamp::now();
         let script = StepScript { program: "/bin/check".into(), args: vec!["-q".into()], timeout_minutes: 5 };
         let base = AutomationTrigger {
+            id: 1,
+            automation_id: 1,
+            enabled: true,
             name: "受信箱".into(),
             role_id: None,
             when: TriggerWhen::Every { minutes: 60 },
@@ -3484,6 +3487,10 @@ mod tests {
             script: None,
             task: TriggerTask::Fixed { title: "見る".into(), notes: "メモ".into() },
             next_at,
+            last_filed_at: None,
+            order_key: "a0".into(),
+            created_at: next_at,
+            updated_at: next_at,
         };
         let json = |t: AutomationTrigger| serde_json::to_value(AutomationTriggerDto::from(t)).expect("json");
 

@@ -109,6 +109,8 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   automation_placement_step: ["automations"],
   // The roles defined in an automation are read on its definition alone, as who carries a step out is.
   automation_role: ["automations"],
+  // An automation's triggers are read on the automation alone, as its roles are.
+  automation_trigger: ["automations"],
   automation_action_step: ["automationActions", "automations"],
   automation_cfg: ["automationActions", "automations"],
   automation_exit: ["automationActions", "automations"],

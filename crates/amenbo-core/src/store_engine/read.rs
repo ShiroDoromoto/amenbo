@@ -6659,9 +6659,37 @@ pub fn automation_actions_splitting(
     automation_rows(conn, A.table, &pred, &[Sort::by(A.id)], super::hydrate::automation_action_row)
 }
 
-/// The `automation` record with this id.
+/// The `automation` record with this id, with its triggers.
 pub fn automation(conn: &Connection, id: i64) -> Result<Option<crate::model::Automation>> {
-    super::hydrate::row_by_id(conn, "automation", id, super::hydrate::automation_row)
+    let Some(mut automation) = super::hydrate::row_by_id(conn, "automation", id, super::hydrate::automation_row)? else {
+        return Ok(None);
+    };
+    automation.triggers = automation_triggers_of(conn, id)?;
+    Ok(Some(automation))
+}
+
+/// The `automation_trigger` record with this id.
+pub fn automation_trigger(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationTrigger>> {
+    super::hydrate::row_by_id(conn, "automation_trigger", id, super::hydrate::automation_trigger_row)
+}
+
+/// The triggers of one automation, in the order they are written in.
+pub fn automation_triggers_of(conn: &Connection, automation_id: i64) -> Result<Vec<crate::model::AutomationTrigger>> {
+    const T: col::automation_trigger::Cols = col::automation_trigger::ALL;
+    automation_rows(
+        conn,
+        T.table,
+        &Pred::eq(T.automation_id, automation_id),
+        &[Sort::by(T.order_key), Sort::by(T.id)],
+        super::hydrate::automation_trigger_row,
+    )
+}
+
+/// The triggers whose task is worked under this role, ascending — what has to let go of it before the
+/// role goes, the key being `RESTRICT`.
+pub fn automation_trigger_ids_with_role(conn: &Connection, role_id: i64) -> Result<Vec<i64>> {
+    const T: col::automation_trigger::Cols = col::automation_trigger::ALL;
+    select_ids(conn, T.id, Some(&Pred::eq(T.role_id, role_id)))
 }
 
 /// The `automation_placement` record with this id.
@@ -7349,16 +7377,31 @@ pub fn automation_run_ids_under_way(conn: &Connection, automation_id: i64) -> Re
     select_ids(conn, R.id, Some(&pred))
 }
 
-/// **The automations a trigger may start a run of** — every one carrying a trigger that is not
-/// archived, not stopped and not kept for export only, across projects, oldest first. A trigger is
-/// asked by the app's look, and that look is this machine's, not one project's.
+/// **The automations a trigger may start a run of** — every one carrying a trigger that is enabled and
+/// not archived, not stopped and not kept for export only, across projects, oldest first, each with all
+/// its triggers. A trigger is asked by the app's look, and that look is this machine's, not one
+/// project's.
 pub fn automations_triggered(conn: &Connection) -> Result<Vec<crate::model::Automation>> {
-    const A: col::automation::Cols = col::automation::ALL;
-    let pred = Pred::is_not_null(A.trigger_when_kind)
-        .and(Pred::eq(A.archived, false))
-        .and(Pred::eq(A.stopped, false))
-        .and(Pred::eq(A.export_only, false));
-    automation_rows(conn, A.table, &pred, &[Sort::by(A.id)], super::hydrate::automation_row)
+    const T: col::automation_trigger::Cols = col::automation_trigger::ALL;
+    let mut sel = Select::new();
+    let automation_id = sel.col(T.automation_id);
+    let mut sql = Sql::from(&sel, T.table);
+    sql.push_where(Some(&Pred::eq(T.enabled, true))).order_by([Sort::by(T.automation_id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let mut ids = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| automation_id.get(r))
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<i64>>>()
+        .map_err(StoreEngineError::from)?;
+    ids.dedup();
+    let mut found = Vec::new();
+    for id in ids {
+        let Some(automation) = automation(conn, id)? else { continue };
+        if !automation.archived && !automation.stopped && !automation.export_only {
+            found.push(automation);
+        }
+    }
+    Ok(found)
 }
 
 /// **The automations Amenbo is waiting on a task for** ([`crate::model::Automation::waits_for_task_since`])

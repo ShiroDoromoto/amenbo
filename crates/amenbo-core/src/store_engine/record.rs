@@ -24,7 +24,7 @@ use crate::model::{
     AutomationEdge, AutomationExit, AutomationPlacement, AutomationPlacementStep, AutomationPort,
     AutomationLaunch, AutomationRole, AutomationRun, AutomationRunDef,
     AutomationRunPass, AutomationRunStep, AutomationRunTask, AutomationRunValue,
-    AutomationStep, AutomationVersion, TriggerTask, TriggerWhen,
+    AutomationStep, AutomationTrigger, AutomationVersion, TriggerTask, TriggerWhen,
     AutomationWire, Database, Decision, DecisionComment, DecisionDimensionValue,
     DecisionEdge, DecisionMadeIn, DecisionTaskLink,
     Dimension, DimensionValue, NotifyTarget,
@@ -549,10 +549,6 @@ pub fn automation_action(a: &AutomationAction) -> Record {
 }
 
 pub fn automation(a: &Automation) -> Record {
-    let [trigger_script_program, trigger_script_args, trigger_script_timeout_minutes] =
-        script_values(&a.trigger.as_ref().and_then(|t| t.script.clone()));
-    let [trigger_task_script_program, trigger_task_script_args, trigger_task_script_timeout_minutes] =
-        script_values(&a.trigger.as_ref().and_then(|t| t.task.script().cloned()));
     Record::new(
         "automation",
         a.id,
@@ -567,72 +563,60 @@ pub fn automation(a: &Automation) -> Record {
                 ("failures_to_kind", a.failures_to.map(|f| tv(f.kind_str())).unwrap_or(Value::Null)),
                 ("failures_to_role_id", kv_opt(&a.failures_to.and_then(|f| f.role_id()))),
                 ("export_only", bv(a.export_only)),
-                ("trigger_when_kind", a.trigger.as_ref().map(|t| tv(t.when.kind_str())).unwrap_or(Value::Null)),
-                (
-                    "trigger_every_minutes",
-                    match a.trigger.as_ref().map(|t| t.when) {
-                        Some(TriggerWhen::Every { minutes }) => iv(minutes.into()),
-                        Some(TriggerWhen::Idle | TriggerWhen::Tasks | TriggerWhen::Script) | None => Value::Null,
-                    },
-                ),
-                (
-                    "trigger_condition_filter",
-                    a.trigger.as_ref().and_then(|t| t.condition.as_ref()).map(|c| tv(&c.filter)).unwrap_or(Value::Null),
-                ),
-                (
-                    "trigger_condition_below",
-                    a.trigger
-                        .as_ref()
-                        .and_then(|t| t.condition.as_ref())
-                        .map(|c| iv(c.below.into()))
-                        .unwrap_or(Value::Null),
-                ),
-                ("trigger_script_program", trigger_script_program),
-                ("trigger_script_args", trigger_script_args),
-                ("trigger_script_timeout_minutes", trigger_script_timeout_minutes),
-                ("trigger_task_kind", a.trigger.as_ref().map(|t| tv(t.task.kind_str())).unwrap_or(Value::Null)),
-                (
-                    "trigger_task_title",
-                    a.trigger
-                        .as_ref()
-                        .and_then(|t| match &t.task {
-                            TriggerTask::Fixed { title, .. } => Some(tv(title)),
-                            TriggerTask::File { .. } | TriggerTask::Script { .. } => None,
-                        })
-                        .unwrap_or(Value::Null),
-                ),
-                (
-                    "trigger_task_notes",
-                    a.trigger
-                        .as_ref()
-                        .and_then(|t| match &t.task {
-                            TriggerTask::Fixed { notes, .. } => Some(tv(notes)),
-                            TriggerTask::File { .. } | TriggerTask::Script { .. } => None,
-                        })
-                        .unwrap_or(Value::Null),
-                ),
-                (
-                    "trigger_task_path",
-                    a.trigger
-                        .as_ref()
-                        .and_then(|t| match &t.task {
-                            TriggerTask::File { path } => Some(tv(path)),
-                            TriggerTask::Fixed { .. } | TriggerTask::Script { .. } => None,
-                        })
-                        .unwrap_or(Value::Null),
-                ),
-                ("trigger_task_script_program", trigger_task_script_program),
-                ("trigger_task_script_args", trigger_task_script_args),
-                ("trigger_task_script_timeout_minutes", trigger_task_script_timeout_minutes),
-                ("trigger_name", a.trigger.as_ref().map(|t| tv(&t.name)).unwrap_or(Value::Null)),
-                ("trigger_role_id", kv_opt(&a.trigger.as_ref().and_then(|t| t.role_id))),
-                ("trigger_next_at", tsov(&a.trigger.as_ref().map(|t| t.next_at))),
                 ("stopped", bv(a.stopped)),
                 ("waits_for_task_since", tsov(&a.waits_for_task_since)),
                 ("order_key", tv(&a.order_key)),
             ],
             &a.created_at,
             &a.updated_at,
+        ),
+    )
+}
+
+pub fn automation_trigger(t: &AutomationTrigger) -> Record {
+    let [script_program, script_args, script_timeout_minutes] = script_values(&t.script);
+    let [task_script_program, task_script_args, task_script_timeout_minutes] =
+        script_values(&t.task.script().cloned());
+    let (task_title, task_notes, task_path) = match &t.task {
+        TriggerTask::Fixed { title, notes } => (tv(title), tv(notes), Value::Null),
+        TriggerTask::File { path } => (Value::Null, Value::Null, tv(path)),
+        TriggerTask::Script { .. } => (Value::Null, Value::Null, Value::Null),
+    };
+    Record::new(
+        "automation_trigger",
+        t.id,
+        with_audit(
+            vec![
+                ("automation_id", kv(t.automation_id)),
+                ("enabled", bv(t.enabled)),
+                ("name", tv(&t.name)),
+                ("role_id", kv_opt(&t.role_id)),
+                ("when_kind", tv(t.when.kind_str())),
+                (
+                    "every_minutes",
+                    match t.when {
+                        TriggerWhen::Every { minutes } => iv(minutes.into()),
+                        TriggerWhen::Idle | TriggerWhen::Tasks | TriggerWhen::Script => Value::Null,
+                    },
+                ),
+                ("condition_filter", t.condition.as_ref().map(|c| tv(&c.filter)).unwrap_or(Value::Null)),
+                ("condition_below", t.condition.as_ref().map(|c| iv(c.below.into())).unwrap_or(Value::Null)),
+                ("script_program", script_program),
+                ("script_args", script_args),
+                ("script_timeout_minutes", script_timeout_minutes),
+                ("task_kind", tv(t.task.kind_str())),
+                ("task_title", task_title),
+                ("task_notes", task_notes),
+                ("task_path", task_path),
+                ("task_script_program", task_script_program),
+                ("task_script_args", task_script_args),
+                ("task_script_timeout_minutes", task_script_timeout_minutes),
+                ("next_at", tsv(&t.next_at)),
+                ("last_filed_at", tsov(&t.last_filed_at)),
+                ("order_key", tv(&t.order_key)),
+            ],
+            &t.created_at,
+            &t.updated_at,
         ),
     )
 }

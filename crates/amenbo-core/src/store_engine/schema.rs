@@ -1146,49 +1146,7 @@ datasets! {
         // its definition never edited. Set by the upgrade on every automation already there, never by a
         // write. Like `archived`, not part of a saved version.
         export_only: bool_col,
-        // **The trigger**: what files a task on its own and starts a run with it, in three parts — when
-        // to file one, what the task says, and the run, which is this automation's. NULL in
-        // `trigger_when_kind` is no trigger, and then every other `trigger_` column is NULL too, but
-        // `trigger_script_args` and `trigger_task_script_args`, which are ''. Like `archived`, none of
-        // it is part of a saved version.
-        //
-        // When to file one: `every` is every `trigger_every_minutes` minutes; `idle` is whenever the
-        // automation has no run under way; `tasks` is whenever the condition below holds; `script` is
-        // whenever the script below says to. The last three leave `trigger_every_minutes` NULL.
-        trigger_when_kind: enum_opt("every", "idle", "tasks", "script"),
-        trigger_every_minutes: col(INT_OPT),
-        // The tasks it looks at first, on top of the when: it files one only while fewer than
-        // `trigger_condition_below` tasks of the automation's project match `trigger_condition_filter`
-        // (what `task list --filter` takes). Both NULL is no condition; a `tasks` always has one.
-        trigger_condition_filter: col(OPT),
-        trigger_condition_below: col(INT_OPT),
-        // The program it asks first, on top of the when and the condition, as a script step's is written
-        // (`AMB-D-1016`): it files one only where the program says so in its output.json. NULL in
-        // `trigger_script_program` is no script, and then the arguments are '' and the timeout NULL; a
-        // `script` always has one.
-        trigger_script_program: col(OPT),
-        trigger_script_args: col(REQ),
-        trigger_script_timeout_minutes: col(INT_OPT),
-        // What the task says: `fixed` is the title and notes written here; `file` is what the file at
-        // `trigger_task_path` says when the task is filed; `script` is what the program in
-        // `trigger_task_script_*` writes then, as a script step's is written. Each leaves the others'
-        // columns NULL (the program's arguments '').
-        trigger_task_kind: enum_opt("fixed", "file", "script"),
-        trigger_task_title: col(OPT),
-        trigger_task_notes: col(OPT),
-        trigger_task_path: col(OPT),
-        trigger_task_script_program: col(OPT),
-        trigger_task_script_args: col(REQ),
-        trigger_task_script_timeout_minutes: col(INT_OPT),
-        // What the trigger is called, as the timeline of a task it filed names it ('' for blank), and
-        // the role that task is worked under, one of this automation's own — NULL for none. `RESTRICT`,
-        // so a role that goes lets go of it first (`ops::automation`).
-        trigger_name: col(OPT),
-        trigger_role_id: fk_opt("automation_role", "RESTRICT"),
-        // When the trigger is next asked whether to file one. Moved on only when it does, so a time it
-        // says no leaves nothing behind.
-        trigger_next_at: ts_opt,
-        // A person stopped this automation: no run of it starts, its trigger files nothing, and a run of
+        // A person stopped this automation: no run of it starts, its triggers file nothing, and a run of
         // it that finishes a round pauses rather than starting the next. Like `archived`, not part of a
         // saved version.
         stopped: bool_col,
@@ -1301,6 +1259,56 @@ datasets! {
         entry_placement_id: fk_opt("automation_placement", "RESTRICT"),
         agent: col(OPT),
         model: col(OPT),
+        order_key: col(ORDER_KEY),
+    }
+
+    // **One trigger of an automation**: what files a task on its own and starts a run with it, in three
+    // parts — when to file one, what the task says, and the run, which is the automation's. An
+    // automation holds any number, in `order_key` order, and each is asked on its own: one filing a task
+    // moves only its own `next_at` and `last_filed_at`. One not `enabled` is not asked. Like
+    // `automation.archived`, none of it is part of a saved version, nor of the automation's export.
+    //
+    // When to file one: `every` is every `every_minutes` minutes; `idle` is whenever the automation has
+    // no run under way; `tasks` is whenever the condition below holds; `script` is whenever the script
+    // below says to. The last three leave `every_minutes` NULL.
+    automation_trigger {
+        automation_id: fk("automation", "RESTRICT"),
+        enabled: bool_col,
+        // What it is called, as the timeline of a task it filed names it ('' for blank), and the role
+        // that task is worked under, one of the same automation's own — NULL for none. `RESTRICT`, so a
+        // role that goes lets go of it first (`ops::automation`).
+        name: col(REQ),
+        role_id: fk_opt("automation_role", "RESTRICT"),
+        when_kind: enum_col("every", "idle", "tasks", "script"),
+        every_minutes: col(INT_OPT),
+        // The tasks it looks at first, on top of the when: it files one only while fewer than
+        // `condition_below` tasks of the automation's project match `condition_filter` (what
+        // `task list --filter` takes). Both NULL is no condition; a `tasks` always has one.
+        condition_filter: col(OPT),
+        condition_below: col(INT_OPT),
+        // The program it asks first, on top of the when and the condition, as a script step's is written
+        // (`AMB-D-1016`): it files one only where the program says so in its output.json. NULL in
+        // `script_program` is no script, and then the arguments are '' and the timeout NULL; a `script`
+        // always has one.
+        script_program: col(OPT),
+        script_args: col(REQ),
+        script_timeout_minutes: col(INT_OPT),
+        // What the task says: `fixed` is the title and notes written here; `file` is what the file at
+        // `task_path` says when the task is filed; `script` is what the program in `task_script_*` writes
+        // then, as a script step's is written. Each leaves the others' columns NULL (the program's
+        // arguments '').
+        task_kind: enum_col("fixed", "file", "script"),
+        task_title: col(OPT),
+        task_notes: col(OPT),
+        task_path: col(OPT),
+        task_script_program: col(OPT),
+        task_script_args: col(REQ),
+        task_script_timeout_minutes: col(INT_OPT),
+        // When it is next asked whether to file one. Moved on only when it does, so a time it says no
+        // leaves nothing behind.
+        next_at: ts,
+        // When it last filed one, NULL until it has.
+        last_filed_at: ts_opt,
         order_key: col(ORDER_KEY),
     }
 
@@ -1527,7 +1535,7 @@ datasets! {
         // What a run failed with `failed_check` did not pass, as the refusal said it. Set with that
         // reason and only then.
         stopped_detail: col(OPT),
-        // The launch the run was started in. NULL on a run written before launches were kept (v119
+        // The launch the run was started in. NULL on a run written before launches were kept (v120
         // gives each run then under way one of its own) and on a test run, which belongs to none.
         launch_id: fk_opt("automation_launch", "RESTRICT"),
     }

@@ -541,68 +541,69 @@ fn failures_to(kind: Option<String>, role_id: Option<i64>) -> rusqlite::Result<O
     }
 }
 
-/// An automation's trigger, read back from its seventeen columns. No kind of when is no trigger, and
-/// then every other column is NULL (the scripts' arguments '', as a step's are); a kind beside a missing
+/// One trigger of an automation, read back from its row. A kind of when or of task beside a missing
 /// part is a row nothing writes, and reads as an error.
-fn trigger(r: &Row) -> rusqlite::Result<Option<AutomationTrigger>> {
-    const C: col::automation::Cols = col::automation::ALL;
-    let Some(when_kind) = get(r, C.trigger_when_kind)? else { return Ok(None) };
-    let when = match (when_kind.as_str(), get(r, C.trigger_every_minutes)?) {
+pub(super) fn automation_trigger_row(r: &Row) -> rusqlite::Result<AutomationTrigger> {
+    const C: col::automation_trigger::Cols = col::automation_trigger::ALL;
+    let when = match (get(r, C.when_kind)?.as_str(), get(r, C.every_minutes)?) {
         ("every", Some(minutes)) => TriggerWhen::Every {
-            minutes: u32::try_from(minutes).map_err(|_| bad(format!("bad trigger_every_minutes {minutes}")))?,
+            minutes: u32::try_from(minutes).map_err(|_| bad(format!("bad every_minutes {minutes}")))?,
         },
         ("idle", None) => TriggerWhen::Idle,
         ("tasks", None) => TriggerWhen::Tasks,
         ("script", None) => TriggerWhen::Script,
-        (kind, minutes) => return Err(bad(format!("bad trigger_when {kind:?} with minutes {minutes:?}"))),
+        (kind, minutes) => return Err(bad(format!("bad trigger when {kind:?} with minutes {minutes:?}"))),
     };
-    let condition = match (get(r, C.trigger_condition_filter)?, get(r, C.trigger_condition_below)?) {
+    let condition = match (get(r, C.condition_filter)?, get(r, C.condition_below)?) {
         (None, None) => None,
         (Some(filter), Some(below)) => Some(TriggerCondition {
             filter,
-            below: u32::try_from(below).map_err(|_| bad(format!("bad trigger_condition_below {below}")))?,
+            below: u32::try_from(below).map_err(|_| bad(format!("bad condition_below {below}")))?,
         }),
-        (filter, below) => return Err(bad(format!("bad trigger_condition {filter:?} below {below:?}"))),
+        (filter, below) => return Err(bad(format!("bad trigger condition {filter:?} below {below:?}"))),
     };
     if when == TriggerWhen::Tasks && condition.is_none() {
         return Err(bad("a tasks trigger with no condition".to_string()));
     }
-    let ask_script = script(r, C.trigger_script_program, C.trigger_script_args, C.trigger_script_timeout_minutes)?;
+    let ask_script = script(r, C.script_program, C.script_args, C.script_timeout_minutes)?;
     if when == TriggerWhen::Script && ask_script.is_none() {
         return Err(bad("a script trigger with no script".to_string()));
     }
-    let task_kind: Option<String> = get(r, C.trigger_task_kind)?;
-    let task = match task_kind.as_deref() {
-        Some("fixed") => TriggerTask::Fixed {
-            title: get(r, C.trigger_task_title)?.unwrap_or_default(),
-            notes: get(r, C.trigger_task_notes)?.unwrap_or_default(),
+    let task = match get(r, C.task_kind)?.as_str() {
+        "fixed" => TriggerTask::Fixed {
+            title: get(r, C.task_title)?.unwrap_or_default(),
+            notes: get(r, C.task_notes)?.unwrap_or_default(),
         },
-        Some("file") => TriggerTask::File {
-            path: get(r, C.trigger_task_path)?.ok_or_else(|| bad("a file trigger_task with no path".to_string()))?,
+        "file" => TriggerTask::File {
+            path: get(r, C.task_path)?.ok_or_else(|| bad("a file trigger task with no path".to_string()))?,
         },
-        Some("script") => TriggerTask::Script {
-            script: script(
-                r,
-                C.trigger_task_script_program,
-                C.trigger_task_script_args,
-                C.trigger_task_script_timeout_minutes,
-            )?
-            .ok_or_else(|| bad("a script trigger_task with no program".to_string()))?,
+        "script" => TriggerTask::Script {
+            script: script(r, C.task_script_program, C.task_script_args, C.task_script_timeout_minutes)?
+                .ok_or_else(|| bad("a script trigger task with no program".to_string()))?,
         },
-        kind => return Err(bad(format!("bad trigger_task {kind:?}"))),
+        kind => return Err(bad(format!("bad trigger task {kind:?}"))),
     };
-    let next_at = ts_opt(r, C.trigger_next_at)?.ok_or_else(|| bad("a trigger with no trigger_next_at".to_string()))?;
-    Ok(Some(AutomationTrigger {
-        name: get(r, C.trigger_name)?.unwrap_or_default(),
-        role_id: get(r, C.trigger_role_id)?,
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationTrigger {
+        id: get(r, C.id)?,
+        automation_id: get(r, C.automation_id)?,
+        enabled: get(r, C.enabled)?,
+        name: get(r, C.name)?,
+        role_id: get(r, C.role_id)?,
         when,
         condition,
         script: ask_script,
         task,
-        next_at,
-    }))
+        next_at: ts(r, C.next_at)?,
+        last_filed_at: ts_opt(r, C.last_filed_at)?,
+        order_key: get(r, C.order_key)?,
+        created_at,
+        updated_at,
+    })
 }
 
+/// An automation, read back from its own row. Its triggers are rows of their own, so they are left
+/// empty here, for the reader that holds the connection to fill in ([`super::read::automation`]).
 pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
     const C: col::automation::Cols = col::automation::ALL;
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
@@ -619,7 +620,7 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
         },
         failures_to: failures_to(get(r, C.failures_to_kind)?, get(r, C.failures_to_role_id)?)?,
         export_only: get(r, C.export_only)?,
-        trigger: trigger(r)?,
+        triggers: Vec::new(),
         stopped: get(r, C.stopped)?,
         waits_for_task_since: ts_opt(r, C.waits_for_task_since)?,
         order_key: get(r, C.order_key)?,

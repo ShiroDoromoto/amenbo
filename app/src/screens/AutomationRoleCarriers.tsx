@@ -9,6 +9,10 @@
 // none of the step, the role and Amenbo chose an agent for has none either, and is left out with it:
 // the start press names that one (`useLaunchCheck`).
 //
+// **A step that asks a person is not a row either** (`interactive`). An agent still opens it, so it
+// keeps its `carrier` for the launch check and the pane; the table is for the steps an agent works
+// through on its own, and leaves this one out as the mock does (`AMB-D-1121`).
+//
 // **The ● is the row's, not a cell's.** Where a step was chosen at is one place for the agent and its
 // model together (`AutomationChosenAtDto`, `AMB-D-865`), so a step that chose for itself marks both.
 // The words for where each was chosen are the GUI's (`AMB-D-396`).
@@ -20,7 +24,10 @@ import type { AutomationCarrierDto, AutomationDetailDto } from "../bindings/bind
 /** One row of the table: a step of a placement on the round, and who carries it out there. */
 export type CarrierRow = { placementId: number; stepId: number; name: string; carrier: AutomationCarrierDto };
 
-/** The steps the round drawn in `graph` reaches, in the picture's order, each with who carries it out. */
+/**
+ * The steps the round drawn in `graph` reaches, in the picture's order, each with who carries it out —
+ * leaving out a step no agent carries out and a step that asks a person.
+ */
 export function roleCarrierRows(automation: AutomationDetailDto, graph: PicGraph | null): CarrierRow[] {
   if (graph === null) return [];
   const { numberOf } = pictureOrder(graph);
@@ -31,7 +38,7 @@ export function roleCarrierRows(automation: AutomationDetailDto, graph: PicGraph
     .sort((a, b) => at(a.id) - at(b.id))
     .flatMap((one) =>
       one.steps.flatMap((step) =>
-        step.carrier === undefined
+        step.carrier === undefined || step.interactive
           ? []
           : [{ placementId: one.id, stepId: step.stepId, name: step.name, carrier: step.carrier }],
       ),

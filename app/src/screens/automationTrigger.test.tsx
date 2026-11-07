@@ -1,29 +1,38 @@
 // @vitest-environment jsdom
-// An automation's trigger, written on its dialog. The trigger writes and the confirm are stubbed;
-// every field, chip and press runs for real.
+// An automation's trigger, written on its card. The trigger writes and the confirm are stubbed; every
+// field, radio, chip and press runs for real.
 //
-// What these guard: **a new trigger starts as one that files every hour, and the save sends what was
+// What these guard: **the card stands in the page, not in a dialog, its head naming the trigger,
+// whether it is on and when it last filed**, with "On" switching it off at once; **it asks in three
+// numbered parts**; **a new trigger, opened on none even with others written, starts as one that files every hour, and the save sends what was
 // typed** as a trigger added; **the trigger it is opened on opens as it stands and goes back
-// unchanged**, rewritten under its id, the others left alone; **"while fewer
-// than N tasks match" always carries its condition, and "when a script says so" its script**, while
-// with the other kinds each is sent only when asked for; **the note and the preview say what will be
-// filed** — its title, role, who works it and the trigger's name; **a refusal is drawn and the dialog
-// stays open**; and **"Remove trigger" takes that one away by its id**.
+// unchanged**, rewritten under its id, the others left alone; **"while fewer than N tasks match"
+// always carries its condition, and "when a script says so" its script**, while with the other kinds
+// each is sent only when asked for; **the note, the list and the preview say what will be filed** —
+// its title, role, who works it and the trigger's name; **a refusal is drawn and the card stays
+// open**; and **"Remove trigger" takes that one away by its id**.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AutomationDetailDto, AutomationTriggerDto } from "../bindings/bindings";
 
-const hoisted = vi.hoisted(() => ({ add: vi.fn(), update: vi.fn(), remove: vi.fn(), confirm: vi.fn() }));
+const hoisted = vi.hoisted(() => ({
+  add: vi.fn(),
+  update: vi.fn(),
+  remove: vi.fn(),
+  enable: vi.fn(),
+  confirm: vi.fn(),
+}));
 
 vi.mock("../core/automations", () => ({
   addAutomationTrigger: hoisted.add,
   updateAutomationTrigger: hoisted.update,
   removeAutomationTrigger: hoisted.remove,
+  setAutomationTriggerEnabled: hoisted.enable,
 }));
 vi.mock("../core/dialog", () => ({ confirmDialog: hoisted.confirm }));
 
-import { t, tf } from "../core/i18n";
+import { dueLabel, t, tf } from "../core/i18n";
 import { AutomationTrigger, formOf, inputOf } from "./AutomationTrigger";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -65,16 +74,14 @@ const written: AutomationTriggerDto = {
 
 const page = () => document.body;
 
-/** Draws the dialog, opened on `trigger`, or on a new one without it. */
+/** The card, opened on `trigger`, or on a new one without it. */
 async function draw(
   automation: AutomationDetailDto,
   trigger?: AutomationTriggerDto,
   onSaved = vi.fn(),
   onClose = vi.fn(),
 ) {
-  await act(async () =>
-    root.render(createElement(AutomationTrigger, { automation, trigger, onSaved, onClose })),
-  );
+  await act(async () => root.render(createElement(AutomationTrigger, { automation, trigger, onSaved, onClose })));
   return { onSaved, onClose };
 }
 
@@ -94,12 +101,21 @@ async function press(button: HTMLElement | undefined) {
 function box(words: string): HTMLInputElement | HTMLTextAreaElement {
   const named = page().querySelector<HTMLInputElement>(`[aria-label="${words}"]`);
   if (named !== null) return named;
-  const label = [...page().querySelectorAll("label")].find(
-    (one) => one.querySelector(".autostep__label")?.textContent === words,
-  );
-  const inside = label?.querySelector<HTMLInputElement | HTMLTextAreaElement>("input, textarea");
+  const label = [...page().querySelectorAll("label")].find((one) => one.textContent === words);
+  const forId = label?.getAttribute("for");
+  const inside =
+    forId === null || forId === undefined
+      ? label?.querySelector<HTMLInputElement | HTMLTextAreaElement>("input, textarea")
+      : document.getElementById(forId);
   expect(inside).toBeTruthy();
-  return inside!;
+  return inside as HTMLInputElement | HTMLTextAreaElement;
+}
+
+/** The radio button whose words are these. */
+function radio(words: string): HTMLInputElement | undefined {
+  return [...page().querySelectorAll("label")]
+    .find((one) => one.textContent === words)
+    ?.querySelector<HTMLInputElement>("input[type=radio]") ?? undefined;
 }
 
 async function type(control: HTMLInputElement | HTMLTextAreaElement, value: string) {
@@ -124,7 +140,7 @@ beforeEach(() => {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  for (const write of [hoisted.add, hoisted.update, hoisted.remove]) {
+  for (const write of [hoisted.add, hoisted.update, hoisted.remove, hoisted.enable]) {
     write.mockReset();
     write.mockResolvedValue(undefined);
   }
@@ -187,7 +203,64 @@ describe("the form and what it sends", () => {
   });
 });
 
-describe("the dialog", () => {
+describe("the card's head", () => {
+  it("stands in the page rather than in a dialog of its own", async () => {
+    await draw(detail(written), written);
+    expect(page().querySelector("[role=dialog]")).toBeNull();
+    expect(container.querySelector("form.trigcard")).not.toBeNull();
+  });
+
+  it("names the trigger in place, says it is on, and when it last filed", async () => {
+    const filed = { ...written, lastFiledAt: "2026-11-07T12:40:00Z" };
+    await draw(detail(filed), filed);
+    const head = container.querySelector(".trigcard__head")!;
+    expect((head.querySelector(`[aria-label="${t("auto.trigger.name")}"]`) as HTMLInputElement).value).toBe(
+      "Top up the reviews",
+    );
+    expect(buttonNamed(t("auto.trigger.enabled"))?.getAttribute("aria-pressed")).toBe("true");
+    expect(head.querySelector("[data-head=filed]")?.textContent).toBe(
+      tf("auto.trigger.lastFiled", { at: dueLabel({ kind: "at", at: "2026-11-07T12:40:00Z" }) }),
+    );
+  });
+
+  it("says a trigger that has filed nothing has not filed yet", async () => {
+    await draw(detail(written), written);
+    expect(page().querySelector("[data-head=filed]")?.textContent).toBe(t("auto.trigger.neverFiled"));
+  });
+
+  it("switches the trigger off at once, and a stopped one back on", async () => {
+    await draw(detail(written), written);
+    await press(buttonNamed(t("auto.trigger.enabled")));
+    expect(hoisted.enable).toHaveBeenCalledWith(31, false);
+
+    const stopped = { ...written, enabled: false };
+    await draw(detail(stopped), stopped);
+    expect(buttonNamed(t("auto.trigger.disabled"))?.getAttribute("aria-pressed")).toBe("false");
+    await press(buttonNamed(t("auto.trigger.disabled")));
+    expect(hoisted.enable).toHaveBeenLastCalledWith(31, true);
+    expect(hoisted.update).not.toHaveBeenCalled();
+  });
+
+  it("gives a new trigger neither the chip nor the line, until it is saved", async () => {
+    await draw(detail());
+    expect(buttonNamed(t("auto.trigger.enabled"))).toBeUndefined();
+    expect(page().querySelector("[data-head=filed]")).toBeNull();
+    expect(box(t("auto.trigger.name")).getAttribute("placeholder")).toBe(t("auto.trigger.newName"));
+  });
+
+  it("asks in three numbered parts", async () => {
+    await draw(detail());
+    const parts = [...container.querySelectorAll(".trigcard__part")];
+    expect(parts.map((one) => one.querySelector(".trigcard__no")?.textContent)).toEqual(["1", "2", "3"]);
+    expect(parts.map((one) => one.querySelector("h3")?.textContent)).toEqual([
+      t("auto.trigger.when"),
+      t("auto.trigger.task"),
+      t("auto.trigger.role"),
+    ]);
+  });
+});
+
+describe("the card", () => {
   it("saves what was typed through the trigger's write, then closes", async () => {
     const { onSaved, onClose } = await draw(detail());
     await type(box(t("auto.trigger.name")), "Morning check");
@@ -212,7 +285,8 @@ describe("the dialog", () => {
   it("opens a trigger already written as it stands", async () => {
     await draw(detail(written), written);
     expect((box(t("auto.trigger.name")) as HTMLInputElement).value).toBe("Top up the reviews");
-    expect(buttonNamed(t("auto.trigger.whenIdle"))?.getAttribute("aria-pressed")).toBe("true");
+    expect(radio(t("auto.trigger.whenIdle"))?.checked).toBe(true);
+    expect(radio(t("auto.trigger.taskFile"))?.checked).toBe(true);
     expect(tick(t("auto.trigger.counted"))?.checked).toBe(true);
     expect((box(t("auto.trigger.filter")) as HTMLInputElement).value).toBe("status:todo");
     expect((box(t("auto.trigger.below")) as HTMLInputElement).value).toBe("3");
@@ -233,7 +307,7 @@ describe("the dialog", () => {
   it("keeps the condition on for a tasks trigger, with no box to turn it off", async () => {
     await draw(detail());
     expect(page().querySelector(`[aria-label="${t("auto.trigger.filter")}"]`)).toBeNull();
-    await press(buttonNamed(t("auto.trigger.whenTasks")));
+    await press(radio(t("auto.trigger.whenTasks")));
     expect(tick(t("auto.trigger.counted"))).toBeUndefined();
     await type(box(t("auto.trigger.filter")), "status:todo");
     await type(box(t("auto.trigger.below")), "5");
@@ -247,7 +321,7 @@ describe("the dialog", () => {
   it("asks for a script's boxes when the script decides", async () => {
     await draw(detail());
     expect(page().querySelector(`[aria-label="${t("auto.step.program")}"]`)).toBeNull();
-    await press(buttonNamed(t("auto.trigger.whenScript")));
+    await press(radio(t("auto.trigger.whenScript")));
     expect(tick(t("auto.trigger.asked"))).toBeUndefined();
     await type(box(t("auto.step.program")), "/usr/bin/python3");
     await press(buttonNamed(t("auto.trigger.save")));
@@ -275,10 +349,31 @@ describe("the dialog", () => {
     expect(previewTitle()).toBe("Check the reports");
     expect(previewLine()).toBe(tf("auto.trigger.previewLine", { role: "Bob", trigger: "Morning check" }));
 
-    await press(buttonNamed(t("auto.trigger.taskFile")));
+    await press(radio(t("auto.trigger.taskFile")));
     expect(previewTitle()).toBe(t("auto.trigger.previewFromFile"));
-    await press(buttonNamed(t("auto.trigger.taskScript")));
+    await press(radio(t("auto.trigger.taskScript")));
     expect(previewTitle()).toBe(t("auto.trigger.previewFromScript"));
+  });
+
+  it("lists the automation's triggers beside the card, a line each", async () => {
+    const other: AutomationTriggerDto = {
+      ...written,
+      id: 32,
+      name: "Daily check",
+      roleId: undefined,
+      when: { kind: "every", minutes: 1440 },
+      condition: undefined,
+      task: { kind: "fixed", title: "Look around", notes: "" },
+    };
+    await draw(detail(written, other));
+    const lines = [...page().querySelectorAll("[data-list=triggers] li")].map((one) => one.textContent);
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain("Top up the reviews");
+    expect(lines[0]).toContain("/Users/alice/next.md");
+    expect(lines[0]).toContain(tf("auto.side.triggerRole", { role: "Bob" }));
+    expect(lines[1]).toContain("Daily check");
+    expect(lines[1]).toContain(tf("auto.side.everyDays", { days: 1 }));
+    expect(lines[1]).toContain(t("auto.side.triggerRoleNone"));
   });
 
   it("draws what core refused and stays open with what was typed", async () => {

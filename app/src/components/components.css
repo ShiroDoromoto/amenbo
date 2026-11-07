@@ -2052,6 +2052,16 @@ button.feed__target:hover { color: var(--c-accent); }
 /* An empty picture draws nothing, and the "+ first …" is all the place holds: it stands in the middle,
    with room above and below where the picture would be. */
 .actbuild__canvas > .btn:only-child { margin-block: var(--s-6); }
+/* The table of who carries out each step of the picked role's round, under the picture
+   (`../screens/AutomationRoleCarriers`). */
+.autocarriers { display: flex; flex-direction: column; gap: var(--s-2); padding: 0 var(--s-3) var(--s-5); }
+.autocarriers__table { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); }
+.autocarriers__table th, .autocarriers__table td {
+  text-align: start; padding: 4px 6px; border-block-end: var(--border-w) var(--border-style) var(--c-rule);
+}
+.autocarriers__table th { color: var(--c-text-muted); font-weight: var(--fw-medium); }
+.autocarriers__row--step td:not(:first-child) { color: var(--c-accent); }
+.autocarriers__hint { margin: 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* The panel fills the right pane (`.rightpane`), which holds the border, the ground and the one scroll.
    The head stays at the top of that scroll, so the close is in reach under a long body. */
 /* An action's build screen over the automation it was opened from (`../screens/AutomationActionOver`).

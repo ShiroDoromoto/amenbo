@@ -3605,10 +3605,22 @@ pub struct AutomationRolePassDto {
     /// The spot on the picture that files it, by the placement's id.
     #[ts(type = "number")]
     pub(crate) placement: i64,
-    /// The action standing on that spot, by name — what the build screen labels the task by.
+    /// The action standing on that spot, by name — what the build screen labels the task by until a
+    /// run has passed one on from there, the title being written only when a run files it.
     pub(crate) name: String,
     /// Whether the task it files is set to depend on another — what the build screen marks it with.
     pub(crate) depends: bool,
+    /// **The reference of the task a run last passed on from that spot**
+    /// ([`amenbo_core::ops::automation_run::RolePass::last_task_id`]). Absent where no run has passed
+    /// one from there yet, or the ones it did have since been deleted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) task_ref: Option<String>,
+    /// **The title of that task** — what the build screen names the task the role passes on by, in
+    /// place of `name`. Absent where `task_ref` is.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) task_title: Option<String>,
 }
 
 /// **Who carries one step out at one spot, and where that was chosen** — the step at the spot, the

@@ -1614,11 +1614,17 @@ datasets! {
     // The role it was passed from is the round's own (`automation_run_task.role_id`), read from there
     // rather than kept twice. `to_role_id` and `task_id` are `SET NULL` for the reason the round's
     // `task_id` is.
+    //
+    // `placement_id` is the spot of the picture whose step filed it (`automation_run_def.placement_id`),
+    // a plain id for the reason that one is: the record still stands once the placement is taken off.
+    // What the build screen reads the title of the task a spot last passed on by. NULL on a row written
+    // before this was kept.
     automation_run_pass {
         run_id: fk("automation_run", "RESTRICT"),
         run_task_id: fk("automation_run_task", "RESTRICT"),
         to_role_id: fk_opt("automation_role", "SET NULL"),
         task_id: fk_opt("task", "SET NULL"),
+        placement_id: col(KEY_REF_OPT),
     }
 
     // **One step, run once.** `seq` is the move number within the run, so a step the run comes back

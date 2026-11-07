@@ -2890,6 +2890,10 @@ pub struct AutomationRunPass {
     /// The task it filed. `None` where the task has since been deleted.
     #[serde(default)]
     pub task_id: Option<i64>,
+    /// The spot of the picture whose step filed it ([`AutomationRunDef::placement_id`]), kept after that
+    /// placement is taken off. `None` on a record written before this was kept.
+    #[serde(default)]
+    pub placement_id: Option<i64>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

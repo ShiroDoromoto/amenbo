@@ -425,7 +425,7 @@ amenbo automation action-show 7 --saved                # ...as it was saved last
 amenbo automation test-run 3                           # walk the draft through first: every step and the prompt each agent would get, with nothing started and nothing kept
 amenbo automation start 3                              # away it goes, from the newest saved version (refused if never saved, and with no app up: the app opens the steps)
 amenbo automation start 4 --title "Login loses the password field" --dim Category=bug --file ./issue.md   # ...or hand a make_task entry the task it files: title, notes, classification and attachments
-amenbo automation trigger 4 --every 60 --title "Look over the inbox"   # ...or let it file that task and start itself every hour while the app is up (none while it already has its most runs going); --off takes it away
+amenbo automation trigger 4 --every 60 --title "Look over the inbox"   # ...or add a trigger that files that task and starts it every hour while the app is up (none while it already has its most runs going); an automation may have several, each listed by `automation show` with its id
 amenbo automation trigger 4 --every 60 --name "Inbox" --role 7 --title "Look over the inbox"  # ...called "Inbox" on the timeline of each task it files, which is worked under role 7 (one of this automation's, from role-list); left out, no name and no role
 amenbo automation trigger 4 --when-idle --title "Look over the inbox"  # ...or whenever none of its runs is going, a minute after the last one it filed at the soonest
 amenbo automation trigger 4 --when-idle --if-tasks "status:todo" --fewer-than 3 --title "Look over the inbox"  # ...only while fewer than 3 of the project's tasks are todo; --if-tasks alone files one whenever that holds
@@ -433,7 +433,10 @@ amenbo automation trigger 4 --when-idle --if-tasks "status:todo" --fewer-than 3 
 amenbo automation trigger 4 --if-script /usr/local/bin/has-mail --title "Look over the inbox"  # ...or whenever that program writes {"version":1,"file":true} to $AMENBO_OUTPUT (its exit code only says it ran to the end); --script-arg and --script-timeout-minutes go with it, and it may be laid on the others too
 amenbo automation trigger 4 --every 60 --task-from-file /opt/notes/inbox-task.md  # ...the task read from that file each time instead of --title: its first line is the title, the rest the notes
 amenbo automation trigger 4 --when-idle --task-from-script /usr/local/bin/next-mail  # ...or written each time by that program, as {"version":1,"title":"…","notes":"…"} in $AMENBO_OUTPUT; --task-script-arg and --task-script-timeout-minutes go with it
-amenbo automation stop 4                               # stop it starting new rounds: start and its trigger are refused, and each run pauses once its round is over (one waiting for room to take a task, at once) and a wait for a task ends; --off lets it start them again
+amenbo automation trigger --trigger 12 --every 30 --title "Look over the inbox"  # ...write trigger 12 afresh, keeping its id, whether it is on and when it last filed a task
+amenbo automation trigger --trigger 12 --off                                  # ...have it asked no more, kept as it is; --on has it asked again
+amenbo automation trigger --trigger 12 --rm -y                                # ...take it away, the automation's other triggers left as they are
+amenbo automation stop 4                               # stop it starting new rounds: start is refused and its triggers file nothing, and each run pauses once its round is over (one waiting for room to take a task, at once) and a wait for a task ends; --off lets it start them again
 amenbo automation stop-waiting 3                       # an automation set to wait for a task makes no run until one turns up; this stops it waiting
 amenbo automation pause 7                              # ...at the end of the action under way (a wait under way included: the run pauses once its time is up)
 amenbo automation pause 7 --before-next-task           # ...or where it would take its next task (one waiting for room pauses now)

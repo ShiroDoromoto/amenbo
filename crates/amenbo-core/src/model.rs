@@ -2446,13 +2446,15 @@ impl AutomationLaunchStatus {
 ///
 /// A person launches an automation once, and the launch runs up to the automation's
 /// `max_concurrent_runs` at once while there are tasks to take: where one run ends, the next is started
-/// in the same launch ([`crate::ops::automation_run::top_up`]). A run its trigger starts, or one started
+/// in the same launch ([`crate::ops::automation_run::top_up`]). A run one of its triggers starts, or one started
 /// once a task turns up for an automation waiting on one, joins the launch standing; where none is
 /// standing, it opens one. An automation has at most one launch that has not ended.
 ///
 /// Pausing, picking up and stopping a launch acts on each run under way in it
 /// ([`crate::ops::automation_stop::pause_launch`] and the ops beside it). It ends once no run of it is
-/// under way and nothing is waiting to start one — or where a person stopped it.
+/// under way and nothing is waiting to start one — no task, and no failed round's task filed to a role
+/// ([`crate::ops::automation_run::incidents_waiting_in_launch`]) while a run can still be started in it
+/// — or where a person stopped it.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationLaunch {
     pub id: i64,

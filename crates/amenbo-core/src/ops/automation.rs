@@ -1608,7 +1608,7 @@ pub struct Stopped {
 ///
 /// - **No run of it starts.** A launch is refused, and so is picking up a run paused before its next
 ///   task, which would start a round from the entry ([`automation_run`]).
-/// - **Its trigger files nothing** while it is stopped, and `next_at` stays where it was.
+/// - **Its triggers file nothing** while it is stopped, and their `next_at` stays where it was.
 /// - **A run of it finishes the round it is on**, and pauses where the round is over, before it takes
 ///   its next task. One standing at its entry waiting for room in the action that takes one is paused
 ///   here at once ([`Stopped::paused`]). A run that takes no tasks has no round to finish and goes on to

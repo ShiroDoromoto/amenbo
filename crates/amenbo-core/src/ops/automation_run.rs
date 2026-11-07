@@ -859,6 +859,61 @@ pub fn passes_of_run(conn: &Connection, run_id: i64) -> Result<Vec<RunPass>> {
         .collect())
 }
 
+/// **One failed round's task waiting for the role it was filed to** — filed by a round of a launch
+/// to the role the automation sends a failed round to, and not taken by any round yet. That role has
+/// an incident in the launch while it waits, whether or not a round of the role is under way.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct LaunchIncident {
+    /// The task the round was filed as.
+    pub task_id: i64,
+    /// The role it was filed to — the task's role.
+    pub role_id: i64,
+    /// The run whose round failed.
+    pub run_id: i64,
+    /// The round that failed.
+    pub run_task_id: i64,
+    /// The failed round's role. `None` where the round had none, and where it has since been taken
+    /// out.
+    pub from_role_id: Option<i64>,
+    /// When the round failed and was filed.
+    pub filed_at: Option<Timestamp>,
+}
+
+/// **Every failed round's task waiting in one launch for the role it was filed to**, in the order
+/// they were filed — what says a role of the launch has an incident.
+///
+/// A task waits while it is `todo`, the AI's, and under one of the launch's automation's roles. It
+/// stops waiting once a round takes it, once it is closed, and once a person takes it over or moves it
+/// to another role. One filed to a person waits for no role and is left out. A launch that has ended
+/// answers the same way, so what it left behind is still read.
+pub fn incidents_waiting_in_launch(conn: &Connection, launch_id: i64) -> Result<Vec<LaunchIncident>> {
+    let Some(launch) = read::automation_launch(conn, launch_id)? else { return Ok(Vec::new()) };
+    let mut waiting = Vec::new();
+    for run_id in read::automation_launch_run_ids(conn, launch_id)? {
+        for round in read::automation_run_tasks_of(conn, run_id)? {
+            let Some(task_id) = round.incident_task_id else { continue };
+            let Some(task) = read::task(conn, task_id)? else { continue };
+            if task.status != crate::model::TaskStatus::Todo || task.assignee_kind != Some(ActorKind::Ai) {
+                continue;
+            }
+            let Some(role_id) = task.role_id else { continue };
+            if read::automation_role(conn, role_id)?.is_none_or(|r| r.automation_id != launch.automation_id) {
+                continue;
+            }
+            waiting.push(LaunchIncident {
+                task_id,
+                role_id,
+                run_id,
+                run_task_id: round.id,
+                from_role_id: round.role_id,
+                filed_at: round.ended_at,
+            });
+        }
+    }
+    waiting.sort_by_key(|incident| incident.task_id);
+    Ok(waiting)
+}
+
 /// **The placements one round reaches** — walked from where it starts, as [`reachable`] walks, but not
 /// on into a placement in `starts` other than its own: that is where the automation's entry or another
 /// role's round begins, and a line going there has left this round.
@@ -2331,7 +2386,7 @@ pub fn launches_to_top_up(conn: &Connection, launches: &[i64]) -> Result<Vec<i64
 /// raised while the launch runs takes hold at once. No run of the launch stands about to take a task:
 /// that run would take the one found here. And the newest saved entry finds a task to take — an entry
 /// that is not the built-in that takes one is never topped up, its run walking the picture once.
-fn tops_up(conn: &Connection, launch_id: i64) -> Result<bool> {
+pub(crate) fn tops_up(conn: &Connection, launch_id: i64) -> Result<bool> {
     let Some(launch) = read::automation_launch(conn, launch_id)? else { return Ok(false) };
     if launch.status != AutomationLaunchStatus::Running {
         return Ok(false);

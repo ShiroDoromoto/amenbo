@@ -60,7 +60,7 @@ function placement(id: number, roleId: number | undefined, steps: number): Autom
     exits: [],
     inputs: [],
     settings: [],
-    steps: Array.from({ length: steps }, (_, n) => ({ stepId: id * 10 + n, name: `step ${n}` })),
+    steps: Array.from({ length: steps }, (_, n) => ({ stepId: id * 10 + n, name: `step ${n}`, interactive: false })),
   };
 }
 

@@ -3761,6 +3761,8 @@ pub struct AutomationPlacementStepDto {
     pub(crate) step_id: i64,
     /// What the step is called, on the action's own screen.
     pub(crate) name: String,
+    /// Whether the step may stop and ask a person (`automation_action_step.interactive`).
+    pub(crate) interactive: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) agent: Option<String>,

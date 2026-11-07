@@ -2206,7 +2206,8 @@ pub struct AutomationRole {
     pub name: String,
     /// **How many are in it** — how many tasks under this role may be under way at once. From 1 up
     /// to [`MAX_ROLE_HEADCOUNT`], [`DEFAULT_ROLE_HEADCOUNT`] until somebody changes it. It is part of
-    /// the role, so a saved version keeps it; one saved without it reads as the default.
+    /// the role, so a saved version keeps it; one saved without it reads as the default. A launch
+    /// copies it as it opens ([`AutomationLaunchRole`]), so one saved takes hold from the next launch.
     #[serde(default = "default_role_headcount")]
     pub headcount: u32,
     /// The icon it is drawn with, by the name the GUI knows it under, or `None` for none chosen.
@@ -2487,6 +2488,23 @@ pub struct AutomationLaunch {
     pub started_by_kind: Option<ActorKind>,
     #[serde(default)]
     pub ended_at: Option<Timestamp>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **How many are in one role for one launch** ([`AutomationLaunch`]) — the role's headcount copied from
+/// the newest saved version when the launch opened, then changed on the launch alone
+/// ([`crate::ops::automation_run::launch_headcount_set`]). The definition is left as it is: a headcount
+/// saved takes hold from the next launch, and once this one ends the next copies the definition again.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationLaunchRole {
+    pub id: i64,
+    pub launch_id: i64,
+    /// The role, as the saved version names it — a plain id, kept whether or not the role is still in
+    /// the draft.
+    pub role_id: i64,
+    /// From 1 up to [`MAX_ROLE_HEADCOUNT`].
+    pub headcount: u32,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

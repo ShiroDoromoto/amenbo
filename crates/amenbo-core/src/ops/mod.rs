@@ -223,8 +223,10 @@ pub(crate) mod test_support {
 
     /// **Let an automation have `n` runs going at once** — its roles' headcount added up to `n`. Its first
     /// role (every automation has one) is given what the others leave of `n`, and where a version of it is
-    /// saved the draft is saved again, since the runs under way are measured against the newest saved
-    /// version ([`crate::ops::automation_run::seats`]).
+    /// saved the draft is saved again, since a launch copies the newest saved version
+    /// ([`crate::ops::automation_run::seats`]). Where a launch is standing, the role is given the same
+    /// headcount on it too, as a person would for that launch
+    /// ([`crate::ops::automation_run::launch_headcount_set`]).
     pub(crate) fn room_for(tx: &WriteTx<'_>, automation_id: i64, n: u32) {
         use crate::ops::automation::{role_update, version_add, RoleChange};
         let roles = crate::store_engine::read::automation_roles_of(tx.conn(), automation_id).expect("read roles");
@@ -235,6 +237,12 @@ pub(crate) mod test_support {
             .expect("set the headcount");
         if crate::store_engine::read::automation_version_latest(tx.conn(), automation_id).expect("read").is_some() {
             version_add(tx, automation_id).expect("save the headcount");
+        }
+        if let Some(launch) =
+            crate::store_engine::read::automation_launch_standing(tx.conn(), automation_id).expect("read")
+        {
+            crate::ops::automation_run::launch_headcount_set(tx, launch.id, first.id, headcount)
+                .expect("set the headcount for the launch");
         }
     }
 

@@ -1430,11 +1430,11 @@ mod tests {
 
     /// **One launch keeps its runs going side by side, up to its most, while there are tasks to take.**
     /// A run is added only once every run of the launch has taken its task, it joins the same launch
-    /// and is started by whoever pressed it, and a headcount raised and saved while the launch runs
-    /// makes room at once.
+    /// and is started by whoever pressed it. A headcount saved while the launch runs waits for the next
+    /// launch, and one raised on the launch makes room at once.
     #[test]
     fn one_launch_tops_up_to_its_most_while_there_are_tasks() {
-        use crate::ops::automation_run::{launches_to_top_up, top_up};
+        use crate::ops::automation_run::{launch_headcount_set, launches_to_top_up, top_up};
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let (automation, _) = picture(tx, project);
@@ -1460,13 +1460,167 @@ mod tests {
             assert!(launches_to_top_up(tx.conn(), &[launch]).expect("ask").is_empty(), "two is its most");
             assert!(top_up(tx, launch, &launcher()).expect("top up").is_none(), "nothing is written");
 
-            crate::ops::test_support::room_for(tx, automation.id, 3);
+            let role = read::automation_roles_of(tx.conn(), automation.id).expect("roles")[0].id;
+            automation::role_update(tx, role, automation::RoleChange { headcount: Some(3), ..Default::default() })
+                .expect("raise the definition");
+            automation::version_add(tx, automation.id).expect("save it");
+            assert!(top_up(tx, launch, &launcher()).expect("top up").is_none(), "the next launch takes it up");
+
+            launch_headcount_set(tx, launch, role, 3).expect("raise it for this launch");
             let third = top_up(tx, launch, &launcher()).expect("top up").expect("a third run");
             assert_eq!(third.launch_id, Some(launch));
             assert_eq!(
                 read::automation_launch_run_ids_under_way(tx.conn(), launch).expect("runs"),
                 vec![first.id, second.id, third.id],
             );
+        });
+    }
+
+    /// The work of a round opened and reported done, and the close carried out after it — answering where
+    /// the run went from the close.
+    fn round_finished(tx: &WriteTx<'_>, run: i64, work: &crate::model::AutomationRunDef) -> Next {
+        let claude = ["claude".to_string()];
+        let Opened::Ready(opening) = open(tx, run, work.id, Some(&claude)).expect("open the work") else {
+            panic!("the work opens a terminal");
+        };
+        let Next::Step(close) = report_done(tx, &opening) else { panic!("the work goes on to the close") };
+        let Opened::Carried { next, .. } = open(tx, run, close.id, Some(&claude)).expect("close") else {
+            panic!("the close is carried out");
+        };
+        next
+    }
+
+    /// Two runs of a round picture side by side in one launch, each on its task: the launch, its one role,
+    /// and each run with the work its round stands before.
+    fn two_at_work(
+        tx: &WriteTx<'_>,
+        automation: &Automation,
+    ) -> (i64, i64, [(AutomationRun, Box<crate::model::AutomationRunDef>); 2]) {
+        use crate::ops::automation_run::top_up;
+        let first = launched(tx, automation);
+        let launch = first.launch_id.expect("a launch");
+        let Opened::Carried { next: Next::Step(first_work), .. } = open_entry(tx, &first) else {
+            panic!("the take goes on to the work");
+        };
+        let second = top_up(tx, launch, &launcher()).expect("top up").expect("a second run");
+        let Opened::Carried { next: Next::Step(second_work), .. } = open_entry(tx, &second) else {
+            panic!("the take goes on to the work");
+        };
+        let role = read::automation_roles_of(tx.conn(), automation.id).expect("roles")[0].id;
+        (launch, role, [(first, first_work), (second, second_work)])
+    }
+
+    /// **A headcount lowered on the launch stops no task under way.** The seat still to go goes as its run
+    /// finishes its task: that run ends where it comes to take the next, completed, without taking one.
+    /// The definition is left as it is.
+    #[test]
+    fn a_headcount_lowered_on_the_launch_lets_a_seat_go_as_its_run_finishes_a_round() {
+        use crate::ops::automation_run::{launch_headcount_set, launch_headcounts, launches_to_top_up};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = round_picture(tx, project);
+            crate::ops::test_support::room_for(tx, automation.id, 2);
+            for title in ["a", "b", "c", "d"] {
+                for_ai(tx, title, project, None);
+            }
+            let (launch, role, [(first, first_work), (second, second_work)]) = two_at_work(tx, &automation);
+
+            launch_headcount_set(tx, launch, role, 1).expect("lower it for this launch");
+            let counted = launch_headcounts(tx.conn(), launch).expect("read");
+            assert_eq!(counted.len(), 1);
+            assert_eq!((counted[0].defined, counted[0].headcount), (2, 1), "the definition is left as it is");
+            assert_eq!(counted[0].under_way, vec![first.id, second.id], "no task under way is stopped");
+            assert_eq!(counted[0].to_let_go, 1, "one seat is still to go");
+            assert!(launches_to_top_up(tx.conn(), &[launch]).expect("ask").is_empty());
+
+            let Next::Step(take) = round_finished(tx, first.id, &first_work) else { panic!("back round to the take") };
+            let Opened::LetGo { run: let_go } = open(tx, first.id, take.id, Some(&[])).expect("open the take") else {
+                panic!("the first to finish its task lets its seat go");
+            };
+            assert_eq!(let_go.status, AutomationRunStatus::Completed);
+            let counted = launch_headcounts(tx.conn(), launch).expect("read");
+            assert_eq!((counted[0].under_way.clone(), counted[0].to_let_go), (vec![second.id], 0));
+
+            let Next::Step(take) = round_finished(tx, second.id, &second_work) else { panic!("back round to the take") };
+            assert!(
+                matches!(open(tx, second.id, take.id, Some(&[])).expect("open the take"), Opened::Carried { .. }),
+                "the seat left takes its next task",
+            );
+        });
+    }
+
+    /// **Raised again before the seats have gone, the headcount calls the rest off**: the runs under way
+    /// keep their seats, and each goes round as before.
+    #[test]
+    fn a_headcount_raised_again_calls_off_the_seats_still_to_go() {
+        use crate::ops::automation_run::{launch_headcount_reset, launch_headcount_set, launch_headcounts};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = round_picture(tx, project);
+            crate::ops::test_support::room_for(tx, automation.id, 2);
+            for title in ["a", "b", "c", "d"] {
+                for_ai(tx, title, project, None);
+            }
+            let (launch, role, [(first, first_work), _]) = two_at_work(tx, &automation);
+
+            launch_headcount_set(tx, launch, role, 1).expect("lower it");
+            assert_eq!(launch_headcounts(tx.conn(), launch).expect("read")[0].to_let_go, 1);
+            let back = launch_headcount_reset(tx, launch, role).expect("back to the definition");
+            assert_eq!(back.headcount, 2);
+            assert_eq!(launch_headcounts(tx.conn(), launch).expect("read")[0].to_let_go, 0, "called off");
+
+            let Next::Step(take) = round_finished(tx, first.id, &first_work) else { panic!("back round to the take") };
+            assert!(
+                matches!(open(tx, first.id, take.id, Some(&[])).expect("open the take"), Opened::Carried { .. }),
+                "the run keeps its seat and takes its next task",
+            );
+        });
+    }
+
+    /// **How many are in a role for a launch is from 1 to 10** (`AMB-D-1124`), changed only on a launch
+    /// under way and only for a role of the newest saved version. Once the launch ends every role reads
+    /// as its definition again, and the next launch copies the definition as it then stands.
+    #[test]
+    fn a_launch_headcount_is_held_to_its_range_and_ends_with_the_launch() {
+        use crate::ops::automation_run::{launch_headcount_set, launch_headcounts};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = round_picture(tx, project);
+            for_ai(tx, "a", project, None);
+            let run = launched(tx, &automation);
+            let launch = run.launch_id.expect("a launch");
+            let role = read::automation_roles_of(tx.conn(), automation.id).expect("roles")[0].id;
+
+            for wrong in [0, crate::model::MAX_ROLE_HEADCOUNT + 1] {
+                assert!(
+                    matches!(launch_headcount_set(tx, launch, role, wrong), Err(crate::error::Error::Invalid(_))),
+                    "a headcount of {wrong}",
+                );
+            }
+            let most = launch_headcount_set(tx, launch, role, crate::model::MAX_ROLE_HEADCOUNT).expect("ten");
+            assert_eq!(most.headcount, crate::model::MAX_ROLE_HEADCOUNT);
+            assert!(
+                matches!(launch_headcount_set(tx, launch, role + 1000, 2), Err(crate::error::Error::Invalid(_))),
+                "a role the automation does not hold",
+            );
+
+            automation::role_update(tx, role, automation::RoleChange { headcount: Some(3), ..Default::default() })
+                .expect("change the definition");
+            automation::version_add(tx, automation.id).expect("save it");
+            assert_eq!(
+                launch_headcounts(tx.conn(), launch).expect("read")[0].headcount,
+                crate::model::MAX_ROLE_HEADCOUNT,
+                "a saved headcount waits for the next launch",
+            );
+
+            automation_stop::stop_launch(tx, launch).expect("stop");
+            let ended = launch_headcounts(tx.conn(), launch).expect("read");
+            assert_eq!((ended[0].defined, ended[0].headcount), (3, 3), "back at the definition");
+            assert!(matches!(launch_headcount_set(tx, launch, role, 2), Err(crate::error::Error::Invalid(_))));
+
+            for_ai(tx, "b", project, None);
+            let next = launched(tx, &automation).launch_id.expect("a launch of its own");
+            assert_eq!(launch_headcounts(tx.conn(), next).expect("read")[0].headcount, 3, "copied afresh");
         });
     }
 

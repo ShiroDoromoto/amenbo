@@ -41,7 +41,10 @@
 //! **One launch runs side by side** ([`AutomationLaunch`]). A person launches an automation once, and
 //! the launch stays open until a person stops it. Each role has as many seats as its headcount
 //! ([`seats`]), and a run is started into a role's free seat where that role has a task to take: the
-//! app's look starts one more where one has ([`top_up`]), so one that ends makes room for the next. A
+//! app's look starts one more where one has ([`top_up`]), so one that ends makes room for the next. The
+//! launch copies each role's headcount from the definition as it opens, and it is changed on the launch
+//! alone from then on ([`launch_headcount_set`]): raised, the seats added take tasks at once; lowered, a
+//! run past it ends as it comes to take its next task. A
 //! run a trigger starts ([`fire`]), or one started once a task turns up ([`start_waiting`]), joins the
 //! launch standing, and opens one where none is. A test run belongs to none.
 //!
@@ -61,7 +64,8 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
     ActorKind, AttachmentTarget, Automation, AutomationCfg, AutomationCfgOwner, AutomationEnds, AutomationExit,
-    AutomationLaunch, AutomationLaunchStatus, AutomationOwner, AutomationPictureOwner, AutomationPlacement,
+    AutomationLaunch, AutomationLaunchRole, AutomationLaunchStatus, AutomationOwner, AutomationPictureOwner,
+    AutomationPlacement,
     AutomationRole,
     AutomationPortDirection,
     AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
@@ -2010,21 +2014,36 @@ pub enum ReadsFrom {
 }
 
 /// **How many runs of an automation its roles hold between them** — the headcount of the roles its
-/// newest saved version holds, added up, and the draft's where nothing is saved yet. One where it holds
-/// no role. What a trigger weighs its room against; a run is started only into a role's free seat
-/// ([`seats`]). Read as it stands each time it is asked, so a headcount saved while a launch runs takes
-/// hold at once.
+/// newest saved version holds, added up, and the draft's where nothing is saved yet; each role at the
+/// headcount the launch standing holds for it ([`in_launch`]). One where it holds no role. What a
+/// trigger weighs its room against; a run is started only into a role's free seat ([`seats`]).
 pub fn headcount(conn: &Connection, automation: &Automation) -> Result<u32> {
     let (pic, _) = definition(conn, automation, ReadsFrom::Saved)?;
-    Ok(headcount_of(&pic))
+    Ok(headcount_of(&pic, &in_launch(conn, automation.id)?))
 }
 
-/// [`headcount`] of a picture already read: its roles' headcount added up, or one where it has none.
-fn headcount_of(pic: &Picture) -> u32 {
+/// [`headcount`] of a picture already read, with the launch standing's headcounts (`counts`): its roles'
+/// headcount added up, or one where it has none.
+fn headcount_of(pic: &Picture, counts: &BTreeMap<i64, u32>) -> u32 {
     match pic.roles() {
         [] => 1,
-        roles => roles.iter().map(|r| r.headcount).sum(),
+        roles => roles.iter().map(|r| counted(r, counts)).sum(),
     }
+}
+
+/// **How many are in one role now** — the launch standing's headcount for it where it holds one
+/// ([`in_launch`]), the role's own (its definition's) where it does not.
+fn counted(role: &AutomationRole, counts: &BTreeMap<i64, u32>) -> u32 {
+    counts.get(&role.id).copied().unwrap_or(role.headcount)
+}
+
+/// **How many are in each role for the launch of this automation standing** — by role, as the launch
+/// copied them when it opened and as they have been changed on it since
+/// ([`crate::model::AutomationLaunchRole`]). Empty where no launch is standing: the definition's
+/// headcount is what a launch opened now would copy.
+fn in_launch(conn: &Connection, automation_id: i64) -> Result<BTreeMap<i64, u32>> {
+    let Some(launch) = read::automation_launch_standing(conn, automation_id)? else { return Ok(BTreeMap::new()) };
+    Ok(read::automation_launch_roles(conn, launch.id)?.into_iter().map(|r| (r.role_id, r.headcount)).collect())
 }
 
 /// **The seats of one role of an automation** — as many as its headcount, each held by a run of it under
@@ -2036,7 +2055,8 @@ pub struct Seats {
     /// its round starts: its runs walk the picture as it is drawn, and sit in one set of seats as many as
     /// its [`headcount`].
     pub role_id: Option<i64>,
-    /// How many seats it has — the role's headcount.
+    /// How many seats it has — the role's headcount for the launch standing ([`in_launch`]), its
+    /// definition's where no launch holds one for it.
     pub headcount: u32,
     /// The runs `running` or `paused` sitting in them, a paused one holding its seat as much as a running
     /// one (`AMB-D-961`). A run bound to no role sits in no role's seat.
@@ -2049,6 +2069,13 @@ impl Seats {
         self.under_way.len() < self.headcount as usize
     }
 
+    /// **How many seats are still to go** — the runs under way past the headcount, after it was lowered
+    /// on the launch. Each goes as its run comes to take its next task ([`over_headcount`]); none is
+    /// recorded, so raising the headcount again calls the rest off.
+    pub fn to_let_go(&self) -> u32 {
+        u32::try_from(self.under_way.len()).unwrap_or(u32::MAX).saturating_sub(self.headcount)
+    }
+
     /// The roles a run in these seats takes tasks of, as the waiting built-ins read them — none for the
     /// seats of an automation with no role naming where its round starts.
     fn roles(&self) -> Vec<i64> {
@@ -2057,9 +2084,9 @@ impl Seats {
 }
 
 /// **The seats of each role of an automation** ([`Seats`]), in the order its roles are defined in — of
-/// the roles its newest saved version names where their round starts, read as they stand each time they
-/// are asked, so a headcount saved while a launch runs takes hold at once (`AMB-D-1015`). One set, as
-/// many as its [`headcount`], where none names one.
+/// the roles its newest saved version names where their round starts, each as many as the launch
+/// standing holds for it ([`in_launch`]). A headcount saved while a launch runs takes hold from the next
+/// launch. One set, as many as its [`headcount`], where none names one.
 pub fn seats(conn: &Connection, automation: &Automation) -> Result<Vec<Seats>> {
     let (pic, _) = definition(conn, automation, ReadsFrom::Saved)?;
     seats_of(conn, automation.id, &pic)
@@ -2068,10 +2095,11 @@ pub fn seats(conn: &Connection, automation: &Automation) -> Result<Vec<Seats>> {
 /// [`seats`] of a picture already read.
 fn seats_of(conn: &Connection, automation_id: i64, pic: &Picture) -> Result<Vec<Seats>> {
     let on = roles_on(pic);
+    let counts = in_launch(conn, automation_id)?;
     if on.is_empty() {
         return Ok(vec![Seats {
             role_id: None,
-            headcount: headcount_of(pic),
+            headcount: headcount_of(pic, &counts),
             under_way: read::automation_run_ids_under_way(conn, automation_id)?,
         }]);
     }
@@ -2079,7 +2107,7 @@ fn seats_of(conn: &Connection, automation_id: i64, pic: &Picture) -> Result<Vec<
     for role in pic.roles().iter().filter(|r| on.contains(&r.id)) {
         seats.push(Seats {
             role_id: Some(role.id),
-            headcount: role.headcount,
+            headcount: counted(role, &counts),
             under_way: read::automation_run_ids_under_way_as(conn, automation_id, role.id)?,
         });
     }
@@ -2506,10 +2534,17 @@ pub fn task_wait_held_back(
 }
 
 /// **The launch a run about to be made is started in** — the one standing for the automation, or a new
-/// one opened by `by` where none is ([`AutomationLaunch`]).
+/// one opened by `by` where none is ([`AutomationLaunch`]). A new one copies the headcount of each role
+/// of `pic`, the definition launched ([`crate::model::AutomationLaunchRole`]): from then on its seats
+/// are as many as it holds, changed on it alone ([`launch_headcount_set`]).
 ///
 /// **A paused launch is refused.** A person paused it, and a run started in it would not be paused.
-fn join_launch(tx: &WriteTx<'_>, automation: &Automation, by: Option<ActorKind>) -> Result<AutomationLaunch> {
+fn join_launch(
+    tx: &WriteTx<'_>,
+    automation: &Automation,
+    pic: &Picture,
+    by: Option<ActorKind>,
+) -> Result<AutomationLaunch> {
     match read::automation_launch_standing(tx.conn(), automation.id)? {
         Some(launch) if launch.status == AutomationLaunchStatus::Paused => Err(Error::invalid(format!(
             "automation '{}' has its launch paused ({}) — pick it up again before launching it",
@@ -2529,6 +2564,17 @@ fn join_launch(tx: &WriteTx<'_>, automation: &Automation, by: Option<ActorKind>)
                 updated_at: now,
             };
             emit_create(tx, record::automation_launch(&launch))?;
+            for role in pic.roles() {
+                let row = AutomationLaunchRole {
+                    id: read::next_id(tx.conn(), "automation_launch_role")?,
+                    launch_id: launch.id,
+                    role_id: role.id,
+                    headcount: role.headcount,
+                    created_at: now,
+                    updated_at: now,
+                };
+                emit_create(tx, record::automation_launch_role(&row))?;
+            }
             Ok(launch)
         }
     }
@@ -2559,8 +2605,8 @@ pub fn launches_to_top_up(conn: &Connection, launches: &[i64]) -> Result<Vec<i64
 /// to start). The newest saved entry is the built-in that takes a task — any other is never topped up,
 /// its run walking the picture once. And one of the automation's roles has a free seat ([`seats`]), a
 /// task of its own to take at that entry, and no run of it standing about to take one, which would take
-/// the task found here ([`with_a_task`]). The seats are read from the newest saved version as it stands
-/// now, so a headcount raised and saved while the launch runs takes hold at once.
+/// the task found here ([`with_a_task`]). The seats are as many as the launch holds for each role
+/// ([`seats`]), so a headcount raised on the launch takes hold at once ([`launch_headcount_set`]).
 fn tops_up(conn: &Connection, launch_id: i64) -> Result<bool> {
     let Some(launch) = read::automation_launch(conn, launch_id)? else { return Ok(false) };
     if launch.status != AutomationLaunchStatus::Running {
@@ -2596,6 +2642,162 @@ pub fn top_up(tx: &WriteTx<'_>, launch_id: i64, by: &Launcher<'_>) -> Result<Opt
     let launch = read::automation_launch(tx.conn(), launch_id)?.ok_or_else(|| not_found("launch", launch_id))?;
     let by = Launcher { by: launch.started_by_kind, ..*by };
     launch_handing(tx, launch.automation_id, &by, &HandedAtLaunch::default(), ReadsFrom::Saved).map(Some)
+}
+
+/// **How many are in one role for one launch, beside its definition** ([`launch_headcounts`]) — what the
+/// run's pane reads to say a role is at a headcount of its own for this launch, and how many seats are
+/// still to go after it was lowered.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct RoleHeadcount {
+    pub role_id: i64,
+    /// The headcount the newest saved version gives it — what the next launch copies.
+    pub defined: u32,
+    /// The headcount this launch holds for it. `defined` once the launch has ended.
+    pub headcount: u32,
+    /// Its runs `running` or `paused`, a paused one holding its seat as much as a running one. None once
+    /// the launch has ended.
+    pub under_way: Vec<i64>,
+    /// The runs under way past `headcount` ([`Seats::to_let_go`]): each goes as it comes to take its next
+    /// task, so this is how many seats are still to go.
+    pub to_let_go: u32,
+}
+
+/// **How many are in each role for one launch, beside its definition** ([`RoleHeadcount`]) — one for each
+/// role the newest saved version of its automation holds, in the order they are defined in. The runs
+/// under way and the seats still to go are read from the same seats a run is let go by
+/// ([`seats`], [`over_headcount`]); where no role names where its round starts, they are the first
+/// role's. Once the launch has ended, every role is back at its definition with nothing under way.
+pub fn launch_headcounts(conn: &Connection, launch_id: i64) -> Result<Vec<RoleHeadcount>> {
+    let launch = read::automation_launch(conn, launch_id)?.ok_or_else(|| not_found("launch", launch_id))?;
+    let automation =
+        read::automation(conn, launch.automation_id)?.ok_or_else(|| not_found("automation", launch.automation_id))?;
+    let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+    if launch.status == AutomationLaunchStatus::Ended {
+        return Ok(pic
+            .roles()
+            .iter()
+            .map(|role| RoleHeadcount {
+                role_id: role.id,
+                defined: role.headcount,
+                headcount: role.headcount,
+                under_way: Vec::new(),
+                to_let_go: 0,
+            })
+            .collect());
+    }
+    let counts: BTreeMap<i64, u32> =
+        read::automation_launch_roles(conn, launch.id)?.into_iter().map(|r| (r.role_id, r.headcount)).collect();
+    let seats = seats_of(conn, automation.id, &pic)?;
+    let mut found = Vec::with_capacity(pic.roles().len());
+    for (i, role) in pic.roles().iter().enumerate() {
+        // Where no role names where its round starts, its runs sit in one set of seats bound to no role
+        // (`seats_of`): that set is read as the first role's, as every automation has one.
+        let sat = seats.iter().find(|s| match s.role_id {
+            Some(id) => id == role.id,
+            None => i == 0,
+        });
+        found.push(RoleHeadcount {
+            role_id: role.id,
+            defined: role.headcount,
+            headcount: counted(role, &counts),
+            under_way: sat.map(|s| s.under_way.clone()).unwrap_or_default(),
+            to_let_go: sat.map_or(0, Seats::to_let_go),
+        });
+    }
+    Ok(found)
+}
+
+/// **Change how many are in one role for this launch alone** — from 1 up to
+/// [`crate::model::MAX_ROLE_HEADCOUNT`] (`AMB-D-1124`); to stop a role taking tasks is another thing
+/// than a headcount of none. The definition is left as it is, and once the launch ends the next one
+/// copies the definition again.
+///
+/// - **Raised, it takes hold at once**: the seats added are free, and the app's look starts a run into
+///   one where the role has a task to take ([`top_up`]).
+/// - **Lowered, no task under way is stopped.** Free seats go at once. Where that is not enough, a run
+///   under way past the headcount ends as it comes to take its next task ([`over_headcount`]) — the
+///   seats go in the order their runs finish a task.
+/// - **Raised again before they have gone**, the seats still to go are called off and the runs under way
+///   keep their seats: what is to go is never recorded, only read as the runs under way past the
+///   headcount ([`Seats::to_let_go`]).
+///
+/// Refused for a launch that has ended, and for a role the newest saved version of its automation does
+/// not hold.
+pub fn launch_headcount_set(
+    tx: &WriteTx<'_>,
+    launch_id: i64,
+    role_id: i64,
+    headcount: u32,
+) -> Result<AutomationLaunchRole> {
+    let headcount = crate::ops::automation::checked_headcount(headcount)?;
+    let (launch, _) = launch_role(tx.conn(), launch_id, role_id)?;
+    let now = Timestamp::now();
+    match read::automation_launch_roles(tx.conn(), launch.id)?.into_iter().find(|r| r.role_id == role_id) {
+        Some(before) if before.headcount == headcount => Ok(before),
+        Some(before) => {
+            let after = AutomationLaunchRole { headcount, updated_at: now, ..before.clone() };
+            crate::ops::emit_update(
+                tx,
+                record::automation_launch_role(&before),
+                record::automation_launch_role(&after),
+            )?;
+            Ok(after)
+        }
+        None => {
+            let row = AutomationLaunchRole {
+                id: read::next_id(tx.conn(), "automation_launch_role")?,
+                launch_id: launch.id,
+                role_id,
+                headcount,
+                created_at: now,
+                updated_at: now,
+            };
+            emit_create(tx, record::automation_launch_role(&row))?;
+            Ok(row)
+        }
+    }
+}
+
+/// **Put one role of this launch back at its definition's headcount** — the one the newest saved version
+/// of its automation gives it, as [`launch_headcount_set`] would set it, with what that says of a
+/// headcount raised or lowered.
+pub fn launch_headcount_reset(tx: &WriteTx<'_>, launch_id: i64, role_id: i64) -> Result<AutomationLaunchRole> {
+    let (_, role) = launch_role(tx.conn(), launch_id, role_id)?;
+    launch_headcount_set(tx, launch_id, role_id, role.headcount)
+}
+
+/// **A launch not ended, and one role of the newest saved version of its automation** — what changing a
+/// headcount on the launch is asked of.
+fn launch_role(conn: &Connection, launch_id: i64, role_id: i64) -> Result<(AutomationLaunch, AutomationRole)> {
+    let launch = read::automation_launch(conn, launch_id)?.ok_or_else(|| not_found("launch", launch_id))?;
+    if launch.status == AutomationLaunchStatus::Ended {
+        return Err(Error::invalid(format!(
+            "launch '{launch_id}' has ended — how many are in a role is changed on a launch under way, and \
+             the next one copies the definition"
+        )));
+    }
+    let automation =
+        read::automation(conn, launch.automation_id)?.ok_or_else(|| not_found("automation", launch.automation_id))?;
+    let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+    let role = pic.roles().iter().find(|r| r.id == role_id).cloned().ok_or_else(|| {
+        Error::invalid(format!(
+            "role '{role_id}' is not one of automation '{}' as it was last saved",
+            automation.name
+        ))
+    })?;
+    Ok((launch, role))
+}
+
+/// **Whether a run's seat is one still to go** — the headcount of its role lowered on the launch below
+/// the runs under way in it ([`Seats::to_let_go`]). Asked as the run comes to the step that takes its
+/// next task: such a run ends there without taking one
+/// ([`crate::ops::automation_step::Opened::LetGo`]), so the seats go in the order their runs finish a
+/// task and no task under way is stopped.
+pub(crate) fn over_headcount(conn: &Connection, run: &AutomationRun) -> Result<bool> {
+    let automation =
+        read::automation(conn, run.automation_id)?.ok_or_else(|| not_found("automation", run.automation_id))?;
+    let seats = seats(conn, &automation)?;
+    Ok(seats.iter().any(|s| s.under_way.contains(&run.id) && s.to_let_go() > 0))
 }
 
 /// **Whether the runs under way leave a trigger room to file a task** — `under_way` being the
@@ -3095,7 +3297,7 @@ fn launch_asking(
     }
     // A test run is thrown away with its transaction, and belongs to no launch.
     let launch_id = match limited {
-        true => Some(join_launch(tx, &automation, by.by)?.id),
+        true => Some(join_launch(tx, &automation, &pic, by.by)?.id),
         false => None,
     };
     if may_wait {
@@ -5792,7 +5994,7 @@ mod tests {
                 crate::ops::automation_step::Opened::NoAgent { agent, .. } => {
                     panic!("cannot start {agent}")
                 }
-                crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::LeftToWait { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
+                crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::LeftToWait { .. } | crate::ops::automation_step::Opened::LetGo { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
                 crate::ops::automation_step::Opened::LeftTaskOpen { .. } => panic!("left a task open"),
                 crate::ops::automation_step::Opened::Script(_) => panic!("not a script"),
                 crate::ops::automation_step::Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
@@ -5906,7 +6108,7 @@ mod tests {
             crate::ops::automation_step::Opened::NoAgent { agent, .. } => {
                 panic!("cannot start {agent}")
             }
-            crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::LeftToWait { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
+            crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::LeftToWait { .. } | crate::ops::automation_step::Opened::LetGo { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
             crate::ops::automation_step::Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             crate::ops::automation_step::Opened::Script(_) => panic!("not a script"),
             crate::ops::automation_step::Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),

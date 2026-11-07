@@ -1497,9 +1497,10 @@ datasets! {
     //
     // **One launch of an automation** — the runs it starts side by side, taken as one. A person
     // launches once, and the launch keeps up to the headcount of the automation's roles going while
-    // there are tasks to take; a run a trigger starts, or one started once a task turns up, joins the launch
-    // standing. Pausing and stopping a launch act on each of its runs. An automation has at most one
-    // launch that is not `ended`.
+    // there are tasks to take — the headcount it holds for each role (`automation_launch_role`); a run
+    // a trigger starts, or one started once a task turns up, joins the launch standing. Pausing and
+    // stopping a launch act on each of its runs. An automation has at most one launch that is not
+    // `ended`.
     //
     // `started_by_kind` is who pressed launch, NULL for one a trigger or a task turning up opened.
     // `ended_at` is set with `status = 'ended'` and only then.
@@ -1510,6 +1511,21 @@ datasets! {
         started_by_kind: actor_kind,
         ended_at: ts_opt,
     }
+
+    // **How many are in one role for one launch** — the role's headcount copied from the newest saved
+    // version when the launch opened, and changed on the launch alone from then on. A saved headcount
+    // takes hold from the next launch; the definition is left as it is, and once the launch ends the
+    // next one copies the definition again. A role the launch holds no row for (one saved after it
+    // opened) sits in as many seats as its definition says.
+    //
+    // `role_id` is a plain id with no constraint behind it, as `automation_run_def.step_id` is: a saved
+    // version names its roles by id, and the launch keeps the row whether or not the role is still in the
+    // draft. The rows go with their launch.
+    automation_launch_role {
+        launch_id: fk("automation_launch", "RESTRICT"),
+        role_id: col(KEY_REF),
+        headcount: col(HEADCOUNT),
+    } => "UNIQUE (launch_id, role_id)"
 
     // `acknowledged_at` is when a person said they had seen a failure. Until then the failure stays at
     // the top of the runs tab, because the task it handed back is one nobody is carrying.

@@ -7505,6 +7505,22 @@ pub fn automation_launch_ids_in_project(conn: &Connection, project_id: i64) -> R
     select_ids(conn, L.id, Some(&Pred::eq(L.project_id, project_id)))
 }
 
+/// **How many are in each role for one launch** ([`crate::model::AutomationLaunchRole`]), one row a
+/// role, in the order they were written.
+pub fn automation_launch_roles(
+    conn: &Connection,
+    launch_id: i64,
+) -> Result<Vec<crate::model::AutomationLaunchRole>> {
+    const L: col::automation_launch_role::Cols = col::automation_launch_role::ALL;
+    automation_rows(
+        conn,
+        L.table,
+        &Pred::eq(L.launch_id, launch_id),
+        &[Sort::by(L.id)],
+        super::hydrate::automation_launch_role_row,
+    )
+}
+
 /// The `automation_run_def` record with this id.
 pub fn automation_run_def(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationRunDef>> {
     super::hydrate::row_by_id(conn, "automation_run_def", id, super::hydrate::automation_run_def_row)

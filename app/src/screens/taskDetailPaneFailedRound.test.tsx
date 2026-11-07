@@ -29,7 +29,7 @@ let root: Root;
 const failedRun = (run: number, task: number): AutomationRunCardDto => ({
   run, project: 1, projectName: "P", automation: 3, automationName: "Nightly", status: "failed",
   pauseRequested: false, pauseBeforeNextTask: false, pausableBeforeNextTask: false, waiting: false, waitsForRoom: false,
-  stepsDone: 2, reportWithheld: [], acknowledged: false,
+  stepsDone: 2, passes: [], reportWithheld: [], acknowledged: false,
   incident: { id: task, ref: `AMB-T-${task}`, person: true },
 } as AutomationRunCardDto);
 

@@ -189,6 +189,7 @@ function runCard(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto
     waitsForRoom: false,
     stepName: "取る",
     stepsDone: 1,
+    passes: [],
     reportWithheld: [],
     acknowledged: false,
     ...over,

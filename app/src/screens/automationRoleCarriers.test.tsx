@@ -63,8 +63,8 @@ function detail(): AutomationDetailDto {
     archived: false,
     maxConcurrentRuns: 1,
     roles: [
-      { id: 1, name: "Alice", agent: "claude-code", model: "opus", entryPlacementId: 2 },
-      { id: 2, name: "Bob", agent: "codex" },
+      { id: 1, name: "Alice", agent: "claude-code", model: "opus", entryPlacementId: 2, passes: [] },
+      { id: 2, name: "Bob", agent: "codex", passes: [] },
     ],
     placements: [
       placement(1, 1, [

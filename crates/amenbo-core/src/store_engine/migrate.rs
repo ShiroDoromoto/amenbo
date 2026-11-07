@@ -1379,7 +1379,35 @@ pub const STEPS: &[Step] = &[
         // before this takes the default, and so does every copy a run took of one.
         apply: Apply::Custom(let_a_step_say_how_long_it_takes),
     },
+    Step {
+        to: 118,
+        name: "add automation_run_pass, the tasks a round filed for another role to work",
+        // **Seeded with nothing.** No round filed a task under another role before this, so there is no
+        // task passed from one role to another to record.
+        apply: Apply::Custom(let_a_round_pass_a_task_on),
+    },
 ];
+
+/// v118: `automation_run_pass`, the tasks a round filed for another role to work.
+///
+/// **The table is laid down here in frozen text** as well as by genesis, for the reason v53's are.
+fn let_a_round_pass_a_task_on(ctx: &Ctx<'_>) -> Result<()> {
+    ctx.tx.execute_batch(AUTOMATION_RUN_PASS_TABLE)?;
+    Ok(())
+}
+
+/// The table v118 lays down — frozen text, like every step's.
+const AUTOMATION_RUN_PASS_TABLE: &str = r"
+CREATE TABLE IF NOT EXISTS automation_run_pass (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    run_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_run(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    run_task_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_run_task(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    to_role_id BIGINT REFERENCES automation_role(id) ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    task_id BIGINT REFERENCES task(id) ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+";
 
 /// v117: `automation_action_step.expected_minutes` and `automation_run_def.expected_minutes` — how long
 /// a step is expected to take, and that as a run copied it at launch.
@@ -11756,6 +11784,39 @@ mod tests {
         let role: Option<i64> =
             engine.conn().query_row("SELECT role_id FROM automation_run_task WHERE id = 1", [], |r| r.get(0)).unwrap();
         assert_eq!(role, None, "no round was worked under a role");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v118: a run written before the step passed no task to another role, and a round can record one.
+    #[test]
+    fn a_run_written_before_v118_passed_nothing_on() {
+        let dir = scratch("run-pass");
+        let engine = store_at(&dir, 117);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO task (id, title, status, project_id) VALUES (1, 'work', 'done', 1), (2, 'test', 'todo', 1);
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_role (id, automation_id, name) VALUES (1, 1, 'Alice'), (2, 1, 'Bob');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'completed');
+                 INSERT INTO automation_run_task (id, run_id, seq, task_id, role_id) VALUES (1, 1, 1, 1, 1);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let passed: i64 =
+            engine.conn().query_row("SELECT COUNT(*) FROM automation_run_pass", [], |r| r.get(0)).unwrap();
+        assert_eq!(passed, 0, "no round passed a task on before");
+        engine
+            .conn()
+            .execute(
+                "INSERT INTO automation_run_pass (run_id, run_task_id, to_role_id, task_id) VALUES (1, 1, 2, 2)",
+                [],
+            )
+            .unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -617,10 +617,10 @@ describe("one role's round, as the build screen draws it", () => {
       archived: false,
       maxConcurrentRuns: 1,
       roles: [
-        { id: 10, name: "Research", entryPlacementId: 1 },
-        { id: 20, name: "Design", entryPlacementId: 2 },
-        { id: 30, name: "Build", entryPlacementId: 4 },
-        { id: 40, name: "Upkeep" },
+        { id: 10, name: "Research", entryPlacementId: 1, passes: [] },
+        { id: 20, name: "Design", entryPlacementId: 2, passes: [] },
+        { id: 30, name: "Build", entryPlacementId: 4, passes: [] },
+        { id: 40, name: "Upkeep", passes: [] },
       ],
       placements: [
         step({

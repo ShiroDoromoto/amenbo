@@ -1879,6 +1879,10 @@ pub(crate) fn run_delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
         orphaned.extend(crate::ops::sweep_polymorphic(tx, AttachmentTarget::AutomationRunStep, step)?);
         tx.delete_record("automation_run_step", step)?;
     }
+    // A task passed on names the round that passed it, so it goes before the round does.
+    for pass in read::automation_run_pass_ids(tx.conn(), id)? {
+        tx.delete_record("automation_run_pass", pass)?;
+    }
     for run_task in read::automation_run_task_ids(tx.conn(), id)? {
         tx.delete_record("automation_run_task", run_task)?;
     }

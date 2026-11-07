@@ -2428,6 +2428,11 @@ fn launch_asking(
             .coded(ErrorCode::InvalidAutomationWorkspaceClosed),
         ));
     }
+    // What was handed is checked before the room left: a launch handed the wrong thing would not go
+    // through with room to spare either, and what to fix is the person's to see first.
+    let handed_task = entry_reads(tx.conn(), &automation, &pic, handed)?
+        .map(|task| serde_json::to_string(&task).map_err(Error::from))
+        .transpose()?;
     if limited {
         let max = automation.max_concurrent_runs;
         let mut runs = read::automation_run_ids_under_way(tx.conn(), automation_id)?;
@@ -2447,9 +2452,6 @@ fn launch_asking(
             ));
         }
     }
-    let handed_task = entry_reads(tx.conn(), &automation, &pic, handed)?
-        .map(|task| serde_json::to_string(&task).map_err(Error::from))
-        .transpose()?;
     if may_wait {
         if let Some(e) = entry_builtin(tx.conn(), &pic)? {
             let waits = crate::ops::automation_builtin::waits_now(
@@ -5481,6 +5483,23 @@ mod tests {
             let paused = read::automation_run(tx.conn(), first.id).expect("read").expect("the run");
             assert_eq!(paused.status, AutomationRunStatus::Paused);
             refused(tx);
+        });
+    }
+
+    /// **What was handed is refused before the most runs under way is**: a launch handed the wrong
+    /// thing would not go through with room to spare either, so that is the refusal it gets.
+    #[test]
+    fn what_was_handed_is_refused_before_the_most_runs_under_way() {
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let automation =
+                automation::update(tx, automation.id, None, None, None, Some(1), None).expect("set a most");
+            let startable = claude();
+            launch(tx, automation.id, &here(&startable)).expect("the first reaches the most");
+            let titled = HandedAtLaunch { title: Some("an issue".into()), ..Default::default() };
+            let err = launch_handing(tx, automation.id, &here(&startable), &titled, ReadsFrom::Saved)
+                .expect_err("handed what the entry does not read");
+            assert!(err.to_string().contains("reads nothing handed over at launch"), "{err}");
         });
     }
 

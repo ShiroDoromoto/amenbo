@@ -1393,6 +1393,14 @@ pub const STEPS: &[Step] = &[
         // asked, as it was, and with nothing filed yet, since no time it filed one was kept.
         apply: Apply::Custom(give_the_triggers_a_table_of_their_own),
     },
+    Step {
+        to: 120,
+        name: "add automation_run_pass.placement_id, the spot whose step filed the task passed on",
+        // **Left NULL on every row already there.** The step a pass was filed by is not kept anywhere a
+        // row of v119 can be matched back to, and a spot guessed at would put another spot's title on
+        // the build screen.
+        apply: Apply::Custom(let_a_pass_say_which_spot_filed_it),
+    },
 ];
 
 /// v119: `automation_trigger`, an automation's triggers, one row each — and the `automation.trigger_*`
@@ -1449,6 +1457,17 @@ fn give_the_triggers_a_table_of_their_own(ctx: &Ctx<'_>) -> Result<()> {
         if cols.iter().any(|c| c == column) {
             tx.execute_batch(&format!("ALTER TABLE automation DROP COLUMN {column};"))?;
         }
+    }
+    Ok(())
+}
+
+/// v120: `automation_run_pass.placement_id`, the spot of the picture whose step filed the task passed on.
+///
+/// **Only where it is not there yet.** A store whose table was created in the live shape already has it.
+fn let_a_pass_say_which_spot_filed_it(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_run_pass")?.iter().any(|c| c == "placement_id") {
+        tx.execute_batch("ALTER TABLE automation_run_pass ADD COLUMN placement_id BIGINT;")?;
     }
     Ok(())
 }
@@ -11964,6 +11983,43 @@ mod tests {
             .conn()
             .execute(
                 "INSERT INTO automation_run_pass (run_id, run_task_id, to_role_id, task_id) VALUES (1, 1, 2, 2)",
+                [],
+            )
+            .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v120: a task passed on before the step names no spot, and a pass can name the one that filed it.
+    #[test]
+    fn a_pass_written_before_v120_names_no_spot() {
+        let dir = scratch("run-pass-spot");
+        let engine = store_at(&dir, 119);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO task (id, title, status, project_id) VALUES (1, 'work', 'done', 1), (2, 'test', 'todo', 1);
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_role (id, automation_id, name) VALUES (1, 1, 'Alice'), (2, 1, 'Bob');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'completed');
+                 INSERT INTO automation_run_task (id, run_id, seq, task_id, role_id) VALUES (1, 1, 1, 1, 1);
+                 INSERT INTO automation_run_pass (id, run_id, run_task_id, to_role_id, task_id) VALUES (1, 1, 1, 2, 2);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let spot: Option<i64> = engine
+            .conn()
+            .query_row("SELECT placement_id FROM automation_run_pass WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(spot, None, "a pass from before names no spot");
+        engine
+            .conn()
+            .execute(
+                "INSERT INTO automation_run_pass (run_id, run_task_id, to_role_id, task_id, placement_id) \
+                 VALUES (1, 1, 2, 2, 7)",
                 [],
             )
             .unwrap();

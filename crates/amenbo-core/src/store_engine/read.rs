@@ -7632,6 +7632,25 @@ pub fn automation_run_passes_of(
     )
 }
 
+/// **The tasks passed to another role from these spots of a picture**, by the runs of every version of
+/// it, newest first — what the build screen reads the title a spot last passed on by.
+pub fn automation_run_passes_at(
+    conn: &Connection,
+    placement_ids: &[i64],
+) -> Result<Vec<crate::model::AutomationRunPass>> {
+    const P: col::automation_run_pass::Cols = col::automation_run_pass::ALL;
+    if placement_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    automation_rows(
+        conn,
+        P.table,
+        &Pred::is_in(P.placement_id, placement_ids.iter().copied()),
+        &[Sort::by(P.id).desc()],
+        super::hydrate::automation_run_pass_row,
+    )
+}
+
 /// The step executions of one run.
 pub fn automation_run_step_ids(conn: &Connection, run_id: i64) -> Result<Vec<i64>> {
     const S: col::automation_run_step::Cols = col::automation_run_step::ALL;

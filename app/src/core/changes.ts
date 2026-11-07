@@ -129,8 +129,9 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   automation_run_task: ["automationRuns"],
   automation_run_step: ["automationRuns"],
   automation_run_value: [],
-  // A task a round filed for another role. It moves the line the run's pane draws between two roles.
-  automation_run_pass: ["automationRuns"],
+  // A task a round filed for another role. It moves the line the run's pane draws between two roles,
+  // and the title the build screen names the task a role passes on by — the one last passed on.
+  automation_run_pass: ["automationRuns", "automations"],
 };
 
 /**

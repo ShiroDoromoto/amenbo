@@ -241,6 +241,7 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
             at_binding_id,
             made_in: None,
             role_id,
+            made_in_run_step_id: Some(carry.run_step.id),
         },
     )?;
     if let Some(trigger) = handed.as_ref().and_then(|h| h.trigger.as_deref()) {
@@ -1813,6 +1814,7 @@ mod tests {
                 assert!(matches!(next, Next::Step(_)), "the run goes on: {next:?}");
                 let (filed, exit) = handed(tx, run_step_id);
                 assert_eq!(exit, way_out(tx, run_step_id, MADE_AND_TAKEN));
+                assert_eq!(filed.made_in_run_step_id, Some(run_step_id), "the task says which step filed it");
                 filed
             }
             other => panic!("the entry is carried out, not {other:?}"),
@@ -2143,6 +2145,7 @@ mod tests {
             created_by_kind: None,
             at_binding_id: None,
             role_id: Some(role_id),
+            made_in_run_step_id: None,
             made_in: None,
         };
         let added = task::add(tx, new).expect("a task");

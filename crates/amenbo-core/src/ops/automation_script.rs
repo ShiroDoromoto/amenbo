@@ -20,7 +20,10 @@
 //! The program is started by its path with its arguments as they are written — no shell is in between,
 //! so nothing in one is expanded or split. The two variables are set on that process alone, which its
 //! children inherit, and it is started without [`crate::session::STEP_VAR`] so an Amenbo it calls is not
-//! taken for a step it has no part in. On macOS it is handed the user's login-shell `PATH`
+//! taken for a step it has no part in. A step's program is handed the run and the step execution it was
+//! started for instead, in [`crate::session::RUN_VAR`] and [`crate::session::RUN_STEP_VAR`], so a task
+//! an Amenbo it calls files is recorded as filed in that step; a program started for no step, a
+//! trigger's, is started without both. On macOS it is handed the user's login-shell `PATH`
 //! ([`crate::sys::login_shell_path`]) when that can be read: a `.app` started from Finder carries only
 //! `/usr/bin:/bin:/usr/sbin:/sbin`, where neither `amenbo` nor a Homebrew tool is found, while an AI step's
 //! terminal finds both. It is started in a group of its own, and one still running at its timeout, or when
@@ -105,7 +108,7 @@ pub enum Ended {
 /// **Run `script` once** with its output on pipes, handing it `given`, and stop it at its timeout or as
 /// soon as `stop` answers `true` — asked every [`STOP_EVERY`] while it runs.
 pub fn run(script: &StepScript, given: &[(String, Given)], stop: impl FnMut() -> bool) -> Ran {
-    match prepare(script, given) {
+    match prepare(script, given, None) {
         Ok(prepared) => run_prepared(prepared, stop),
         Err(why) => not_started(why),
     }
@@ -139,7 +142,14 @@ pub struct Prepared {
 
 /// **Write the folder for one run of `script`**, handing it `given`, and answer what to start the program
 /// with — or why it cannot be, in the OS's words.
-pub fn prepare(script: &StepScript, given: &[(String, Given)]) -> Result<Prepared, String> {
+///
+/// `step` is the run and the step execution the program is started for, as `(run, run_step)`, or `None`
+/// for a program started for no step.
+pub fn prepare(
+    script: &StepScript,
+    given: &[(String, Given)],
+    step: Option<(i64, i64)>,
+) -> Result<Prepared, String> {
     let dir = folder().map_err(|e| e.to_string())?;
     let minutes = u64::try_from(script.timeout_minutes).unwrap_or(0);
     let mut prepared = Prepared {
@@ -156,6 +166,13 @@ pub fn prepare(script: &StepScript, given: &[(String, Given)]) -> Result<Prepare
     std::fs::create_dir(&prepared.out).map_err(|e| e.to_string())?;
     prepared.env.push((INPUT_VAR, input.into_os_string()));
     prepared.env.push((OUTPUT_VAR, prepared.output.clone().into_os_string()));
+    match step {
+        Some((run, run_step)) => {
+            prepared.env.push((crate::session::RUN_VAR, run.to_string().into()));
+            prepared.env.push((crate::session::RUN_STEP_VAR, run_step.to_string().into()));
+        }
+        None => prepared.env_remove.extend([crate::session::RUN_VAR, crate::session::RUN_STEP_VAR]),
+    }
     if let Some(path) = crate::sys::login_shell_path() {
         prepared.env.push((crate::env::PATH_VAR, path.to_os_string()));
     }
@@ -531,9 +548,20 @@ mod tests {
             assert!(matches!(ran.ended, Ended::NotJson(_)), "{:?}", ran.ended);
         }
 
+        /// A step's program is handed the run and the step execution it was started for, and a program
+        /// started for no step is handed neither.
+        #[test]
+        fn a_steps_program_is_handed_its_run_and_its_step() {
+            let body = sh(r#"echo "${AMENBO_RUN-none} ${AMENBO_RUN_STEP-none} ${AMENBO_AUTOMATION_STEP-none}""#);
+            let prepared = prepare(&body, &[], Some((7, 42))).expect("the folder is written");
+            assert_eq!(run_prepared(prepared, || false).output_tail, "7 42 none\n");
+            let prepared = prepare(&body, &[], None).expect("the folder is written");
+            assert_eq!(run_prepared(prepared, || false).output_tail, "none none none\n");
+        }
+
         /// [`run`] with a timeout of `timeout` in place of the script's.
         fn run_for(script: &StepScript, timeout: Duration, stop: impl FnMut() -> bool) -> Ran {
-            let mut prepared = prepare(script, &[]).expect("the folder is written");
+            let mut prepared = prepare(script, &[], None).expect("the folder is written");
             prepared.timeout = timeout;
             run_prepared(prepared, stop)
         }

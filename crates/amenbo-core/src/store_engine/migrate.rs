@@ -1426,6 +1426,13 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 124,
+        name: "add task.made_in_run_step_id, the step of a run a task was filed in",
+        // **Seeded with nothing.** Which step a task was filed in was not kept before this, so every
+        // task already there says it was filed in none.
+        apply: Apply::Custom(let_a_task_say_which_step_filed_it),
+    },
+    Step {
+        to: 125,
         name: "index a run's steps and its copy of the automation by run",
         // Every read of a run seeks `automation_run_step` and `automation_run_def` by `run_id`, and
         // unindexed each one scans the whole table.
@@ -1483,6 +1490,23 @@ fn give_each_role_a_headcount(ctx: &Ctx<'_>) -> Result<()> {
                 rusqlite::params![serde_json::Value::Array(roles).to_string(), version_id],
             )?;
         }
+    }
+    Ok(())
+}
+
+/// v124: `task.made_in_run_step_id`, the step execution a task was filed in. NULL on every row already
+/// there: no task said which step filed it until now, and nothing kept elsewhere can be matched back.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. Nullable with no default, which
+/// is what lets a column carrying a key be added in place — so a store that never ran an automation
+/// is moved by adding an empty column and nothing else.
+fn let_a_task_say_which_step_filed_it(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "task")?.iter().any(|c| c == "made_in_run_step_id") {
+        tx.execute_batch(
+            "ALTER TABLE task ADD COLUMN made_in_run_step_id BIGINT REFERENCES automation_run_step(id) \
+                 ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED;",
+        )?;
     }
     Ok(())
 }
@@ -12269,6 +12293,32 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// v124: every task already written says it was filed in no step, and the new column takes a step
+    /// execution from then on.
+    #[test]
+    fn a_task_written_before_v124_was_filed_in_no_step() {
+        let dir = scratch("task-made-in-run-step");
+        let engine = store_at(&dir, 123);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO task (id, title, project_id) VALUES (1, 'look', 1);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let step = |engine: &StoreEngine| -> Option<i64> {
+            engine.conn().query_row("SELECT made_in_run_step_id FROM task WHERE id = 1", [], |r| r.get(0)).unwrap()
+        };
+        assert_eq!(step(&engine), None, "no task said which step filed it before");
+        let tasks: i64 = engine.conn().query_row("SELECT COUNT(*) FROM task", [], |r| r.get(0)).unwrap();
+        assert_eq!(tasks, 1, "the task is kept as it was");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// v122: every trigger already written counts its condition's tasks whatever their role, as it did,
     /// and the new column takes a role of the automation from then on.
     #[test]
@@ -12359,13 +12409,13 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v124: a store from before it seeks a run's steps and its copy of the automation by `run_id`,
+    /// v125: a store from before it seeks a run's steps and its copy of the automation by `run_id`,
     /// rather than scanning both tables for every run it reads. (The open already lays the indexes down
     /// from `schema::EXTRA_SQL`; the step is what moves the version, as at v28.)
     #[test]
-    fn a_runs_steps_and_def_are_indexed_by_run_from_v124() {
+    fn a_runs_steps_and_def_are_indexed_by_run_from_v125() {
         let dir = scratch("automation-run-indexes");
-        let engine = store_at(&dir, 123);
+        let engine = store_at(&dir, 124);
         let indexed = |name: &str| -> i64 {
             engine
                 .conn()

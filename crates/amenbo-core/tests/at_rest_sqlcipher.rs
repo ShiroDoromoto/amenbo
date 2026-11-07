@@ -41,6 +41,7 @@ fn new_task(title: &str) -> NewTask {
         created_by_kind: None,
         at_binding_id: None,
         role_id: None,
+        made_in_run_step_id: None,
         made_in: None,
     }
 }

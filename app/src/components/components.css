@@ -2416,7 +2416,19 @@ button.feed__target:hover { color: var(--c-accent); }
   display: flex; flex-direction: column;
   background: var(--c-pane-frame);
 }
+/* The room and, laid over its top and bottom edges, the notices of a round needing a person out of sight. */
+.runroles__view { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .runroles__room { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: var(--s-2); }
+.runroles__unseen {
+  position: absolute; left: 50%; transform: translateX(-50%); z-index: 3;
+  max-width: calc(100% - 16px); padding: 1px 10px; border: 1px solid var(--c-human); border-radius: 999px;
+  background: var(--c-surface-pic) var(--c-surface); color: var(--c-human); box-shadow: var(--shadow-md);
+  font: inherit; font-size: var(--fs-xs); line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+}
+.runroles__unseen[data-edge="top"] { top: 6px; }
+.runroles__unseen[data-edge="bottom"] { bottom: 6px; }
+.runroles__unseen[data-stop] { border-color: var(--c-stop); color: var(--c-stop); }
+.runroles__unseen:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 /* The cards, and over them the lines between two of them: a hand-on, or where a failure was filed. */
 .runroles__desk { position: relative; }
 .runroles__strokes { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }

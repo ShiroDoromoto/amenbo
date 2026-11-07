@@ -13,6 +13,9 @@
 // and where that role has no card it says "→ role" instead. **Where the cards do not all fit in the
 // room, each round is a row of a list**, unless the reader holds the room to one or the other.
 //
+// **A round that needs a person, out of sight in the room, is named at the room's edge**, and the
+// notice scrolls the room to it when pressed — never by itself. It is read again as the room scrolls.
+//
 // **A card or a row is pressed to read its round's terminal**, and the terminal has a bar over it: the way back to
 // the roles, the other rounds of the same automation, and — where a step turned the pane — why.
 import { act, createElement } from "react";
@@ -23,7 +26,9 @@ import type { AutomationRunCardDto, TaskRoleDto } from "../bindings/bindings";
 import type { BuiltinRun } from "../talk/automationStep";
 import { TerminalPane } from "./TerminalPane";
 import { t, tf } from "../core/i18n";
-import { cardsFit, filedLine, fitOf, handsAway, handsOf, roleCards, roundsOf, silenceOf, type RoleCard } from "./RunPicture";
+import {
+  attnOf, cardsFit, filedLine, fitOf, handsAway, handsOf, noticeOf, roleCards, roundsOf, silenceOf, unseenOf, type RoleCard,
+} from "./RunPicture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -471,6 +476,139 @@ describe("cards or the list", () => {
     await act(async () => views()[1]!.click());
     expect(cards()).toHaveLength(1);
     expect(rows()).toHaveLength(0);
+  });
+});
+
+describe("a round out of sight", () => {
+  const FAILING: Say = {
+    ...FAILED,
+    run: 71,
+    step: "write the tests",
+    task: { ref: "AMB-T-7", title: "Fix the search filter", seq: 1 },
+    round: { role: 12, startedAt: null },
+  };
+
+  /** Where the mark — the card's chip — stands on the page, and where the card does; the room shows
+   *  from 0 to 100. */
+  let at = { top: 150, bottom: 250 };
+  let card = { top: 0, bottom: 0 };
+  const scrollBy = vi.fn();
+  const box = (top: number, bottom: number) =>
+    ({ top, bottom, left: 0, right: 100, width: 100, height: bottom - top, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+
+  beforeEach(() => {
+    at = { top: 150, bottom: 250 };
+    card = { top: 0, bottom: 0 };
+    scrollBy.mockReset();
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("runroles__room")) return box(0, 100);
+      if (this.dataset.attn !== undefined) return box(at.top, at.bottom);
+      if (this.classList.contains("runroles__card")) return box(card.top, card.bottom);
+      return box(0, 0);
+    });
+    (HTMLElement.prototype as unknown as { scrollBy: unknown }).scrollBy = scrollBy;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete (HTMLElement.prototype as unknown as { scrollBy?: unknown }).scrollBy;
+  });
+
+  const notices = () => [...container.querySelectorAll<HTMLButtonElement>(".runroles__unseen")];
+  const marks = () => [...container.querySelectorAll<HTMLElement>("[data-attn]")];
+
+  it("says what is below the room at its bottom edge, and scrolls to it only when pressed", async () => {
+    roles = [role(12, "Bob")];
+    await pane(FAILING);
+    expect(cards()[0]!.dataset.attn, "the card itself was the mark").toBeUndefined();
+    expect(marks().map((one) => [one.className, one.dataset.attn])).toEqual([["runroles__chip", "failed"]]);
+    const what = tf("auto.run.roles.attn.failed", { n: 1 });
+    expect(notices().map((one) => [one.dataset.edge, one.textContent, one.dataset.stop])).toEqual([["bottom", `↓ ${what}`, "true"]]);
+    expect(notices()[0]!.getAttribute("aria-label")).toBe(tf("auto.run.roles.unseenDown", { what }));
+    expect(scrollBy, "the room scrolled by itself").not.toHaveBeenCalled();
+
+    await act(async () => notices()[0]!.click());
+    expect(scrollBy).toHaveBeenCalledWith({ top: 158, behavior: "smooth" });
+  });
+
+  it("is read again when the room scrolls, and not before", async () => {
+    roles = [role(12, "Bob")];
+    await pane({ ...FAILING, run: 72 });
+    expect(notices()).toHaveLength(1);
+
+    at = { top: 20, bottom: 90 };
+    await pane({ ...FAILING, run: 72, step: "check" });
+    expect(notices(), "the notice moved without a scroll").toHaveLength(1);
+
+    const room = container.querySelector<HTMLElement>(".runroles__room")!;
+    await act(async () => room.dispatchEvent(new Event("scroll")));
+    expect(notices()).toHaveLength(0);
+
+    at = { top: -120, bottom: -20 };
+    await act(async () => room.dispatchEvent(new Event("scroll")));
+    expect(notices().map((one) => one.dataset.edge)).toEqual(["top"]);
+    await act(async () => notices()[0]!.click());
+    expect(scrollBy).toHaveBeenCalledWith({ top: -128, behavior: "smooth" });
+  });
+
+  it("names nothing for a round that needs no person", async () => {
+    roles = [role(12, "Bob")];
+    await pane({ ...FAILING, run: 73, state: { ...FAILED.state!, status: "paused", word: "Paused" } });
+    expect(marks()).toHaveLength(0);
+    expect(notices()).toHaveLength(0);
+  });
+
+  it("says a mark is below where the card is in sight but its mark is cut off at the room's bottom", async () => {
+    roles = [role(12, "Bob")];
+    card = { top: 10, bottom: 120 };
+    at = { top: 95, bottom: 113 };
+    await pane({ ...FAILING, run: 74 });
+    expect(notices().map((one) => one.dataset.edge)).toEqual(["bottom"]);
+
+    await act(async () => notices()[0]!.click());
+    expect(scrollBy).toHaveBeenCalledWith({ top: 21, behavior: "smooth" });
+
+    at = { top: 74, bottom: 92 };
+    const room = container.querySelector<HTMLElement>(".runroles__room")!;
+    await act(async () => room.dispatchEvent(new Event("scroll")));
+    expect(notices()).toHaveLength(0);
+  });
+});
+
+describe("attnOf, unseenOf and noticeOf", () => {
+  const card = (state: RoleCard["state"]): RoleCard => ({ role: 2, name: "B", icon: "person", state });
+
+  it("marks a round that may wait, one that failed, and one quiet into the second stage", () => {
+    expect(attnOf(card("asks"), { stage: 0, for: null })).toBe("asks");
+    expect(attnOf(card("failed"), { stage: 0, for: null })).toBe("failed");
+    expect(attnOf(card("running"), { stage: 2, for: 1 })).toBe("stalled");
+    expect(attnOf(card("running"), { stage: 1, for: 1 })).toBeNull();
+    expect(attnOf(card("paused"), { stage: 0, for: null })).toBeNull();
+  });
+
+  it("counts a mark as out of sight once any of it is more than 1px past the room's edge", () => {
+    const marks = [
+      { attn: "asks" as const, top: -2, bottom: 16 },
+      { attn: "failed" as const, top: -1, bottom: 17 },
+      { attn: "asks" as const, top: 84, bottom: 102 },
+      { attn: "stalled" as const, top: 83, bottom: 101 },
+    ];
+    const { up, down } = unseenOf(0, 100, marks);
+    expect(up.map((one) => one.attn)).toEqual(["asks"]);
+    expect(down.map((one) => one.attn)).toEqual(["asks"]);
+  });
+
+  it("names each kind with how many, in one order, and in the stop colour where one failed or stalled", () => {
+    expect(noticeOf([])).toBeNull();
+    expect(noticeOf(["asks", "asks"])).toEqual({ what: tf("auto.run.roles.attn.asks", { n: 2 }), stop: false });
+    expect(noticeOf(["stalled", "asks", "failed"])).toEqual({
+      what: [
+        tf("auto.run.roles.attn.asks", { n: 1 }),
+        tf("auto.run.roles.attn.failed", { n: 1 }),
+        tf("auto.run.roles.attn.stalled", { n: 1 }),
+      ].join(" ・ "),
+      stop: true,
+    });
   });
 });
 

@@ -17,6 +17,15 @@
 // a card that jumped to the top when its round asked for a person would be a card the reader has to
 // look for again. Only the room the cards are in scrolls — the pane's own place on the page stays.
 //
+// **A round that needs a person, out of sight in the room, is named at the room's edge**: one that may
+// wait for a person, one that failed, and one whose terminal has been quiet into the second stage. What
+// is read is the mark that says so on the card or row, not the card: a card partly in sight whose mark
+// is cut off counts. Where such a mark is above what the room shows, a notice at its top says what is
+// there and how many — "↑ Waiting for input 1" — and one at its bottom says what is below. Pressing it
+// scrolls the room to the nearest of them; nothing scrolls by itself. The notices are read again only
+// when the room scrolls or changes size, so a notice does not come and go under the reader's eye while
+// they read the cards.
+//
 // **The cards are a list where they do not fit.** Whether every card fits is read off the room the
 // cards are drawn in, as large as it is now — a pane is narrowed by the window, by the panel at the
 // right and by splitting the page (`AMB-D-939`), and all three are the same room getting smaller. A
@@ -222,13 +231,156 @@ export function silenceOf(
   return { stage, for: stage === 0 || lastOutput === null ? null : now - lastOutput };
 }
 
-/** The clock a quiet round is marked with: how long its terminal has printed nothing. */
-function QuietChip({ silence }: { silence: Silence }) {
+/** What a round needs a person for, as the notice at the room's edge counts it. */
+export type Attn = "asks" | "failed" | "stalled";
+
+/** The order the notice names them in. */
+const ATTNS: readonly Attn[] = ["asks", "failed", "stalled"];
+
+/** What the notice calls each, with how many. */
+const ATTN_KEY = {
+  asks: "auto.run.roles.attn.asks",
+  failed: "auto.run.roles.attn.failed",
+  stalled: "auto.run.roles.attn.stalled",
+} as const;
+
+/**
+ * **What `card`'s round needs a person for**, with its silence at `silence`: one that may wait for a
+ * person, one that failed, or one quiet into the second stage. Null for the rest.
+ */
+export function attnOf(card: RoleCard, silence: Silence): Attn | null {
+  if (card.state === "asks") return "asks";
+  if (card.state === "failed") return "failed";
+  return silence.stage === 2 ? "stalled" : null;
+}
+
+/** How far past the room's edge a mark may stand and still be in sight: a box is measured in
+ *  fractions of a pixel, and one drawn flush with the edge can come out a little past it. */
+const SLACK = 1;
+
+/** The room left between the room's edge and the mark scrolled to. */
+const MARGIN = 8;
+
+/** Where a mark stands — the chip that says a round needs a person — with `top` and `bottom` on the page. */
+export type Mark = { readonly attn: Attn; readonly top: number; readonly bottom: number };
+
+/**
+ * **The marks out of sight above and below the room** that shows from `top` to `bottom` on the page,
+ * each in the order they stand. A mark is out of sight as soon as any of it is past the room's edge: a
+ * chip cut in half is not read.
+ */
+export function unseenOf(top: number, bottom: number, marks: readonly Mark[]): { up: Mark[]; down: Mark[] } {
+  return {
+    up: marks.filter((mark) => mark.top < top - SLACK),
+    down: marks.filter((mark) => mark.bottom > bottom + SLACK),
+  };
+}
+
+/**
+ * **What a notice says for `attns`**: each kind with how many, in the order of `ATTNS`. Null where there
+ * are none; `stop` where a failure or a stall is among them, which draws the notice in the stop colour.
+ */
+export function noticeOf(attns: readonly Attn[]): { what: string; stop: boolean } | null {
+  if (attns.length === 0) return null;
+  const parts = ATTNS.flatMap((attn) => {
+    const n = attns.filter((one) => one === attn).length;
+    return n === 0 ? [] : [tf(ATTN_KEY[attn], { n })];
+  });
+  return { what: parts.join(" ・ "), stop: attns.some((attn) => attn !== "asks") };
+}
+
+/** The marks in the room `at`, where they stand on the page. */
+function marksIn(at: HTMLElement): Mark[] {
+  return [...at.querySelectorAll<HTMLElement>("[data-attn]")].map((el) => {
+    const box = el.getBoundingClientRect();
+    return { attn: el.dataset.attn as Attn, top: box.top, bottom: box.bottom };
+  });
+}
+
+/** What is out of sight above and below the room `room`, read again only as it scrolls or changes
+ *  size — and as it turns between cards and the list, which only a change of size or a press does. */
+function useUnseen(room: RefObject<HTMLDivElement | null>, view: RoomView): { up: Attn[]; down: Attn[] } {
+  const [unseen, setUnseen] = useState<{ up: Attn[]; down: Attn[] }>({ up: [], down: [] });
+  useLayoutEffect(() => {
+    const at = room.current;
+    if (at === null) return;
+    const measure = () => {
+      const box = at.getBoundingClientRect();
+      // A room not laid out yet — a pane on a page not shown — has nothing out of sight.
+      const { up, down } = unseenOf(box.top, box.bottom, box.height === 0 ? [] : marksIn(at));
+      const next = { up: up.map((mark) => mark.attn), down: down.map((mark) => mark.attn) };
+      setUnseen((before) =>
+        before.up.join() === next.up.join() && before.down.join() === next.down.join() ? before : next,
+      );
+    };
+    measure();
+    at.addEventListener("scroll", measure, { passive: true });
+    if (typeof ResizeObserver === "undefined") return () => at.removeEventListener("scroll", measure);
+    const watch = new ResizeObserver(measure);
+    watch.observe(at);
+    return () => {
+      at.removeEventListener("scroll", measure);
+      watch.disconnect();
+    };
+  }, [room, view]);
+  return unseen;
+}
+
+/** Scroll the room `at` until the nearest mark out of sight `up` or below it is wholly in sight. */
+function scrollToUnseen(at: HTMLElement, up: boolean): void {
+  const box = at.getBoundingClientRect();
+  const unseen = unseenOf(box.top, box.bottom, marksIn(at));
+  const mark = up ? unseen.up[unseen.up.length - 1] : unseen.down[0];
+  if (mark === undefined) return;
+  const by = up ? mark.top - box.top - MARGIN : mark.bottom - box.bottom + MARGIN;
+  const still = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  at.scrollBy({ top: by, behavior: still ? "auto" : "smooth" });
+}
+
+/** The notice at the room's top or bottom edge, for the marks `attns` out of sight beyond it. */
+function UnseenNotice({ attns, up, onPress }: { attns: readonly Attn[]; up: boolean; onPress: () => void }) {
+  const notice = noticeOf(attns);
+  if (notice === null) return null;
+  return (
+    <button
+      type="button"
+      className="runroles__unseen"
+      data-edge={up ? "top" : "bottom"}
+      data-stop={notice.stop || undefined}
+      aria-label={tf(up ? "auto.run.roles.unseenUp" : "auto.run.roles.unseenDown", { what: notice.what })}
+      onClick={onPress}
+    >
+      {up ? "↑" : "↓"} {notice.what}
+    </button>
+  );
+}
+
+/** The clock a quiet round is marked with: how long its terminal has printed nothing. It is the mark the
+ *  notice at the room's edge reads where `attn` is a stall. */
+function QuietChip({ silence, attn }: { silence: Silence; attn: Attn | null }) {
   if (silence.stage === 0 || silence.for === null) return null;
   return (
-    <span className="runroles__chip runroles__quiet" data-quiet={silence.stage}>
+    <span
+      className="runroles__chip runroles__quiet"
+      data-quiet={silence.stage}
+      data-attn={attn === "stalled" ? attn : undefined}
+    >
       <Icon name="clock" />
       {tf("auto.run.roles.quiet", { time: clockOf(silence.for) })}
+    </span>
+  );
+}
+
+/** The chip a card or row says `chipOf` in. It is the mark the notice at the room's edge reads where
+ *  `attn` is a wait or a failure. */
+function Chip({ state, attn, children }: { state: RoleCard["state"]; attn: Attn | null; children: string }) {
+  return (
+    <span
+      className="runroles__chip"
+      data-state={state}
+      data-attn={attn === "asks" || attn === "failed" ? attn : undefined}
+    >
+      {children}
     </span>
   );
 }
@@ -352,6 +504,7 @@ function Card({ card, run, now, silence, away, onOpen }: {
   const since = run.round?.startedAt ?? null;
   const ran = since !== null && underWay(card) ? clockOf(now - since) : null;
   const chip = chipOf(card, run);
+  const attn = attnOf(card, silence);
   const quiet = silence.stage > 0;
   return (
     <li
@@ -387,8 +540,8 @@ function Card({ card, run, now, silence, away, onOpen }: {
       {(ran !== null || chip !== null || quiet || away.length > 0) && (
         <span className="runroles__foot">
           {ran !== null && <span className="runroles__time">{tf("face.elapsed", { time: ran })}</span>}
-          {chip !== null && <span className="runroles__chip" data-state={card.state}>{chip}</span>}
-          <QuietChip silence={silence} />
+          {chip !== null && <Chip state={card.state} attn={attn}>{chip}</Chip>}
+          <QuietChip silence={silence} attn={attn} />
           {away.map((hand) => (
             <span key={`${hand.to}-${hand.filed}`} className="runroles__hand" data-to={hand.to}>
               → {hand.name}
@@ -408,6 +561,7 @@ function Row({ card, run, now, silence, away, onOpen }: {
   const since = run.round?.startedAt ?? null;
   const ran = since !== null && underWay(card) ? clockOf(now - since) : null;
   const chip = chipOf(card, run);
+  const attn = attnOf(card, silence);
   return (
     <li
       className="runroles__row"
@@ -441,8 +595,8 @@ function Row({ card, run, now, silence, away, onOpen }: {
         {run.step !== "" && <span className="runroles__step">{run.step}</span>}
       </span>
       <span className="runroles__rowend">
-        {chip !== null && <span className="runroles__chip" data-state={card.state}>{chip}</span>}
-        <QuietChip silence={silence} />
+        {chip !== null && <Chip state={card.state} attn={attn}>{chip}</Chip>}
+        <QuietChip silence={silence} attn={attn} />
         {away.map((hand) => (
           <span key={`${hand.to}-${hand.filed}`} className="runroles__hand" data-to={hand.to}>
             → {hand.name}
@@ -476,6 +630,10 @@ export const RunRoles = memo(
     const view = pin === "auto" ? fit : pin;
     const desk = useRef<HTMLDivElement>(null);
     const strokes = useStrokes(desk, hands, view);
+    const unseen = useUnseen(room, view);
+    const jump = (up: boolean) => {
+      if (room.current !== null) scrollToUnseen(room.current, up);
+    };
     // The clock ticks while a round is under way: for its time, and for how long its terminal has
     // been quiet, which is measured whether or not the round's start was read.
     const now = useNow(cards.some(underWay));
@@ -483,50 +641,54 @@ export const RunRoles = memo(
     const expected = run.expectedMinutes ?? null;
     return (
       <div className="runroles" data-view={view} aria-label={t("auto.run.faceRoles")} role="region">
-        <div className="runroles__room" ref={room}>
-          {cards.length === 0 ? (
-            <p className="runroles__none">{t("auto.run.roles.none")}</p>
-          ) : view === "list" ? (
-            <ul className="runroles__rows">
-              {cards.map((card) => (
-                <Row
-                  key={card.role ?? "run"}
-                  card={card}
-                  run={run}
-                  now={now}
-                  silence={silenceOf(card, last, now, expected)}
-                  away={handsAway(card.role, hands, [])}
-                  onOpen={onOpen}
-                />
-              ))}
-            </ul>
-          ) : (
-            <div className="runroles__desk" ref={desk}>
-              <ul className="runroles__cards">
+        <div className="runroles__view">
+          <div className="runroles__room" ref={room}>
+            {cards.length === 0 ? (
+              <p className="runroles__none">{t("auto.run.roles.none")}</p>
+            ) : view === "list" ? (
+              <ul className="runroles__rows">
                 {cards.map((card) => (
-                  <Card
+                  <Row
                     key={card.role ?? "run"}
                     card={card}
                     run={run}
                     now={now}
                     silence={silenceOf(card, last, now, expected)}
-                    away={handsAway(card.role, hands, cards)}
+                    away={handsAway(card.role, hands, [])}
                     onOpen={onOpen}
                   />
                 ))}
               </ul>
-              {strokes.length > 0 && (
-                <svg className="runroles__strokes" aria-hidden="true">
-                  {strokes.map((stroke) => (
-                    <g key={stroke.key} data-filed={stroke.filed || undefined}>
-                      <path d={stroke.path} />
-                      <path d={stroke.head} />
-                    </g>
+            ) : (
+              <div className="runroles__desk" ref={desk}>
+                <ul className="runroles__cards">
+                  {cards.map((card) => (
+                    <Card
+                      key={card.role ?? "run"}
+                      card={card}
+                      run={run}
+                      now={now}
+                      silence={silenceOf(card, last, now, expected)}
+                      away={handsAway(card.role, hands, cards)}
+                      onOpen={onOpen}
+                    />
                   ))}
-                </svg>
-              )}
-            </div>
-          )}
+                </ul>
+                {strokes.length > 0 && (
+                  <svg className="runroles__strokes" aria-hidden="true">
+                    {strokes.map((stroke) => (
+                      <g key={stroke.key} data-filed={stroke.filed || undefined}>
+                        <path d={stroke.path} />
+                        <path d={stroke.head} />
+                      </g>
+                    ))}
+                  </svg>
+                )}
+              </div>
+            )}
+          </div>
+          <UnseenNotice attns={unseen.up} up onPress={() => jump(true)} />
+          <UnseenNotice attns={unseen.down} up={false} onPress={() => jump(false)} />
         </div>
         {idle.length > 0 && (
           <div className="runroles__idle">

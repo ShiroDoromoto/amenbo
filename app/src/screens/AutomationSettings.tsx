@@ -23,23 +23,21 @@
 // be picked back once something else is. The roles offered are this automation's own, in their order.
 //
 // **The column lists every trigger the automation has** (`AMB-D-1119`), in its order, one box each:
-// when it files a task, what the task says, and the role it is worked under. Pressing a box opens the
-// dialog on that trigger, to change it or take it away (`./AutomationTrigger`). "+ Add a trigger"
-// stands under the list however many there are, and opens the same dialog on a new one; with none,
-// the column says so above it.
+// when it files a task, what the task says, and the role it is worked under. "+ Add a trigger" stands
+// under the list however many there are; with none, the column says so above it. Pressing a box, or
+// "+ Add a trigger", asks the build screen to open that trigger's card in its middle
+// (`./AutomationTrigger`), to change it or take it away, or to write a new one.
 import { useState } from "react";
 import { editAutomation, editAutomationRole } from "../core/automations";
 import { builtinWord } from "../core/builtinWords";
 import { errText, t, tf } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
 import { Stepper } from "../components/Stepper";
-import { AutomationTrigger } from "./AutomationTrigger";
 import { RoleIcon } from "./AutomationRoles";
-import { filterValueLabel } from "./automationParts";
+import { taskLine, whenLine } from "./AutomationTrigger";
 import type {
   AutomationDetailDto,
   AutomationFailuresToDto,
-  AutomationTriggerConditionDto,
   AutomationTriggerDto,
 } from "../bindings/bindings";
 
@@ -53,68 +51,6 @@ function failuresOf(value: string): AutomationFailuresToDto | null {
   if (value === "human") return { kind: "human" };
   if (value.startsWith("role:")) return { kind: "role", roleId: Number(value.slice("role:".length)) };
   return null;
-}
-
-/** How often an "every" trigger is asked, in the largest unit the minutes divide into. */
-function everyLine(minutes: number): string {
-  if (minutes % 1440 === 0) return tf("auto.side.everyDays", { days: minutes / 1440 });
-  if (minutes % 60 === 0) return tf("auto.side.everyHours", { hours: minutes / 60 });
-  return tf("auto.side.every", { minutes });
-}
-
-/**
- * What a trigger's condition counts, in the words the filter's values are drawn with elsewhere
- * (`filterValueLabel`): the values one key takes are joined by "/", the keys and the role the tasks
- * are worked under stand side by side. Empty where every task is counted.
- */
-function countedWords(condition: AutomationTriggerConditionDto, roles: AutomationDetailDto["roles"]): string {
-  const groups: string[] = [];
-  for (const part of condition.filter.split(/\s+/)) {
-    const at = part.indexOf(":");
-    if (at <= 0) continue;
-    const key = part.slice(0, at);
-    const values = part.slice(at + 1).split(",").filter((one) => one !== "");
-    if (values.length > 0) groups.push(values.map((one) => filterValueLabel(key, one)).join("/"));
-  }
-  const role = roles.find((one) => one.id === condition.roleId);
-  if (role !== undefined) groups.push(role.name);
-  return groups.join(" ");
-}
-
-/** How few of what the condition counts it waits for, naming what it counts where it says. */
-function belowLine(condition: AutomationTriggerConditionDto, roles: AutomationDetailDto["roles"]): string {
-  const counted = countedWords(condition, roles);
-  return counted === ""
-    ? tf("auto.side.below", { below: condition.below })
-    : tf("auto.side.belowOf", { what: counted, below: condition.below });
-}
-
-/** When the trigger files a task, in the words of the dialog's ①, with what its condition counts. */
-function whenLine(trigger: AutomationTriggerDto, roles: AutomationDetailDto["roles"]): string {
-  const when =
-    trigger.when.kind === "every"
-      ? everyLine(trigger.when.minutes)
-      : trigger.when.kind === "idle"
-        ? t("auto.trigger.whenIdle")
-        : trigger.when.kind === "tasks"
-          ? t("auto.trigger.whenTasks")
-          : t("auto.trigger.whenScript");
-  const below = trigger.condition === undefined ? null : belowLine(trigger.condition, roles);
-  // "Tasks" is the condition with nothing else, so it is named by the condition alone.
-  if (trigger.when.kind === "tasks" && below !== null) return below;
-  return below === null ? when : `${when} ・ ${below}`;
-}
-
-/** What the task the trigger files says, as far as it can be read before it is filed. */
-function taskLine(trigger: AutomationTriggerDto): string {
-  switch (trigger.task.kind) {
-    case "fixed":
-      return trigger.task.title;
-    case "file":
-      return trigger.task.path;
-    case "script":
-      return t("auto.trigger.taskScript");
-  }
 }
 
 /** The fewest a role can have. The most is core's (`AutomationDetailDto.maxHeadcount`). */
@@ -146,13 +82,14 @@ function TotalLine({ total }: { total: number }) {
 export function AutomationSettings({
   automation,
   draft,
+  onOpenTrigger,
 }: {
   automation: AutomationDetailDto;
   draft: DraftPresses;
+  /** Open a trigger's card: the one given, or a new one. */
+  onOpenTrigger: (trigger: AutomationTriggerDto | undefined) => void;
 }) {
   const [refused, setRefused] = useState<string | null>(null);
-  // The trigger whose dialog is open, by its id, or "new" for one being added.
-  const [opened, setOpened] = useState<number | "new" | null>(null);
   const failures = failuresValue(automation.failuresTo);
   const roleLine = (trigger: AutomationTriggerDto) => {
     const role = automation.roles.find((one) => one.id === trigger.roleId);
@@ -213,7 +150,7 @@ export function AutomationSettings({
                   type="button"
                   className="autoside__trigger"
                   title={trigger.name.trim() || t("auto.trigger.title")}
-                  onClick={() => setOpened(trigger.id)}
+                  onClick={() => onOpenTrigger(trigger)}
                 >
                   <span className="autoside__when">{whenLine(trigger, automation.roles)}</span>
                   <span className="autoside__what">{taskLine(trigger)}</span>
@@ -223,7 +160,7 @@ export function AutomationSettings({
             ))}
           </ul>
         )}
-        <button type="button" className="btn autoside__add" onClick={() => setOpened("new")}>
+        <button type="button" className="btn autoside__add" onClick={() => onOpenTrigger(undefined)}>
           {t("auto.side.triggerAdd")}
         </button>
       </div>
@@ -290,14 +227,6 @@ export function AutomationSettings({
           )}
         </div>
       </div>
-
-      {opened !== null && (
-        <AutomationTrigger
-          automation={automation}
-          trigger={opened === "new" ? undefined : automation.triggers.find((one) => one.id === opened)}
-          onClose={() => setOpened(null)}
-        />
-      )}
     </div>
   );
 }

@@ -24,6 +24,7 @@ import type {
   AutomationEdgeDto,
   AutomationPortDto,
   AutomationPlacementDto,
+  AutomationTriggerDto,
   AutomationWireDto,
 } from "../bindings/bindings";
 
@@ -2355,12 +2356,46 @@ describe("one role's round, as the build screen draws it", () => {
 
   it("says where the round receives its task from, and whom it hands on to", () => {
     expect(automationGraph(automation, 20)!.round).toMatchObject({
-      receives: { start: false, roles: ["Research"] },
+      receives: { failures: false, triggers: [], roles: ["Research"] },
       handsTo: ["Build"],
     });
-    // The automation's start, and no role after the last.
-    expect(automationGraph(automation, 10)!.round).toMatchObject({ receives: { start: true, roles: [] } });
+    // Nothing but a person hands Research its task, and no role comes after the last.
+    expect(automationGraph(automation, 10)!.round).toMatchObject({ receives: { failures: false, triggers: [], roles: [] } });
     expect(automationGraph(automation, 30)!.round).toMatchObject({ handsTo: [] });
+  });
+
+  it("says the round receives a failed round's incident and the tasks its triggers file", () => {
+    const trigger = (id: number, name: string, roleId: number | undefined, enabled = true): AutomationTriggerDto => ({
+      id,
+      enabled,
+      name,
+      roleId,
+      when: { kind: "every", minutes: 60 },
+      task: { kind: "fixed", title: name, notes: "" },
+      nextAt: "2026-11-07T00:00:00Z",
+    });
+    const upkept: AutomationDetailDto = {
+      ...automation,
+      failuresTo: { kind: "role", roleId: 40 },
+      triggers: [
+        trigger(1, "Daily check", 40),
+        trigger(2, "Top up", 20),
+        trigger(3, "Switched off", 40, false),
+        trigger(4, "Nightly sweep", 40),
+        trigger(5, "On no role", undefined),
+      ],
+    };
+    // Only the triggers switched on that file this role's task, in the order they are written.
+    expect(automationGraph(upkept, 40)!.round).toMatchObject({
+      receives: { failures: true, triggers: ["Daily check", "Nightly sweep"], roles: [] },
+    });
+    expect(automationGraph(upkept, 20)!.round).toMatchObject({
+      receives: { failures: false, triggers: ["Top up"], roles: ["Research"] },
+    });
+    // Failures filed to a person are no role's to receive.
+    expect(automationGraph({ ...upkept, failuresTo: { kind: "human" } }, 40)!.round).toMatchObject({
+      receives: { failures: false },
+    });
   });
 
   it("says the round starts where the automation does when the built-in it starts with hands it the task", () => {
@@ -2382,8 +2417,8 @@ describe("one role's round, as the build screen draws it", () => {
         ...automation.edges,
       ],
     };
-    expect(automationGraph(started, 10)!.round).toMatchObject({ receives: { start: true, roles: [] } });
-    expect(automationGraph(started, 20)!.round).toMatchObject({ receives: { start: false, roles: ["Research", "file"] } });
+    expect(automationGraph(started, 10)!.round).toMatchObject({ receives: { roles: [] } });
+    expect(automationGraph(started, 20)!.round).toMatchObject({ receives: { roles: ["Research", "file"] } });
   });
 
   it("draws the whole automation where no role is given, or the role is gone", () => {

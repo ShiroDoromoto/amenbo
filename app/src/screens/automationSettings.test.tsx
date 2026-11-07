@@ -10,8 +10,8 @@
 // presses, or says it is the saved version**; **who failures are filed to is required, offers the automation's roles
 // and the person, and writes the one picked**; **every trigger is listed in order — when, what it
 // files and under which role, the wait in the largest unit it divides into and the condition by what
-// it counts — and a press opens the dialog on that one**; **"+ Add a trigger" is
-// always there, and opens the dialog on a new one**; and **a refusal is drawn in core's words**.
+// it counts — and a press asks the build screen to open that one's card**; **"+ Add a trigger" is
+// always there, and asks for a new one's card**; and **a refusal is drawn in core's words**.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,6 +22,8 @@ const hoisted = vi.hoisted(() => ({
   edits: [] as unknown[],
   /** What the next write is refused with, if anything. */
   refuse: null as string | null,
+  /** Each trigger the column asked to open, `undefined` for a new one. */
+  opened: [] as unknown[],
 }));
 
 vi.mock("../core/automations", () => ({
@@ -81,6 +83,7 @@ beforeEach(() => {
   hoisted.edits = [];
   hoisted.refuse = null;
   Object.assign(draft, { saved: 0, discarded: 0, canSave: true, canDiscard: true });
+  hoisted.opened = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -105,6 +108,7 @@ const render = (shown: AutomationDetailDto = automation) =>
           canSave: draft.canSave,
           canDiscard: draft.canDiscard,
         },
+        onOpenTrigger: (trigger: AutomationTriggerDto | undefined) => hoisted.opened.push(trigger),
       }),
     );
   });
@@ -120,7 +124,6 @@ const pick = (value: string) =>
     select().value = value;
     select().dispatchEvent(new Event("change", { bubbles: true }));
   });
-const dialog = () => document.body.querySelector('[role="dialog"]');
 
 describe("the column", () => {
   it("holds who failures are filed to, the triggers and the headcounts, each in a box of its own", async () => {
@@ -271,19 +274,13 @@ const other: AutomationTriggerDto = {
   nextAt: "2026-11-07T00:00:00Z",
 };
 
-/** The dialog's first box, which holds the trigger's name. */
-const nameBox = () => dialog()!.querySelector("input")!;
-
 describe("the triggers", () => {
-  it("say there are none, and offer to add one, whose press opens a new trigger's dialog", async () => {
+  it("say there are none, and offer to add one, whose press asks for a new one's card", async () => {
     await render();
     expect(container.textContent).toContain(t("auto.side.triggerNone"));
     expect(container.querySelector(".autoside__trigger")).toBeNull();
-    expect(dialog()).toBeNull();
     await press(button(t("auto.side.triggerAdd")));
-    expect(dialog()).not.toBeNull();
-    expect(nameBox().value).toBe("");
-    expect(button(t("auto.trigger.remove"))).toBeUndefined();
+    expect(hoisted.opened).toEqual([undefined]);
   });
 
   it("are listed in order, each by when, what it files and its role", async () => {
@@ -340,15 +337,14 @@ describe("the triggers", () => {
   it("keep offering to add one however many there are", async () => {
     await render({ ...automation, triggers: [written, other] });
     await press(button(t("auto.side.triggerAdd")));
-    expect(nameBox().value).toBe("");
+    expect(hoisted.opened).toEqual([undefined]);
   });
 
-  it("open the dialog on the one pressed", async () => {
+  it("ask for the card of the one pressed", async () => {
     await render({ ...automation, triggers: [written, other] });
     const drawn = Array.from(container.querySelectorAll<HTMLButtonElement>(".autoside__trigger"));
     await press(drawn[1]);
-    expect(nameBox().value).toBe("Daily check");
-    expect(button(t("auto.trigger.remove"))).toBeDefined();
+    expect(hoisted.opened).toEqual([other]);
   });
 });
 

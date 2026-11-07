@@ -97,9 +97,10 @@
 // a step chose for itself marked (`./AutomationRoleCarriers`).
 //
 // **What the automation holds as a whole stands down the right** (`./AutomationSettings`): who a
-// failed round is filed to, its triggers, each opening its own dialog (`./AutomationTrigger`), and how
-// many each role has, each in a box of its own. They are about none of the roles in particular, or
-// about all of them at once, so they stand beside the left and the middle rather than in either. The
+// failed round is filed to, its triggers, and how many each role has, each in a box of its own. They
+// are about none of the roles in particular, or about all of them at once, so they stand beside the
+// left and the middle rather than in either. Pressing a trigger opens its card in the middle, where the
+// picture stands (`./AutomationTrigger`), until the card is closed or a role is picked on the left. The
 // headcount box ends on the head's own "Save" and "Discard changes", held back on the same terms.
 //
 // **The head says what is saved** (`./AutomationSaved`, `AMB-D-1005`): nothing yet, changes not
@@ -119,6 +120,7 @@ import { useSaved } from "./AutomationSaved";
 import { AutomationSettings } from "./AutomationSettings";
 import { AutomationStepPanel } from "./AutomationStepPanel";
 import { AutomationTestPane, useAutomationTestRun } from "./AutomationTestPane";
+import { AutomationTrigger } from "./AutomationTrigger";
 import type { WhereTo } from "./automationParts";
 import { useAutomationStart } from "../components/StartAutomation";
 import {
@@ -183,7 +185,7 @@ function mendedIn(
  * width rather than scrolled. The width the two sides take is measured while they stand beside the
  * middle and kept for while they do not, so the screen goes back beside them once that width is there.
  */
-function useStacked(needs: number | undefined) {
+function useStacked(needs: number | undefined, pictureShown: boolean) {
   const frameRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const [stacked, setStacked] = useState(false);
@@ -206,7 +208,8 @@ function useStacked(needs: number | undefined) {
     sized.observe(frame);
     sized.observe(canvas);
     return () => sized.disconnect();
-  }, [needs]);
+    // A trigger's card stands where the picture does, so the middle is watched anew once it is back.
+  }, [needs, pictureShown]);
   return { frameRef, canvasRef, stacked };
 }
 
@@ -269,13 +272,21 @@ export function AutomationBuildScreen({
   // and one that is gone — taken off, or only on a draft that was discarded — falls back to it too.
   const [roleId, setRoleId] = useState<number | null>(null);
   const role = automation?.roles.find((one) => one.id === roleId) ?? automation?.roles[0];
+  // The trigger whose card stands in the middle: one written, by its id, or a new one. One taken away
+  // meanwhile closes its card.
+  const [triggerOpen, setTriggerOpen] = useState<{ id: number } | "new" | null>(null);
+  const openTrigger =
+    triggerOpen === null || triggerOpen === "new"
+      ? undefined
+      : automation?.triggers.find((one) => one.id === triggerOpen.id);
+  const triggerShown = triggerOpen === "new" || openTrigger !== undefined;
   // The picture in the middle is that role's round (`automationGraph`), laid out again only when the
   // definition or the role changes.
   const roundGraph = useMemo(() => automationGraph(automation, role?.id), [automation, role?.id]);
   // How wide that round's row has to be, as the picture tells it, and whether the three places go one
   // under another to give it that.
   const [rowNeeds, setRowNeeds] = useState<number | undefined>(undefined);
-  const { frameRef, canvasRef, stacked } = useStacked(rowNeeds);
+  const { frameRef, canvasRef, stacked } = useStacked(rowNeeds, !triggerShown);
   // A role just added is picked once it is in the list: it goes after the roles already there, so it
   // is the last once the list is longer than it was at the press.
   const [addedAt, setAddedAt] = useState<number | null>(null);
@@ -510,41 +521,56 @@ export function AutomationBuildScreen({
             <AutomationRoleList
               automation={automation}
               pickedId={role?.id ?? null}
-              onPick={setRoleId}
+              onPick={(id) => {
+                setRoleId(id);
+                setTriggerOpen(null);
+              }}
               onAdded={setAddedAt}
             />
           )}
           <div className="actbuild__main">
-            {automation !== null && role !== undefined && (
-              <AutomationRoleHead key={role.id} automation={automation} role={role} onRemoved={() => setRoleId(null)} />
-            )}
-            <div className="actbuild__canvashead">
-              <span className="actbuild__sec">{t("auto.build.picture")}</span>
-            </div>
-            <div className="actbuild__canvas" ref={canvasRef}>
-              <AutomationPicture
-                graph={roundGraph}
-                onRowNeeds={setRowNeeds}
-                selectedBoxId={testing !== null ? test.marked : pressed?.id}
-                placedForYou={forYou}
-                onPickBox={(box) => setShowing({ kind: "box", id: box })}
-                onInsert={(edgeId) => setShowing({ kind: "library", target: { edgeId } })}
-                onOpenExit={({ boxId, exitName }) => setShowing({ kind: "library", target: { fromId: boxId, exitName } })}
+            {automation !== null && triggerShown ? (
+              <AutomationTrigger
+                // Another trigger opened is another card, with nothing typed for the last one.
+                key={openTrigger?.id ?? "new"}
+                automation={automation}
+                trigger={openTrigger}
+                onClose={() => setTriggerOpen(null)}
               />
-              {automation !== null && automation.placements.length === 0 && (
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  onClick={() => setShowing({ kind: "library", target: { automationId: automation.id } })}
-                >
-                  {t("auto.pic.first")}
-                </button>
-              )}
-            </div>
-            {automation !== null && role !== undefined && (
+            ) : (
               <>
-                <AutomationRoleWho key={role.id} automation={automation} role={role} />
-                <AutomationRoleCarriers automation={automation} graph={roundGraph} />
+                {automation !== null && role !== undefined && (
+                  <AutomationRoleHead key={role.id} automation={automation} role={role} onRemoved={() => setRoleId(null)} />
+                )}
+                <div className="actbuild__canvashead">
+                  <span className="actbuild__sec">{t("auto.build.picture")}</span>
+                </div>
+                <div className="actbuild__canvas" ref={canvasRef}>
+                  <AutomationPicture
+                    graph={roundGraph}
+                    onRowNeeds={setRowNeeds}
+                    selectedBoxId={testing !== null ? test.marked : pressed?.id}
+                    placedForYou={forYou}
+                    onPickBox={(box) => setShowing({ kind: "box", id: box })}
+                    onInsert={(edgeId) => setShowing({ kind: "library", target: { edgeId } })}
+                    onOpenExit={({ boxId, exitName }) => setShowing({ kind: "library", target: { fromId: boxId, exitName } })}
+                  />
+                  {automation !== null && automation.placements.length === 0 && (
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      onClick={() => setShowing({ kind: "library", target: { automationId: automation.id } })}
+                    >
+                      {t("auto.pic.first")}
+                    </button>
+                  )}
+                </div>
+                {automation !== null && role !== undefined && (
+                  <>
+                    <AutomationRoleWho key={role.id} automation={automation} role={role} />
+                    <AutomationRoleCarriers automation={automation} graph={roundGraph} />
+                  </>
+                )}
               </>
             )}
           </div>
@@ -557,6 +583,7 @@ export function AutomationBuildScreen({
                 canSave: automation.unsaved && saveBlocks.length === 0 && !keeping,
                 canDiscard: automation.saved !== undefined && automation.unsaved && !keeping,
               }}
+              onOpenTrigger={(trigger) => setTriggerOpen(trigger === undefined ? "new" : { id: trigger.id })}
             />
           )}
         </div>

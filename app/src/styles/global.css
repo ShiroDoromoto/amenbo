@@ -117,11 +117,16 @@ input[type="color"] {
    own does not stack under a sibling that has one — it is put in a column beside it, and the columns
    it invents squeeze the whole app into the first one. The bands stack inside their row instead, so a
    banner can be added without the shell being told about it. The row is auto, so with every band
-   silent the wrapper is empty, has no height, and the track collapses to 0. */
+   silent the wrapper is empty, has no height, and the track collapses to 0.
+   **The one column is the window's width, never what is in it** (`minmax(0, 1fr)`). Left unwritten it
+   is `auto`, which is at least as wide as the widest child needs at the least: a terminal is as wide
+   as its columns, so one told more columns than its pane gives held the window that much wider and
+   scrolled it sideways, cutting the right-hand column off, until the pane was closed. */
 .shell {
   height: 100%;
   display: grid;
   grid-template-rows: var(--topbar-h) auto 1fr;
+  grid-template-columns: minmax(0, 1fr);
 }
 .shell > .topbar { grid-row: 1; }
 .shell > .shell__banners { grid-row: 2; }
@@ -299,12 +304,17 @@ input[type="color"] {
 
    **Where each pane sits is written on the element, not in here.** A pane's cell falls out of laying
    the panes down in order, so there is no rule that could name it: what this holds is the grid the
-   places are counted in (`AMB-D-939`). */
+   places are counted in (`AMB-D-939`).
+
+   **A cell's width is the page's share, never what is in it** (`minmax(0, 1fr)`). A plain `1fr`
+   is at least as wide as what its pane needs at the least, so a terminal told more columns than its
+   cells give would take the width from the panes beside it. What keeps the window from growing with
+   it is the shell's column (`.shell`). */
 .workspace__page-grid {
   flex: 0 0 100%; min-width: 0; min-height: 0;
   scroll-snap-align: start; scroll-snap-stop: always;
   display: grid; gap: var(--s-2);
-  grid-template: 1fr 1fr / repeat(12, 1fr);
+  grid-template: 1fr 1fr / repeat(12, minmax(0, 1fr));
   padding: var(--s-3);
 }
 /* A full page has no gap to draw an empty frame in, so the way in goes beside the panes instead —

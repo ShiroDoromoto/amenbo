@@ -2525,8 +2525,8 @@ button.feed__target:hover { color: var(--c-accent); }
    turned the pane — why. It stands in the pane's body under the roles, so the terminal keeps its size
    when the face is turned.
    **Its width is the pane's, never its own** (`contain: inline-size`): what it says is held on one line
-   and cut short, and a task's title or a row of rounds would otherwise ask for its whole length up
-   through the pane to the window, which then scrolls sideways. */
+   and cut short, and a task's title or a row of rounds would otherwise ask the pane for its whole
+   length. */
 .runterm { flex: none; display: flex; flex-direction: column; min-width: 0; contain: inline-size; }
 .runterm__head { display: flex; align-items: center; gap: var(--s-2); min-width: 0; padding: var(--s-1) var(--s-2); border-bottom: var(--border-w) var(--border-style) var(--c-rule); }
 .runterm__head > .icon { flex: none; }

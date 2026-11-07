@@ -158,8 +158,8 @@ pub fn take(tx: &WriteTx<'_>, run_step_id: i64, task_id: i64) -> Result<Task> {
     };
     in_the_runs_project(tx, &run_step, task_id)?;
     let task = crate::ops::task::set_status(tx, task_id, TaskStatus::InProgress, ActorKind::Ai)?;
-    // The round is worked under the task's role, where it is one the run's copies start a round of
-    // (`automation_run::roles_started`) — what says where the round goes on to.
+    // The round is worked under the task's role, where it is one the run takes tasks of — the role the
+    // run is a seat of (`automation_run::roles_started`) — what says where the round goes on to.
     let role = match task.role_id {
         Some(role) if automation_run::roles_started(tx.conn(), run_step.run_id)?.contains(&role) => Some(role),
         _ => None,

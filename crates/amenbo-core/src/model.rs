@@ -2694,6 +2694,13 @@ pub struct AutomationRun {
     /// said it. `None` for every other run.
     #[serde(default)]
     pub stopped_detail: Option<String>,
+    /// **The role the run is a seat of** ([`AutomationRole`]) — set at launch and never changed while
+    /// the run lasts. The run takes only tasks worked under it
+    /// ([`crate::ops::automation_run::roles_started`]). `None` for a run of an automation none of whose
+    /// roles names where its round starts, for a run that ended before runs were given one (v128), and
+    /// where the role has since been taken out (`SET NULL`).
+    #[serde(default)]
+    pub role_id: Option<i64>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

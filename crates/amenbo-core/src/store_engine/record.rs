@@ -833,6 +833,7 @@ pub fn automation_run(r: &AutomationRun) -> Record {
                 ("acknowledged_by_kind", kov(&r.acknowledged_by_kind)),
                 ("stopped_detail", ov(&r.stopped_detail)),
                 ("launch_id", kv_opt(&r.launch_id)),
+                ("role_id", kv_opt(&r.role_id)),
             ],
             &r.created_at,
             &r.updated_at,

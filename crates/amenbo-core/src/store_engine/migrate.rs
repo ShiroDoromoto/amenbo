@@ -1460,6 +1460,14 @@ pub const STEPS: &[Step] = &[
         // is touched.
         apply: Apply::Custom(give_every_automation_a_role),
     },
+    Step {
+        to: 128,
+        name: "add automation_run.role_id, the role a run is a seat of, given to each run under way from its last round",
+        // **Filled only on the runs under way** (`running`, `paused`): the role of the last of their rounds
+        // that was worked under one, else the first role of their automation that names where its round
+        // starts. A run that has ended is left NULL. No task is touched.
+        apply: Apply::Custom(seat_every_run_under_way),
+    },
 ];
 
 /// v127: **every automation has at least one role** from here on, so one that has none is given one —
@@ -1813,6 +1821,38 @@ fn let_a_launch_hold_its_runs(ctx: &Ctx<'_>) -> Result<()> {
         let launch = tx.last_insert_rowid();
         tx.execute("UPDATE automation_run SET launch_id = ?1 WHERE id = ?2", rusqlite::params![launch, u.run])?;
     }
+    Ok(())
+}
+
+/// v128: `automation_run.role_id`, **the role a run is a seat of** — set at launch and kept until the
+/// run ends, the run taking only tasks worked under it.
+///
+/// **A run under way** (`running` or `paused`) is given the role of the last of its rounds worked under
+/// one (`automation_run_task.role_id`, the highest `seq` that has one). A run that has not taken a task
+/// under any role yet is given the first role of its automation, in the order they are defined in, that
+/// names where its round starts — the role a launch gives a run that finds no task. Where there is none,
+/// it is left NULL and takes what its copies start, as before. **A run that has ended is left NULL.**
+///
+/// **Only the automation tables are read and written.** A store with no automation adds the column to an
+/// empty table and writes nothing.
+fn seat_every_run_under_way(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_run")?.iter().any(|c| c == "role_id") {
+        tx.execute_batch(
+            "ALTER TABLE automation_run ADD COLUMN role_id BIGINT REFERENCES automation_role(id) \
+             ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED;",
+        )?;
+    }
+    tx.execute_batch(
+        "UPDATE automation_run SET role_id = COALESCE(
+             (SELECT t.role_id FROM automation_run_task t
+              WHERE t.run_id = automation_run.id AND t.role_id IS NOT NULL
+              ORDER BY t.seq DESC LIMIT 1),
+             (SELECT r.id FROM automation_role r
+              WHERE r.automation_id = automation_run.automation_id AND r.entry_placement_id IS NOT NULL
+              ORDER BY r.order_key, r.id LIMIT 1))
+         WHERE status IN ('running', 'paused') AND role_id IS NULL;",
+    )?;
     Ok(())
 }
 
@@ -12710,6 +12750,67 @@ mod tests {
         assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
         let n: i64 = engine.conn().query_row("SELECT COUNT(*) FROM automation_role", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v128: a run under way is given the role of the last of its rounds worked under one, or, where it
+    /// has taken no task under a role, the first role of its automation that names where its round
+    /// starts. A run that has ended is left with none.
+    #[test]
+    fn every_run_under_way_is_seated_in_a_role_at_v128() {
+        let dir = scratch("automation-run-role");
+        let engine = store_at(&dir, 127);
+        let at = "2026-11-07T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation_action (id, project_id, name, order_key) VALUES (1, 1, '実装', 'm');
+                 INSERT INTO automation (id, project_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 1, '開発', 'm', '{at}', '{at}');
+                 INSERT INTO automation_placement (id, automation_id, action_id, order_key, created_at, updated_at)
+                 VALUES (1, 1, 1, 'm', '{at}', '{at}'), (2, 1, 1, 'n', '{at}', '{at}');
+                 INSERT INTO automation_role (id, automation_id, name, entry_placement_id, order_key, created_at, updated_at)
+                 VALUES (1, 1, 'さくら', NULL, 'a', '{at}', '{at}'), (2, 1, '山田', 2, 'z', '{at}', '{at}'),
+                        (3, 1, '佐藤', 1, 'm', '{at}', '{at}');
+                 INSERT INTO automation_run (id, automation_id, project_id, status, created_at, updated_at)
+                 VALUES (1, 1, 1, 'running', '{at}', '{at}'), (2, 1, 1, 'paused', '{at}', '{at}'),
+                        (3, 1, 1, 'running', '{at}', '{at}'), (4, 1, 1, 'completed', '{at}', '{at}');
+                 INSERT INTO automation_run_task (id, run_id, seq, role_id, created_at, updated_at)
+                 VALUES (1, 1, 1, 3, '{at}', '{at}'), (2, 1, 2, 2, '{at}', '{at}'), (3, 1, 3, NULL, '{at}', '{at}'),
+                        (4, 2, 1, 2, '{at}', '{at}'), (5, 4, 1, 2, '{at}', '{at}');"
+            ))
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let seat = |run: i64| -> Option<i64> {
+            engine.conn().query_row("SELECT role_id FROM automation_run WHERE id = ?1", [run], |r| r.get(0)).unwrap()
+        };
+        assert_eq!(seat(1), Some(2), "the role of the last round worked under one");
+        assert_eq!(seat(2), Some(2), "a paused run is under way too");
+        assert_eq!(seat(3), Some(3), "no round yet: the first role that names where its round starts");
+        assert_eq!(seat(4), None, "a run that has ended is left with none");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v128 on a store with no automation only adds the column to an empty table.
+    #[test]
+    fn a_store_with_no_automation_writes_no_seat_at_v128() {
+        let dir = scratch("automation-run-role-empty");
+        let engine = store_at(&dir, 127);
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let n: i64 = engine.conn().query_row("SELECT COUNT(*) FROM automation_run", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 0);
+        let has: i64 = engine
+            .conn()
+            .query_row("SELECT COUNT(*) FROM pragma_table_info('automation_run') WHERE name = 'role_id'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(has, 1);
         std::fs::remove_dir_all(&dir).ok();
     }
 

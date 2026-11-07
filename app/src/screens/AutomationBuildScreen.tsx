@@ -91,7 +91,8 @@
 // **The roles stand down the left** (`./AutomationRoles`): the list with each one's step count and
 // the press that adds one, and over the picture the head of the one picked — its name, where it stands
 // in the list, and the agent and model its steps fall back to (`AMB-D-960`). They are written to the
-// draft like the rest.
+// draft like the rest. Under the picture, each step of the round with the agent and model that carry
+// it out, the ones a step chose for itself marked (`./AutomationRoleCarriers`).
 //
 // **The head says what is saved** (`./AutomationSaved`, `AMB-D-1005`): nothing yet, changes not
 // saved, or the version saved last and when. A write still marks the field it came from.
@@ -101,6 +102,7 @@ import { Panel } from "./AutomationActionBuildScreen";
 import { AutomationLibraryPanel, placeKey, type PlaceTarget } from "./AutomationLibraryPanel";
 import { AutomationPicture } from "./AutomationPicture";
 import { AutomationRoleHead, AutomationRoleList } from "./AutomationRoles";
+import { AutomationRoleCarriers } from "./AutomationRoleCarriers";
 import { automationGraph, pictureOrder } from "./automationLayout";
 import { AutomationActionMake } from "./AutomationActionMake";
 import { AutomationActionOver } from "./AutomationActionOver";
@@ -223,6 +225,9 @@ export function AutomationBuildScreen({
   // and one that is gone — taken off, or only on a draft that was discarded — falls back to it too.
   const [roleId, setRoleId] = useState<number | null>(null);
   const role = automation?.roles.find((one) => one.id === roleId) ?? automation?.roles[0];
+  // The picture in the middle is that role's round (`automationGraph`), laid out again only when the
+  // definition or the role changes.
+  const roundGraph = useMemo(() => automationGraph(automation, role?.id), [automation, role?.id]);
   // A role just added is picked once it is in the list: it goes after the roles already there, so it
   // is the last once the list is longer than it was at the press.
   const [addedAt, setAddedAt] = useState<number | null>(null);
@@ -469,7 +474,7 @@ export function AutomationBuildScreen({
           </div>
           <div className="actbuild__canvas">
             <AutomationPicture
-              graph={automationGraph(automation)}
+              graph={roundGraph}
               selectedBoxId={testing !== null ? test.marked : pressed?.id}
               placedForYou={forYou}
               onPickBox={(box) => setShowing({ kind: "box", id: box })}
@@ -486,6 +491,9 @@ export function AutomationBuildScreen({
               </button>
             )}
           </div>
+          {automation !== null && role !== undefined && (
+            <AutomationRoleCarriers automation={automation} graph={roundGraph} />
+          )}
         </div>
       </div>
 

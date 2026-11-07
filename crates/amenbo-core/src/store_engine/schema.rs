@@ -1179,6 +1179,11 @@ datasets! {
         trigger_task_script_program: col(OPT),
         trigger_task_script_args: col(REQ),
         trigger_task_script_timeout_minutes: col(INT_OPT),
+        // What the trigger is called, as the timeline of a task it filed names it ('' for blank), and
+        // the role that task is worked under, one of this automation's own — NULL for none. `RESTRICT`,
+        // so a role that goes lets go of it first (`ops::automation`).
+        trigger_name: col(OPT),
+        trigger_role_id: fk_opt("automation_role", "RESTRICT"),
         // When the trigger is next asked whether to file one. Moved on only when it does, so a time it
         // says no leaves nothing behind.
         trigger_next_at: ts_opt,

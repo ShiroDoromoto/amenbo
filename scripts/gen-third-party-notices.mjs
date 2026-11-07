@@ -7,10 +7,12 @@
 // carry the notice, and it only reads what a crate declares. That second half matters here: rusqlite
 // is built with `bundled-sqlcipher-vendored-openssl`, so SQLCipher (BSD-3-Clause), SQLite (public
 // domain) and OpenSSL (Apache-2.0) are compiled into the binaries from C sources vendored inside two
-// crates — libsqlite3-sys, which declares only `MIT`, and openssl-src, whose `MIT/Apache-2.0` is the
-// crate's build glue, not OpenSSL. No declaration names them, so BUNDLED_SOURCES below names them,
-// by crate AND version: a bump of either carrier, or a new `*-src` crate, stops the gate until a
-// human has looked at what the new sources say (guards/check-third-party-notices.mjs).
+// crates — sqlcipher-src, whose top-level LICENSE is the crate's own MIT text while the SQLCipher
+// and libtomcrypt texts sit next to the sources, and openssl-src, whose `MIT/Apache-2.0` is the
+// crate's build glue, not OpenSSL. Reading a crate's top-level license files does not reach them, so
+// BUNDLED_SOURCES below names them, by crate AND version: a bump of either carrier, or a new `*-src`
+// crate, stops the gate until a human has looked at what the new sources say
+// (guards/check-third-party-notices.mjs).
 //
 // What counts as shipped: the crates reachable from the shipped roots (the `amenbo` CLI, the askpass
 // helper, the GUI host crate) over normal and build edges, on every target platform. Dev edges are
@@ -47,18 +49,18 @@ export const WORKSPACES = [
 // it was copied from.
 export const BUNDLED_SOURCES = [
   {
-    crate: 'libsqlite3-sys',
-    version: '0.38.2',
+    crate: 'sqlcipher-src',
+    version: '419.0.6+sqlcipher-4.19.0-sqlite-3.53.4-libtomcrypt-1.18.2',
     component: 'SQLCipher',
     license: 'BSD-3-Clause',
-    files: ['sqlcipher/LICENSE'],
+    files: ['sqlcipher/LICENSE-sqlcipher'],
   },
   {
-    crate: 'libsqlite3-sys',
-    version: '0.38.2',
+    crate: 'sqlcipher-src',
+    version: '419.0.6+sqlcipher-4.19.0-sqlite-3.53.4-libtomcrypt-1.18.2',
     component: 'SQLite (inside the SQLCipher amalgamation)',
     license: 'blessing (public domain)',
-    evidence: { file: 'sqlcipher/sqlite3.c', contains: 'The author disclaims copyright to this source code.' },
+    evidence: { file: 'sqlcipher/sqlcipher.c', contains: 'The author disclaims copyright to this source code.' },
     statement: [
       'The author disclaims copyright to this source code.  In place of',
       'a legal notice, here is a blessing:',
@@ -67,6 +69,13 @@ export const BUNDLED_SOURCES = [
       '   May you find forgiveness for yourself and forgive others.',
       '   May you share freely, never taking more than you give.',
     ].join('\n'),
+  },
+  {
+    crate: 'sqlcipher-src',
+    version: '419.0.6+sqlcipher-4.19.0-sqlite-3.53.4-libtomcrypt-1.18.2',
+    component: 'LibTomCrypt',
+    license: 'public domain or WTFPL',
+    files: ['sqlcipher/LICENSE-libtomcrypt'],
   },
   {
     crate: 'openssl-src',

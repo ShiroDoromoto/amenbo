@@ -9,9 +9,10 @@
 // regenerate it by hand.
 //
 // Two questions, both a red:
-//   1. Do the bundled C sources still match BUNDLED_SOURCES? libsqlite3-sys and openssl-src vendor
-//      SQLCipher, SQLite and OpenSSL, and no crate declares those licenses — so a bump of either
-//      carrier, or a new `*-src` crate, has to be read by a human before it ships.
+//   1. Do the bundled C sources still match BUNDLED_SOURCES? sqlcipher-src and openssl-src vendor
+//      SQLCipher, SQLite, libtomcrypt and OpenSSL, and their license texts sit beside those sources
+//      rather than at the crate's top level — so a bump of either carrier, or a new `*-src` crate, has to be
+//      read by a human before it ships.
 //   2. Is the committed file what the generator writes for this tree?
 //
 // Usage: node guards/check-third-party-notices.mjs   (from anywhere; needs cargo, fetches crates)

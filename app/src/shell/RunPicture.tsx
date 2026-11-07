@@ -17,6 +17,15 @@
 // a card that jumped to the top when its round asked for a person would be a card the reader has to
 // look for again. Only the room the cards are in scrolls — the pane's own place on the page stays.
 //
+// **The cards are a list where they do not fit.** Whether every card fits is read off the room the
+// cards are drawn in, as large as it is now — a pane is narrowed by the window, by the panel at the
+// right and by splitting the page (`AMB-D-939`), and all three are the same room getting smaller. A
+// card needs 150px by 118px; where the room holds fewer cards than there are rounds, each round is one
+// row of a list instead, and a narrow list puts a row on two lines. The list turns back to cards only
+// once the room has grown 40px past where it turned, so a pane on the edge does not flip back and forth
+// while it is being dragged. The reader can hold it to cards or to the list in the row above; it is on
+// its own until they do.
+//
 // **A card draws only the lines that touch it**: what it hands on to another role, and the role its
 // failure was filed to. A line is drawn only where both cards are in the room; where the other role
 // has no card, the card says "→ role" instead, and so does a row of the list, which draws no line.
@@ -35,12 +44,19 @@
 //
 // The role's name and icon are the definition's as it is now (`AMB-D-1015`), read by the project's
 // roles (`../core/projectRoles`) — the run's copy holds only which role its round is under.
+//
+// **A card is pressed to read its round's terminal**, and the terminal has a bar over it: the way back
+// to the roles, whose round it is, and the other rounds of the same automation — each another run, in
+// a pane of its own — as their icons with a dot for how each stands. Pressing one goes to that run's
+// pane, on its terminal. Where a step that may wait for a person turned the pane, the bar says so in
+// one line.
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useProjectRoles } from "../core/projectRoles";
+import { useLiveRuns } from "../core/automations";
 import { t, tf } from "../core/i18n";
 import { Icon, isIconName, type IconName } from "../components/Icon";
 import { clockOf, type Say } from "../talk/nameplate";
-import type { TaskRoleDto } from "../bindings/bindings";
+import type { AutomationRunCardDto, TaskRoleDto } from "../bindings/bindings";
 
 /** What a role's round is doing, as its card says it. */
 export type RoundState =
@@ -93,6 +109,66 @@ export function roleCards(run: Say, roles: readonly TaskRoleDto[]): { cards: Rol
       .map((role) => ({ role: role.id, name: role.name, icon: roleIcon(role), state })),
     idle: own.filter((role) => role.id !== at),
   };
+}
+
+/** How the room shows its rounds: a card each, or a row each of one list. */
+export type RoomView = "cards" | "list";
+
+/** What the reader holds the room to, or `auto` for the room's size to decide. */
+export type ViewPin = "auto" | RoomView;
+
+/** The least a card is drawn at, and the room between the cards and around them (`--s-2`). */
+const CARD_W = 150;
+const CARD_H = 118;
+const GAP = 8;
+const PAD = 8;
+/** How far the room grows past where it turned to the list before it turns back to cards. */
+const BACK = 40;
+
+/** **How many cards a room of `width` by `height` holds**, the room's padding included in both. */
+export function cardsFit(width: number, height: number): number {
+  const across = Math.max(0, Math.floor((width - PAD * 2 + GAP) / (CARD_W + GAP)));
+  const down = Math.max(0, Math.floor((height - PAD * 2 + GAP) / (CARD_H + GAP)));
+  return across * down;
+}
+
+/** What the room is showing, and the size it was when it turned to the list; null before it did. */
+export type Fit = { readonly view: RoomView; readonly width: number | null; readonly height: number | null };
+
+/**
+ * **What the room shows for `need` rounds at `width` by `height`**, where it showed `before`. Cards
+ * that no longer all fit turn to the list at once; the list turns back only once they fit and the room
+ * is `BACK` wider or taller than where it turned.
+ */
+export function fitOf(before: Fit | null, width: number, height: number, need: number): Fit {
+  const fits = cardsFit(width, height) >= need;
+  if (before === null) return { view: fits ? "cards" : "list", width: null, height: null };
+  if (before.view === "cards") return fits ? before : { view: "list", width, height };
+  if (!fits) return before;
+  const grown =
+    before.width === null || before.height === null || width >= before.width + BACK || height >= before.height + BACK;
+  return grown ? { view: "cards", width: null, height: null } : before;
+}
+
+/** What the room `room` shows for `need` rounds, measured again as it changes size. */
+function useFit(room: RefObject<HTMLDivElement | null>, need: number): RoomView {
+  const [fit, setFit] = useState<Fit | null>(null);
+  useLayoutEffect(() => {
+    const at = room.current;
+    if (at === null) return;
+    const measure = () => {
+      const width = at.clientWidth, height = at.clientHeight;
+      // A room not laid out yet — a pane on a page not shown — says nothing of what fits.
+      if (width === 0 || height === 0) return;
+      setFit((before) => fitOf(before, width, height, need));
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(measure);
+    watch.observe(at);
+    return () => watch.disconnect();
+  }, [room, need]);
+  return fit?.view ?? "cards";
 }
 
 /** The clock, read again each second while `ticking`. */
@@ -188,7 +264,7 @@ function strokeOf(a: Box, b: Box): { path: string; head: string } {
 }
 
 /** The lines between the cards in `room`, measured again as the room changes size. */
-function useStrokes(room: RefObject<HTMLDivElement | null>, hands: readonly Hand[]): Stroke[] {
+function useStrokes(room: RefObject<HTMLDivElement | null>, hands: readonly Hand[], view: RoomView): Stroke[] {
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   useLayoutEffect(() => {
     const at = room.current;
@@ -213,12 +289,14 @@ function useStrokes(room: RefObject<HTMLDivElement | null>, hands: readonly Hand
     const watch = new ResizeObserver(measure);
     watch.observe(at);
     return () => watch.disconnect();
-  }, [room, hands]);
+  }, [room, hands, view]);
   return strokes;
 }
 
-/** One role's card. */
-function Card({ card, run, now, away }: { card: RoleCard; run: Say; now: number; away: readonly Hand[] }) {
+/** One role's card, pressed to read its round's terminal where `onOpen` is given. */
+function Card({ card, run, now, away, onOpen }: {
+  card: RoleCard; run: Say; now: number; away: readonly Hand[]; onOpen?: () => void;
+}) {
   // The time is the round's, counted while it is under way: a paused or failed round has stopped at
   // a moment the pane does not know.
   const since = run.round?.startedAt ?? null;
@@ -226,6 +304,15 @@ function Card({ card, run, now, away }: { card: RoleCard; run: Say; now: number;
   const chip = chipOf(card, run);
   return (
     <li className="runroles__card" data-role={card.role ?? undefined} data-state={card.state}>
+      {/* The whole card is the press, laid over it so that what the card says stays read as text. */}
+      {onOpen !== undefined && (
+        <button
+          type="button"
+          className="runroles__open"
+          aria-label={tf("auto.run.roundTerminal", { name: card.name })}
+          onClick={onOpen}
+        />
+      )}
       <span className="runroles__top">
         <Icon name={card.icon} />
         <span className="runroles__name">{card.name}</span>
@@ -252,31 +339,97 @@ function Card({ card, run, now, away }: { card: RoleCard; run: Say; now: number;
   );
 }
 
+/** One round as a row of the list: what its card says, on one line, with no dot and no line drawn —
+ *  pressed, like the card, to read its round's terminal where `onOpen` is given. */
+function Row({ card, run, now, away, onOpen }: {
+  card: RoleCard; run: Say; now: number; away: readonly Hand[]; onOpen?: () => void;
+}) {
+  const since = run.round?.startedAt ?? null;
+  const ran = since !== null && (card.state === "running" || card.state === "asks") ? clockOf(now - since) : null;
+  const chip = chipOf(card, run);
+  return (
+    <li className="runroles__row" data-role={card.role ?? undefined} data-state={card.state}>
+      {onOpen !== undefined && (
+        <button
+          type="button"
+          className="runroles__open"
+          aria-label={tf("auto.run.roundTerminal", { name: card.name })}
+          onClick={onOpen}
+        />
+      )}
+      <Icon name={card.icon} />
+      <span className="runroles__rowname">
+        <span className="runroles__name">{card.name}</span>
+        {away.map((hand) => (
+          <span key={`${hand.to}-${hand.filed}`} className="runroles__to">
+            → {hand.name}
+          </span>
+        ))}
+      </span>
+      <span className="runroles__rowbody">
+        {run.task !== null && (
+          <span className="runroles__task" title={`${run.task.ref} ${run.task.title}`}>
+            {run.task.ref} {run.task.title}
+          </span>
+        )}
+        {run.step !== "" && <span className="runroles__step">{run.step}</span>}
+      </span>
+      <span className="runroles__rowend">
+        {chip !== null && <span className="runroles__chip" data-state={card.state}>{chip}</span>}
+        {away.map((hand) => (
+          <span key={`${hand.to}-${hand.filed}`} className="runroles__hand" data-to={hand.to}>
+            → {hand.name}
+          </span>
+        ))}
+        {ran !== null && <span className="runroles__time">{tf("face.elapsed", { time: ran })}</span>}
+      </span>
+    </li>
+  );
+}
+
 /**
  * Drawn again only when what it reads of the run changes: the run's words are built afresh on each
  * draw of the workspace, and drawing every pane's cards again on each of those would slow the typing
  * in the panes around it.
  */
 export const RunRoles = memo(
-  function RunRoles({ run, project }: { run: Say; project: number }) {
+  function RunRoles({ run, project, pin = "auto", onOpen }: {
+    run: Say; project: number; pin?: ViewPin; onOpen?: () => void;
+  }) {
     const roles = useProjectRoles(project);
     const { cards, idle } = useMemo(() => roleCards(run, roles), [run, roles]);
     const filed = useMemo(() => filedLine(cards, run, roles), [cards, run, roles]);
     const hands = useMemo(() => handsOf(cards, run, roles), [cards, run, roles]);
+    const room = useRef<HTMLDivElement>(null);
+    const fit = useFit(room, cards.length);
+    const view = pin === "auto" ? fit : pin;
     const desk = useRef<HTMLDivElement>(null);
-    const strokes = useStrokes(desk, hands);
+    const strokes = useStrokes(desk, hands, view);
     const counting = (run.round?.startedAt ?? null) !== null;
     const now = useNow(counting && cards.some((card) => card.state === "running" || card.state === "asks"));
     return (
-      <div className="runroles" aria-label={t("auto.run.faceRoles")} role="region">
-        <div className="runroles__room">
+      <div className="runroles" data-view={view} aria-label={t("auto.run.faceRoles")} role="region">
+        <div className="runroles__room" ref={room}>
           {cards.length === 0 ? (
             <p className="runroles__none">{t("auto.run.roles.none")}</p>
+          ) : view === "list" ? (
+            <ul className="runroles__rows">
+              {cards.map((card) => (
+                <Row key={card.role ?? "run"} card={card} run={run} now={now} away={handsAway(card.role, hands, [])} onOpen={onOpen} />
+              ))}
+            </ul>
           ) : (
             <div className="runroles__desk" ref={desk}>
               <ul className="runroles__cards">
                 {cards.map((card) => (
-                  <Card key={card.role ?? "run"} card={card} run={run} now={now} away={handsAway(card.role, hands, cards)} />
+                  <Card
+                    key={card.role ?? "run"}
+                    card={card}
+                    run={run}
+                    now={now}
+                    away={handsAway(card.role, hands, cards)}
+                    onOpen={onOpen}
+                  />
                 ))}
               </ul>
               {strokes.length > 0 && (
@@ -312,8 +465,12 @@ export const RunRoles = memo(
       </div>
     );
   },
+  // `onOpen` is made afresh on each draw and does the same thing on each, so it is not compared — only
+  // whether there is one.
   (before, after) =>
     before.project === after.project &&
+    before.pin === after.pin &&
+    (before.onOpen === undefined) === (after.onOpen === undefined) &&
     before.run.run === after.run.run &&
     before.run.automation === after.run.automation &&
     before.run.automationId === after.run.automationId &&
@@ -330,3 +487,121 @@ export const RunRoles = memo(
     before.run.state?.word === after.run.state?.word &&
     (before.run.state?.waiting === true) === (after.run.state?.waiting === true),
 );
+
+/** How a round stands, as the dot beside its icon on the bar over a terminal says it. */
+export type RoundDot = RoundState | "waiting";
+
+/** How the run `run` stands, as a live run's row says it — it does not say whether its step asks. */
+function dotOfCard(run: AutomationRunCardDto): RoundDot {
+  if (run.status === "failed") return "failed";
+  if (run.status === "paused") return "paused";
+  return run.waiting || run.waitsForRoom ? "waiting" : "running";
+}
+
+/** How the run whose pane this is stands, read off its own words, which do say whether its step asks. */
+function dotOfSay(run: Say): RoundDot {
+  const status = run.state?.status ?? "running";
+  if (status === "failed") return "failed";
+  if (status === "paused") return "paused";
+  if (run.state?.waiting === true) return "waiting";
+  return run.interactive ? "asks" : "running";
+}
+
+/** One round on the bar over a terminal. */
+export type Round = {
+  readonly run: number;
+  readonly name: string;
+  readonly icon: IconName;
+  readonly dot: RoundDot;
+  /** Which of the rounds this is, where several are under one role: the task it works, by
+   *  reference, or the run's number where it has none. */
+  readonly which: string;
+};
+
+/**
+ * **The rounds on the bar over the run `run`'s terminal**: the live runs `live` of the same
+ * automation, this one among them, in the order they were started. Each is drawn by the role its round
+ * is under, or by the automation where it has none. Empty where this run is the only one — a bar of
+ * one round has nowhere else to go.
+ */
+export function roundsOf(run: Say, live: readonly AutomationRunCardDto[], roles: readonly TaskRoleDto[]): Round[] {
+  const byRole = (role: number | null | undefined, otherwise: string) => {
+    const one = role === null || role === undefined ? undefined : roles.find((each) => each.id === role);
+    return one === undefined ? { name: otherwise, icon: "robot" as IconName } : { name: one.name, icon: roleIcon(one) };
+  };
+  const others = live.filter((one) => one.automation === run.automationId && one.run !== run.run);
+  if (others.length === 0) return [];
+  const which = (number: number, task: { readonly ref: string } | null | undefined) => task?.ref ?? `#${number}`;
+  const own: Round = {
+    run: run.run, ...byRole(run.round?.role, run.automation), dot: dotOfSay(run), which: which(run.run, run.task),
+  };
+  return [
+    own,
+    ...others.map((one) => ({
+      run: one.run, ...byRole(one.role, one.automationName), dot: dotOfCard(one), which: which(one.run, one.task),
+    })),
+  ].sort((a, b) => a.run - b.run);
+}
+
+/**
+ * **The bar over a run's terminal**: the way back to the roles, whose round this is and what step it
+ * is on, the other rounds of the same automation, and — where a step that may wait for a person turned
+ * the pane (`byStep`) — the line that says so.
+ */
+export function RunTermBar({ run, project, byStep, onBack, onGoTo }: {
+  run: Say;
+  project: number;
+  byStep: boolean;
+  onBack: () => void;
+  /** Go to the run `run`'s terminal — this one's, or another round's in its own pane. */
+  onGoTo: (run: number) => void;
+}) {
+  const roles = useProjectRoles(project);
+  const live = useLiveRuns();
+  const rounds = useMemo(() => roundsOf(run, live, roles), [run, live, roles]);
+  const own = run.round?.role ?? null;
+  const role = own === null ? undefined : roles.find((one) => one.id === own);
+  const name = role?.name ?? run.automation;
+  return (
+    <div className="runterm">
+      <div className="runterm__head">
+        <button type="button" className="runterm__back" onClick={onBack}>
+          {t("auto.run.backToRoles")}
+        </button>
+        <Icon name={role === undefined ? "robot" : roleIcon(role)} />
+        <span className="runterm__body">
+          <span className="runterm__task">
+            {run.task === null ? name : `${name} ・ ${run.task.ref} ${run.task.title}`}
+          </span>
+          {run.step !== "" && <span className="runterm__step">{run.step}</span>}
+        </span>
+      </div>
+      {rounds.length > 0 && (
+        <div className="runterm__strip">
+          <span className="runterm__others">{t("auto.run.otherRounds")}</span>
+          {rounds.map((round) => (
+            <button
+              key={round.run}
+              type="button"
+              className="runterm__round"
+              data-run={round.run}
+              data-state={round.dot}
+              aria-current={round.run === run.run ? "true" : undefined}
+              title={`${round.name} ・ ${round.which}`}
+              aria-label={tf("auto.run.roundTerminalOf", { name: round.name, which: round.which })}
+              onClick={() => onGoTo(round.run)}
+            >
+              <Icon name={round.icon} />
+              <span className="runterm__dot" />
+            </button>
+          ))}
+        </div>
+      )}
+      {byStep && (
+        <p className="runterm__notice" role="status">
+          {tf("auto.run.turnedForStep", { role: name })}
+        </p>
+      )}
+    </div>
+  );
+}

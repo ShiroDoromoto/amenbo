@@ -10,10 +10,10 @@ app/src-tauri/Cargo.lock. Do not edit it by hand; run the script instead.
 Sources compiled into the binaries from inside a Rust crate
 ==============================================================================
 
-SQLCipher — BSD-3-Clause, vendored by the libsqlite3-sys crate
+SQLCipher — BSD-3-Clause, vendored by the sqlcipher-src crate
 ------------------------------------------------------------------------------
 
-Copyright (c) 2008-2020 Zetetic LLC
+Copyright (c) 2025, ZETETIC LLC
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-SQLite (inside the SQLCipher amalgamation) — blessing (public domain), vendored by the libsqlite3-sys crate
+SQLite (inside the SQLCipher amalgamation) — blessing (public domain), vendored by the sqlcipher-src crate
 ------------------------------------------------------------------------------
 
 The author disclaims copyright to this source code.  In place of
@@ -47,6 +47,39 @@ a legal notice, here is a blessing:
    May you do good and not evil.
    May you find forgiveness for yourself and forgive others.
    May you share freely, never taking more than you give.
+
+LibTomCrypt — public domain or WTFPL, vendored by the sqlcipher-src crate
+------------------------------------------------------------------------------
+
+LibTomCrypt is licensed under DUAL licensing terms.
+
+Choose and use the license of your needs.
+
+[LICENSE #1]
+
+LibTomCrypt is public domain.  As should all quality software be.
+
+Tom St Denis
+
+[/LICENSE #1]
+
+[LICENSE #2]
+
+            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+                    Version 2, December 2004
+
+ Copyright (C) 2004 Sam Hocevar <sam@hocevar.net>
+
+ Everyone is permitted to copy and distribute verbatim or modified
+ copies of this license document, and changing it is allowed as long
+ as the name is changed.
+
+            DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+   TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+
+  0. You just DO WHAT THE FUCK YOU WANT TO.
+
+[/LICENSE #2]
 
 OpenSSL — Apache-2.0, vendored by the openssl-src crate
 ------------------------------------------------------------------------------
@@ -623,6 +656,7 @@ socket2 — MIT OR Apache-2.0
 softbuffer — MIT OR Apache-2.0
 soup3 — MIT
 soup3-sys — MIT
+sqlcipher-src — MIT AND BSD-3-Clause AND blessing AND WTFPL
 sqlite-wasm-rs — MIT
 stable_deref_trait — MIT OR Apache-2.0
 static_vcruntime — MIT OR Apache-2.0 OR Zlib
@@ -16009,6 +16043,30 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
 THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Used by: sqlcipher-src
+------------------------------------------------------------------------------
+MIT License
+
+Copyright (c) 2026 Luca Cappelletti
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.

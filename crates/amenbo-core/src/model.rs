@@ -1927,9 +1927,17 @@ pub const MIN_TRIGGER_EVERY_MINUTES: u32 = 1;
 /// like any other.
 ///
 /// A time it answers no leaves nothing behind — no task, no run, no record — so the only thing it
-/// keeps is `next_at`, which moves on only when a task is filed.
+/// keeps is `next_at`, which moves on only when a task is filed. A time it files one leaves a line in
+/// that task's timeline naming it by `name` ([`crate::activity_log::event::task_filed_by_trigger`]).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AutomationTrigger {
+    /// What it is called, as the timeline of a task it filed names it. May be blank.
+    #[serde(default)]
+    pub name: String,
+    /// The role the task it files is worked under — one of the same automation's own
+    /// ([`AutomationRole`]) — or `None` for none, which leaves the task to be worked in a session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role_id: Option<i64>,
     pub when: TriggerWhen,
     /// The tasks it looks at before filing one, on top of `when` — `None` where it looks at none. A
     /// [`TriggerWhen::Tasks`] always has one.

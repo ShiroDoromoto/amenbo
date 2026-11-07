@@ -39,7 +39,8 @@ import { PaneModel } from "./PaneModel";
 import { PaneSize } from "./PaneSize";
 import { RunActs } from "./RunActs";
 import { BuiltinCard } from "./BuiltinCard";
-import { RunRoles } from "./RunPicture";
+import { RunRoles, RunTermBar, type ViewPin } from "./RunPicture";
+import { faceOf, keepFace, onTerminalShown, showTerminalOf, type Face } from "./runFaces";
 import { RunOverCard, RunPausedCard } from "./RunBody";
 import { useBoxNumber } from "../screens/boxNumber";
 import type { BuiltinRun } from "../talk/automationStep";
@@ -86,17 +87,11 @@ async function handOver(session: string, paths: string[]) {
   }
 }
 
-/** What a run's pane shows under its row: its roles, or the terminal (`./RunPicture`). */
-type Face = "roles" | "terminal";
-
 /**
- * **The face each run's pane was last turned to**, by run. A pane comes down when it is carried onto
- * another page or its project is left, and goes up again for the same run, which is the pane still, and
- * should come back as the reader left it. A run not in here opens on its roles — every run does, the
- * first time — and nothing is kept for the app as a whole: one reader turning one pane to its terminal
- * says nothing about the next run.
+ * **What each run's roles are held to** — cards, the list, or `auto` for the room's size to decide
+ * (`./RunPicture`) — by run, kept the way the face is. A run not in here is on `auto`.
  */
-const faces = new Map<number, Face>();
+const pins = new Map<number, ViewPin>();
 
 /**
  * One slot of the workspace: a frame, and the terminal in it when there is one.
@@ -201,7 +196,7 @@ function Pane({
    *  A refusal is said on the toast — the run may have ended a moment before the press. */
   const [pressing, setPressing] = useState(false);
   // Which face a run's pane is turned to. An ordinary pane has the terminal and nothing else.
-  const [face, setFace] = useState<Face>(() => (run === null ? "terminal" : faces.get(run.run) ?? "roles"));
+  const [face, setFace] = useState<Face>(() => (run === null ? "terminal" : faceOf(run.run) ?? "roles"));
   const runId = run?.run ?? null;
   // **A step that may wait for a person turns the pane to its terminal** (`AMB-T-5776`), so a question
   // it asks is not left behind the roles nobody reads it in. Whether the agent is waiting is not
@@ -209,17 +204,43 @@ function Pane({
   // the step's, not the reader's: it is not kept, and once the step is over the pane goes back to the
   // face the reader last chose — the terminal, where that is what they chose. A press while the step
   // runs is the reader's choice, and is kept like any other.
+  //
+  // **Where the step turned it, the pane says so** in one line over the terminal: a pane that changed
+  // under a reader with nothing to say why is one they cannot trust to stay put. The line is the
+  // step's turn only — a pane the reader had on its terminal already was not turned.
   const asks = run !== null && run.interactive && (run.state === null || run.state.status === "running");
   const stepAt = run === null ? null : `${run.placement ?? ""}:${run.step}`;
+  const [byStep, setByStep] = useState(false);
   useEffect(() => {
     if (runId === null) return;
-    setFace(asks ? "terminal" : faces.get(runId) ?? "roles");
+    const kept = faceOf(runId);
+    setFace(asks ? "terminal" : kept ?? "roles");
+    setByStep(asks && kept !== "terminal");
   }, [runId, asks, stepAt]);
   const turn = (to: Face) => {
-    if (runId !== null) faces.set(runId, to);
+    if (runId !== null) keepFace(runId, to);
     setFace(to);
+    setByStep(false);
   };
+  // A press elsewhere turning this run to its terminal (`./runFaces`): a round on the bar over another
+  // run's terminal, or the task this run's failed round was filed as.
+  useEffect(() => {
+    if (runId === null) return;
+    return onTerminalShown((one) => {
+      if (one !== runId) return;
+      setFace("terminal");
+      setByStep(false);
+    });
+  }, [runId]);
   const onRoles = run !== null && face === "roles";
+  const [pin, setPin] = useState<ViewPin>(() => (run === null ? "auto" : pins.get(run.run) ?? "auto"));
+  useEffect(() => {
+    if (runId !== null) setPin(pins.get(runId) ?? "auto");
+  }, [runId]);
+  const hold = (to: ViewPin) => {
+    if (runId !== null) pins.set(runId, to);
+    setPin(to);
+  };
   const press = async (act: () => Promise<unknown>) => {
     setPressing(true);
     try {
@@ -841,6 +862,22 @@ function Pane({
               row says how it ended. **They are marks and not words** (`AMB-T-5529`), standing straight
               after the state they act on, so the row's words are left to the automation's name; each
               is named for a reader who cannot see it. Cancelling keeps the pane. */}
+          {/* **Cards, the list, or the room's size to decide** (`./RunPicture`), while the roles are up. */}
+          {onRoles && (
+            <span className="slot__views" role="group" aria-label={t("auto.run.views")}>
+              {(["auto", "cards", "list"] as const).map((one) => (
+                <button
+                  key={one}
+                  type="button"
+                  className={`slot__view${pin === one ? " slot__view--on" : ""}`}
+                  aria-pressed={pin === one}
+                  onClick={() => hold(one)}
+                >
+                  {t(one === "auto" ? "auto.run.viewAuto" : one === "cards" ? "auto.run.viewCards" : "auto.run.viewList")}
+                </button>
+              ))}
+            </span>
+          )}
           {/* **The roles or the terminal** (`./RunPicture`), on a run's pane only. Two presses, one
               pressed, rather than one that flips: what the reader needs to see is which face is up. */}
           {run !== null && (
@@ -1035,7 +1072,29 @@ function Pane({
             away would be ending what draws it. The roles are drawn over it, so it keeps its size when
             the face is turned (`../talk/terminal`). */}
         <div className="slot__body">
-        {run !== null && face === "roles" && <RunRoles run={run} project={project} />}
+        {/* **The bar over a run's terminal** (`./RunPicture`): the way back to the roles, whose round
+            this is, the other rounds of the same automation and, where a step turned the pane, why.
+            It stands in the layout under the roles as the terminal does, so turning the face does not
+            refit the terminal. */}
+        {run !== null && (
+          <RunTermBar
+            run={run}
+            project={project}
+            byStep={byStep && face === "terminal"}
+            onBack={() => turn("roles")}
+            onGoTo={(other) => {
+              if (other === run.run) {
+                turn("terminal");
+                return;
+              }
+              showTerminalOf(other);
+              on.current.onGoToRun?.(other);
+            }}
+          />
+        )}
+        {run !== null && face === "roles" && (
+          <RunRoles run={run} project={project} pin={pin} onOpen={() => turn("terminal")} />
+        )}
         {/* **A run over, with no terminal up, says how it ended** (`./RunBody`) — in place of the card
             of a built-in it was stopped on too, which would otherwise go on saying it was at work. */}
         {/* **A script's tail, kept on the run** (`tail`), in place of either card below: it is what the
@@ -1294,13 +1353,16 @@ type PaneProps = {
   /** The press on this pane's band, said as the box opens or folds away. What the *next* pane will
    *  start as is a separate answer and is written down here (`../core/composeStartsOpen`). */
   onFold: (frame: string, open: boolean) => void;
+  /** Go to the pane the run `run` is drawn in — a round pressed on the bar over a run's terminal.
+   *  Left out where this is drawn outside the workspace. */
+  onGoToRun?: (run: number) => void;
 };
 
 /** The functions among {@link PaneProps}: what the face wants done with what happens in the pane. */
 type Handlers = Pick<
   PaneProps,
   | "onOpened" | "onSaid" | "onPath" | "onClosed" | "onDrop" | "onName" | "onFocus" | "onRow" | "onWrite" | "onFold"
-  | "onGrab" | "onStretch" | "onSize"
+  | "onGrab" | "onStretch" | "onSize" | "onGoToRun"
 >;
 
 /** {@link Pane}, drawn again only when something it draws has changed ({@link samePane}). */
@@ -1323,12 +1385,15 @@ const DrawnPane = memo(Pane, samePane);
 export function TerminalPane(props: PaneProps) {
   const {
     onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite, onFold, onGrab, onStretch, onSize,
+    onGoToRun,
   } = props;
   const on = useRef<Handlers>({
     onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite, onFold, onGrab, onStretch, onSize,
+    onGoToRun,
   });
   on.current = {
     onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite, onFold, onGrab, onStretch, onSize,
+    onGoToRun,
   };
   return <DrawnPane {...props} on={on} />;
 }

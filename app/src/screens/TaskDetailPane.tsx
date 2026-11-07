@@ -28,6 +28,8 @@ import { ErrorNote } from "../components/ErrorNote";
 import { RoleField, ROLE_NONE } from "../components/RoleField";
 import { useProjectRoles } from "../core/projectRoles";
 import { Icon } from "../components/Icon";
+import { useLiveRuns } from "../core/automations";
+import { showTerminalOf } from "../shell/runFaces";
 
 // The placement to display. The Tauri DTO already carries task.placement (name included); the mock
 // fallback builds one by resolving projectId against snapshot.projects.
@@ -58,7 +60,7 @@ const COMMENT_PAGE = 20; // Bounded memory: how many comments render initially (
  * produces it.
  */
 export function TaskDetailPane({
-  taskId, onDeleted, onDirtyChange, onSelectDecision, onGoToPane, focusCommentAt, editCommentAt,
+  taskId, onDeleted, onDirtyChange, onSelectDecision, onGoToPane, onGoToRun, focusCommentAt, editCommentAt,
 }: {
   taskId: number;
   onDeleted?: () => void;
@@ -68,6 +70,9 @@ export function TaskDetailPane({
   /** Go to the pane this task was made in, opening it again where it is gone (`AMB-D-897`). Absent
    *  outside the shell, where there is no workspace to go to. */
   onGoToPane?: (project: number, pane: string) => void;
+  /** Go to the pane a run is drawn in — the run whose failed round this task was filed as. Absent
+   *  outside the shell. */
+  onGoToRun?: (project: number, run: number) => void;
   /** Nonce that focuses the comment box when opened via the reply arrow in the activity feed. Every increment re-focuses, so you can reply to the same task again and again. undefined = an ordinary selection. */
   focusCommentAt?: number;
   /** The comment to open in edit mode when opened via the pencil in the activity feed. The nonce lets the same comment be re-opened; if it is an old comment, the render window (commentLimit) widens to reach its row. */
@@ -93,6 +98,11 @@ export function TaskDetailPane({
   const [dimValues, setDimValues] = useState<Record<number, number[]>>({});
   const task = useTask(taskId);
   const madeIn = useTaskMadeIn(taskId);
+  // **The run whose failed round this task was filed as**, while it is still on the "running" tab
+  // (`../shell/RunPicture`). Its pane keeps the terminal the round fell in, which is what a person
+  // reading the failure wants to read next.
+  const liveRuns = useLiveRuns();
+  const fellIn = liveRuns.find((one) => one.status === "failed" && one.incident?.id === taskId) ?? null;
   const commentCount = task?.comments ?? 0; // Grows on a post, which is what triggers the refetch
   useEffect(() => {
     if (!inTauri()) { setTaskActivity(null); return; }
@@ -534,6 +544,25 @@ export function TaskDetailPane({
           {inTauri() && <Commits taskId={taskId} />}
 
           <div className="detail__sep" />
+
+          {fellIn !== null && onGoToRun && (
+            <>
+              <div>
+                <div className="detail__section-h">{t("auto.run.failedRound")}</div>
+                <button
+                  className="btn"
+                  onClick={() => {
+                    showTerminalOf(fellIn.run);
+                    onGoToRun(fellIn.project, fellIn.run);
+                  }}
+                >
+                  <Icon name="keyboard" />
+                  <span>{tf("auto.run.openFailedRound", { automation: fellIn.automationName })}</span>
+                </button>
+              </div>
+              <div className="detail__sep" />
+            </>
+          )}
 
           {madeIn && onGoToPane && task.projectId !== null && (
             <>

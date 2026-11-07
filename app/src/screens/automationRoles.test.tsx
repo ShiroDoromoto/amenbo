@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-// The roles of an automation on its build screen: the list down the left and the head of the picked
-// one. The write doors are stubbed; every row, field and press runs for real.
+// The roles of an automation on its build screen: the list down the left, the head of the picked
+// one, and its default agent and model. The write doors are stubbed; every row, field and press runs
+// for real.
 //
 // What these guard: **each row counts the steps its role's round reaches**, over every placement it
 // is on; **the picked row is marked and a press picks another**; **"+ Add a role" writes one named
@@ -35,7 +36,7 @@ vi.mock("../core/boundFolders", () => ({
 vi.mock("../core/ipc", () => ({ invoke: () => Promise.resolve(null) }));
 
 import { t, tf } from "../core/i18n";
-import { AutomationRoleHead, AutomationRoleList, roleStepCount } from "./AutomationRoles";
+import { AutomationRoleHead, AutomationRoleList, AutomationRoleWho, roleStepCount } from "./AutomationRoles";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -160,8 +161,6 @@ describe("the picked role's head", () => {
   const head = (role: AutomationRoleDto, onRemoved = () => undefined) =>
     draw(createElement(AutomationRoleHead, { automation: detail(), role, onRemoved }));
   const nameBox = () => container.querySelector<HTMLInputElement>(".autorole__name")!;
-  const agentOf = (id: number) => container.querySelector<HTMLSelectElement>(`#role-agent-${id}`)!;
-  const modelOf = (id: number) => container.querySelector<HTMLSelectElement>(`#role-model-${id}`)!;
 
   async function typeName(value: string) {
     await act(async () => {
@@ -203,9 +202,16 @@ describe("the picked role's head", () => {
     expect(hoisted.remove).toHaveBeenCalledWith(2);
     expect(removed).toHaveBeenCalled();
   });
+});
+
+describe("the picked role's agent and model", () => {
+  const who = (role: AutomationRoleDto) => draw(createElement(AutomationRoleWho, { automation: detail(), role }));
+  const agentOf = (id: number) => container.querySelector<HTMLSelectElement>(`#role-agent-${id}`)!;
+  const modelOf = (id: number) => container.querySelector<HTMLSelectElement>(`#role-model-${id}`)!;
 
   it("chooses the default agent and model the way a step's are", async () => {
-    await head(alice);
+    await who(alice);
+    expect(container.textContent).toContain(t("auto.build.roleWho"));
     expect(container.textContent).toContain(t("auto.build.roleAgent"));
     expect(agentOf(1).value).toBe("claude-code");
     expect(modelOf(1).value).toBe("opus");
@@ -216,7 +222,7 @@ describe("the picked role's head", () => {
   });
 
   it("offers no model while no agent is chosen", async () => {
-    await head(bob);
+    await who(bob);
     expect(agentOf(2).value).toBe("");
     expect(modelOf(2).disabled).toBe(true);
   });

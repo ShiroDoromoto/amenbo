@@ -65,7 +65,7 @@ use crate::commands::{open_store_read, with_store_mut};
 use crate::dto::{
     AutomationActionCardDto, AutomationActionDetailDto, AutomationBuiltinDto,
     AutomationBuiltinExitDto, AutomationBuiltinRunDto, AutomationCardDto, AutomationCfgDto,
-    AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationHeldBackDto,
+    AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationFailuresToDto, AutomationHeldBackDto,
     AutomationHeldByRecordDto, AutomationHeldByValueDto, AutomationLaunchAsksDto,
     AutomationCarrierDto, AutomationLaunchAxisDto, AutomationLaunchBlockDto,
     AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto,
@@ -168,11 +168,15 @@ pub fn automation_import(project_id: i64, src: String) -> Result<WriteAck, CmdEr
     Ok(WriteAck::new(&["automations", "automationActions"]).automation(made.id))
 }
 
-/// **Rename an automation, rewrite its notes, put it out of the way, or set how many of its runs may
-/// be going at once.** Only what is `Some` is written.
+/// **Rename an automation, rewrite its notes, put it out of the way, set how many of its runs may
+/// be going at once, or choose who a failed round is filed to.** Only what is `Some` is written.
 ///
 /// `max_concurrent_runs` sets the most runs at once at that number, from 1 up to
 /// [`amenbo_core::model::MAX_CONCURRENT_RUNS_LIMIT`]. There is no lifting it.
+///
+/// `failures_to` chooses a person or a role of this automation; core refuses a role of another one.
+/// There is no taking it back to nobody from here: a launch is refused without one, so the screen only
+/// ever moves it from one to another.
 ///
 /// Archiving takes nothing away, and like every rewrite it goes through while a run of the automation
 /// is going — the run keeps the copy it started with ([`amenbo_core::ops::automation::update`]). It
@@ -189,9 +193,11 @@ pub fn automation_edit(
     notes: Option<String>,
     archived: Option<bool>,
     max_concurrent_runs: Option<u32>,
+    failures_to: Option<AutomationFailuresToDto>,
 ) -> Result<WriteAck, CmdError> {
+    let failures_to = failures_to.map(|to| Some(to.into()));
     with_store_mut(|store| {
-        store.automation_update(id, name.as_deref(), notes.as_deref(), archived, max_concurrent_runs, None)?;
+        store.automation_update(id, name.as_deref(), notes.as_deref(), archived, max_concurrent_runs, failures_to)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations"]))
@@ -2961,6 +2967,7 @@ fn detail_dto(
         archived: a.archived,
         max_concurrent_runs: a.max_concurrent_runs,
         trigger: a.trigger.map(Into::into),
+        failures_to: a.failures_to.map(Into::into),
         edges: view.edges.into_iter().map(|e| edge_dto(e, &names)).collect(),
         wires,
         roles: view.roles.into_iter().map(role_dto).collect(),
@@ -3334,6 +3341,21 @@ mod tests {
             json(AutomationTrigger { task: TriggerTask::File { path: "/tmp/next.md".into() }, ..base })["task"],
             serde_json::json!({ "kind": "file", "path": "/tmp/next.md" }),
         );
+    }
+
+    /// **Who a failed round is filed to goes out and comes back in one form**: `{ kind: "human" }` or
+    /// `{ kind: "role", roleId }`, read off core's and read back into it unchanged.
+    #[test]
+    fn who_failures_are_filed_to_reads_and_writes_in_one_form() {
+        use amenbo_core::model::FailuresTo;
+        for (to, wire) in [
+            (FailuresTo::Human, serde_json::json!({ "kind": "human" })),
+            (FailuresTo::Role { role_id: 7 }, serde_json::json!({ "kind": "role", "roleId": 7 })),
+        ] {
+            assert_eq!(serde_json::to_value(AutomationFailuresToDto::from(to)).expect("writes"), wire);
+            let back = serde_json::from_value::<AutomationFailuresToDto>(wire).expect("reads");
+            assert_eq!(FailuresTo::from(back), to);
+        }
     }
 
     /// **A trigger as a screen writes it reads into core's** ([`amenbo_core::ops::automation::NewTrigger`]):

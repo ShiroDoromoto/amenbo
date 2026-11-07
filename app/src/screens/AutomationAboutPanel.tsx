@@ -1,5 +1,7 @@
-// What the automation itself holds — its name, its notes, how many of its runs may go at once,
-// whether it is kept out of the way, and the one press that takes the whole definition away.
+// What the automation itself holds — its name, its notes, whether it is kept out of the way, and the
+// one press that takes the whole definition away. How many of its runs may go at once, who failures
+// are filed to and its trigger stand down the build screen's right instead (`./AutomationSettings`),
+// in view without opening anything.
 //
 // **It opens in the build screen's panel, from "Edit" on the head** (`./AutomationBuildScreen`). What a
 // reader opens a definition for is the picture and the spot they are about to fix; everything here is
@@ -26,18 +28,13 @@
 // running (`amenbo_core::ops::automation::update`) — the row goes to the fold at the end of the list —
 // so it saves the way the name does, and a switch says by its shape that it turns back.
 //
-// **The most runs at once is a number, always there.** A launch past it is refused
-// (`amenbo_core::ops::automation_run`). It is 1 until somebody changes it and there is no "no limit":
-// it runs from 1 to `MAX_CONCURRENT_RUNS`. A number outside that is not written: the field goes back
-// to the stored one.
-//
 // **Deleting is the opposite, so it goes through the machine's own confirm** and names what goes
 // with it. Core refuses it while a run stands behind it, saying how many
 // (`amenbo_core::ops::automation::delete`); that sentence is drawn rather than re-asked here, so the
 // screen and the store cannot come to disagree about when a definition can go.
 import { useEffect, useState } from "react";
 import { Switch } from "./automationParts";
-import { deleteAutomation, editAutomation, MAX_CONCURRENT_RUNS } from "../core/automations";
+import { deleteAutomation, editAutomation } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
 import { asTyped } from "../core/keys";
 import { errText, t } from "../core/i18n";
@@ -104,8 +101,6 @@ export function AutomationAboutPanel({
   onDeleted: () => void;
 }) {
   const [notes, setNotes] = useDraft(automation.notes);
-  const limit = automation.maxConcurrentRuns;
-  const [most, setMost] = useDraft(String(limit));
   const [refused, setRefused] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const cli = useCliCommandName();
@@ -123,15 +118,6 @@ export function AutomationAboutPanel({
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
     } catch { /* where the clipboard is unavailable, quietly skip */ }
-  };
-
-  const commitMost = () => {
-    const next = Number(most);
-    if (!Number.isInteger(next) || next < 1 || next > MAX_CONCURRENT_RUNS) {
-      setMost(String(limit));
-      return;
-    }
-    if (next !== limit) void run(editAutomation(automation.id, { maxConcurrentRuns: next }));
   };
 
   // Physical, and it takes every step with it, so the confirm comes before the write and core's
@@ -175,19 +161,6 @@ export function AutomationAboutPanel({
           <span className="autoabout__copied" role="status">{copied ? t("auto.about.copied") : ""}</span>
         </div>
       )}
-
-      <label className="autostep__field">
-        <span className="autostep__label">{t("auto.about.mostRuns")}</span>
-        <input
-          type="number"
-          min={1}
-          max={MAX_CONCURRENT_RUNS}
-          step={1}
-          value={most}
-          onChange={(e) => setMost(e.target.value)}
-          onBlur={commitMost}
-        />
-      </label>
 
       <label className="switchrow">
         <span>{t("auto.about.archive")}</span>

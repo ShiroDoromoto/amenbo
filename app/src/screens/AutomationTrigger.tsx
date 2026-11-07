@@ -1,6 +1,7 @@
 // **An automation's trigger, written on a dialog of its own** — what files a task without a person and
-// starts a run of this automation with it. The build screen's list of triggers opens it; the dialog
-// itself stands alone, given the automation and told when it is done.
+// starts a run of this automation with it. The build screen's right column opens it
+// (`./AutomationSettings`); the dialog itself stands alone, given the automation and told when it is
+// done.
 //
 // **It asks three things, numbered as the reader decides them**: ① whether to file a task now (every so
 // many minutes, when no run of it is going, while fewer than N tasks match a filter, or when a script

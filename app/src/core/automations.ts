@@ -37,6 +37,7 @@ import type {
   AutomationCfgDto,
   AutomationDetailDto,
   AutomationEdgeDto,
+  AutomationFailuresToDto,
   AutomationHeldBackDto,
   AutomationLaunchAsksDto,
   AutomationLaunchCheckDto,
@@ -131,8 +132,8 @@ export async function importAutomation(projectId: number, src: string): Promise<
 export const MAX_CONCURRENT_RUNS = 4;
 
 /**
- * **Rename an automation, rewrite its notes, put it out of the way, or set how many of its runs may
- * be going at once.** Only what is passed is written.
+ * **Rename an automation, rewrite its notes, put it out of the way, set how many of its runs may be
+ * going at once, or choose who a failed round is filed to.** Only what is passed is written.
  *
  * Archiving takes nothing away and stops nothing already running. It keeps a definition nobody
  * launches any more out of a reader's way, and the row stays in the list with the mark on it —
@@ -140,10 +141,19 @@ export const MAX_CONCURRENT_RUNS = 4;
  *
  * `maxConcurrentRuns` is the most at, from 1 up to `MAX_CONCURRENT_RUNS`; left out, it is kept. There
  * is no lifting it. A launch past it is refused rather than queued.
+ *
+ * `failuresTo` is the person or a role of this automation. There is no choosing nobody: a launch is
+ * refused without one, so it only ever moves from one to another.
  */
 export async function editAutomation(
   id: number,
-  patch: { name?: string; notes?: string; archived?: boolean; maxConcurrentRuns?: number },
+  patch: {
+    name?: string;
+    notes?: string;
+    archived?: boolean;
+    maxConcurrentRuns?: number;
+    failuresTo?: AutomationFailuresToDto;
+  },
 ): Promise<void> {
   if (!inTauri()) return;
   return ack("automation_edit", {
@@ -152,6 +162,7 @@ export async function editAutomation(
     notes: patch.notes ?? null,
     archived: patch.archived ?? null,
     maxConcurrentRuns: patch.maxConcurrentRuns ?? null,
+    failuresTo: patch.failuresTo ?? null,
   });
 }
 

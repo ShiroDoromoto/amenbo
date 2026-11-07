@@ -558,6 +558,10 @@ maxConcurrentRuns: number,
  */
 trigger?: AutomationTriggerDto, 
 /**
+ * Who a failed round is filed to. Absent while nobody is chosen, which the launch check refuses.
+ */
+failuresTo?: AutomationFailuresToDto, 
+/**
  * **The automation's roles, in the order they are defined in.** A placement names the one whose
  * round reaches it (`AutomationPlacementDto::role_id`), and a step the one it falls back to
  * (`AutomationCarrierDto::chosen_at`).
@@ -618,6 +622,13 @@ export type AutomationExitDto = { id: number,
  * [`amenbo_core::model::DONE_EXIT`].
  */
 name: string, outputs: Array<AutomationPortDto>, };
+
+/**
+ * **Who a failed round of an automation is filed to** — the wire form of
+ * [`amenbo_core::model::FailuresTo`]: `human` for the person, `role` for a role of the same
+ * automation. It is read and written in the same form.
+ */
+export type AutomationFailuresToDto = { "kind": "human" } | { "kind": "role", roleId: number, };
 
 /**
  * **What is keeping a waiting run waiting** (`AMB-D-999`) — the tasks its filter matches that cannot

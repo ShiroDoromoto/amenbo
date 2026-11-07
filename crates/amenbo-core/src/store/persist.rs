@@ -1375,6 +1375,60 @@ impl Store {
         })
     }
 
+    /// Add a trigger to an automation, after the ones it has (one operation = one transaction) —
+    /// [`crate::ops::automation::trigger_add`].
+    pub fn automation_trigger_add(
+        &mut self,
+        automation_id: i64,
+        trigger: crate::ops::automation::NewTrigger,
+    ) -> Result<crate::model::AutomationTrigger> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)], |tx| {
+            crate::ops::automation::trigger_add(tx, automation_id, trigger)
+        })
+    }
+
+    /// Write one trigger afresh (one operation = one transaction) —
+    /// [`crate::ops::automation::trigger_update`].
+    pub fn automation_trigger_update(
+        &mut self,
+        trigger_id: i64,
+        trigger: crate::ops::automation::NewTrigger,
+    ) -> Result<crate::model::AutomationTrigger> {
+        let automation_id = self.automation_of_trigger(trigger_id)?;
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)], |tx| {
+            crate::ops::automation::trigger_update(tx, trigger_id, trigger)
+        })
+    }
+
+    /// Take one trigger away from its automation (one operation = one transaction) —
+    /// [`crate::ops::automation::trigger_delete`].
+    pub fn automation_trigger_delete(&mut self, trigger_id: i64) -> Result<()> {
+        let automation_id = self.automation_of_trigger(trigger_id)?;
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)], |tx| {
+            crate::ops::automation::trigger_delete(tx, trigger_id)
+        })
+    }
+
+    /// Have one trigger be asked or not (one operation = one transaction) —
+    /// [`crate::ops::automation::trigger_set_enabled`].
+    pub fn automation_trigger_set_enabled(
+        &mut self,
+        trigger_id: i64,
+        enabled: bool,
+    ) -> Result<crate::model::AutomationTrigger> {
+        let automation_id = self.automation_of_trigger(trigger_id)?;
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)], |tx| {
+            crate::ops::automation::trigger_set_enabled(tx, trigger_id, enabled)
+        })
+    }
+
+    /// The automation a trigger is one of — what its write is reached through — or not found.
+    fn automation_of_trigger(&self, trigger_id: i64) -> Result<i64> {
+        crate::store_engine::read::automation_trigger(self.engine.conn(), trigger_id)?
+            .map(|trigger| trigger.automation_id)
+            .ok_or_else(|| crate::error::Error::not_found(format!("automation trigger '{trigger_id}' not found")))
+    }
+
     /// Stop an automation from starting new rounds, or let it start them again (one operation = one
     /// transaction) — [`crate::ops::automation::stop`].
     pub fn automation_set_stopped(

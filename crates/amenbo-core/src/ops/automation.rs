@@ -1413,14 +1413,11 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
     if before.triggers.is_empty() && trigger.is_none() {
         return Ok(before);
     }
-    if before.export_only && trigger.is_some() {
-        return Err(Error::invalid(format!(
-            "automation '{}' is kept for export only and is never launched, so nothing can start it",
-            before.name
-        )));
+    if trigger.is_some() {
+        refuse_trigger_on_export_only(&before)?;
     }
     let now = Timestamp::now();
-    let written = trigger.map(|new| checked_trigger(tx, &before, new, now)).transpose()?;
+    let written = trigger.map(|new| checked_trigger(tx, &before, new, now, &[])).transpose()?;
     for old in &before.triggers {
         tx.delete_record("automation_trigger", old.id)?;
     }
@@ -1435,10 +1432,87 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
     Ok(after)
 }
 
+/// **Add a trigger to an automation**, after the triggers it already has, enabled. It is checked as
+/// [`trigger_set`] says, and its first time to be asked is counted from now. The triggers already there
+/// are left as they are.
+pub fn trigger_add(tx: &WriteTx<'_>, automation_id: i64, new: NewTrigger) -> Result<AutomationTrigger> {
+    let automation = live_automation(tx, automation_id)?;
+    refuse_trigger_on_export_only(&automation)?;
+    let sibs: Vec<(i64, String)> = automation.triggers.iter().map(|t| (t.id, t.order_key.clone())).collect();
+    let trigger = checked_trigger(tx, &automation, new, Timestamp::now(), &sibs)?;
+    emit_create(tx, record::automation_trigger(&trigger))?;
+    Ok(trigger)
+}
+
+/// **Write one trigger afresh** — what it is called, its role, when it files a task, what it looks at
+/// and asks first, and what the task says — checked as [`trigger_set`] says. It keeps its id, its place
+/// among the automation's triggers, whether it is enabled and when it last filed a task. When it is next
+/// asked is counted afresh from now, as writing it again with [`trigger_set`] does.
+pub fn trigger_update(tx: &WriteTx<'_>, id: i64, new: NewTrigger) -> Result<AutomationTrigger> {
+    let before = live_trigger(tx, id)?;
+    let automation = live_automation(tx, before.automation_id)?;
+    refuse_trigger_on_export_only(&automation)?;
+    let now = Timestamp::now();
+    let written = checked_trigger(tx, &automation, new, now, &[])?;
+    let after = AutomationTrigger {
+        id: before.id,
+        enabled: before.enabled,
+        last_filed_at: before.last_filed_at,
+        order_key: before.order_key.clone(),
+        created_at: before.created_at,
+        ..written
+    };
+    emit_update(tx, record::automation_trigger(&before), record::automation_trigger(&after))?;
+    Ok(after)
+}
+
+/// **Take one trigger away from its automation.** The others are left as they are, and the tasks it
+/// filed stay as they were.
+pub fn trigger_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
+    live_trigger(tx, id)?;
+    tx.delete_record("automation_trigger", id)?;
+    Ok(())
+}
+
+/// **Have one trigger be asked** (`enabled` true) **or not** (false). One that is not files nothing,
+/// and its `next_at` stays where it was, whichever way it is switched. Writing what already stands
+/// writes nothing.
+pub fn trigger_set_enabled(tx: &WriteTx<'_>, id: i64, enabled: bool) -> Result<AutomationTrigger> {
+    let before = live_trigger(tx, id)?;
+    if before.enabled == enabled {
+        return Ok(before);
+    }
+    let after = AutomationTrigger { enabled, updated_at: Timestamp::now(), ..before.clone() };
+    emit_update(tx, record::automation_trigger(&before), record::automation_trigger(&after))?;
+    Ok(after)
+}
+
+/// The trigger with this id, or not found.
+fn live_trigger(tx: &WriteTx<'_>, id: i64) -> Result<AutomationTrigger> {
+    read::automation_trigger(tx.conn(), id)?.ok_or_else(|| not_found("automation trigger", id))
+}
+
+/// An automation kept for export only is never launched, so no trigger is written on it.
+fn refuse_trigger_on_export_only(automation: &Automation) -> Result<()> {
+    if automation.export_only {
+        return Err(Error::invalid(format!(
+            "automation '{}' is kept for export only and is never launched, so nothing can start it",
+            automation.name
+        )));
+    }
+    Ok(())
+}
+
 /// **A trigger as it is written** on `automation`, checked as [`trigger_set`] says, its first time to
-/// be asked counted from `now`. It is given the next id, and the first place among the automation's
-/// triggers, which [`trigger_set`] has it be the only one of.
-fn checked_trigger(tx: &WriteTx<'_>, automation: &Automation, new: NewTrigger, now: Timestamp) -> Result<AutomationTrigger> {
+/// be asked counted from `now`. It is given the next id, enabled, and the place after `sibs` among the
+/// automation's triggers — the first where it is given none, as [`trigger_set`] does.
+fn checked_trigger(
+    tx: &WriteTx<'_>,
+    automation: &Automation,
+    new: NewTrigger,
+    now: Timestamp,
+    sibs: &[(i64, String)],
+) -> Result<AutomationTrigger> {
     let NewTrigger { name, role_id, when, condition, script, task } = new;
     checked_trigger_role(tx, automation.id, role_id)?;
     match when {
@@ -1504,7 +1578,7 @@ fn checked_trigger(tx: &WriteTx<'_>, automation: &Automation, new: NewTrigger, n
         task,
         next_at: when.after(now),
         last_filed_at: None,
-        order_key: place(&[], &Position::Bottom)?,
+        order_key: place(sibs, &Position::Bottom)?,
         created_at: now,
         updated_at: now,
     })
@@ -2686,7 +2760,7 @@ pub fn role_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 fn take_role_off_triggers(tx: &WriteTx<'_>, role: &AutomationRole) -> Result<()> {
     let now = Timestamp::now();
     for id in read::automation_trigger_ids_with_role(tx.conn(), role.id)? {
-        let before = read::automation_trigger(tx.conn(), id)?.ok_or_else(|| not_found("automation trigger", id))?;
+        let before = live_trigger(tx, id)?;
         let after = AutomationTrigger { role_id: None, updated_at: now, ..before.clone() };
         emit_update(tx, record::automation_trigger(&before), record::automation_trigger(&after))?;
     }
@@ -4495,6 +4569,143 @@ mod tests {
             emit_update(tx, record::automation(&off), record::automation(&old)).expect("mark it");
             let refused = trigger_set(tx, automation.id, Some(hourly("見る")));
             assert!(matches!(refused, Err(Error::Invalid(_))), "nothing starts one kept for export only");
+        });
+    }
+
+    /// A trigger filing `title` every hour, with no role, condition or script.
+    fn hourly_trigger(title: &str) -> NewTrigger {
+        NewTrigger {
+            name: String::new(),
+            role_id: None,
+            when: TriggerWhen::Every { minutes: 60 },
+            condition: None,
+            script: None,
+            task: NewTriggerTask::Fixed { title: title.into(), notes: String::new() },
+        }
+    }
+
+    /// **Triggers are added one at a time, after those already there**, each enabled and counted from
+    /// its write, the ones before left as they were. One that does not check out, one under another
+    /// automation's role, and any on an automation kept for export only are refused.
+    #[test]
+    fn a_trigger_is_added_after_the_others() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let first = trigger_add(tx, automation.id, hourly_trigger("受信箱を見る")).expect("the first");
+            let second = trigger_add(tx, automation.id, NewTrigger { when: TriggerWhen::Idle, ..hourly_trigger("点検する") })
+                .expect("the second");
+            assert!(first.enabled && second.enabled, "written to be asked");
+            assert!(first.order_key < second.order_key, "the second goes after the first");
+            let triggers = live_automation(tx, automation.id).expect("read").triggers;
+            assert_eq!(triggers, vec![first.clone(), second], "both kept, in the order they were added");
+
+            let refused = trigger_add(tx, automation.id, hourly_trigger("  "));
+            assert!(matches!(refused, Err(Error::Invalid(_))), "a task with no title");
+            let born = add(tx, mk_project(tx, "よそ"), NewAutomation { name: "よその".into(), ..Default::default() })
+                .expect("another automation");
+            let theirs = role_add(tx, born.id, NewRole { name: "よその".into(), ..NewRole::default() }).expect("a role");
+            let refused = trigger_add(tx, automation.id, NewTrigger { role_id: Some(theirs.id), ..hourly_trigger("見る") });
+            assert!(matches!(refused, Err(Error::Invalid(_))), "another automation's role");
+            let refused = trigger_add(tx, automation.id + 1000, hourly_trigger("見る"));
+            assert!(matches!(refused, Err(Error::NotFound(_))), "no such automation");
+            assert_eq!(live_automation(tx, automation.id).expect("read").triggers.len(), 2, "nothing more written");
+
+            let before = live_automation(tx, automation.id).expect("read");
+            let old = Automation { export_only: true, ..before.clone() };
+            emit_update(tx, record::automation(&before), record::automation(&old)).expect("mark it");
+            let refused = trigger_add(tx, automation.id, hourly_trigger("見る"));
+            assert!(matches!(refused, Err(Error::Invalid(_))), "nothing starts one kept for export only");
+            let refused = trigger_update(tx, first.id, hourly_trigger("見る"));
+            assert!(matches!(refused, Err(Error::Invalid(_))), "nor is one rewritten there");
+        });
+    }
+
+    /// **A trigger written afresh keeps its id, its place, whether it is enabled and when it last
+    /// filed**, and is counted afresh from the write. The other triggers are left as they were, and what
+    /// does not check out is refused with nothing written.
+    #[test]
+    fn a_trigger_is_written_afresh_in_its_place() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let role = role_add(tx, automation.id, NewRole { name: "さくら".into(), ..NewRole::default() }).expect("a role");
+            let first = trigger_add(tx, automation.id, hourly_trigger("受信箱を見る")).expect("the first");
+            let second = trigger_add(tx, automation.id, hourly_trigger("点検する")).expect("the second");
+            let filed = Timestamp::now();
+            let marked = AutomationTrigger { enabled: false, last_filed_at: Some(filed), ..first.clone() };
+            emit_update(tx, record::automation_trigger(&first), record::automation_trigger(&marked)).expect("as it stood");
+
+            let written = NewTrigger {
+                name: "朝の点検".into(),
+                role_id: Some(role.id),
+                when: TriggerWhen::Every { minutes: 1440 },
+                ..hourly_trigger("毎日の点検")
+            };
+            let after = trigger_update(tx, first.id, written).expect("write it afresh");
+            assert_eq!(after.id, first.id);
+            assert_eq!(after.order_key, first.order_key, "in its place");
+            assert!(!after.enabled, "still not asked");
+            assert_eq!(after.last_filed_at, Some(filed), "when it last filed is kept");
+            assert_eq!(after.created_at, first.created_at);
+            assert_eq!(after.name, "朝の点検");
+            assert_eq!(after.role_id, Some(role.id));
+            assert_eq!(after.task, TriggerTask::Fixed { title: "毎日の点検".into(), notes: String::new() });
+            assert!(after.next_at > first.next_at, "counted afresh from the write");
+            let triggers = live_automation(tx, automation.id).expect("read").triggers;
+            assert_eq!(triggers, vec![after.clone(), second], "the other left as it was");
+
+            let refused = trigger_update(tx, first.id, NewTrigger { when: TriggerWhen::Tasks, ..hourly_trigger("見る") });
+            assert!(matches!(refused, Err(Error::Invalid(_))), "a `tasks` with no condition");
+            assert_eq!(read::automation_trigger(tx.conn(), first.id).expect("read"), Some(after));
+            let refused = trigger_update(tx, first.id + 1000, hourly_trigger("見る"));
+            assert!(matches!(refused, Err(Error::NotFound(_))), "no such trigger");
+        });
+    }
+
+    /// **A trigger is switched off and on, and taken away, one at a time.** Switched either way, its
+    /// `next_at` stays where it was; switching it to what already stands writes nothing. Taking one away
+    /// leaves the others.
+    #[test]
+    fn a_trigger_is_switched_and_taken_away_alone() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let first = trigger_add(tx, automation.id, hourly_trigger("受信箱を見る")).expect("the first");
+            let second = trigger_add(tx, automation.id, hourly_trigger("点検する")).expect("the second");
+
+            let same = trigger_set_enabled(tx, first.id, true).expect("already on");
+            assert_eq!(same, first, "nothing is written");
+            let off = trigger_set_enabled(tx, first.id, false).expect("switch it off");
+            assert!(!off.enabled);
+            assert_eq!(off.next_at, first.next_at, "not moved while it is off");
+            assert_eq!(read::automation_trigger(tx.conn(), first.id).expect("read"), Some(off.clone()));
+            let on = trigger_set_enabled(tx, first.id, true).expect("switch it on");
+            assert!(on.enabled);
+            assert_eq!(on.next_at, first.next_at, "not moved when it is on again");
+            assert_eq!(read::automation_trigger(tx.conn(), second.id).expect("read"), Some(second.clone()));
+
+            trigger_delete(tx, first.id).expect("take the first away");
+            assert_eq!(live_automation(tx, automation.id).expect("read").triggers, vec![second]);
+            assert!(matches!(trigger_delete(tx, first.id), Err(Error::NotFound(_))), "gone already");
+            assert!(matches!(trigger_set_enabled(tx, first.id, false), Err(Error::NotFound(_))), "gone already");
+        });
+    }
+
+    /// **A role that goes is taken off every trigger that files under it**, the others left with theirs.
+    #[test]
+    fn a_role_that_goes_is_taken_off_every_trigger() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let going = role_add(tx, automation.id, NewRole { name: "山田".into(), ..NewRole::default() }).expect("a role");
+            let staying = role_add(tx, automation.id, NewRole { name: "佐藤".into(), ..NewRole::default() }).expect("a role");
+            let under = |role: i64, title: &str| NewTrigger { role_id: Some(role), ..hourly_trigger(title) };
+            let a = trigger_add(tx, automation.id, under(going.id, "一つ目")).expect("one");
+            let b = trigger_add(tx, automation.id, under(going.id, "二つ目")).expect("two");
+            let c = trigger_add(tx, automation.id, under(staying.id, "三つ目")).expect("three");
+
+            role_delete(tx, going.id).expect("take the role away");
+            let triggers = live_automation(tx, automation.id).expect("read").triggers;
+            let roles: Vec<_> = triggers.iter().map(|t| (t.id, t.role_id)).collect();
+            assert_eq!(roles, vec![(a.id, None), (b.id, None), (c.id, Some(staying.id))]);
+            assert_eq!(triggers[0].next_at, a.next_at, "each keeps its next_at");
         });
     }
 

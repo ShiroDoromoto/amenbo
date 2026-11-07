@@ -2074,6 +2074,74 @@ button.feed__target:hover { color: var(--c-accent); }
   .autoroles__list { flex-direction: row; flex-wrap: wrap; }
   .autoroles__row { width: auto; }
 }
+/* A trigger's card, standing in the build screen's middle where the picture does
+   (`../screens/AutomationTrigger`), with the automation's triggers and the task it files in a column
+   beside it. The two wrap under each other where the middle is narrow. */
+.trigstage { display: flex; flex-direction: column; gap: var(--s-2); padding: 0 var(--s-3) var(--s-3); }
+.trigstage > .actbuild__canvashead { padding-inline: 0; }
+.trigstage__row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s-5); }
+.trigstage__row > * { min-width: 0; max-width: 100%; }
+.trigstage__notes { flex: 1 1 260px; display: flex; flex-direction: column; gap: var(--s-3); font-size: var(--fs-md); }
+.trigstage__notes h3 { margin: 0; font-size: var(--fs-md); font-weight: var(--fw-bold); }
+.trigstage__list { margin: 0; padding-inline-start: 1.2em; display: flex; flex-direction: column; gap: var(--s-2); color: var(--c-text-muted); overflow-wrap: anywhere; }
+.trigstage__list b { color: var(--c-text); font-weight: var(--fw-medium); }
+.trigstage__preview {
+  display: flex; flex-direction: column; gap: 4px; padding: var(--s-3); font-size: var(--fs-xs); overflow-wrap: anywhere;
+  border: var(--border-w) dashed var(--c-edge); border-radius: var(--r-md);
+}
+.trigstage__previewtitle { font-size: var(--fs-md); font-weight: var(--fw-bold); }
+.trigcard {
+  flex: 1 1 520px; max-width: 640px; display: flex; flex-direction: column; gap: var(--s-4); padding: var(--s-5);
+  background: var(--c-surface-pic) var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-sm);
+}
+/* The head: the name, written in place, then whether it is on, and when it last filed at the far end. */
+.trigcard__head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-3); }
+.trigcard__name {
+  flex: 1 1 8rem; min-width: 0; max-width: 16rem; padding: 0; border: 0; border-radius: 0;
+  border-block-end: var(--border-w) dashed var(--c-edge); background: none;
+  font: inherit; font-size: var(--fs-body); font-weight: var(--fw-bold); color: var(--c-text);
+}
+.trigcard__sp { flex: 1; }
+/* The on/off switch is the mock's run chip: small, round and without a rule, tinted while on. */
+.trigcard__switch { flex: none; font-size: var(--fs-xs); border-radius: 999px; border-color: transparent; }
+.trigcard__switch--on { background: var(--c-accent-weak); color: var(--c-accent-text); }
+/* "Last filed" keeps to the right end, also on the line the head wraps onto when the card is narrow. */
+.trigcard__filed { flex: none; margin-inline-start: auto; }
+/* Each of the three numbered parts starts under a rule, its number in a filled circle. */
+.trigcard__part {
+  display: flex; flex-direction: column; gap: var(--s-2); padding-top: var(--s-3);
+  border-block-start: var(--border-w) var(--border-style) var(--c-rule);
+}
+.trigcard__parthead { display: flex; align-items: baseline; gap: var(--s-2); }
+.trigcard__parthead h3 { margin: 0; font-size: var(--fs-md); font-weight: var(--fw-bold); }
+.trigcard__no {
+  flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+  font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-on-accent); background: var(--c-accent);
+}
+.trigcard__radios { display: flex; flex-wrap: wrap; gap: 6px; }
+.trigcard__radio {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; font-size: var(--fs-xs); cursor: pointer;
+  background: var(--c-surface-pic) var(--c-surface); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
+}
+.trigcard__radio:has(input:checked) { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); }
+.trigcard__radio input { margin: 0; accent-color: var(--c-accent); }
+/* What goes with the answer picked in part 1, in a sunken box under the choices. */
+.trigcard__sub {
+  display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3);
+  background: var(--c-sunken-pic) var(--c-sunken); border-radius: var(--r-md);
+}
+.trigcard__form { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 8px 12px; font-size: var(--fs-md); }
+.trigcard__lbl { font-size: var(--fs-xs); }
+.trigcard__mach {
+  display: flex; align-items: flex-start; gap: 8px; padding: var(--s-2) var(--s-3); font-size: var(--fs-xs); color: var(--c-text-muted);
+  background: var(--c-sunken-pic) var(--c-sunken); border-radius: var(--r-md);
+}
+.trigcard__buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+@container actbody (max-width: 40rem) {
+  .trigcard { padding: var(--s-4); }
+  .trigcard__form { grid-template-columns: minmax(0, 1fr); }
+}
 .autorole { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-3) 0; }
 .autorole__head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
 .autorole__name {

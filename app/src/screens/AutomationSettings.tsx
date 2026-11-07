@@ -15,13 +15,13 @@
 //
 // **The column draws the automation's first trigger** (`AMB-D-1119`); an automation may have more,
 // and listing them all is still to come. Without one the column says so and offers "+ Add a trigger";
-// with one it draws what it files and when, and pressing it opens the same dialog to change it or take
-// it away (`./AutomationTrigger`).
+// with one it draws what it files and when. Either press asks the build screen to open the trigger's
+// card in its middle (`./AutomationTrigger`), to change it or take it away, or to write a new one.
 import { useState } from "react";
 import { editAutomation } from "../core/automations";
 import { errText, t, tf } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
-import { AutomationTrigger } from "./AutomationTrigger";
+import { taskLine, whenLine } from "./AutomationTrigger";
 import type {
   AutomationDetailDto,
   AutomationFailuresToDto,
@@ -40,39 +40,17 @@ function failuresOf(value: string): AutomationFailuresToDto | null {
   return null;
 }
 
-/** When the trigger files a task, in the words of the dialog's ①. */
-function whenLine(trigger: AutomationTriggerDto): string {
-  const when =
-    trigger.when.kind === "every"
-      ? tf("auto.side.every", { minutes: trigger.when.minutes })
-      : trigger.when.kind === "idle"
-        ? t("auto.trigger.whenIdle")
-        : trigger.when.kind === "tasks"
-          ? t("auto.trigger.whenTasks")
-          : t("auto.trigger.whenScript");
-  const below = trigger.condition === undefined ? null : tf("auto.side.below", { below: trigger.condition.below });
-  // "Tasks" is the condition with nothing else, so it is named by the condition alone.
-  if (trigger.when.kind === "tasks" && below !== null) return below;
-  return below === null ? when : `${when} ・ ${below}`;
-}
-
-/** What the task the trigger files says, as far as it can be read before it is filed. */
-function taskLine(trigger: AutomationTriggerDto): string {
-  switch (trigger.task.kind) {
-    case "fixed":
-      return trigger.task.title;
-    case "file":
-      return trigger.task.path;
-    case "script":
-      return t("auto.trigger.taskScript");
-  }
-}
-
-export function AutomationSettings({ automation }: { automation: AutomationDetailDto }) {
+export function AutomationSettings({
+  automation,
+  onOpenTrigger,
+}: {
+  automation: AutomationDetailDto;
+  /** Open a trigger's card: the one given, or a new one. */
+  onOpenTrigger: (trigger: AutomationTriggerDto | undefined) => void;
+}) {
   const [refused, setRefused] = useState<string | null>(null);
-  const [triggering, setTriggering] = useState(false);
   const failures = failuresValue(automation.failuresTo);
-  // The first of its triggers, as the dialog writes it.
+  // The first of its triggers.
   const trigger = automation.triggers[0];
   const triggerRoleId = trigger?.roleId;
   const triggerRole =
@@ -120,7 +98,7 @@ export function AutomationSettings({ automation }: { automation: AutomationDetai
         {trigger === undefined ? (
           <>
             <span className="autostep__hint">{t("auto.side.triggerNone")}</span>
-            <button type="button" className="btn autoside__add" onClick={() => setTriggering(true)}>
+            <button type="button" className="btn autoside__add" onClick={() => onOpenTrigger(undefined)}>
               {t("auto.side.triggerAdd")}
             </button>
           </>
@@ -129,7 +107,7 @@ export function AutomationSettings({ automation }: { automation: AutomationDetai
             type="button"
             className="autoside__trigger"
             title={t("auto.trigger.title")}
-            onClick={() => setTriggering(true)}
+            onClick={() => onOpenTrigger(trigger)}
           >
             <span className="autoside__when">{trigger.name.trim() || whenLine(trigger)}</span>
             {trigger.name.trim() !== "" && <span className="autostep__hint">{whenLine(trigger)}</span>}
@@ -142,8 +120,6 @@ export function AutomationSettings({ automation }: { automation: AutomationDetai
           </button>
         )}
       </div>
-
-      {triggering && <AutomationTrigger automation={automation} onClose={() => setTriggering(false)} />}
     </div>
   );
 }

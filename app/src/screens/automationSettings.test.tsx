@@ -5,8 +5,8 @@
 // What these guard: **the column holds two boxes — who failures are filed to, and the trigger — and
 // no count of runs at once**; **who failures are filed to is required, offers the automation's roles
 // and the person, and writes the one picked**; **the trigger is offered to add while there is none,
-// and drawn — what it files, when and under which role — once there is one, each opening the
-// trigger's dialog**; and **a refusal is drawn in core's words**.
+// and drawn — what it files, when and under which role — once there is one, each asking the build
+// screen to open the trigger's card**; and **a refusal is drawn in core's words**.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,6 +17,8 @@ const hoisted = vi.hoisted(() => ({
   edits: [] as unknown[],
   /** What the next write is refused with, if anything. */
   refuse: null as string | null,
+  /** Each trigger the column asked to open, `undefined` for a new one. */
+  opened: [] as unknown[],
 }));
 
 vi.mock("../core/automations", () => ({
@@ -70,6 +72,7 @@ const written: AutomationTriggerDto = {
 beforeEach(() => {
   hoisted.edits = [];
   hoisted.refuse = null;
+  hoisted.opened = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -81,7 +84,14 @@ afterEach(() => {
 });
 
 const render = (shown: AutomationDetailDto = automation) =>
-  act(async () => { root.render(createElement(AutomationSettings, { automation: shown })); });
+  act(async () => {
+    root.render(
+      createElement(AutomationSettings, {
+        automation: shown,
+        onOpenTrigger: (trigger: AutomationTriggerDto | undefined) => hoisted.opened.push(trigger),
+      }),
+    );
+  });
 
 const button = (label: string) =>
   Array.from(document.body.querySelectorAll("button")).find(
@@ -94,7 +104,6 @@ const pick = (value: string) =>
     select().value = value;
     select().dispatchEvent(new Event("change", { bubbles: true }));
   });
-const dialog = () => document.body.querySelector('[role="dialog"]');
 
 describe("the column", () => {
   it("holds who failures are filed to and the trigger, each in a box of its own, and no count of runs at once", async () => {
@@ -139,12 +148,11 @@ describe("who failures are filed to", () => {
 });
 
 describe("the trigger", () => {
-  it("is offered to add while there is none, and the press opens its dialog", async () => {
+  it("is offered to add while there is none, and the press asks for a new one's card", async () => {
     await render();
     expect(container.textContent).toContain(t("auto.side.triggerNone"));
-    expect(dialog()).toBeNull();
     await press(button(t("auto.side.triggerAdd")));
-    expect(dialog()).not.toBeNull();
+    expect(hoisted.opened).toEqual([undefined]);
   });
 
   it("draws the one written — its name, when, what it files and its role — and opens it on a press", async () => {
@@ -156,7 +164,7 @@ describe("the trigger", () => {
     expect(drawn.textContent).toContain(tf("auto.side.triggerRole", { role: "Bob" }));
     expect(button(t("auto.side.triggerAdd"))).toBeUndefined();
     await press(drawn);
-    expect(dialog()).not.toBeNull();
+    expect(hoisted.opened).toEqual([written]);
   });
 });
 

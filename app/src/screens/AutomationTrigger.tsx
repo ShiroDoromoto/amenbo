@@ -1,35 +1,46 @@
-// **An automation's trigger, written on a dialog of its own** — what files a task without a person and
-// starts a run of this automation with it. The build screen's right column opens it
-// (`./AutomationSettings`); the dialog itself stands alone, given the automation and told when it is
-// done.
+// **An automation's trigger, written on a card in the build screen's middle** — what files a task
+// without a person and starts a run of this automation with it. The build screen's right column asks
+// for it (`./AutomationSettings`), and the screen draws the card where the picture stands
+// (`./AutomationBuildScreen`); the card itself stands alone, given the automation and the trigger to
+// open, or none for a new one, and told when it is done. Beside it stand the automation's triggers in
+// a line each and the task this one files, so more than one can be read side by side with it.
 //
-// **It asks three things, numbered as the reader decides them**: ① whether to file a task now (every so
-// many minutes, when no run of it is going, while fewer than N tasks match a filter, or when a script
-// says so), ② what the task says (fixed words, a file read from its full path, or what a script
-// writes), and ③ the role the task is worked under, or none, which leaves it to a session. Neither ①
-// nor ② asks an AI: both are decided mechanically, and the AI works only inside the run the task
-// starts.
+// **Its head names the trigger, says whether it is on and when it last filed a task.** The name is
+// written in the head itself, in place. Pressing "On" switches the trigger off at once and back
+// (`setAutomationTriggerEnabled`), the way a setting kept apart from the saved versions is written; a
+// new trigger has neither the chip nor the line until it is saved.
 //
-// **It writes the automation's first trigger**, adding it where there is none, or takes that one away.
-// An automation may have more than one; the others are left as they are, and listing them is the
-// build screen's to do. It is a setting, not part of the definition: the save writes it at once, and
-// the build screen's "Save" and "Discard changes" neither keep nor undo it. When it is next asked is
-// counted by core from the write, so nothing here sends it.
+// **It asks three things, each in a numbered part**: 1 whether to file a task now (every so many
+// minutes, when no run of it is going, while fewer than N tasks match a filter, or when a script says
+// so), 2 what the task says (fixed words, a file read from its full path, or what a script writes), and
+// 3 the role the task is worked under, or none, which leaves it to a session. Neither 1 nor 2 asks an
+// AI: both are decided mechanically, and the AI works only inside the run the task starts.
 //
-// **A condition and a script can go with any ①**, on top of it. "While fewer than N tasks match" is
-// the condition with nothing else, and "when a script says so" the script with nothing else, so there
-// each cannot be switched off.
+// **It writes the trigger it was opened on**, adding one where it was opened on none, or takes it
+// away. The automation's other triggers are left as they are. It is a setting, not part of the
+// definition: the save writes it at once, and the build screen's "Save" and "Discard changes" neither
+// keep nor undo it. When it is next asked is counted by core from the write, so nothing here sends it.
+//
+// **A condition and a script can go with any answer to 1**, on top of it. "While fewer than N tasks
+// match" is the condition with nothing else, and "when a script says so" the script with nothing else,
+// so there each cannot be switched off.
 //
 // **What core refuses** — a wait under a minute, a task with no title, a filter that does not read —
-// comes back as core's own sentence, drawn at the top, and the dialog stays open with what was typed.
+// comes back as core's own sentence, drawn at the top, and the card stays open with what was typed.
+// The form does not check its own boxes (`noValidate`), so core's sentence is the only one drawn.
 //
-// **Only its buttons close it**, as with the other dialogs of the build screen: a stray press on the
-// backdrop or Escape would throw away what was typed.
-import { useState } from "react";
-import { createPortal } from "react-dom";
-import { addAutomationTrigger, removeAutomationTrigger, updateAutomationTrigger } from "../core/automations";
+// **Only its buttons close it** from within: a stray press or Escape would throw away what was typed.
+// The build screen puts its picture back in the card's place when a role is picked on the left or the
+// trigger goes away.
+import { useId, useState, type FormEvent, type ReactNode } from "react";
+import {
+  addAutomationTrigger,
+  removeAutomationTrigger,
+  setAutomationTriggerEnabled,
+  updateAutomationTrigger,
+} from "../core/automations";
 import { confirmDialog } from "../core/dialog";
-import { errText, t, tf } from "../core/i18n";
+import { dueLabel, errText, t, tf } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
 import type {
@@ -40,9 +51,9 @@ import type {
   AutomationTriggerInputDto,
 } from "../bindings/bindings";
 
-/** The four answers to ① — whether to file a task now. */
+/** The four answers to 1 — whether to file a task now. */
 export type WhenKind = "every" | "idle" | "tasks" | "script";
-/** The three answers to ② — what the task says. */
+/** The three answers to 2 — what the task says. */
 export type TaskKind = "fixed" | "file" | "script";
 
 const WHENS: { id: WhenKind; label: () => string }[] = [
@@ -61,16 +72,16 @@ const TASKS: { id: TaskKind; label: () => string }[] = [
 /** A script as its three boxes hold it: the program, its arguments one to a line, and its timeout. */
 type ScriptBoxes = { program: string; args: string; minutes: string };
 
-/** Everything the dialog holds, as typed. */
+/** Everything the card holds, as typed. */
 export type TriggerForm = {
   name: string;
   when: WhenKind;
   minutes: string;
-  /** Whether a condition goes with an ① other than "tasks", which always has one. */
+  /** Whether a condition goes with an answer to 1 other than "tasks", which always has one. */
   counted: boolean;
   filter: string;
   below: string;
-  /** Whether a script is asked with an ① other than "script", which always asks one. */
+  /** Whether a script is asked with an answer to 1 other than "script", which always asks one. */
   asked: boolean;
   judge: ScriptBoxes;
   task: TaskKind;
@@ -198,7 +209,7 @@ function ScriptBoxesField({
   );
 }
 
-/** A row of chips, one of them pressed. */
+/** A row of chips, one of them pressed — the role the task is worked under. */
 function Chips<K extends string | number>({
   label,
   options,
@@ -227,6 +238,101 @@ function Chips<K extends string | number>({
   );
 }
 
+/** A row of radio buttons, one of them picked. */
+function Radios<K extends string>({
+  label,
+  options,
+  picked,
+  onPick,
+}: {
+  label: string;
+  options: { id: K; label: string }[];
+  picked: K;
+  onPick: (id: K) => void;
+}) {
+  const name = useId();
+  return (
+    <div className="trigcard__radios" role="radiogroup" aria-label={label}>
+      {options.map((one) => (
+        <label key={one.id} className="trigcard__radio">
+          <input type="radio" name={name} checked={picked === one.id} onChange={() => onPick(one.id)} />
+          {one.label}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+/** One of the card's three numbered parts: its number in a circle, its heading, and what it asks. */
+function Part({ no, title, children }: { no: number; title: string; children: ReactNode }) {
+  const id = useId();
+  return (
+    <section className="trigcard__part" aria-labelledby={id}>
+      <div className="trigcard__parthead">
+        <span className="trigcard__no" aria-hidden="true">
+          {no}
+        </span>
+        <h3 id={id}>{title}</h3>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** When the trigger files a task, in the words of the card's part 1. */
+export function whenLine(trigger: AutomationTriggerDto): string {
+  const when =
+    trigger.when.kind === "every"
+      ? tf("auto.side.every", { minutes: trigger.when.minutes })
+      : trigger.when.kind === "idle"
+        ? t("auto.trigger.whenIdle")
+        : trigger.when.kind === "tasks"
+          ? t("auto.trigger.whenTasks")
+          : t("auto.trigger.whenScript");
+  const below = trigger.condition === undefined ? null : tf("auto.side.below", { below: trigger.condition.below });
+  // "Tasks" is the condition with nothing else, so it is named by the condition alone.
+  if (trigger.when.kind === "tasks" && below !== null) return below;
+  return below === null ? when : `${when} ・ ${below}`;
+}
+
+/** What the task the trigger files says, as far as it can be read before it is filed. */
+export function taskLine(trigger: AutomationTriggerDto): string {
+  switch (trigger.task.kind) {
+    case "fixed":
+      return trigger.task.title;
+    case "file":
+      return trigger.task.path;
+    case "script":
+      return t("auto.trigger.taskScript");
+  }
+}
+
+/** The role a trigger's task is worked under, as one line. */
+function roleLine(automation: AutomationDetailDto, roleId: number | undefined): string {
+  const role = roleId === undefined ? undefined : automation.roles.find((one) => one.id === roleId);
+  return role === undefined ? t("auto.side.triggerRoleNone") : tf("auto.side.triggerRole", { role: role.name });
+}
+
+/** The automation's triggers, a line each: its name, when it files, what, and under which role. */
+function TriggerList({ automation }: { automation: AutomationDetailDto }) {
+  if (automation.triggers.length === 0) return null;
+  return (
+    <>
+      <h3>{t("auto.trigger.list")}</h3>
+      <ul className="trigstage__list" data-list="triggers">
+        {automation.triggers.map((one) => (
+          <li key={one.id}>
+            <b>{one.name.trim() || whenLine(one)}</b>{" "}
+            {[one.name.trim() === "" ? null : whenLine(one), taskLine(one), roleLine(automation, one.roleId)]
+              .filter((part) => part !== null && part !== "")
+              .join(" ・ ")}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
 /** The task the trigger files, as it will stand: its title, the role, who works it and the trigger. */
 function Preview({ automation, form }: { automation: AutomationDetailDto; form: TriggerForm }) {
   const role = automation.roles.find((one) => one.id === form.roleId);
@@ -235,12 +341,12 @@ function Preview({ automation, form }: { automation: AutomationDetailDto; form: 
       ? form.title.trim()
       : t(form.task === "file" ? "auto.trigger.previewFromFile" : "auto.trigger.previewFromScript");
   return (
-    <section className="autodlg__stack" aria-labelledby="auto-trigger-preview">
-      <h3 className="autodlg__title" id="auto-trigger-preview">
-        {t("auto.trigger.preview")}
-      </h3>
-      <div>
-        <div data-preview="title">{title === "" ? t("auto.trigger.previewNoTitle") : title}</div>
+    <>
+      <h3>{t("auto.trigger.preview")}</h3>
+      <div className="trigstage__preview">
+        <span className="trigstage__previewtitle" data-preview="title">
+          {title === "" ? t("auto.trigger.previewNoTitle") : title}
+        </span>
         <span className="autostep__hint" data-preview="line">
           {tf("auto.trigger.previewLine", {
             role: role?.name ?? t("auto.trigger.roleNone"),
@@ -248,36 +354,41 @@ function Preview({ automation, form }: { automation: AutomationDetailDto; form: 
           })}
         </span>
       </div>
-    </section>
+    </>
   );
 }
 
 export function AutomationTrigger({
   automation,
+  trigger,
   onSaved,
   onClose,
 }: {
   automation: AutomationDetailDto;
+  /** The trigger to rewrite, or none to add one. */
+  trigger?: AutomationTriggerDto;
   /** The trigger is written, or taken away. */
   onSaved?: () => void;
   onClose: () => void;
 }) {
-  const first = automation.triggers[0];
-  const [form, setForm] = useState<TriggerForm>(() => formOf(first));
+  const [form, setForm] = useState<TriggerForm>(() => formOf(trigger));
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
   const put = (patch: Partial<TriggerForm>) => setForm((now) => ({ ...now, ...patch }));
+  const titleId = useId();
+  const notesId = useId();
+  const pathId = useId();
 
-  const write = async (trigger: AutomationTriggerInputDto | null) => {
+  const write = async (input: AutomationTriggerInputDto | null) => {
     setBusy(true);
     setRefused(null);
     try {
-      if (trigger === null) {
-        if (first !== undefined) await removeAutomationTrigger(first.id);
-      } else if (first === undefined) {
-        await addAutomationTrigger(automation.id, trigger);
+      if (input === null) {
+        if (trigger !== undefined) await removeAutomationTrigger(trigger.id);
+      } else if (trigger === undefined) {
+        await addAutomationTrigger(automation.id, input);
       } else {
-        await updateAutomationTrigger(first.id, trigger);
+        await updateAutomationTrigger(trigger.id, input);
       }
       onClose();
       onSaved?.();
@@ -287,196 +398,219 @@ export function AutomationTrigger({
     }
   };
 
-  const save = () => {
+  const save = (e: FormEvent) => {
+    e.preventDefault();
     if (!busy) void write(inputOf(form));
   };
 
   const remove = async () => {
-    const name = first?.name ?? "";
+    const name = trigger?.name ?? "";
     if (await confirmDialog(tf("auto.trigger.removeConfirm", { name }))) void write(null);
   };
 
-  return createPortal(
-    <div className="modal__overlay">
-      <div
-        className="modal__card modal__card--wide autodlg__stack"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="auto-trigger-title"
-      >
-        <h2 className="autodlg__title" id="auto-trigger-title">
-          {t("auto.trigger.title")}
-        </h2>
-        <span className="autostep__hint">{t("auto.trigger.lead")}</span>
+  const switchOn = (on: boolean) => {
+    if (trigger === undefined) return;
+    setRefused(null);
+    setAutomationTriggerEnabled(trigger.id, on).catch((e: unknown) => setRefused(errText(e)));
+  };
 
-        {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
+  return (
+    <div className="trigstage">
+      <div className="actbuild__canvashead">
+        <span className="actbuild__sec">{t("auto.trigger.title")}</span>
+      </div>
+      <span className="autostep__hint">{t("auto.trigger.lead")}</span>
+      <div className="trigstage__row">
+        <form className="trigcard" noValidate onSubmit={save}>
+          <div className="trigcard__head">
+            <input
+              {...asTyped}
+              autoFocus
+              className="trigcard__name"
+              aria-label={t("auto.trigger.name")}
+              placeholder={t("auto.trigger.newName")}
+              value={form.name}
+              onChange={(e) => put({ name: e.target.value })}
+            />
+            {trigger !== undefined && (
+              <button
+                type="button"
+                className={`chip chip--press trigcard__switch${trigger.enabled ? " trigcard__switch--on" : ""}`}
+                aria-pressed={trigger.enabled}
+                onClick={() => switchOn(!trigger.enabled)}
+              >
+                {t(trigger.enabled ? "auto.trigger.enabled" : "auto.trigger.disabled")}
+              </button>
+            )}
+            {trigger !== undefined && (
+              <span className="autostep__hint trigcard__filed" data-head="filed">
+                {trigger.lastFiledAt === undefined
+                  ? t("auto.trigger.neverFiled")
+                  : tf("auto.trigger.lastFiled", { at: dueLabel({ kind: "at", at: trigger.lastFiledAt }) })}
+              </span>
+            )}
+          </div>
 
-        <label className="autostep__field">
-          <span className="autostep__label">{t("auto.trigger.name")}</span>
-          <input
-            {...asTyped}
-            autoFocus
-            value={form.name}
-            onChange={(e) => put({ name: e.target.value })}
-          />
-        </label>
+          {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
 
-        <section className="autodlg__stack" aria-labelledby="auto-trigger-when">
-          <h3 className="autodlg__title" id="auto-trigger-when">
-            {t("auto.trigger.when")}
-          </h3>
-          <Chips
-            label={t("auto.trigger.when")}
-            options={WHENS.map((one) => ({ id: one.id, label: one.label() }))}
-            picked={form.when}
-            onPick={(when) => put({ when })}
-          />
-          {form.when === "every" && (
-            <span className="autostep__limit">
-              <input
-                type="number"
-                min={1}
-                aria-label={t("auto.trigger.minutes")}
-                value={form.minutes}
-                onChange={(e) => put({ minutes: e.target.value })}
-              />
-              {t("auto.trigger.minutesUnit")}
-            </span>
-          )}
-          {form.when === "idle" && <span className="autostep__hint">{t("auto.trigger.idleHint")}</span>}
-          {form.when !== "script" && (
-            <label className="buttonrow">
-              <input
-                type="checkbox"
-                checked={form.asked}
-                onChange={(e) => put({ asked: e.target.checked })}
-              />
-              {t("auto.trigger.asked")}
-            </label>
-          )}
-          {(form.when === "script" || form.asked) && (
-            <>
-              <span className="autostep__hint">{t("auto.trigger.judgeHint")}</span>
-              <ScriptBoxesField boxes={form.judge} onChange={(judge) => put({ judge })} />
-            </>
-          )}
-          {form.when !== "tasks" && (
-            <label className="buttonrow">
-              <input
-                type="checkbox"
-                checked={form.counted}
-                onChange={(e) => put({ counted: e.target.checked })}
-              />
-              {t("auto.trigger.counted")}
-            </label>
-          )}
-          {(form.when === "tasks" || form.counted) && (
-            <>
-              <div className="autostep__pair autostep__pair--top">
-                <span className="autostep__label">{t("auto.trigger.filter")}</span>
+          <Part no={1} title={t("auto.trigger.when")}>
+            <Radios
+              label={t("auto.trigger.whenPick")}
+              options={WHENS.map((one) => ({ id: one.id, label: one.label() }))}
+              picked={form.when}
+              onPick={(when) => put({ when })}
+            />
+            <div className="trigcard__sub">
+              {form.when === "every" && (
+                <span className="autostep__limit">
+                  <input
+                    type="number"
+                    min={1}
+                    aria-label={t("auto.trigger.minutes")}
+                    value={form.minutes}
+                    onChange={(e) => put({ minutes: e.target.value })}
+                  />
+                  {t("auto.trigger.minutesUnit")}
+                </span>
+              )}
+              {form.when === "idle" && <span className="autostep__hint">{t("auto.trigger.idleHint")}</span>}
+              {form.when !== "script" && (
+                <label className="buttonrow">
+                  <input
+                    type="checkbox"
+                    checked={form.asked}
+                    onChange={(e) => put({ asked: e.target.checked })}
+                  />
+                  {t("auto.trigger.asked")}
+                </label>
+              )}
+              {(form.when === "script" || form.asked) && (
+                <>
+                  <span className="autostep__hint">{t("auto.trigger.judgeHint")}</span>
+                  <ScriptBoxesField boxes={form.judge} onChange={(judge) => put({ judge })} />
+                </>
+              )}
+              {form.when !== "tasks" && (
+                <label className="buttonrow">
+                  <input
+                    type="checkbox"
+                    checked={form.counted}
+                    onChange={(e) => put({ counted: e.target.checked })}
+                  />
+                  {t("auto.trigger.counted")}
+                </label>
+              )}
+              {(form.when === "tasks" || form.counted) && (
+                <>
+                  <div className="autostep__pair autostep__pair--top">
+                    <span className="autostep__label">{t("auto.trigger.filter")}</span>
+                    <div className="autostep__field">
+                      <input
+                        {...asTyped}
+                        className="autostep__mono"
+                        aria-label={t("auto.trigger.filter")}
+                        value={form.filter}
+                        onChange={(e) => put({ filter: e.target.value })}
+                      />
+                      <span className="autostep__hint">{t("auto.trigger.filterHint")}</span>
+                    </div>
+                  </div>
+                  <span className="autostep__limit">
+                    <input
+                      type="number"
+                      min={1}
+                      aria-label={t("auto.trigger.below")}
+                      value={form.below}
+                      onChange={(e) => put({ below: e.target.value })}
+                    />
+                    {t("auto.trigger.belowUnit")}
+                  </span>
+                </>
+              )}
+            </div>
+          </Part>
+
+          <Part no={2} title={t("auto.trigger.task")}>
+            <Radios
+              label={t("auto.trigger.taskPick")}
+              options={TASKS.map((one) => ({ id: one.id, label: one.label() }))}
+              picked={form.task}
+              onPick={(task) => put({ task })}
+            />
+            {form.task === "fixed" && (
+              <div className="trigcard__form">
+                <label className="trigcard__lbl" htmlFor={titleId}>
+                  {t("auto.trigger.taskTitle")}
+                </label>
+                <input {...asTyped} id={titleId} value={form.title} onChange={(e) => put({ title: e.target.value })} />
+                <label className="trigcard__lbl" htmlFor={notesId}>
+                  {t("auto.trigger.taskNotes")}
+                </label>
+                <textarea id={notesId} rows={3} value={form.notes} onChange={(e) => put({ notes: e.target.value })} />
+              </div>
+            )}
+            {form.task === "file" && (
+              <div className="trigcard__form">
+                <label className="trigcard__lbl" htmlFor={pathId}>
+                  {t("auto.trigger.taskPath")}
+                </label>
                 <div className="autostep__field">
                   <input
                     {...asTyped}
+                    id={pathId}
                     className="autostep__mono"
-                    aria-label={t("auto.trigger.filter")}
-                    value={form.filter}
-                    onChange={(e) => put({ filter: e.target.value })}
+                    value={form.path}
+                    onChange={(e) => put({ path: e.target.value })}
                   />
-                  <span className="autostep__hint">{t("auto.trigger.filterHint")}</span>
+                  <span className="autostep__hint">{t("auto.trigger.taskPathHint")}</span>
                 </div>
               </div>
-              <span className="autostep__limit">
-                <input
-                  type="number"
-                  min={1}
-                  aria-label={t("auto.trigger.below")}
-                  value={form.below}
-                  onChange={(e) => put({ below: e.target.value })}
-                />
-                {t("auto.trigger.belowUnit")}
-              </span>
-            </>
-          )}
-        </section>
+            )}
+            {form.task === "script" && (
+              <>
+                <span className="autostep__hint">{t("auto.trigger.writerHint")}</span>
+                <ScriptBoxesField boxes={form.writer} onChange={(writer) => put({ writer })} />
+              </>
+            )}
+          </Part>
 
-        <section className="autodlg__stack" aria-labelledby="auto-trigger-task">
-          <h3 className="autodlg__title" id="auto-trigger-task">
-            {t("auto.trigger.task")}
-          </h3>
-          <Chips
-            label={t("auto.trigger.task")}
-            options={TASKS.map((one) => ({ id: one.id, label: one.label() }))}
-            picked={form.task}
-            onPick={(task) => put({ task })}
-          />
-          {form.task === "fixed" && (
-            <>
-              <label className="autostep__field">
-                <span className="autostep__label">{t("auto.trigger.taskTitle")}</span>
-                <input {...asTyped} value={form.title} onChange={(e) => put({ title: e.target.value })} />
-              </label>
-              <label className="autostep__field">
-                <span className="autostep__label">{t("auto.trigger.taskNotes")}</span>
-                <textarea rows={4} value={form.notes} onChange={(e) => put({ notes: e.target.value })} />
-              </label>
-            </>
-          )}
-          {form.task === "file" && (
-            <label className="autostep__field">
-              <span className="autostep__label">{t("auto.trigger.taskPath")}</span>
-              <input
-                {...asTyped}
-                className="autostep__mono"
-                value={form.path}
-                onChange={(e) => put({ path: e.target.value })}
-              />
-              <span className="autostep__hint">{t("auto.trigger.taskPathHint")}</span>
-            </label>
-          )}
-          {form.task === "script" && (
-            <>
-              <span className="autostep__hint">{t("auto.trigger.writerHint")}</span>
-              <ScriptBoxesField boxes={form.writer} onChange={(writer) => put({ writer })} />
-            </>
-          )}
-        </section>
+          <Part no={3} title={t("auto.trigger.role")}>
+            <Chips<number | "none">
+              label={t("auto.trigger.role")}
+              options={[
+                ...automation.roles.map((one) => ({ id: one.id as number | "none", label: one.name })),
+                { id: "none", label: t("auto.trigger.roleNone") },
+              ]}
+              picked={form.roleId ?? "none"}
+              onPick={(id) => put({ roleId: id === "none" ? null : id })}
+            />
+          </Part>
 
-        <section className="autodlg__stack" aria-labelledby="auto-trigger-role">
-          <h3 className="autodlg__title" id="auto-trigger-role">
-            {t("auto.trigger.role")}
-          </h3>
-          <Chips<number | "none">
-            label={t("auto.trigger.role")}
-            options={[
-              ...automation.roles.map((one) => ({ id: one.id as number | "none", label: one.name })),
-              { id: "none", label: t("auto.trigger.roleNone") },
-            ]}
-            picked={form.roleId ?? "none"}
-            onPick={(id) => put({ roleId: id === "none" ? null : id })}
-          />
-        </section>
+          <div className="trigcard__mach">
+            <span aria-hidden="true">ⓘ</span>
+            <span data-note="recorded">{tf("auto.trigger.recorded", { name: form.name.trim() })}</span>
+          </div>
 
-        <span className="autostep__hint" data-note="recorded">
-          {tf("auto.trigger.recorded", { name: form.name.trim() })}
-        </span>
-
-        <Preview automation={automation} form={form} />
-
-        <div className="buttonrow">
-          <button type="button" className="btn btn--primary" disabled={busy} onClick={save}>
-            {t("auto.trigger.save")}
-          </button>
-          <button type="button" className="btn" disabled={busy} onClick={onClose}>
-            {t("auto.add.cancel")}
-          </button>
-          {first !== undefined && (
-            <button type="button" className="btn" disabled={busy} onClick={() => void remove()}>
-              {t("auto.trigger.remove")}
+          <div className="trigcard__buttons">
+            {trigger !== undefined && (
+              <button type="button" className="btn" disabled={busy} onClick={() => void remove()}>
+                {t("auto.trigger.remove")}
+              </button>
+            )}
+            <span className="trigcard__sp" />
+            <button type="button" className="btn" disabled={busy} onClick={onClose}>
+              {t("auto.add.cancel")}
             </button>
-          )}
+            <button type="submit" className="btn btn--primary" disabled={busy}>
+              {t("auto.trigger.save")}
+            </button>
+          </div>
+        </form>
+        <div className="trigstage__notes">
+          <TriggerList automation={automation} />
+          <Preview automation={automation} form={form} />
         </div>
       </div>
-    </div>,
-    document.body,
+    </div>
   );
 }

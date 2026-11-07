@@ -2048,6 +2048,10 @@ pub enum AutomationCmd {
         /// make_task comes set to take the task it files, the one way a run can start from it
         #[arg(long, value_name = "KEY")]
         builtin: Option<String>,
+        /// the axis `split_by_dim` splits by (name or ID) — one a task holds one value of. Its ways out
+        /// are that axis's values, and the one for a task with none
+        #[arg(long, value_name = "AXIS", requires = "builtin")]
+        axis: Option<String>,
     },
     /// Take a placement off its automation with the answers and lines hanging on it — confirms unless -y
     PlaceRm {

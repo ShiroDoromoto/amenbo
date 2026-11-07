@@ -309,6 +309,31 @@ describe("the automations screen", () => {
     expect(container.querySelector(".actpanel")).toBeNull();
   });
 
+  // The middle of the build screen goes as the mock has it: the picked role's head, then how it works
+  // (the picture), then its agent and model.
+  it("puts the picture of how the role works between the role's head and its agent and model", async () => {
+    hoisted.automations = [card()];
+    hoisted.detail = detail({ roles: [{ id: 1, name: "Alice", passes: [] }] });
+    hoisted.check = { ready: true, blocks: [] };
+    await render();
+    await act(async () => { button("Morning round").click(); });
+    const main = container.querySelector(".actbuild__main")!;
+    const parts = [...main.children].map((one) =>
+      one.classList.contains("autorole--who")
+        ? "who"
+        : one.classList.contains("autorole")
+          ? "head"
+          : one.classList.contains("actbuild__canvashead")
+            ? "heading"
+            : one.classList.contains("actbuild__canvas")
+              ? "picture"
+              : one.className,
+    );
+    expect(parts).toEqual(["head", "heading", "picture", "who"]);
+    expect(main.querySelector(".actbuild__canvashead")?.textContent).toBe(t("auto.build.picture"));
+    expect(main.querySelector(".autorole--who .actbuild__sec")?.textContent).toBe(t("auto.build.roleWho"));
+  });
+
   // The tabs stay over the build screen (`AMB-T-5419`), with the automation's own tab lit.
   it("keeps the tabs over the build screen, and moves to another tab in one press", async () => {
     hoisted.automations = [card()];

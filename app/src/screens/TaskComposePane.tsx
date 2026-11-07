@@ -7,7 +7,6 @@ import { asTyped, isEnterSubmit } from "../core/keys";
 import { useSingleFlight } from "../core/singleFlight";
 import { useBoundFolders } from "../core/boundFolders";
 import { useProjectRoles } from "../core/projectRoles";
-import { dataAdapter } from "../mock/adapter";
 import { RoleField, ROLE_NONE } from "../components/RoleField";
 import { ErrorNote } from "../components/ErrorNote";
 import type { Facet } from "../mock/types";
@@ -42,7 +41,8 @@ export function TaskComposePane({
   const choosing = folders.all.length >= 2;
   const [at, setAt] = useState("");
   const canCreate = title.trim() !== "" && (!choosing || at !== "");
-  // The facet it is handed to, "" for nobody.
+  // The facet it is handed to, "" until the person presses one of the two — nothing is pressed for
+  // them (`AMB-D-531`), and a task created before that is handed to nobody.
   const [assignee, setAssignee] = useState<Facet | "">("");
   // The role, asked of a task handed to the AI in a project that defines one. Nothing is chosen until
   // the person chooses, "no role" included (`AMB-D-531`); creating before that says why under the field
@@ -51,7 +51,7 @@ export function TaskComposePane({
   const askingRole = assignee === "ai" && roles.length > 0;
   const [role, setRole] = useState("");
   const [roleMissing, setRoleMissing] = useState(false);
-  const pickAssignee = (next: Facet | "") => { setAssignee(next); setRole(""); setRoleMissing(false); };
+  const pickAssignee = (next: Facet) => { setAssignee(next); setRole(""); setRoleMissing(false); };
 
   // Dirty whenever there is input (title, notes, either day, a chosen folder, an assignee). On unmount, always drop it back to false.
   useEffect(() => {
@@ -119,15 +119,20 @@ export function TaskComposePane({
         </div>
         <div className="detail__field">
           <span className="detail__flabel">{t("detail.assignee")}</span>
-          <select
-            className="btn"
-            aria-label={t("detail.assignee")}
-            value={assignee}
-            onChange={(e) => pickAssignee(e.target.value as Facet | "")}
-          >
-            <option value="">{t("detail.unassigned")}</option>
-            {dataAdapter.listRoster().map((a) => <option value={a.kind} key={a.kind}>{a.name}</option>)}
-          </select>
+          <span className="ownerseg" role="group" aria-label={t("detail.assignee")}>
+            {(["human", "ai"] as const).map((facet) => (
+              <button
+                key={facet}
+                type="button"
+                className="ownerseg__one"
+                aria-pressed={assignee === facet}
+                onClick={() => pickAssignee(facet)}
+              >
+                <span className={`ownerseg__dot ownerseg__dot--${facet}`} aria-hidden="true" />
+                {t(facet === "ai" ? "facet.ai" : "facet.human")}
+              </button>
+            ))}
+          </span>
         </div>
         {askingRole && (
           <>

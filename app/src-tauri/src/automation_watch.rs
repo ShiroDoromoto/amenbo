@@ -67,7 +67,7 @@ const WHILE_WAITING: Duration = Duration::from_secs(30);
 /// without this its programs would be started again on every look.
 const SCRIPT_ASKED_AGAIN: Duration = Duration::from_secs(60 * amenbo_core::model::MIN_TRIGGER_EVERY_MINUTES as u64);
 
-/// **Where a trigger's scripts stand**, by automation: running on a thread of their own, or answered and
+/// **Where a trigger's scripts stand**, by trigger: running on a thread of their own, or answered and
 /// left until they may be asked again.
 enum Asking {
     /// Its programs are running; what they said comes down here when they end — `None` for no.
@@ -107,8 +107,8 @@ pub fn watch(app: tauri::AppHandle) {
     // The automations waiting for a task, and when each is next asked. Kept here rather than in the
     // store because it is only a pace: a restart that loses it asks them once more, which is all.
     let mut resting = HashMap::new();
-    // The automations whose trigger was refused at launch, and when each is asked again. A pace, like
-    // `resting`: a restart that loses it asks them once more, which is all.
+    // The triggers refused at launch, and when each is asked again. A pace, like `resting`: a restart
+    // that loses it asks them once more, which is all.
     let mut held = HashMap::new();
     // The triggers whose script is running or has answered. Not cleared by a nudge, so a press in the
     // app does not start a program again; a restart that loses it asks them once more, which is all.
@@ -285,24 +285,24 @@ fn fire_triggers(
         let store = crate::commands::open_store_read()?;
         amenbo_core::ops::automation_run::triggers_due(store.read_model().conn(), amenbo_core::time::Timestamp::now())?
     };
-    let to_ask = |automation: &i64| found.ask.iter().any(|(asked, _)| asked == automation);
-    held.retain(|automation, due| (found.due.contains(automation) || to_ask(automation)) && Instant::now() < *due);
-    asking.retain(|automation, standing| match standing {
+    let to_ask = |trigger: &i64| found.ask.iter().any(|(asked, _)| asked == trigger);
+    held.retain(|trigger, due| (found.due.contains(trigger) || to_ask(trigger)) && Instant::now() < *due);
+    asking.retain(|trigger, standing| match standing {
         Asking::Running(_) => true,
-        Asking::Answered(until) => to_ask(automation) && Instant::now() < *until,
+        Asking::Answered(until) => to_ask(trigger) && Instant::now() < *until,
     });
     let mut due: Vec<(i64, Option<ScriptsSaid>)> = found
         .due
         .into_iter()
-        .filter(|automation| !held.contains_key(automation))
-        .map(|automation| (automation, None))
+        .filter(|trigger| !held.contains_key(trigger))
+        .map(|trigger| (trigger, None))
         .collect();
-    for (automation, scripts) in &found.ask {
-        if !held.contains_key(automation) && !asking.contains_key(automation) {
-            asking.insert(*automation, ask(*automation, scripts.clone()));
+    for (trigger, scripts) in &found.ask {
+        if !held.contains_key(trigger) && !asking.contains_key(trigger) {
+            asking.insert(*trigger, ask(*trigger, scripts.clone()));
         }
     }
-    for (automation, standing) in asking.iter_mut() {
+    for (trigger, standing) in asking.iter_mut() {
         let Asking::Running(answer) = standing else { continue };
         let said = match answer.try_recv() {
             Ok(said) => Some(said),
@@ -311,10 +311,10 @@ fn fire_triggers(
         };
         *standing = Asking::Answered(Instant::now() + SCRIPT_ASKED_AGAIN);
         match said {
-            Some(Ok(Some(said))) => due.push((*automation, Some(said))),
+            Some(Ok(Some(said))) => due.push((*trigger, Some(said))),
             Some(Ok(None)) => {}
-            Some(Err(why)) => log::warn!("the trigger of automation {automation} had no answer from its script: {why}"),
-            None => log::warn!("the trigger of automation {automation} lost its script before it answered"),
+            Some(Err(why)) => log::warn!("trigger {trigger} had no answer from its script: {why}"),
+            None => log::warn!("trigger {trigger} lost its script before it answered"),
         }
     }
     if !due.is_empty() {
@@ -326,15 +326,15 @@ fn fire_triggers(
             workspace_open: None,
             by: None,
         };
-        for (automation, said) in due {
+        for (trigger, said) in due {
             let fired =
-                crate::commands::with_store_mut(|store| Ok(store.automation_trigger_fire(automation, &by, said.as_ref())?));
+                crate::commands::with_store_mut(|store| Ok(store.automation_trigger_fire(trigger, &by, said.as_ref())?));
             match fired {
-                Ok(Some(run)) => log::info!("the trigger of automation {automation} started run {}", run.id),
+                Ok(Some(run)) => log::info!("trigger {trigger} started run {}", run.id),
                 Ok(None) => {}
                 Err(e) => {
-                    log::warn!("the trigger of automation {automation} could not start a run: {}", e.message_en);
-                    held.insert(automation, Instant::now() + WHILE_WAITING);
+                    log::warn!("trigger {trigger} could not start a run: {}", e.message_en);
+                    held.insert(trigger, Instant::now() + WHILE_WAITING);
                 }
             }
         }
@@ -350,15 +350,15 @@ fn fire_triggers(
 
 /// **Start a trigger's scripts** on a thread of their own, and wake the look once they have answered.
 /// Each is stopped only at its timeout: nothing in the app waits on them.
-fn ask(automation: i64, scripts: TriggerScripts) -> Asking {
+fn ask(trigger: i64, scripts: TriggerScripts) -> Asking {
     let (tell, answer) = std::sync::mpsc::channel();
-    let started = std::thread::Builder::new().name(format!("trigger-script-{automation}")).spawn(move || {
+    let started = std::thread::Builder::new().name(format!("trigger-script-{trigger}")).spawn(move || {
         let said = amenbo_core::ops::automation_run::ask_trigger(&scripts, || false);
         let _ = tell.send(said);
         wake();
     });
     if let Err(e) = started {
-        log::warn!("the trigger of automation {automation} could not start a thread for its script: {e}");
+        log::warn!("trigger {trigger} could not start a thread for its script: {e}");
     }
     Asking::Running(answer)
 }

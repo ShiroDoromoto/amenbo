@@ -625,7 +625,7 @@ fn a_trigger_is_written_shown_and_taken_away() {
     let (_, a, _, _) = an_automation(&cli);
 
     let set = cli.json(&["automation", "trigger", &a, "--every", "60", "--title", "Look over the inbox", "--notes", "what to do", "--json"]);
-    let trigger = &set["automation"]["trigger"];
+    let trigger = &set["automation"]["triggers"][0];
     assert_eq!(trigger["when"], serde_json::json!({ "kind": "every", "minutes": 60 }), "{set}");
     assert_eq!(
         trigger["task"],
@@ -637,21 +637,21 @@ fn a_trigger_is_written_shown_and_taken_away() {
     assert!(text.contains("every 60 minute(s), filing \"Look over the inbox\""), "{text}");
 
     let idle = cli.json(&["automation", "trigger", &a, "--when-idle", "--title", "Look over the inbox", "--json"]);
-    assert_eq!(idle["automation"]["trigger"]["when"], serde_json::json!({ "kind": "idle" }), "{idle}");
+    assert_eq!(idle["automation"]["triggers"][0]["when"], serde_json::json!({ "kind": "idle" }), "{idle}");
     let (text, _) = cli.run(&["automation", "show", &a]);
     assert!(text.contains("whenever none of its runs is under way, filing \"Look over the inbox\" — not before"), "{text}");
 
     let counted = cli.json(&[
         "automation", "trigger", &a, "--when-idle", "--if-tasks", "status:todo", "--fewer-than", "3", "--title", "Look over the inbox", "--json",
     ]);
-    let trigger = &counted["automation"]["trigger"];
+    let trigger = &counted["automation"]["triggers"][0];
     assert_eq!(trigger["when"], serde_json::json!({ "kind": "idle" }), "{counted}");
     assert_eq!(trigger["condition"], serde_json::json!({ "filter": "status:todo", "below": 3 }), "{counted}");
     let (text, _) = cli.run(&["automation", "show", &a]);
     assert!(text.contains("whenever none of its runs is under way while fewer than 3 task(s) match \"status:todo\""), "{text}");
 
     let alone = cli.json(&["automation", "trigger", &a, "--if-tasks", "status:todo", "--fewer-than", "1", "--title", "x", "--json"]);
-    assert_eq!(alone["automation"]["trigger"]["when"], serde_json::json!({ "kind": "tasks" }), "{alone}");
+    assert_eq!(alone["automation"]["triggers"][0]["when"], serde_json::json!({ "kind": "tasks" }), "{alone}");
     let (text, _) = cli.run(&["automation", "show", &a]);
     assert!(text.contains("whenever fewer than 1 task(s) match \"status:todo\", filing \"x\" — not before"), "{text}");
 
@@ -661,7 +661,7 @@ fn a_trigger_is_written_shown_and_taken_away() {
         "automation", "trigger", &a, "--if-script", program, "--script-arg", "--quiet", "--script-timeout-minutes", "5",
         "--title", "x", "--json",
     ]);
-    let trigger = &asked["automation"]["trigger"];
+    let trigger = &asked["automation"]["triggers"][0];
     assert_eq!(trigger["when"], serde_json::json!({ "kind": "script" }), "{asked}");
     assert_eq!(
         trigger["script"],
@@ -675,7 +675,7 @@ fn a_trigger_is_written_shown_and_taken_away() {
         "automation", "trigger", &a, "--every", "60", "--if-tasks", "status:todo", "--fewer-than", "3", "--if-script", program,
         "--title", "x", "--json",
     ]);
-    assert_eq!(both["automation"]["trigger"]["script"]["timeout_minutes"], serde_json::json!(30), "{both}");
+    assert_eq!(both["automation"]["triggers"][0]["script"]["timeout_minutes"], serde_json::json!(30), "{both}");
     let (text, _) = cli.run(&["automation", "show", &a]);
     assert!(
         text.contains(&format!("every 60 minute(s) while fewer than 3 task(s) match \"status:todo\" and \"{program}\" says so")),
@@ -684,7 +684,7 @@ fn a_trigger_is_written_shown_and_taken_away() {
 
     let file = if cfg!(windows) { r"C:\amenbo\task.md" } else { "/tmp/amenbo/task.md" };
     let read = cli.json(&["automation", "trigger", &a, "--every", "60", "--task-from-file", file, "--json"]);
-    assert_eq!(read["automation"]["trigger"]["task"], serde_json::json!({ "kind": "file", "path": file }), "{read}");
+    assert_eq!(read["automation"]["triggers"][0]["task"], serde_json::json!({ "kind": "file", "path": file }), "{read}");
     let (text, _) = cli.run(&["automation", "show", &a]);
     assert!(text.contains(&format!("every 60 minute(s), filing the task \"{file}\" says")), "{text}");
 
@@ -693,7 +693,7 @@ fn a_trigger_is_written_shown_and_taken_away() {
         "--task-script-timeout-minutes", "5", "--json",
     ]);
     assert_eq!(
-        written["automation"]["trigger"]["task"],
+        written["automation"]["triggers"][0]["task"],
         serde_json::json!({ "kind": "script", "script": { "program": program, "args": ["--quiet"], "timeout_minutes": 5 } }),
         "{written}"
     );
@@ -734,7 +734,7 @@ fn a_trigger_is_written_shown_and_taken_away() {
     }
 
     let off = cli.json(&["automation", "trigger", &a, "--off", "--json"]);
-    assert!(off["automation"]["trigger"].is_null(), "{off}");
+    assert_eq!(off["automation"]["triggers"], serde_json::json!([]), "{off}");
     let (text, _) = cli.run(&["automation", "show", &a]);
     assert!(!text.contains("starts a run on its own"), "{text}");
 }
@@ -751,7 +751,7 @@ fn a_trigger_is_named_and_files_under_a_role_of_its_own() {
     let set = cli.json(&[
         "automation", "trigger", &a, "--every", "60", "--name", "Inbox", "--role", &role, "--title", "Look over the inbox", "--json",
     ]);
-    let trigger = &set["automation"]["trigger"];
+    let trigger = &set["automation"]["triggers"][0];
     assert_eq!(trigger["name"].as_str(), Some("Inbox"), "{set}");
     assert_eq!(id_str(&trigger["role_id"]), role, "{set}");
     let (text, _) = cli.run(&["automation", "show", &a]);
@@ -761,7 +761,7 @@ fn a_trigger_is_named_and_files_under_a_role_of_its_own() {
     );
 
     let plain = cli.json(&["automation", "trigger", &a, "--every", "60", "--title", "Look over the inbox", "--json"]);
-    let trigger = &plain["automation"]["trigger"];
+    let trigger = &plain["automation"]["triggers"][0];
     assert_eq!(trigger["name"].as_str(), Some(""), "written again, it is blank: {plain}");
     assert!(trigger.get("role_id").is_none(), "and under no role: {plain}");
 

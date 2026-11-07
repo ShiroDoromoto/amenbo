@@ -624,7 +624,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             // clap holds exactly one of the two: `--action` is required unless `--builtin` is given.
             let (p, what) = match (action, builtin) {
                 (_, Some(key)) => {
-                    let p = store.automation_builtin_place(automation, &key).map_err(CliError::from)?;
+                    let p = store.automation_builtin_place(automation, &key, None).map_err(CliError::from)?;
                     (p, format!("the built-in '{key}'"))
                 }
                 (Some(action), None) => {

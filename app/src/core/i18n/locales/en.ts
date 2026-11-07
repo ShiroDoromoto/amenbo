@@ -1187,6 +1187,7 @@ const ui = {
   "auto.build.roleNew": "Role {n}",
   "auto.build.roleSteps": "Steps: {n}",
   "auto.build.roleName": "Role name",
+  "auto.build.roleIconRedo": "Redraw the icon",
   "auto.build.roleUp": "Move up",
   "auto.build.roleDown": "Move down",
   "auto.build.roleRemove": "Remove the role",

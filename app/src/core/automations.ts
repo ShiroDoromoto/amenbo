@@ -767,18 +767,20 @@ export async function addAutomationRole(automationId: number, name: string): Pro
 }
 
 /**
- * **Rename a role, or choose the agent and model its steps fall back to** where a step chose none
- * (`AMB-D-960`). `agent` / `model` take `null` to clear; clearing the agent clears the model with it,
- * and a model is only named beside an agent.
+ * **Rename a role, give it a new icon seed, or choose the agent and model its steps fall back to**
+ * where a step chose none (`AMB-D-960`). `icon` / `agent` / `model` take `null` to clear; clearing
+ * the agent clears the model with it, and a model is only named beside an agent.
  */
 export async function editAutomationRole(
   id: number,
-  patch: { name?: string; agent?: string | null; model?: string | null },
+  patch: { name?: string; icon?: string | null; agent?: string | null; model?: string | null },
 ): Promise<void> {
   if (!inTauri()) return;
   return ack("automation_role_edit", {
     id,
     name: patch.name ?? null,
+    icon: patch.icon ?? null,
+    clearIcon: patch.icon === null,
     agent: patch.agent ?? null,
     clearAgent: patch.agent === null,
     model: patch.model ?? null,

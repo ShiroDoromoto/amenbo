@@ -948,6 +948,7 @@ export const tr: Translation = {
     "auto.build.roleNew": "Rol {n}",
     "auto.build.roleSteps": "Adım: {n}",
     "auto.build.roleName": "Rolün adı",
+    "auto.build.roleIconRedo": "Simgeyi yeniden oluştur",
     "auto.build.roleUp": "Yukarı taşı",
     "auto.build.roleDown": "Aşağı taşı",
     "auto.build.roleRemove": "Rolü kaldır",

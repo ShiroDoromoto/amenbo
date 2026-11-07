@@ -965,6 +965,7 @@ export const ru: Translation = {
     "auto.build.roleNew": "Роль {n}",
     "auto.build.roleSteps": "Шагов: {n}",
     "auto.build.roleName": "Название роли",
+    "auto.build.roleIconRedo": "Пересоздать значок",
     "auto.build.roleUp": "Выше",
     "auto.build.roleDown": "Ниже",
     "auto.build.roleRemove": "Удалить роль",

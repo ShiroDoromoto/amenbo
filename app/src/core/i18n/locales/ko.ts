@@ -945,6 +945,7 @@ export const ko: Translation = {
     "auto.build.roleNew": "역할 {n}",
     "auto.build.roleSteps": "단계 수: {n}",
     "auto.build.roleName": "역할 이름",
+    "auto.build.roleIconRedo": "아이콘 다시 만들기",
     "auto.build.roleUp": "위로",
     "auto.build.roleDown": "아래로",
     "auto.build.roleRemove": "역할 삭제",

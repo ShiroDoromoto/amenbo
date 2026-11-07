@@ -195,6 +195,30 @@ describe("the picked role's head", () => {
     expect(hoisted.move).toHaveBeenCalledWith(2, "before", 1);
   });
 
+  it("redraws the icon by writing a new seed, a different one each press", async () => {
+    await head({ ...alice, icon: "old-seed" });
+    await press(buttonNamed(t("auto.build.roleIconRedo")));
+    await press(buttonNamed(t("auto.build.roleIconRedo")));
+    expect(hoisted.edit).toHaveBeenCalledTimes(2);
+    const seeds = hoisted.edit.mock.calls.map(([id, patch]) => {
+      expect(id).toBe(1);
+      expect(Object.keys(patch as object)).toEqual(["icon"]);
+      return (patch as { icon: string }).icon;
+    });
+    for (const seed of seeds) {
+      expect(seed).not.toBe("");
+      expect(seed).not.toBe("old-seed");
+    }
+    expect(seeds[0]).not.toBe(seeds[1]);
+  });
+
+  it("puts a refused redraw on the head", async () => {
+    hoisted.edit.mockRejectedValue("no room");
+    await head(alice);
+    await press(buttonNamed(t("auto.build.roleIconRedo")));
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("no room");
+  });
+
   it("removes the role and hands the screen back", async () => {
     const removed = vi.fn();
     await head(bob, removed);

@@ -711,7 +711,8 @@ jobs:
         run: npm run build
 
       # The window will not run wasm, and a dependency bump is merged with nobody reading it: the PDF
-      # reader publishes its own wasm build from its next major on, and this is what would notice.
+      # reader publishes wasm files of its own and is kept from shipping them, and this is what would
+      # notice one more arriving, or one of them reaching the bundle.
       # It reads the install and the bundle, which is why it sits here rather than in tree-guards.
       - name: Refuse WebAssembly in what ships
         run: ../guards/check-no-wasm.sh

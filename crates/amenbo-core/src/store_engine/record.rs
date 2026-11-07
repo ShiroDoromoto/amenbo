@@ -549,6 +549,10 @@ pub fn automation_action(a: &AutomationAction) -> Record {
 }
 
 pub fn automation(a: &Automation) -> Record {
+    let [trigger_script_program, trigger_script_args, trigger_script_timeout_minutes] =
+        script_values(&a.trigger.as_ref().and_then(|t| t.script.clone()));
+    let [trigger_task_script_program, trigger_task_script_args, trigger_task_script_timeout_minutes] =
+        script_values(&a.trigger.as_ref().and_then(|t| t.task.script().cloned()));
     Record::new(
         "automation",
         a.id,
@@ -568,16 +572,32 @@ pub fn automation(a: &Automation) -> Record {
                     "trigger_every_minutes",
                     match a.trigger.as_ref().map(|t| t.when) {
                         Some(TriggerWhen::Every { minutes }) => iv(minutes.into()),
-                        Some(TriggerWhen::Idle) | None => Value::Null,
+                        Some(TriggerWhen::Idle | TriggerWhen::Tasks | TriggerWhen::Script) | None => Value::Null,
                     },
                 ),
+                (
+                    "trigger_condition_filter",
+                    a.trigger.as_ref().and_then(|t| t.condition.as_ref()).map(|c| tv(&c.filter)).unwrap_or(Value::Null),
+                ),
+                (
+                    "trigger_condition_below",
+                    a.trigger
+                        .as_ref()
+                        .and_then(|t| t.condition.as_ref())
+                        .map(|c| iv(c.below.into()))
+                        .unwrap_or(Value::Null),
+                ),
+                ("trigger_script_program", trigger_script_program),
+                ("trigger_script_args", trigger_script_args),
+                ("trigger_script_timeout_minutes", trigger_script_timeout_minutes),
                 ("trigger_task_kind", a.trigger.as_ref().map(|t| tv(t.task.kind_str())).unwrap_or(Value::Null)),
                 (
                     "trigger_task_title",
                     a.trigger
                         .as_ref()
-                        .map(|t| match &t.task {
-                            TriggerTask::Fixed { title, .. } => tv(title),
+                        .and_then(|t| match &t.task {
+                            TriggerTask::Fixed { title, .. } => Some(tv(title)),
+                            TriggerTask::File { .. } | TriggerTask::Script { .. } => None,
                         })
                         .unwrap_or(Value::Null),
                 ),
@@ -585,13 +605,30 @@ pub fn automation(a: &Automation) -> Record {
                     "trigger_task_notes",
                     a.trigger
                         .as_ref()
-                        .map(|t| match &t.task {
-                            TriggerTask::Fixed { notes, .. } => tv(notes),
+                        .and_then(|t| match &t.task {
+                            TriggerTask::Fixed { notes, .. } => Some(tv(notes)),
+                            TriggerTask::File { .. } | TriggerTask::Script { .. } => None,
                         })
                         .unwrap_or(Value::Null),
                 ),
+                (
+                    "trigger_task_path",
+                    a.trigger
+                        .as_ref()
+                        .and_then(|t| match &t.task {
+                            TriggerTask::File { path } => Some(tv(path)),
+                            TriggerTask::Fixed { .. } | TriggerTask::Script { .. } => None,
+                        })
+                        .unwrap_or(Value::Null),
+                ),
+                ("trigger_task_script_program", trigger_task_script_program),
+                ("trigger_task_script_args", trigger_task_script_args),
+                ("trigger_task_script_timeout_minutes", trigger_task_script_timeout_minutes),
+                ("trigger_name", a.trigger.as_ref().map(|t| tv(&t.name)).unwrap_or(Value::Null)),
+                ("trigger_role_id", kv_opt(&a.trigger.as_ref().and_then(|t| t.role_id))),
                 ("trigger_next_at", tsov(&a.trigger.as_ref().map(|t| t.next_at))),
                 ("stopped", bv(a.stopped)),
+                ("waits_for_task_since", tsov(&a.waits_for_task_since)),
                 ("order_key", tv(&a.order_key)),
             ],
             &a.created_at,
@@ -894,6 +931,7 @@ pub fn automation_run_def(d: &AutomationRunDef) -> Record {
                 ("ins", tv(&d.ins)),
                 ("cfg", tv(&d.cfg)),
                 ("entry", bv(d.entry)),
+                ("roles", tv(&d.roles)),
             ],
             &d.created_at,
             &d.updated_at,
@@ -912,6 +950,8 @@ pub fn automation_run_task(t: &AutomationRunTask) -> Record {
                 ("task_id", kv_opt(&t.task_id)),
                 ("started_at", tsov(&t.started_at)),
                 ("ended_at", tsov(&t.ended_at)),
+                ("role_id", kv_opt(&t.role_id)),
+                ("incident_task_id", kv_opt(&t.incident_task_id)),
             ],
             &t.created_at,
             &t.updated_at,

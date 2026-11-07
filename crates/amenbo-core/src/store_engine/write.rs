@@ -161,6 +161,13 @@ impl<'a> WriteTx<'a> {
         self.activity.borrow_mut().push(entry);
     }
 
+    /// The activity lines this operation has queued so far, in order — for a test to read before the
+    /// commit appends them.
+    #[cfg(test)]
+    pub(crate) fn queued_activity(&self) -> Vec<crate::activity_log::Entry> {
+        self.activity.borrow().clone()
+    }
+
     /// Physically delete the `attachment` rows of `(target_type, target_id)`. See
     /// [`StoreEngine::delete_records_for_target`].
     pub(crate) fn delete_records_for_target(

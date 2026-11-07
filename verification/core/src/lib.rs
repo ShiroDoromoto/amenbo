@@ -446,9 +446,10 @@ const REGISTRY: &[OpSpec] = &[
     // above like every other.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "create-in-pane", required: &["title", "shows"], refs: &[], strings: &["title", "shows"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "assign", required: &["target", "assignee"], refs: &["target"], strings: &["assignee"], binds: false },
-    // A value something other than the road writes, waited for. A run waiting for a task looks again
-    // only every so often, so a task handed to the AI is reserved some seconds after the hand-over and
-    // not at it: the `field` assert right after the move would read the task before the run had looked.
+    // A value something other than the road writes, waited for. An automation waiting for a
+    // task is asked again only every so often, so a task handed to the AI is reserved some seconds after
+    // the hand-over and not at it: the `field` assert right after the move would read the task before the
+    // automation had been asked.
     // `seconds` is how long the road gives it, and the wait ends as soon as the value is there. It is an
     // action and not an assert, since it proves nothing — a value that never comes is left for the
     // `field` assert behind it to read.
@@ -4175,11 +4176,7 @@ const REGISTRY: &[OpSpec] = &[
     // Amenbo's built-ins (`take_task`, …) — one of the two, never both. A built-in is defined in the
     // code and not in the store, so it is named by its key rather than by a binding. Its ways out
     // carry the names the code gives them, and an edge off one is written with that name.
-    //
-    // `axis` is the axis the built-in that splits by one (`split_by_dim`) splits by, named as the
-    // project names it. There is one of that built-in per axis, and its ways out are the axis's values,
-    // so an edge off one is written with a value's name.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "place-add", required: &["target"], refs: &["target", "action"], strings: &["builtin", "axis"], binds: true },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "place-add", required: &["target"], refs: &["target", "action"], strings: &["builtin"], binds: true },
     // Who carries one step (`step`) out at one placement (`target`), and the model where one is named.
     // A step a run could open with nobody chosen is refused at launch, so a premise
     // that stands up a definition to be run chooses for every step of every placement. `agent` is the
@@ -4621,16 +4618,13 @@ const REGISTRY: &[OpSpec] = &[
     // screen is drawn. The pane outlives the step it was opened for, which is why a run that is over
     // is read here at all.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-pane", required: &[], refs: &["target", "task"], strings: &["step", "action", "state", "reason"], binds: false },
-    // **Which face that pane's body is turned to** (`face`): the automation's picture, or the
-    // terminal. A run's pane opens on its picture, and is turned to its terminal while a step that may
-    // wait for a person runs. On the picture, the box the run is on — named the way `pick-box` names
-    // one, by `box` or, for a built-in, by its key (`builtin`) — wears a heavier border, stands picked and is brought
-    // to the middle. Where its action has steps, the box is drawn grown with the action's picture
-    // inside, and it is the step under way there (`step`, by name) that does so, the box's border lit.
-    // What it has passed on the task it is working is lit: the boxes listed under `passed`
-    // (by name) and `passed_builtins` (by key), with the lines between them. A box is read
-    // off the picture as drawn, so a road names what it is sure of and leaves the rest out.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-picture", required: &["face"], refs: &["target"], strings: &["face", "box", "builtin", "step"], binds: false },
+    // **Which face that pane's body is turned to** (`face`): its roles, or the terminal. A run's pane
+    // opens on its roles, and is turned to its terminal while a step that may wait for a person runs.
+    // On the roles, a role whose round is under way is a card, standing in the order the roles are
+    // defined in; a role with no round is an icon on the bar under the cards. `card` is the name the
+    // card carries — the role's, or the automation's where it defines no role — and `step` the step
+    // under way that the card says. A road names what it is sure of and leaves the rest out.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-roles", required: &["face"], refs: &["target"], strings: &["face", "card", "step"], binds: false },
     // **Whether the program in that pane has ended**, once its run is over. The pane outlives the
     // run, and its last lines stay on the screen either way, so words on it cannot say whether the
     // terminal is still taking lines — a line typed at it is what does. A run that is over leaves no
@@ -4721,8 +4715,8 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `on: pane` presses the same moves on the line over the pane the run is drawn in rather than on
     // the tab's row: a reader watching a run is in its pane. Left off, or `on: row`, it is the row.
-    // `open` is the row's alone, the pane being where it leads; `picture` and `terminal` are the
-    // pane's alone — the two faces its body is turned to (`run-picture`).
+    // `open` is the row's alone, the pane being where it leads; `roles` and `terminal` are the
+    // pane's alone — the two faces its body is turned to (`run-roles`).
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-run", required: &["press"], refs: &["target"], strings: &["press", "on"], binds: false },
     //
     // **The automations the sidebar opens**, every project's on one list (`open-view` with

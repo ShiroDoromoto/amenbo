@@ -182,6 +182,7 @@ mod tests {
     fn walk(tx: &WriteTx<'_>, p: &Picture, commit: Option<&str>, report: &str) -> (AutomationRun, Next) {
         let claude = ["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&claude),
             models: nothing_asked(),
             workspace_open: Some(true),
@@ -327,6 +328,7 @@ mod tests {
             for_ai(tx, project);
             let claude = ["claude".to_string()];
             let by = Launcher {
+                default_agent: None,
                 startable: Some(&claude),
                 models: nothing_asked(),
                 workspace_open: Some(true),
@@ -359,7 +361,7 @@ mod tests {
             };
             assert_eq!(paused.run.status, AutomationRunStatus::Paused);
             assert_eq!(paused.run.pause_kind, Some(crate::model::AutomationPauseKind::BeforeNextTask));
-            let resumed = crate::ops::automation_stop::resume(tx, run.id, Some(&claude), nothing_asked())
+            let resumed = crate::ops::automation_stop::resume(tx, run.id, Some(&claude), nothing_asked(), None)
                 .expect("resume");
             assert!(resumed.next.entry, "picked up at the entry: {:?}", resumed.next);
             assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"));
@@ -378,6 +380,7 @@ mod tests {
             let by = Launcher {
                 startable: Some(&claude),
                 models: nothing_asked(),
+                default_agent: None,
                 workspace_open: Some(true),
                 by: Some(ActorKind::Ai),
             };
@@ -411,12 +414,12 @@ mod tests {
             assert_eq!(paused.run.status, AutomationRunStatus::Paused);
             assert_eq!(paused.run.pause_kind, Some(crate::model::AutomationPauseKind::BeforeNextTask));
 
-            let refused = crate::ops::automation_stop::resume(tx, run.id, Some(&claude), nothing_asked());
+            let refused = crate::ops::automation_stop::resume(tx, run.id, Some(&claude), nothing_asked(), None);
             assert!(refused.is_err(), "picking it up would start a new round");
             assert!(launch(tx, p.automation.id, &by).is_err(), "and so would a launch");
 
             automation::stop(tx, p.automation.id, false).expect("start it again");
-            let resumed = crate::ops::automation_stop::resume(tx, run.id, Some(&claude), nothing_asked())
+            let resumed = crate::ops::automation_stop::resume(tx, run.id, Some(&claude), nothing_asked(), None)
                 .expect("resume");
             assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"));
         });

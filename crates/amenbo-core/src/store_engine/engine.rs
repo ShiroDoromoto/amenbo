@@ -73,6 +73,12 @@ pub enum StoreEngineError {
     /// the lines would otherwise be lost without a word.
     #[error("{0} activity line(s) queued on a store engine with no activity ledger")]
     ActivityWithoutLedger(usize),
+    /// A whole-store read ([`super::hydrate_database`]) was handed a store whose `format_version` is
+    /// below this build's: the migration chain has not carried it here, so its tables may lack columns
+    /// this build reads. Named rather than left to surface as SQLite's `no such column`, which points
+    /// at the column and not at the missing migration.
+    #[error("store is at format v{found} but this build reads v{latest}: run the migration before hydrating")]
+    NotMigrated { found: i64, latest: i64 },
 }
 
 impl StoreEngineError {
@@ -261,7 +267,7 @@ impl StoreEngine {
         // Enforce the registry's `REFERENCES` for every write from here on.
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
         let changes: ChangeBuffer = ChangeBuffer::default();
-        install_change_hook(&conn, &changes)?;
+        install_change_hook(&mut conn, &changes)?;
         // Due from the start, so the first commit this engine makes trims — the bound a CLI-only store
         // would otherwise never reach (`rows_since_trim`). An engine that never writes never pays it.
         Ok(StoreEngine { conn, changes, rows_since_trim: trim_due_at_once(), activity_file: None })
@@ -604,7 +610,7 @@ fn trim_due_at_once() -> std::sync::atomic::AtomicU64 {
 /// only records: it cannot write to the feed table from here — SQLite forbids using the connection inside
 /// the hook — so the rows are collected now and written inside the transaction that produced them
 /// ([`super::write::WriteTx::commit`]).
-fn install_change_hook(conn: &Connection, changes: &ChangeBuffer) -> Result<()> {
+fn install_change_hook(conn: &mut Connection, changes: &ChangeBuffer) -> Result<()> {
     let sink = changes.clone();
     conn.update_hook(Some(move |action: rusqlite::hooks::Action, _db: &str, table: &str, row_id: i64| {
         // The whitelist (`schema::feed_table`): SQLite also reports `sqlite_sequence`, `store_meta` and

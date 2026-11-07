@@ -1,5 +1,5 @@
 // How long a key pressed in a pane's box takes to reach the screen, in WebKit — the engine the
-// macOS app draws with — on the terminal face and on a run's picture.
+// macOS app draws with — on the terminal face and on a run's roles.
 //
 //   npm run bench:input                       # the app as it is in this checkout
 //   npm run bench:input -- --rev <commit>     # app/src as it was at that commit, for a before/after
@@ -44,7 +44,7 @@ const { values: opts } = parseArgs({
 });
 const paneCounts = opts.panes.split(",").map(Number);
 const presses = Number(opts.presses);
-const MODES = ["terminal", "picture"];
+const MODES = ["terminal", "roles"];
 
 // The real path, since what the bundler hands back as an importer is one (macOS keeps tmp under a link).
 const work = realpathSync(mkdtempSync(join(tmpdir(), "bench-input-latency-")));

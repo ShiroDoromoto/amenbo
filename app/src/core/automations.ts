@@ -45,7 +45,6 @@ import type {
   AutomationRunHistoryDto,
   AutomationRunStartedDto,
   AutomationTestRunDto,
-  AutomationRunTrailDto,
   EveryAutomationActionCardDto,
   EveryAutomationCardDto,
   WakeDto,
@@ -225,48 +224,34 @@ export function useAutomationBuiltins(): AutomationBuiltinDto[] {
  * **Put a built-in on the picture**, standing on its own, named by its key. It is how the first
  * placement comes in, which is one of the `ENTRY_BUILTINS` (`AMB-D-977`). Its library action is
  * written the first time any automation places it.
- *
- * `axis` is the axis the built-in that splits by one splits by, and `null` for any other: that one has
- * an action per axis (`AMB-D-973`).
  */
-export async function placeAutomationBuiltin(
-  automationId: number,
-  key: string,
-  axis: number | null = null,
-): Promise<void> {
+export async function placeAutomationBuiltin(automationId: number, key: string): Promise<void> {
   if (!inTauri()) return;
-  return ack("automation_builtin_place", { automationId, key, axis });
+  return ack("automation_builtin_place", { automationId, key });
 }
 
 /**
  * **Put a built-in in on a line** — `insertAutomationAction` for a built-in: the way out that was
  * pressed comes to point at the new spot, and the new spot goes on to where that way out used to.
- * `axis` as for `placeAutomationBuiltin`.
  */
-export async function insertAutomationBuiltin(
-  edgeId: number,
-  key: string,
-  axis: number | null = null,
-): Promise<void> {
+export async function insertAutomationBuiltin(edgeId: number, key: string): Promise<void> {
   if (!inTauri()) return;
-  return ack("automation_builtin_insert", { edgeId, key, axis });
+  return ack("automation_builtin_insert", { edgeId, key });
 }
 
 /**
  * **Put a built-in on after a way out that says nothing yet** — `insertAutomationBuiltin` for a way
- * out with no line to press. `axis` as for `placeAutomationBuiltin`.
+ * out with no line to press.
  */
 export async function insertAutomationBuiltinAtExit(
   from: { boxId: number; exitName: string | null },
   key: string,
-  axis: number | null = null,
 ): Promise<void> {
   if (!inTauri()) return;
   return ack("automation_builtin_insert_at_exit", {
     fromId: from.boxId,
     exitName: from.exitName,
     key,
-    axis,
   });
 }
 
@@ -720,6 +705,51 @@ export async function chooseAutomationAgent(
 ): Promise<void> {
   if (!inTauri()) return;
   return ack("automation_placement_step_set", { placementId, stepId, agent, model });
+}
+
+/**
+ * **Define a role in an automation**, after the roles already there. Like every other write on the
+ * definition it goes to the draft, and the role is in the version the next save makes.
+ */
+export async function addAutomationRole(automationId: number, name: string): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_role_add", { automationId, name });
+}
+
+/**
+ * **Rename a role, or choose the agent and model its steps fall back to** where a step chose none
+ * (`AMB-D-960`). `agent` / `model` take `null` to clear; clearing the agent clears the model with it,
+ * and a model is only named beside an agent.
+ */
+export async function editAutomationRole(
+  id: number,
+  patch: { name?: string; agent?: string | null; model?: string | null },
+): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_role_edit", {
+    id,
+    name: patch.name ?? null,
+    agent: patch.agent ?? null,
+    clearAgent: patch.agent === null,
+    model: patch.model ?? null,
+    clearModel: patch.model === null,
+  });
+}
+
+/** **Move a role** before or after another of the same automation's. */
+export async function moveAutomationRole(
+  id: number,
+  position: "before" | "after",
+  anchorId: number,
+): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_role_move", { id, position, anchorId });
+}
+
+/** **Take a role out of its automation.** Its placements stay on the picture. */
+export async function removeAutomationRole(id: number): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_role_remove", { id });
 }
 
 /** Which of the two declares a way out or an input: the library action, or one step inside it. */
@@ -1182,28 +1212,6 @@ export function useHeldBack(run: number | null): AutomationHeldBackDto | null {
   const { data } = useQuery<AutomationHeldBackDto | null>(
     ["heldBack", run],
     () => (run === null ? Promise.resolve(null) : fetchHeldBack(run)),
-  );
-  return data ?? null;
-}
-
-/**
- * **Where a run has been on its task, and where it stands** (`AMB-T-5774`): the spots it passed in the
- * order it passed them, the one under way, and the steps passed inside it and the one under way there.
- * Null outside Tauri.
- */
-export async function fetchRunTrail(run: number): Promise<AutomationRunTrailDto | null> {
-  if (!inTauri()) return null;
-  return invoke<AutomationRunTrailDto>("automation_run_trail", { runId: run });
-}
-
-/**
- * Subscribing read of a run's trail. It sits under the running tab's key, so a step opened, a way out
- * taken or the next task taken reads it again. Null until the first answer lands.
- */
-export function useRunTrail(run: number): AutomationRunTrailDto | null {
-  const { data } = useQuery<AutomationRunTrailDto | null>(
-    ["automationRuns", "trail", run],
-    () => fetchRunTrail(run),
   );
   return data ?? null;
 }

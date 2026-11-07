@@ -254,10 +254,6 @@ impl Driver<'_> {
                     flag.into(),
                     placed.clone(),
                 ];
-                // The axis the built-in that splits by one splits by, as the project names it.
-                if let Some(axis) = with.get("axis").and_then(|v| v.as_str()) {
-                    args.extend(["--axis".into(), axis.to_string()]);
-                }
                 args.push("--json".into());
                 let id = self.bound_id(&args, "automation_placement", bind)?;
                 Ok(Outcome::action(format!(
@@ -551,7 +547,7 @@ impl Driver<'_> {
                 self.run_json(&["automation", verb, &run.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("{verb}d run {run}")))
             }
-            // One run, asked to pause before its next task. One waiting for a task pauses on the spot.
+            // One run, asked to pause before its next task. One waiting for room before it pauses on the spot.
             "pause-before-next-task" => {
                 let run = self.resolve(with)?;
                 let v = self.run_json(&["automation", "pause", &run.to_string(), "--before-next-task", "--json"])?;

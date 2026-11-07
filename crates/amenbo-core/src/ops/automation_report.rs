@@ -158,12 +158,19 @@ pub fn take(tx: &WriteTx<'_>, run_step_id: i64, task_id: i64) -> Result<Task> {
     };
     in_the_runs_project(tx, &run_step, task_id)?;
     let task = crate::ops::task::set_status(tx, task_id, TaskStatus::InProgress, ActorKind::Ai)?;
+    // The round is worked under the task's role, where it is one the run's copies start a round of
+    // (`automation_run::roles_started`) — what says where the round goes on to.
+    let role = match task.role_id {
+        Some(role) if automation_run::roles_started(tx.conn(), run_step.run_id)?.contains(&role) => Some(role),
+        _ => None,
+    };
     // The stretch is what the task belongs to: a run walks several in turn, and every step of this one
     // is about this task from here on.
     if let Some(stretch_id) = run_step.run_task_id {
         if let Some(before) = read::automation_run_task(tx.conn(), stretch_id)? {
             let mut after = before.clone();
             after.task_id = Some(task.id);
+            after.role_id = role;
             after.updated_at = Timestamp::now();
             crate::ops::emit_update(
                 tx,
@@ -174,6 +181,16 @@ pub fn take(tx: &WriteTx<'_>, run_step_id: i64, task_id: i64) -> Result<Task> {
     }
     put(tx, &run_step, port, exit, Produced::Task(task.id))?;
     Ok(task)
+}
+
+/// **Put the round this execution belongs to under a role** — the role a test run's made-up task stands
+/// in for, as it names none of its own ([`crate::ops::automation_rehearse`]).
+pub(crate) fn put_under(tx: &WriteTx<'_>, run_step_id: i64, role_id: i64) -> Result<()> {
+    let run_step = live_execution(tx, run_step_id)?;
+    let Some(stretch_id) = run_step.run_task_id else { return Ok(()) };
+    let Some(before) = read::automation_run_task(tx.conn(), stretch_id)? else { return Ok(()) };
+    let after = AutomationRunTask { role_id: Some(role_id), updated_at: Timestamp::now(), ..before.clone() };
+    crate::ops::emit_update(tx, record::automation_run_task(&before), record::automation_run_task(&after))
 }
 
 // ───────────────────────── out ─────────────────────────
@@ -482,8 +499,8 @@ fn whats_next(
             true => round_over(tx, run),
             false => Ok(Next::Closed(automation_stop::ended(tx, run, Ending::Completed)?)),
         },
-        // The way out calls a person: an ending the author of the picture chose, or an error way out
-        // nobody drew a line from (`AMB-D-966`).
+        // The way out halts the run, and the round is filed as a failure: an ending the author of the
+        // picture chose, or an error way out nobody drew a line from.
         Onward::Halt => Ok(Next::Halted(failed(tx, run, AutomationStoppedReason::Halted)?)),
         // Nothing says what follows the way out — or it leads somewhere the run never copied down,
         // such as a placement added after the launch. The run has no snapshot of that and will not
@@ -518,7 +535,7 @@ fn whats_next(
 fn round_over(tx: &WriteTx<'_>, run: AutomationRun) -> Result<Next> {
     let conn = tx.conn();
     let stretch = read::automation_run_task_last(conn, run.id)?;
-    automation_stop::close_stretch(tx, stretch.as_ref(), Timestamp::now())?;
+    automation_stop::close_stretch(tx, stretch.as_ref(), Timestamp::now(), None)?;
     if run.pause_requested || run.pause_before_next_task || automation_stop::automation_stopped(conn, &run)? {
         return Ok(Next::Paused(automation_stop::settle(tx, run, AutomationPauseKind::BeforeNextTask)?));
     }
@@ -880,6 +897,7 @@ mod tests {
     fn a_run(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
         let startable = vec!["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&startable),
             models: crate::ops::automation_run::nothing_asked(),
             workspace_open: Some(true),
@@ -905,7 +923,7 @@ mod tests {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
-            Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
+            Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::LeftToWait { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
             Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             Opened::Script(_) => panic!("not a script"),
             Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),

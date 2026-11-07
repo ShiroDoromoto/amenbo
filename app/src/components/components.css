@@ -1375,7 +1375,6 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__arrow--branch { fill: var(--c-heed); }
 .autopic__arrow--error, .autopic__arrow--back { fill: var(--c-stop); }
 .autopic__arrow--leaves { fill: var(--c-accent); }
-.autopic__arrow--lit { fill: var(--c-accent); }
 /* What the colours and dashes mean. Each swatch is a short line drawn as the line it stands for. */
 .autopic__legend {
   display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-1) var(--s-3);
@@ -1429,6 +1428,24 @@ button.feed__target:hover { color: var(--c-accent); }
 /* What a step takes in and hands on, on an action's picture — a line each, cut short where it runs out. */
 .autopic__io { display: flex; flex-direction: column; align-items: stretch; gap: 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
 .autopic__iopart { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* On a role's picture: the steps inside an action, in order on one line, cut short where it runs out. */
+.autopic__steps {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-xs); color: var(--c-text);
+}
+/* A line going back, drawn as a loop under the box it goes back to — in the colour a line going back is. */
+.autopic__loop { font-size: var(--fs-xs); color: var(--c-stop); }
+.autopic__loop .autopic__iopart { min-width: 0; }
+.autopic__loopmark { color: var(--c-stop); }
+/* Over and under a role's round: where it receives its task from, and whom it hands on to. Dashed,
+   as the mock draws them: they stand for something outside the round, not a box on it. */
+.autopic__end {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: var(--s-1) var(--s-2); border: 1px dashed var(--c-edge); border-radius: var(--r-md);
+  font-size: var(--fs-xs); color: var(--c-text-muted);
+}
+.autopic__endwords { color: var(--c-text); font-weight: 600; }
+.autopic__roundempty { font-size: var(--fs-md); color: var(--c-text-muted); }
 /* A box that takes the next task, said over its top-right — where a stretch begins. */
 .autopic__takes {
   position: absolute; transform: translate(-100%, calc(-100% - 2px));
@@ -1981,6 +1998,40 @@ button.feed__target:hover { color: var(--c-accent); }
 .actport--cfg { --tone: var(--c-heed); }
 .actport--exit { --tone: var(--c-accent); color: var(--c-text); background: var(--c-surface-pic) var(--c-surface); }
 .actport--error { --tone: var(--c-stop); color: var(--c-stop); border-style: dashed; background: none; }
+/* The roles down the left of the build screen, and what is built for the picked one beside them
+   (`../screens/AutomationRoles`). Narrow is the screen's own width, not the window's, for the reason
+   `autoruns` gives: the list then goes across the top and its rows stand side by side. */
+.actbuild__body { container: actbody / inline-size; display: flex; align-items: stretch; }
+.actbuild__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.autoroles {
+  flex: 0 0 200px; display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3);
+  background: var(--c-sunken-pic) var(--c-sunken); border-inline-end: var(--border-w) var(--border-style) var(--c-rule);
+}
+.autoroles__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.autoroles__row {
+  width: 100%; display: flex; align-items: center; gap: var(--s-2); padding: 5px 6px;
+  font: inherit; color: inherit; text-align: start; background: none; border: 0; border-radius: var(--r-sm); cursor: pointer;
+}
+.autoroles__row:hover { background: var(--c-hover); }
+.autoroles__row[aria-current] { background: var(--c-accent-weak); color: var(--c-accent); }
+.autoroles__name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-weight: var(--fw-medium); }
+.autoroles__count { font-size: var(--fs-xs); color: var(--c-text-muted); }
+.autoroles__add { align-self: flex-start; }
+@container actbody (max-width: 40rem) {
+  .actbuild__body { flex-direction: column; }
+  .autoroles { flex-basis: auto; border-inline-end: 0; border-block-end: var(--border-w) var(--border-style) var(--c-rule); }
+  .autoroles__list { flex-direction: row; flex-wrap: wrap; }
+  .autoroles__row { width: auto; }
+}
+.autorole { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-3) 0; }
+.autorole__head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
+.autorole__name {
+  flex: 1 1 10rem; min-width: 0; max-width: none; padding: 0; border: 0; border-radius: 0;
+  border-block-end: var(--border-w) dashed var(--c-edge); background: none;
+  font: inherit; font-size: var(--fs-xl); font-weight: var(--fw-bold); color: var(--c-text);
+}
+.autorole__who { display: grid; grid-template-columns: auto minmax(0, 20rem); align-items: center; gap: var(--s-1) var(--s-3); font-size: var(--fs-md); }
+.autorole__who > select { min-width: 0; }
 /* The picture. Its panel is not beside it here but in the shell's right-pane column
    (`../shell/paneSlot`), so the picture has the whole width of `.main` and only as much height as it
    draws. */
@@ -2001,6 +2052,16 @@ button.feed__target:hover { color: var(--c-accent); }
 /* An empty picture draws nothing, and the "+ first …" is all the place holds: it stands in the middle,
    with room above and below where the picture would be. */
 .actbuild__canvas > .btn:only-child { margin-block: var(--s-6); }
+/* The table of who carries out each step of the picked role's round, under the picture
+   (`../screens/AutomationRoleCarriers`). */
+.autocarriers { display: flex; flex-direction: column; gap: var(--s-2); padding: 0 var(--s-3) var(--s-5); }
+.autocarriers__table { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); }
+.autocarriers__table th, .autocarriers__table td {
+  text-align: start; padding: 4px 6px; border-block-end: var(--border-w) var(--border-style) var(--c-rule);
+}
+.autocarriers__table th { color: var(--c-text-muted); font-weight: var(--fw-medium); }
+.autocarriers__row--step td:not(:first-child) { color: var(--c-accent); }
+.autocarriers__hint { margin: 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* The panel fills the right pane (`.rightpane`), which holds the border, the ground and the one scroll.
    The head stays at the top of that scroll, so the close is in reach under a long body. */
 /* An action's build screen over the automation it was opened from (`../screens/AutomationActionOver`).
@@ -2305,8 +2366,6 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .autolib__picked .actdecl__rows { margin-block-start: 0; }
 .autolib__note { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: pre-wrap; }
-/* The axis the built-in that splits by one splits by: the word, then the pulldown, on one line. */
-.autolib__axis { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
 /* The row at the foot that makes a new action, under the name typed in the search box: read as the
    list's last row, in the accent, rather than as a button with a sentence over it. */
 .autolib__make {
@@ -2347,62 +2406,166 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__markname { font-weight: var(--fw-bold); }
 .autopic__markports { color: var(--c-text); }
 .autopic__line--leaves { stroke: var(--c-accent); }
-/* **A run's pane, as its picture** (`AMB-T-5775`, `../shell/RunPicture`). It is drawn over the pane's
-   body on the frame's ground and scrolls both ways, and the room around the sheet is half the pane each
-   side, so a box on the edge of the picture can still be brought to the middle. Its bottom is cut off
-   over the pane's band, the box when it is open and the terminal's last eight rows, and a band 3rem
-   high above the cut fades into the frame's ground, so the terminal under it can be followed while
-   the picture is up (`.slot__body--away`). The cut is a plain rectangle (`clip-path: inset`) and the
-   fade a gradient laid over the picture, not a mask: a mask is composited again each time the picture
-   is drawn, and that makes typing in the pane slow. The pane measures that length (`--runpic-clear`,
-   `../shell/TerminalPane`); until it has, the clear band is 5rem. With no terminal under it — a
-   built-in's step, or none up — there is nothing to follow, and the picture is drawn whole
-   (`.slot__body--bare`). */
-.runpic {
+/* **A run's pane, shown by its roles** (`../shell/RunPicture`). It is drawn over the pane's body on the
+   frame's ground, whole: the cards in a room that scrolls up and down inside it, and the bar of the
+   roles with no round under them. A card is never narrower than 150px nor shorter than 118px, and the
+   cards stand in as many columns as fit; where they do not all fit, each round is a row of a list. */
+.runroles {
   position: absolute; inset: 0; z-index: 1;
-  display: flex; container-type: size;
+  container: runroles / inline-size;
+  display: flex; flex-direction: column;
   background: var(--c-pane-frame);
-  clip-path: inset(0 0 var(--runpic-clear, 5rem) 0);
 }
-.runpic::after {
-  content: ""; position: absolute; left: 0; right: 0; z-index: 1;
-  bottom: var(--runpic-clear, 5rem); height: 3rem;
-  background: linear-gradient(to bottom, transparent, var(--c-pane-frame));
-  pointer-events: none;
+.runroles__room { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: var(--s-2); }
+/* The cards, and over them the lines between two of them: a hand-on, or where a failure was filed. */
+.runroles__desk { position: relative; }
+.runroles__strokes { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.runroles__strokes path { fill: none; stroke: var(--c-text-muted); stroke-width: 1.5; }
+.runroles__strokes g[data-filed] path { stroke: var(--c-stop); stroke-dasharray: 4 3; }
+.runroles__cards {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s-2);
 }
-.slot__body--bare > .runpic { clip-path: none; }
-.slot__body--bare > .runpic::after { content: none; }
-.runpic .autopic {
-  flex: 1; max-height: none;
-  overflow: scroll;
-  padding: 50cqh 50cqw;
+.runroles__card {
+  position: relative;
+  min-width: 0; min-height: 118px; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--s-2);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
+  background: var(--c-surface-pic) var(--c-surface);
 }
-/* What the run walked on the task it is working: the lines drawn heavier in the accent, and the boxes
-   with the accent's border. */
-.autopic__line--lit { stroke: var(--c-accent); stroke-width: 2.5; }
-.autopic__node--lit { border-color: var(--c-accent); }
-/* The box under way wears a heavier border and stays still: it does not blink, since an animation
-   in the picture makes typing in the run's pane slow. */
-.autopic__node--at { box-shadow: 0 0 0 2px var(--c-accent); }
-/* The box under way waiting for a task it can take: still, with a dashed border, and a spinner and the
-   words for the wait over it in place of the word that it takes the task. */
-.autopic__node--wait { border-color: var(--c-accent); border-style: dashed; }
-/* The box the run is under way in, grown with its action's picture inside (`AMB-T-6505`): its border
-   lit — the step under way inside is what wears the heavier border. Its head is the action's name and
-   which step the run is at; the action's picture stands under it. */
-.autopic__node--grown {
-  justify-content: flex-start; gap: 0; padding: 0; overflow: visible; cursor: default;
-  border: 1.5px solid var(--c-accent);
+/* The press that opens a round's terminal, laid over the whole of its card or its row. */
+.runroles__open {
+  position: absolute; inset: 0; z-index: 1;
+  padding: 0; border: 0; border-radius: inherit; background: transparent; cursor: pointer;
 }
-.autopic__grownhead { flex: none; box-sizing: border-box; padding: 0 var(--s-2); }
-.autopic__grownat { flex: none; font-size: var(--fs-xs); color: var(--c-accent-text); white-space: nowrap; }
-.autopic__takes--wait { display: inline-flex; align-items: center; gap: var(--s-1); color: var(--c-accent-text); }
-.autopic__spin {
-  flex: none; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box;
-  border: 2px solid var(--c-edge); border-top-color: var(--c-accent);
-  animation: autopic-spin 1s linear infinite;
+.runroles__open:hover { background: color-mix(in srgb, var(--c-accent) 6%, transparent); }
+.runroles__open:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
+.runroles__card[data-state="asks"] { border-color: var(--c-human); }
+.runroles__card[data-state="failed"] { border-color: var(--c-stop); }
+.runroles__top { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
+.runroles__top > .icon { flex: none; }
+.runroles__name { font-weight: var(--fw-bold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The dot on a card whose round is under way: the one thing in the pane that moves. It stays lit,
+   still, where the reader asks for less motion. */
+.runroles__pulse {
+  flex: none; margin-left: auto;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--c-accent);
+  animation: runroles-pulse 2.4s ease-in-out infinite;
 }
-@keyframes autopic-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .autopic__spin { animation: none; } }
+@keyframes runroles-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .runroles__pulse { animation: none; } }
+.runroles__task {
+  font-size: var(--fs-xs);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.runroles__step { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.runroles__foot { margin-top: auto; display: flex; align-items: center; gap: var(--s-1); min-width: 0; overflow: hidden; }
+.runroles__time { flex: none; font-size: var(--fs-xs); color: var(--c-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.runroles__chip {
+  flex: none; padding: 0 var(--s-1); border-radius: var(--r-sm);
+  font-size: var(--fs-xs); white-space: nowrap;
+  border: var(--border-w) var(--border-style) var(--c-rule); color: var(--c-text-muted);
+}
+.runroles__chip[data-state="asks"] { border-color: var(--c-human); color: var(--c-human); }
+.runroles__chip[data-state="failed"] { border-color: var(--c-stop); color: var(--c-stop); }
+/* "→ role": the other end of a line whose role has no card. Cut where a narrow card runs out. */
+.runroles__hand { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* A round as a row of the list: the role, what it is on, and what its card says at its foot, on one
+   line. A row that waits for a person or failed is marked at its left edge in the colour its card's
+   border is drawn in. */
+.runroles__rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.runroles__row {
+  position: relative;
+  min-width: 0; min-height: 40px; box-sizing: border-box;
+  display: grid; grid-template-columns: auto minmax(0, 7rem) minmax(0, 1fr) auto; align-items: center; gap: var(--s-2);
+  padding: var(--s-1) var(--s-2);
+  border-bottom: var(--border-w) var(--border-style) var(--c-rule);
+}
+.runroles__row[data-state="asks"] { box-shadow: 3px 0 0 var(--c-human) inset; }
+.runroles__row[data-state="failed"] { box-shadow: 3px 0 0 var(--c-stop) inset; }
+.runroles__rowname { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.runroles__rowbody { min-width: 0; display: flex; flex-direction: column; }
+.runroles__rowbody > .runroles__task { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.runroles__rowend { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
+/* "→ role" under the role's name, where the row is too narrow to say it at its end. */
+.runroles__to { display: none; margin-inline-start: var(--s-1); font-size: var(--fs-xs); color: var(--c-text-muted); }
+/* A narrow list puts a row on two lines: the role over what it is on, and the end beside both. */
+@container runroles (max-width: 380px) {
+  .runroles__row { grid-template-columns: auto minmax(0, 1fr) auto; row-gap: 0; }
+  .runroles__row > .icon { grid-row: 1 / span 2; }
+  .runroles__rowname { grid-column: 2; grid-row: 1; }
+  .runroles__rowbody { grid-column: 2; grid-row: 2; }
+  .runroles__rowend { grid-column: 3; grid-row: 1 / span 2; flex-direction: column; align-items: flex-end; gap: 2px; }
+  .runroles__rowend > .runroles__hand { display: none; }
+  .runroles__to { display: inline; }
+}
+.runroles__none { margin: 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
+/* The roles with no round: their icons alone, in one line that scrolls sideways inside the bar. */
+.runroles__idle {
+  flex: none; display: flex; align-items: center; gap: var(--s-2);
+  padding: var(--s-1) var(--s-2);
+  border-top: var(--border-w) var(--border-style) var(--c-rule);
+  overflow-x: auto; white-space: nowrap;
+  font-size: var(--fs-xs); color: var(--c-text-muted);
+}
+.runroles__idlecount { flex: none; }
+.runroles__idlelist { flex: none; display: flex; gap: var(--s-1); list-style: none; margin: 0; padding: 0; }
+.runroles__idlelist > li { flex: none; display: flex; }
+/* The line under the pane for a failed round that was filed as a task: one line, cut where it runs out. */
+.runroles__filed {
+  flex: none; margin: 0; padding: var(--s-1) var(--s-2);
+  border-top: var(--border-w) var(--border-style) var(--c-rule);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-xs); color: var(--c-stop);
+}
+/* **The bar over a run's terminal** (`../shell/RunPicture`): the way back to the roles and whose round
+   this is, then the other rounds of the same automation as icons with a dot each, then — where a step
+   turned the pane — why. It stands in the pane's body under the roles, so the terminal keeps its size
+   when the face is turned.
+   **Its width is the pane's, never its own** (`contain: inline-size`): what it says is held on one line
+   and cut short, and a task's title or a row of rounds would otherwise ask for its whole length up
+   through the pane to the window, which then scrolls sideways. */
+.runterm { flex: none; display: flex; flex-direction: column; min-width: 0; contain: inline-size; }
+.runterm__head { display: flex; align-items: center; gap: var(--s-2); min-width: 0; padding: var(--s-1) var(--s-2); border-bottom: var(--border-w) var(--border-style) var(--c-rule); }
+.runterm__head > .icon { flex: none; }
+.runterm__back {
+  flex: none; padding: 1px var(--s-2);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
+  background: transparent; color: var(--c-text); font-size: var(--fs-xs); white-space: nowrap;
+}
+.runterm__back:hover { background: var(--c-accent-faint); }
+.runterm__body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.runterm__task { font-size: var(--fs-xs); font-weight: var(--fw-bold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.runterm__step { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.runterm__strip {
+  display: flex; align-items: center; gap: var(--s-1);
+  padding: 2px var(--s-2); overflow-x: auto; white-space: nowrap;
+  border-bottom: var(--border-w) var(--border-style) var(--c-rule);
+  font-size: var(--fs-xs); color: var(--c-text-muted);
+}
+.runterm__others { flex: none; }
+.runterm__round {
+  flex: none; position: relative; display: inline-flex; padding: 2px;
+  border: var(--border-w) var(--border-style) transparent; border-radius: var(--r-sm);
+  background: transparent; color: var(--c-text); cursor: pointer;
+}
+.runterm__round[aria-current] { border-color: var(--c-accent); background: var(--c-accent-faint); }
+.runterm__dot {
+  position: absolute; top: -2px; right: -2px;
+  width: 7px; height: 7px; border-radius: 50%;
+  border: 1px solid var(--c-surface); background: var(--c-accent);
+}
+.runterm__round[data-state="asks"] .runterm__dot { background: var(--c-human); }
+.runterm__round[data-state="paused"] .runterm__dot,
+.runterm__round[data-state="waiting"] .runterm__dot { background: var(--c-heed); }
+.runterm__round[data-state="failed"] .runterm__dot { background: var(--c-stop); }
+.runterm__notice {
+  margin: 0; padding: var(--s-1) var(--s-2);
+  border-bottom: var(--border-w) var(--border-style) var(--c-rule);
+  background: var(--c-accent-faint); color: var(--c-accent);
+  font-size: var(--fs-xs);
+}
 /* One output a way out of the action hands on, and the step output that fills it. */
 .autostep__outline { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1); }

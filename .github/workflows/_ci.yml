@@ -194,7 +194,7 @@ jobs:
       # `cargo test` and it prints per-test timings (slow tests surface in the
       # final summary; thresholds live in .config/nextest.toml).
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@v2.87.32
+        uses: taiki-e/install-action@v2.90.0
         with:
           tool: cargo-nextest
 
@@ -267,7 +267,7 @@ jobs:
           save-if: false
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@v2.87.32
+        uses: taiki-e/install-action@v2.90.0
         with:
           tool: cargo-nextest
 
@@ -373,7 +373,7 @@ jobs:
           save-if: false
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@v2.87.32
+        uses: taiki-e/install-action@v2.90.0
         with:
           tool: cargo-nextest
 
@@ -447,7 +447,7 @@ jobs:
           save-if: false
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@v2.87.32
+        uses: taiki-e/install-action@v2.90.0
         with:
           tool: cargo-nextest
 
@@ -711,7 +711,8 @@ jobs:
         run: npm run build
 
       # The window will not run wasm, and a dependency bump is merged with nobody reading it: the PDF
-      # reader publishes its own wasm build from its next major on, and this is what would notice.
+      # reader publishes wasm files of its own and is kept from shipping them, and this is what would
+      # notice one more arriving, or one of them reaching the bundle.
       # It reads the install and the bundle, which is why it sits here rather than in tree-guards.
       - name: Refuse WebAssembly in what ships
         run: ../guards/check-no-wasm.sh
@@ -818,7 +819,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install cargo-deny
-        uses: taiki-e/install-action@v2.87.32
+        uses: taiki-e/install-action@v2.90.0
         with:
           tool: cargo-deny
 
@@ -837,6 +838,24 @@ jobs:
       # dependency's license could change here unwatched (Dependabot bumps are auto-merged).
       - name: Check the verification harness's licenses
         run: cargo deny --config deny.toml --manifest-path verification/Cargo.toml check licenses
+
+      # cargo deny judges whether a crate may ship; it neither carries the notices nor sees past a
+      # crate's own declaration — sqlcipher-src vendors SQLCipher (BSD-3-Clause) and keeps its text
+      # beside the sources, and openssl-src builds OpenSSL (Apache-2.0). THIRD-PARTY-NOTICES carries
+      # them, and these steps hold it to the two shipped lockfiles (verification/ never ships).
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      # The refusals first, for the npm-license job's reason: a judge that passes everything
+      # cannot report on itself.
+      - name: Test the notices gate's judgment
+        run: node --test guards/check-third-party-notices.test.mjs
+
+      # Fetches the crate sources through `cargo metadata --locked` and regenerates the file in
+      # memory; red when a vendored-source carrier moved or the committed file is stale.
+      - name: Check THIRD-PARTY-NOTICES against the lockfiles
+        run: node guards/check-third-party-notices.mjs
 
   # The same argument, for the other half of what we ship. cargo deny never sees the GUI's npm
   # dependencies, but they ride into the Tauri bundle exactly as the crates do — and they arrive the

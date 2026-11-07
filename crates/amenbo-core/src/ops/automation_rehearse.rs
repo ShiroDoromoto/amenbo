@@ -15,7 +15,8 @@
 //! is filed, taken or closed, no worktree is cut or folded, nothing is fetched or merged. In their place
 //! every output of the way out a step leaves by is put down as a placeholder
 //! ([`crate::run_wording::rehearsal`]), and a step that hands on a task hands on one made up for the
-//! purpose.
+//! purpose. Where the automation's roles say where each starts, the round of that made-up task is put
+//! under the first of them, and the walk goes on where it starts.
 //!
 //! **Nothing it writes is kept.** The whole walk is one write transaction that is never committed
 //! ([`crate::store::Store::automation_rehearse`]): the run, its steps, the placeholder tasks and the
@@ -225,6 +226,11 @@ fn stand_in(
             AutomationPortKind::TaskTake => {
                 let task = made_up(tx, run, def)?;
                 automation_report::take(tx, run_step_id, task)?;
+                // A made-up task names no role, so its round is put under the first role the run starts a
+                // round of, and the walk goes on where that role starts.
+                if let Some(role) = automation_run::roles_started(tx.conn(), run.id)?.first() {
+                    automation_report::put_under(tx, run_step_id, *role)?;
+                }
             }
             AutomationPortKind::TaskMake => {
                 let task = made_up(tx, run, def)?;
@@ -301,6 +307,7 @@ mod tests {
     fn walk(tx: &WriteTx<'_>, automation: &Automation, handed: &HandedAtLaunch) -> Rehearsal {
         let claude = ["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&claude),
             models: nothing_asked(),
             workspace_open: Some(false),
@@ -483,7 +490,7 @@ mod tests {
             let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
 
             let claude = ["claude".to_string()];
-            let by = Launcher { startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+            let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
             let Err(Error::NotReady(msg)) = rehearse(tx, automation.id, &by, &HandedAtLaunch::default()) else {
                 panic!("a test run is refused where a launch would be")
             };

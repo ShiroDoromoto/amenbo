@@ -58,7 +58,8 @@ export function useAutomationStart(
     setStarting(true);
     try {
       const started = await launchAutomation(id, projectId, folders, workspaceOpen, handed);
-      if (started !== null) onGoToRun?.(projectId, started.run);
+      // No run where the automation waits for a task to take instead: there is nothing to go to yet.
+      if (started !== null && started.run !== null) onGoToRun?.(projectId, started.run);
     } catch (e) {
       setRefused(errText(e));
     } finally {

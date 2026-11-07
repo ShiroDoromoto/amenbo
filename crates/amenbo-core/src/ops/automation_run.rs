@@ -37,6 +37,13 @@
 //! finds no task to take. A round is one stretch of the run ([`crate::model::AutomationRunTask`]), and
 //! a definition saved while one is under way is taken up as the next round starts — never in the middle
 //! of one.
+//!
+//! **Where a round goes after its task is taken is the task's role.** An automation's roles each name
+//! the placement their round starts at, and a launch copies that onto the run ([`AutomationRunDef::roles`]);
+//! the way out that hands on the task taken then goes on to where the task's role starts rather than
+//! along a line ([`by_role`]), and only a task of one of those roles is taken ([`roles_started`]). A task
+//! with no role is not taken at all. An automation with no role naming where its round starts walks its
+//! picture as it is drawn.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -46,15 +53,16 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
     ActorKind, AttachmentTarget, Automation, AutomationCfg, AutomationCfgOwner, AutomationEnds, AutomationExit,
-    AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationPlacementStep,
+    AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationRole,
     AutomationPortDirection,
     AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStepStatus, AutomationStep, AutomationStoppedReason, AutomationEdge,
-    RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, ACTION_BOUNDARY,
+    RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, StepScript, ACTION_BOUNDARY,
     DEFAULT_EXPECTED_MINUTES, ERROR_EXIT,
 };
 use crate::ops::automation::{ActionDef, Picture};
-use crate::ops::automation_builtin_split::SPLIT_BY_DIM;
+use crate::ops::automation_script;
+use crate::ops::automation_builtin_take::TAKE_TASK;
 use crate::ops::emit_create;
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
@@ -162,8 +170,9 @@ pub enum Unmet {
     /// linked folders (`AMB-D-1012`). Which one the task is worked in is not the built-in's to pick, so it
     /// would file nothing and halt the run there.
     FolderUnchosen { step: String, cfg: String, count: usize, builtin: Option<String>, placement: i64 },
-    /// A step nobody has been chosen to carry out where its action is placed (`AMB-D-960`). A pane
-    /// opened on it would have no agent to start.
+    /// A step nobody carries out: no agent is chosen for it where its action is placed, the role whose
+    /// round reaches it names none, and Amenbo has no default either ([`carrier`]). A pane opened on it
+    /// would have no agent to start.
     AgentUnchosen { step: String, placement: i64 },
     /// A step asking for an agent this machine cannot start. A pane opened on it would come up on
     /// `command not found`.
@@ -205,11 +214,6 @@ pub enum Unmet {
     ///
     /// `step` names the action, or the step inside it, whose way out `exit` is.
     HandsOnTaskTaken { step: String, exit: String, placement: i64 },
-    /// The built-in that splits by an axis, placed while its axis was there, whose axis has been deleted
-    /// since (`AMB-D-987`). A run reaching it would have nothing to split by and halt, so the launch is
-    /// refused here instead. `step` is the action's name, which every split shares, so the placement is
-    /// named in the sentence too.
-    SplitAxisGone { step: String, placement: i64 },
 }
 
 impl Unmet {
@@ -282,7 +286,10 @@ impl Unmet {
                 )
             }
             Unmet::AgentUnchosen { step, .. } => {
-                format!("nobody is chosen to carry out '{step}' where its action is placed")
+                format!(
+                    "nobody is chosen to carry out '{step}' — not where its action is placed, not by its role, \
+                     and Amenbo has no default agent"
+                )
             }
             Unmet::AgentMissing { step, agent, .. } => {
                 format!("'{step}' asks for '{agent}', which this machine cannot start")
@@ -320,12 +327,6 @@ impl Unmet {
                     named(exit)
                 )
             }
-            Unmet::SplitAxisGone { step, placement } => {
-                format!(
-                    "'{step}' on placement {placement} splits by an axis that has been deleted — take the \
-                     placement off and place the split again on an axis that is there"
-                )
-            }
         }
     }
 }
@@ -360,7 +361,6 @@ impl Unmet {
             Unmet::LeavesTaskOpen { to: Some(_), .. } => ErrorCode::NotReadyAutomationTaskLeftOpen,
             Unmet::LeavesTaskOpen { to: None, .. } => ErrorCode::NotReadyAutomationTaskLeftOpenAtEnd,
             Unmet::HandsOnTaskTaken { .. } => ErrorCode::NotReadyAutomationHandsOnTaskTaken,
-            Unmet::SplitAxisGone { .. } => ErrorCode::NotReadyAutomationSplitAxisGone,
         }
     }
 
@@ -424,7 +424,6 @@ impl Unmet {
                 }
             }
             Unmet::HandsOnTaskTaken { step, exit, .. } => msg.with("step", step).with("exit", exit),
-            Unmet::SplitAxisGone { step, .. } => msg.with("step", step),
         }
     }
 
@@ -450,8 +449,7 @@ impl Unmet {
             | Unmet::ScriptMissing { placement, .. }
             | Unmet::ScriptNotExecutable { placement, .. }
             | Unmet::LeavesTaskOpen { placement, .. }
-            | Unmet::HandsOnTaskTaken { placement, .. }
-            | Unmet::SplitAxisGone { placement, .. } => Some(*placement),
+            | Unmet::HandsOnTaskTaken { placement, .. } => Some(*placement),
         }
     }
 
@@ -479,7 +477,6 @@ impl Unmet {
             | Unmet::CfgValueClosed { builtin, .. }
             | Unmet::FolderUnchosen { builtin, .. }
             | Unmet::LeavesTaskOpen { builtin, .. } => builtin.as_deref(),
-            Unmet::SplitAxisGone { .. } => Some(SPLIT_BY_DIM.key),
             _ => None,
         }
     }
@@ -503,6 +500,13 @@ pub struct Launcher<'a> {
     /// The models each agent offers on this machine ([`ModelsHere`]) — empty from a caller that has
     /// asked nobody, which is every caller outside the app.
     pub models: &'a ModelsHere,
+    /// **Amenbo's own default agent** — the last of the three a step's agent is chosen from, after the
+    /// step at its placement and the role whose round reaches it ([`carrier`]). It is the answer a pane
+    /// would open with for the automation's project ([`crate::wake::step_agent`]), and names no model.
+    ///
+    /// The store fills it from its configuration on every launch it carries
+    /// ([`crate::store::Store::automation_launch`]), so a caller going through the store writes `None`.
+    pub default_agent: Option<&'a str>,
     /// Whether the talk window is open — `Some(false)` refuses, and **`None` is a caller that cannot
     /// see** (`AMB-D-792`'s discipline, the same one [`Launcher::startable`] takes).
     ///
@@ -524,7 +528,8 @@ pub struct Launcher<'a> {
 /// what its entry does not read is refused rather than left lying on the run where nothing reads it
 /// ([`entry_reads`]).
 ///
-/// A trigger hands its task over the same way, as the title and notes written on it ([`fire`]).
+/// A trigger hands its task over the same way, as the title and notes it says, with the role the task is
+/// worked under and its own name for the line the task's timeline gets ([`fire`]).
 ///
 /// Nothing handed is the default, and a launch that hands nothing starts as it always has.
 #[derive(Clone, Debug, Default)]
@@ -540,6 +545,12 @@ pub struct HandedAtLaunch {
     pub notes: Option<String>,
     /// Its classification, as (axis, value) by name, in the order handed.
     pub classification: Vec<(String, String)>,
+    /// The role it is worked under, one of the automation's own — handed by a trigger
+    /// ([`crate::model::AutomationTrigger::role_id`]). `None` for none.
+    pub role_id: Option<i64>,
+    /// The name of the trigger that hands it, which the task's timeline names it by once it is filed
+    /// ([`crate::activity_log::event::task_filed_by_trigger`]). `None` where a person launched the run.
+    pub trigger: Option<String>,
 }
 
 impl HandedAtLaunch {
@@ -569,6 +580,12 @@ pub struct HandedTask {
     /// One `axis=value` a line — the shape the built-in's input for a chosen classification reads.
     #[serde(default)]
     pub classification: Option<String>,
+    /// The role the task is worked under ([`HandedAtLaunch::role_id`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role_id: Option<i64>,
+    /// The name of the trigger that handed it ([`HandedAtLaunch::trigger`]), or `None` for a person.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trigger: Option<String>,
 }
 
 impl HandedTask {
@@ -632,12 +649,13 @@ fn not_found(what: &str, id: i64) -> Error {
 /// **What is asked of a placement is asked of the action standing on it**, and then of every step the
 /// action could open ([`steps_opened_by`]): a way out inside with nothing after it and a required input
 /// inside that nothing reaches stop a run just as surely as the same gaps on the automation's picture
-/// ([`inside`]). The agent and the model are asked of each step as it is placed here — they are chosen
-/// where the action is placed, step by step (`AMB-D-960`). A script step is asked instead whether its
-/// program is a file this machine can run (`AMB-D-1016`).
+/// ([`inside`]). The agent and the model are asked of each step as it is placed here — the step's own
+/// choice, else the default of the role whose round reaches it, else Amenbo's ([`carrier`]). A script
+/// step is asked instead whether its program is a file this machine can run (`AMB-D-1016`).
 ///
 /// `startable` is [`Launcher::startable`], and `None` leaves the agent check unmade. `models` is
 /// [`Launcher::models`], and an agent it says nothing about leaves that step's model check unmade.
+/// `default_agent` is [`Launcher::default_agent`], Amenbo's own default.
 ///
 /// Asked of the draft — the automation's picture as it is written now. A launch asks it of the
 /// picture it is about to copy down ([`check_picture`]).
@@ -646,10 +664,163 @@ pub fn check(
     automation_id: i64,
     startable: Option<&[String]>,
     models: &ModelsHere,
+    default_agent: Option<&str>,
 ) -> Result<Vec<Unmet>> {
     let automation = read::automation(conn, automation_id)?
         .ok_or_else(|| not_found("automation", automation_id))?;
-    check_picture(conn, &automation, &Picture::read(conn, &automation)?, startable, models)
+    check_picture(conn, &automation, &Picture::read(conn, &automation)?, startable, models, default_agent)
+}
+
+/// **Where the agent carrying a step out was chosen** — the first of three that names one: the step at
+/// its placement, the role whose round reaches that placement, and Amenbo as a whole ([`carrier`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ChosenAt {
+    /// Chosen for this step where its action is placed ([`crate::model::AutomationPlacementStep`]).
+    Step,
+    /// The default of this role ([`AutomationRole`]).
+    Role { role_id: i64 },
+    /// Amenbo's own default ([`Launcher::default_agent`]).
+    Amenbo,
+}
+
+/// **Who carries one step out at one placement**, and where that was chosen.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct Carrier {
+    pub agent: String,
+    /// `None` leaves the agent's own default model.
+    pub model: Option<String>,
+    pub at: ChosenAt,
+}
+
+/// **The role each placement falls back to** — for every role, in the order they are defined in, the
+/// placements its round reaches ([`round_of`]). A placement more than one round reaches falls back to the
+/// first of those roles. A role that names no agent is passed by: it has nothing for a step to fall back
+/// to.
+fn roles_by_placement<'p>(
+    pic: &'p Picture,
+    by_id: &BTreeMap<i64, &AutomationPlacement>,
+    defs: &Defs,
+) -> BTreeMap<i64, &'p AutomationRole> {
+    first_round_reaching(pic, by_id, defs, pic.roles().iter().filter(|role| role.agent.is_some()))
+}
+
+/// **The first of `roles` whose round reaches each placement** — `roles` walked in the order given, a
+/// placement more than one round reaches kept with the first ([`round_of`]). Every role's start still
+/// stops a round, whether or not it is among `roles`.
+fn first_round_reaching<'p>(
+    pic: &'p Picture,
+    by_id: &BTreeMap<i64, &AutomationPlacement>,
+    defs: &Defs,
+    roles: impl Iterator<Item = &'p AutomationRole>,
+) -> BTreeMap<i64, &'p AutomationRole> {
+    let starts: BTreeSet<i64> =
+        pic.roles().iter().filter_map(|role| role.entry_placement_id).chain(pic.entry_placement_id).collect();
+    let mut found = BTreeMap::new();
+    for role in roles {
+        let Some(entry) = role.entry_placement_id else { continue };
+        for id in round_of(entry, pic, by_id, defs, &starts) {
+            found.entry(id).or_insert(role);
+        }
+    }
+    found
+}
+
+/// **The role whose round reaches each placement**, as placement id → role id, for the definition
+/// `reads` names. Every role is walked in the order they are defined in, a role naming no agent
+/// included: this is where a round goes, which a picture draws whether or not the role has an agent for
+/// its steps to fall back to ([`roles_by_placement`] is that narrower one). A placement more than one
+/// round reaches is the first role's; a placement no round reaches is left out.
+pub fn rounds_by_placement(conn: &Connection, automation_id: i64, reads: ReadsFrom) -> Result<BTreeMap<i64, i64>> {
+    let automation = read::automation(conn, automation_id)?
+        .ok_or_else(|| not_found("automation", automation_id))?;
+    let (pic, _) = definition(conn, &automation, reads)?;
+    let by_id: BTreeMap<i64, &AutomationPlacement> = pic.placements.iter().map(|p| (p.id, p)).collect();
+    let defs = defs_of(conn, &pic.placements)?;
+    Ok(first_round_reaching(&pic, &by_id, &defs, pic.roles().iter())
+        .into_iter()
+        .map(|(placement_id, role)| (placement_id, role.id))
+        .collect())
+}
+
+/// **The placements one round reaches** — walked from where it starts, as [`reachable`] walks, but not
+/// on into a placement in `starts` other than its own: that is where the automation's entry or another
+/// role's round begins, and a line going there has left this round.
+fn round_of(
+    entry: i64,
+    pic: &Picture,
+    by_id: &BTreeMap<i64, &AutomationPlacement>,
+    defs: &Defs,
+    starts: &BTreeSet<i64>,
+) -> BTreeSet<i64> {
+    let mut seen = BTreeSet::new();
+    let mut todo = vec![entry];
+    while let Some(id) = todo.pop() {
+        if (id != entry && starts.contains(&id)) || !by_id.contains_key(&id) || !seen.insert(id) {
+            continue;
+        }
+        for exit in defs[&id].action_exits() {
+            if let Some(next) = pic.edge_for_exit(id, exit.id).and_then(|e| e.to_id) {
+                todo.push(next);
+            }
+        }
+    }
+    seen
+}
+
+/// **Who carries one step out at one placement**: the agent chosen for the step there, else the default
+/// of the role the placement falls back to ([`roles_by_placement`]), else Amenbo's own default. `None`
+/// where none of the three names one.
+///
+/// **The model comes from where the agent did.** It is the agent's model and is named only beside it
+/// (`AMB-D-865`), so a step's agent is never put with a role's model. Amenbo's default names no model,
+/// which is the agent's own default.
+fn carrier(
+    pic: &Picture,
+    roles: &BTreeMap<i64, &AutomationRole>,
+    placement_id: i64,
+    step_id: i64,
+    default_agent: Option<&str>,
+) -> Option<Carrier> {
+    if let Some(chosen) = pic.chosen(placement_id, step_id) {
+        return Some(Carrier { agent: chosen.agent.clone(), model: chosen.model.clone(), at: ChosenAt::Step });
+    }
+    if let Some(role) = roles.get(&placement_id) {
+        if let Some(agent) = &role.agent {
+            let at = ChosenAt::Role { role_id: role.id };
+            return Some(Carrier { agent: agent.clone(), model: role.model.clone(), at });
+        }
+    }
+    default_agent.map(|agent| Carrier { agent: agent.to_string(), model: None, at: ChosenAt::Amenbo })
+}
+
+/// **Who carries each step out**, keyed by (placement, step), for the definition `reads` names — every
+/// step an agent carries out, wherever one of the three names somebody ([`carrier`]). A built-in and a
+/// script are left out: Amenbo carries the one out and the other is its own program.
+pub fn carriers(
+    conn: &Connection,
+    automation_id: i64,
+    reads: ReadsFrom,
+    default_agent: Option<&str>,
+) -> Result<BTreeMap<(i64, i64), Carrier>> {
+    let automation = read::automation(conn, automation_id)?
+        .ok_or_else(|| not_found("automation", automation_id))?;
+    let (pic, _) = definition(conn, &automation, reads)?;
+    let by_id: BTreeMap<i64, &AutomationPlacement> = pic.placements.iter().map(|p| (p.id, p)).collect();
+    let defs = defs_of(conn, &pic.placements)?;
+    let roles = roles_by_placement(&pic, &by_id, &defs);
+    let mut found = BTreeMap::new();
+    for placement in &pic.placements {
+        for step in &defs[&placement.id].steps {
+            if step.builtin.is_some() || step.script.is_some() {
+                continue;
+            }
+            if let Some(carried) = carrier(&pic, &roles, placement.id, step.id, default_agent) {
+                found.insert((placement.id, step.id), carried);
+            }
+        }
+    }
+    Ok(found)
 }
 
 /// [`check`], asked of `pic` — the draft or a saved version of `automation` ([`ReadsFrom`]).
@@ -659,6 +830,7 @@ fn check_picture(
     pic: &Picture,
     startable: Option<&[String]>,
     models: &ModelsHere,
+    default_agent: Option<&str>,
 ) -> Result<Vec<Unmet>> {
     if automation.export_only {
         return Ok(vec![Unmet::ExportOnly]);
@@ -681,6 +853,8 @@ fn check_picture(
     let by_id: BTreeMap<i64, &AutomationPlacement> = placements.iter().map(|p| (p.id, p)).collect();
     let defs = defs_of(conn, placements)?;
     let live = reachable(entry_id, pic, &by_id, &defs);
+    let routed = !role_entries(pic, &by_id).is_empty();
+    let roles = roles_by_placement(pic, &by_id, &defs);
 
     for placement in placements {
         if let Some(action) = read::automation_action(conn, placement.action_id)?.filter(|a| a.draft) {
@@ -715,6 +889,11 @@ fn check_picture(
             // is already handled. Left alone it halts the run and calls a person, and an edge on it
             // is how somebody says otherwise.
             if exit.name == ERROR_EXIT {
+                continue;
+            }
+            // A way out that hands on the task taken goes where the task's role starts, in an automation
+            // whose roles say where that is (`by_role`) — no line drawn from it is walked.
+            if routed && goes_by_role(def, exit.id) {
                 continue;
             }
             if !decided(pic, placement.id, exit.id, &by_id) {
@@ -794,9 +973,6 @@ fn check_picture(
                 });
             }
         }
-        if crate::ops::automation_builtin_split::lost_its_axis(conn, placement.action_id)? {
-            unmet.push(Unmet::SplitAxisGone { step: name.clone(), placement: placement.id });
-        }
         let steps = steps_opened_by(def);
         if builtin.is_none() {
             push_new(&mut unmet, hands_on_the_task(placement, def, &name, &steps));
@@ -815,7 +991,7 @@ fn check_picture(
                 continue;
             }
             let mut found = Vec::new();
-            let Some(chosen) = pic.chosen(placement.id, step.id) else {
+            let Some(chosen) = carrier(pic, &roles, placement.id, step.id, default_agent) else {
                 found.push(Unmet::AgentUnchosen { step: step.name.clone(), placement: placement.id });
                 push_new(&mut unmet, found);
                 continue;
@@ -919,6 +1095,7 @@ fn leaves_task_open(
     by_id: &BTreeMap<i64, &AutomationPlacement>,
     defs: &Defs,
 ) -> Result<Vec<Unmet>> {
+    let routed = role_entries(pic, by_id);
     let mut unmet = Vec::new();
     for &start in live {
         let Some(placement) = by_id.get(&start) else { continue };
@@ -928,62 +1105,70 @@ fn leaves_task_open(
             if Some(exit.name.as_str()) == never_taken(conn, pic, placement, def)? {
                 continue;
             }
-            if def.outs_of(exit.id).iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
+            if hands_on_taken(def, exit.id) {
                 lines.push((*placement, exit));
             }
         }
         let mut walked = BTreeSet::new();
         while let Some((from, exit)) = lines.pop() {
-            let Some(edge) = pic.edge_for_exit(from.id, exit.id) else {
-                // Nothing drawn: the error way out halts, and any other is refused as an open way out.
-                continue;
+            // The way out that hands on the task taken goes on to where each role starts (`by_role`);
+            // any other goes where its line is drawn to.
+            let tos: Vec<&AutomationPlacement> = if !routed.is_empty() && goes_by_role(&defs[&from.id], exit.id) {
+                routed.iter().filter_map(|id| by_id.get(id).copied()).collect()
+            } else {
+                let Some(edge) = pic.edge_for_exit(from.id, exit.id) else {
+                    // Nothing drawn: the error way out halts, and any other is refused as an open way out.
+                    continue;
+                };
+                match edge.ends {
+                    AutomationEnds::Halt | AutomationEnds::Exit => continue,
+                    AutomationEnds::Done => {
+                        push_new(
+                            &mut unmet,
+                            vec![Unmet::LeavesTaskOpen {
+                                step: action_name(conn, from.action_id)?,
+                                exit: exit.name.clone(),
+                                to: None,
+                                builtin: action_builtin(conn, from.action_id)?,
+                                to_builtin: None,
+                                placement: from.id,
+                                inside: None,
+                            }],
+                        );
+                        continue;
+                    }
+                    AutomationEnds::Go => match edge.to_id.and_then(|id| by_id.get(&id)) {
+                        Some(to) => vec![*to],
+                        None => continue,
+                    },
+                }
             };
-            let to = match edge.ends {
-                AutomationEnds::Halt | AutomationEnds::Exit => continue,
-                AutomationEnds::Done => {
+            for to in tos {
+                if lets_go_of_the_task(conn, to.action_id)? {
+                    continue;
+                }
+                if takes_a_task(conn, pic, to, &defs[&to.id])? {
                     push_new(
                         &mut unmet,
                         vec![Unmet::LeavesTaskOpen {
                             step: action_name(conn, from.action_id)?,
                             exit: exit.name.clone(),
-                            to: None,
+                            to: Some(action_name(conn, to.action_id)?),
                             builtin: action_builtin(conn, from.action_id)?,
-                            to_builtin: None,
+                            to_builtin: action_builtin(conn, to.action_id)?,
                             placement: from.id,
                             inside: None,
                         }],
                     );
                     continue;
                 }
-                AutomationEnds::Go => match edge.to_id.and_then(|id| by_id.get(&id)) {
-                    Some(to) => *to,
-                    None => continue,
-                },
-            };
-            if lets_go_of_the_task(conn, to.action_id)? {
-                continue;
-            }
-            if takes_a_task(conn, pic, to, &defs[&to.id])? {
-                push_new(
-                    &mut unmet,
-                    vec![Unmet::LeavesTaskOpen {
-                        step: action_name(conn, from.action_id)?,
-                        exit: exit.name.clone(),
-                        to: Some(action_name(conn, to.action_id)?),
-                        builtin: action_builtin(conn, from.action_id)?,
-                        to_builtin: action_builtin(conn, to.action_id)?,
-                        placement: from.id,
-                        inside: None,
-                    }],
-                );
-                continue;
-            }
-            if !walked.insert(to.id) {
-                continue;
-            }
-            push_new(&mut unmet, ends_inside(to, &defs[&to.id]));
-            for exit in defs[&to.id].action_exits() {
-                lines.push((to, exit));
+                if !walked.insert(to.id) {
+                    continue;
+                }
+                push_new(&mut unmet, ends_inside(to, &defs[&to.id]));
+                for exit in defs[&to.id].action_exits() {
+                    lines.push((to, exit));
+                }
             }
         }
     }
@@ -1004,7 +1189,7 @@ fn hands_on_the_task(
     let mut found = Vec::new();
     for (owner, owner_id, name) in owners {
         for exit in def.exits_of(owner, owner_id) {
-            if def.outs_of(exit.id).iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
+            if hands_on_taken(def, exit.id) {
                 push_new(
                     &mut found,
                     vec![Unmet::HandsOnTaskTaken { step: name.clone(), exit: exit.name, placement: placement.id }],
@@ -1184,7 +1369,7 @@ fn action_name(conn: &Connection, action_id: i64) -> Result<String> {
 /// [`Unmet::ActionEmpty`] is raised on.
 ///
 /// Which of them one run walks is decided by the ways out taken while it goes; this is every one it
-/// could walk, in display order, and that is what the agent and the model are asked of (`AMB-D-960`)
+/// could walk, in display order, and that is what the agent and the model are asked of ([`carrier`])
 /// and what a launch copies into the run ([`snapshot`]).
 /// A step nothing inside leads to is left out for the reason [`reachable`] leaves a placement out: no
 /// pane ever comes up on it, so refusing the launch over the agent it names would hold a run back for
@@ -1218,7 +1403,8 @@ fn steps_reached(def: &ActionDef, steps: &[AutomationStep], avoiding: Option<i64
 }
 
 /// The placements a run could actually reach, walked from the entry along the edges that go on to
-/// another placement. A placement nothing reaches is not checked: it cannot stop a run, and refusing to
+/// another placement — and, from a way out that hands on the task taken, on to where each role starts
+/// ([`role_entries`]). A placement nothing reaches is not checked: it cannot stop a run, and refusing to
 /// launch over one would make an automation undeletable-in-practice while its author was still drawing
 /// it.
 fn reachable(
@@ -1239,6 +1425,7 @@ fn reachable_without(
     defs: &Defs,
     avoiding: Option<i64>,
 ) -> BTreeSet<i64> {
+    let routed = role_entries(pic, by_id);
     let mut seen = BTreeSet::new();
     let mut todo = vec![entry_id];
     while let Some(id) = todo.pop() {
@@ -1246,12 +1433,45 @@ fn reachable_without(
             continue;
         }
         for exit in defs[&id].action_exits() {
+            if !routed.is_empty() && goes_by_role(&defs[&id], exit.id) {
+                todo.extend(routed.iter().copied());
+                continue;
+            }
             if let Some(next) = pic.edge_for_exit(id, exit.id).and_then(|e| e.to_id) {
                 todo.push(next);
             }
         }
     }
     seen
+}
+
+/// **The placements the automation's roles start their rounds at** (`AutomationRole::entry_placement_id`),
+/// in the order the roles are defined in, each once — the ones on the picture. Empty where it defines no
+/// role, or none of them names where its round starts: such a picture is walked as it is drawn.
+///
+/// Where there are any, **a way out that hands on the task taken goes on to the one its task's role
+/// starts at** ([`by_role`]), so every one of them is where such a way out leads.
+fn role_entries(pic: &Picture, by_id: &BTreeMap<i64, &AutomationPlacement>) -> Vec<i64> {
+    let mut entries = Vec::new();
+    for id in pic.roles().iter().filter_map(|r| r.entry_placement_id) {
+        if by_id.contains_key(&id) && !entries.contains(&id) {
+            entries.push(id);
+        }
+    }
+    entries
+}
+
+/// Whether this way out of a placed action hands on the task a run works — the way out that takes one.
+fn hands_on_taken(def: &ActionDef, exit_id: i64) -> bool {
+    def.outs_of(exit_id).iter().any(|p| p.kind == AutomationPortKind::TaskTake)
+}
+
+/// **Whether this way out goes where the task's role starts** rather than along a line, where the
+/// automation's roles say where that is ([`by_role`]): the way out of the built-in that takes a task
+/// which hands it on. A task the run files itself and takes walks the line drawn, even one a trigger
+/// files under a role.
+fn goes_by_role(def: &ActionDef, exit_id: i64) -> bool {
+    def.steps.iter().any(|s| s.builtin.as_deref() == Some(TAKE_TASK.key)) && hands_on_taken(def, exit_id)
 }
 
 /// **The lines a run could walk back to an entry that reads what was handed over at launch**
@@ -1318,7 +1538,7 @@ fn takes_a_task(
         if Some(exit.name.as_str()) == never {
             continue;
         }
-        if def.outs_of(exit.id).iter().any(|p| p.kind == AutomationPortKind::TaskTake) {
+        if hands_on_taken(def, exit.id) {
             return Ok(true);
         }
     }
@@ -1477,6 +1697,11 @@ pub(crate) fn answered(
     Ok(out)
 }
 
+/// One setting as a run's copy keeps it.
+fn run_def_cfg(c: AutomationCfg) -> RunDefCfg {
+    RunDefCfg { name: c.name, kind: c.kind, required: c.required, options: c.options, value: c.value }
+}
+
 /// [`answered`], with the answers read off `pic` — the draft or a saved version — rather than the store.
 fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> Vec<AutomationCfg> {
     def.cfgs
@@ -1509,9 +1734,50 @@ fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> V
 /// The run is born `running`, so a launch never waits (`AMB-D-947`): it is either refused or under
 /// way. `started_at` is the moment of the launch itself.
 ///
-/// It reads the saved definition ([`ReadsFrom::Saved`]).
+/// It reads the saved definition ([`ReadsFrom::Saved`]). It makes the run even where the entry would
+/// wait for a task, which the run's entry then finds ([`wait_for_a_task`]); a person's start asks
+/// that first and makes no run ([`start`]).
 pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result<AutomationRun> {
     launch_handing(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved)
+}
+
+/// **What a start of an automation came to** ([`start`]).
+#[derive(Clone, Debug)]
+pub enum Started {
+    /// A run was launched.
+    Run(AutomationRun),
+    /// **Its entry would wait for a task with none to take**, so no run was made and the automation
+    /// waits for one instead ([`Automation::waits_for_task_since`]).
+    Waits(Box<Automation>),
+}
+
+impl Started {
+    /// The run, for a launch that was never let wait.
+    fn run(self) -> Result<AutomationRun> {
+        match self {
+            Started::Run(run) => Ok(run),
+            Started::Waits(automation) => Err(Error::invalid(format!(
+                "automation '{}' was launched to wait for a task, and only a start waits",
+                automation.name
+            ))),
+        }
+    }
+}
+
+/// **Start an automation as a person does** — [`launch_handing`] of the newest saved version, refused
+/// over everything a launch is refused over, and in that order.
+///
+/// **Where the entry would wait for a task and none can be taken now, no run is made**
+/// (`AMB-D-969`): the automation is marked as waiting for one instead ([`Started::Waits`]), and the
+/// app's watch starts a run once one turns up ([`start_waiting`]). A run made then would only stand
+/// at its entry, counted among the runs under way and doing nothing.
+pub fn start(
+    tx: &WriteTx<'_>,
+    automation_id: i64,
+    by: &Launcher<'_>,
+    handed: &HandedAtLaunch,
+) -> Result<Started> {
+    hand(tx, automation_id, by, handed, ReadsFrom::Saved, true, true)
 }
 
 /// **Which definition of an automation a launch reads** — what is checked and copied down onto the run.
@@ -1551,7 +1817,7 @@ pub fn launch_handing(
     handed: &HandedAtLaunch,
     reads: ReadsFrom,
 ) -> Result<AutomationRun> {
-    hand(tx, automation_id, by, handed, reads, true)
+    hand(tx, automation_id, by, handed, reads, true, false)?.run()
 }
 
 /// [`launch_handing`], not refused over the automation's most runs under way. For a test run, whose run
@@ -1563,15 +1829,19 @@ pub fn launch_handing_past_the_limit(
     handed: &HandedAtLaunch,
     reads: ReadsFrom,
 ) -> Result<AutomationRun> {
-    hand(tx, automation_id, by, handed, reads, false)
+    hand(tx, automation_id, by, handed, reads, false, false)?.run()
 }
 
 /// **What the triggers say on one look** ([`triggers_due`]): the automations whose trigger is due now,
-/// and when the soonest of the rest is.
+/// the ones due but for what their scripts say, and when the soonest of the rest is.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TriggersDue {
     /// The automations to [`fire`], oldest first.
     pub due: Vec<i64>,
+    /// The automations whose trigger is due but for its scripts, oldest first, each with them: run them
+    /// outside any write ([`ask_trigger`]), and [`fire`] the automation only where they said to file a
+    /// task, handing it what they said.
+    pub ask: Vec<(i64, TriggerScripts)>,
     /// When the next trigger not yet due is, or `None` where there is none — so a look can sleep no
     /// longer than that.
     pub next_at: Option<Timestamp>,
@@ -1579,17 +1849,26 @@ pub struct TriggersDue {
 
 /// **Which triggers are due at `now`** — the first part of each, asked of every automation that may be
 /// started by one ([`read::automations_triggered`]), which leaves out a stopped one. One whose runs
-/// under way say no ([`has_room`]) is not due: it would decide not to file a task, so a look need not
-/// open a write to hear it say so. It writes nothing: [`fire`] asks all of it again, in the transaction
-/// it writes in.
+/// under way say no ([`has_room`]), or whose condition does not hold ([`condition_holds`]), is not
+/// due: it would decide not to file a task, so a look need not open a write to hear it say so. One
+/// with a script — one that asks whether to file a task, or one that writes what it says — is put in
+/// `ask` rather than `due`: its program may run for hours, so it is not run here. It writes nothing:
+/// [`fire`] asks all of it again, in the transaction it writes in.
 pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
     let mut found = TriggersDue::default();
     for automation in read::automations_triggered(conn)? {
-        let Some(trigger) = automation.trigger else { continue };
+        let Some(trigger) = &automation.trigger else { continue };
         if trigger.next_at <= now {
             let under_way = read::automation_run_ids_under_way(conn, automation.id)?;
-            if has_room(&trigger.when, under_way.len(), automation.max_concurrent_runs) {
-                found.due.push(automation.id);
+            // A condition that no longer reads (an axis it names gone since) is left for `fire` to
+            // refuse, as a launch refused is, rather than stopping every other trigger on this look.
+            if has_room(&trigger.when, under_way.len(), automation.max_concurrent_runs)
+                && condition_holds(conn, automation.project_id, trigger).unwrap_or(true)
+            {
+                match TriggerScripts::of(trigger) {
+                    Some(scripts) => found.ask.push((automation.id, scripts)),
+                    None => found.due.push(automation.id),
+                }
             }
         } else if found.next_at.is_none_or(|soonest| trigger.next_at < soonest) {
             found.next_at = Some(trigger.next_at);
@@ -1602,36 +1881,59 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 /// start a run of the automation on it — `Some(run)` when it did, `None` when it decided not to.
 ///
 /// 1. **Whether to file one.** Not before the trigger's `next_at`, and not while its runs under way say
-///    no ([`has_room`]): an `every` waits while the automation has its most runs under way
+///    no ([`has_room`]): an `every` or a `tasks` waits while the automation has its most runs under way
 ///    (`max_concurrent_runs`), where a task filed would have no run to go to, and an `idle` waits until
-///    it has none at all. An archived automation, a stopped one, one kept for export only and one with
-///    no trigger file none either.
-/// 2. **What it says.** The title and notes written on the trigger.
+///    it has none at all. Nor while its condition does not hold ([`condition_holds`]). One with a
+///    script files one only where `said` was heard from those very scripts — the ones [`ask_trigger`]
+///    ran outside this write — so one rewritten since they were asked files nothing. An archived
+///    automation, a stopped one, one kept for export only and one with no trigger file none either.
+/// 2. **What it says** ([`crate::model::TriggerTask`]): the title and notes written on the trigger, the
+///    ones read from its file now ([`task_from_file`]), or the ones its program wrote in `said`. A file
+///    that says nothing it can file is an error, as a launch refused is.
 /// 3. **The run.** A launch like any other ([`launch_handing`]), of the newest saved version, the task
 ///    handed to its entry as a person's would be — so it is the entry, the built-in that files a task,
-///    that files it. What `by` says is passed on as it stands.
+///    that files it. What `by` says is passed on as it stands. The task is handed with the trigger's
+///    role and name too: the entry files it under that role, and leaves a line in its timeline naming
+///    the trigger ([`crate::activity_log::event::task_filed_by_trigger`]).
 ///
 /// **A time it decides no leaves nothing**: no task, no run, and `next_at` where it was, so the next
 /// look asks again. A launch refused by its checks is an error, and the transaction it is written in
 /// takes nothing with it either. Only a task filed moves `next_at` on, counted from `now` rather than
 /// from when it was due, so an app that was closed for a day files one task when it comes back rather
 /// than a day's worth.
-pub fn fire(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>, now: Timestamp) -> Result<Option<AutomationRun>> {
+pub fn fire(
+    tx: &WriteTx<'_>,
+    automation_id: i64,
+    by: &Launcher<'_>,
+    now: Timestamp,
+    said: Option<&ScriptsSaid>,
+) -> Result<Option<AutomationRun>> {
     let before = read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
     let Some(trigger) = before.trigger.clone() else { return Ok(None) };
     if before.archived || before.stopped || before.export_only || now < trigger.next_at {
         return Ok(None);
     }
     let under_way = read::automation_run_ids_under_way(tx.conn(), automation_id)?;
-    if !has_room(&trigger.when, under_way.len(), before.max_concurrent_runs) {
+    if !has_room(&trigger.when, under_way.len(), before.max_concurrent_runs)
+        || !condition_holds(tx.conn(), before.project_id, &trigger)?
+        || TriggerScripts::of(&trigger).is_some_and(|scripts| said.map(|said| &said.scripts) != Some(&scripts))
+    {
         return Ok(None);
     }
-    let handed = match &trigger.task {
-        crate::model::TriggerTask::Fixed { title, notes } => HandedAtLaunch {
-            title: Some(title.clone()),
-            notes: Some(notes.clone()),
-            ..Default::default()
+    let (title, notes) = match &trigger.task {
+        crate::model::TriggerTask::Fixed { title, notes } => (title.clone(), notes.clone()),
+        crate::model::TriggerTask::File { path } => task_from_file(path).map_err(Error::invalid)?,
+        crate::model::TriggerTask::Script { .. } => match said.and_then(|said| said.wrote.clone()) {
+            Some(wrote) => wrote,
+            None => return Ok(None),
         },
+    };
+    let handed = HandedAtLaunch {
+        title: Some(title),
+        notes: Some(notes),
+        role_id: trigger.role_id,
+        trigger: Some(trigger.name.clone()),
+        ..Default::default()
     };
     let run = launch_handing(tx, automation_id, by, &handed, ReadsFrom::Saved)?;
     let mut after = before.clone();
@@ -1640,17 +1942,357 @@ pub fn fire(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>, now: Timest
     Ok(Some(run))
 }
 
+/// **The entry of `pic`**: the key of the built-in it stands on (`None` for an agent's step or a
+/// script), with the answers written for it there as a run's copy would keep them — or `None` where
+/// `pic` names no entry.
+fn entry_builtin(conn: &Connection, pic: &Picture) -> Result<Option<EntryBuiltin>> {
+    let Some(entry) = pic.entry_placement_id.and_then(|id| pic.placement(id)) else { return Ok(None) };
+    let cfg = answers(pic, entry, &ActionDef::placed(conn, entry)?).into_iter().map(run_def_cfg).collect();
+    Ok(Some(EntryBuiltin { builtin: action_builtin(conn, entry.action_id)?, cfg, roles: roles_on(pic) }))
+}
+
+/// **The entry of a picture as a waiting built-in reads it** ([`entry_builtin`]): the built-in placed
+/// there, the answers written for it, and the roles a run of the picture would start rounds of.
+struct EntryBuiltin {
+    builtin: Option<String>,
+    cfg: Vec<RunDefCfg>,
+    roles: Vec<i64>,
+}
+
+/// **The roles a run launched from `pic` would start rounds of** — [`roles_started`] read before any
+/// run is: the picture's roles that name a placement on it as where their round starts, each once.
+fn roles_on(pic: &Picture) -> Vec<i64> {
+    pic.roles()
+        .iter()
+        .filter(|r| r.entry_placement_id.is_some_and(|id| pic.placement(id).is_some()))
+        .map(|r| r.id)
+        .collect()
+}
+
+/// **Mark an automation as waiting for a task** ([`Automation::waits_for_task_since`]) — from now, or
+/// from when it already was.
+fn mark_waiting(tx: &WriteTx<'_>, before: Automation) -> Result<Automation> {
+    if before.waits_for_task_since.is_some() {
+        return Ok(before);
+    }
+    let after = Automation { waits_for_task_since: Some(Timestamp::now()), ..before.clone() };
+    crate::ops::emit_update(tx, record::automation(&before), record::automation(&after))?;
+    Ok(after)
+}
+
+/// **End a run whose built-in would wait for a task, and have its automation wait instead**
+/// (`AMB-D-969`) — where the run came back to its entry with no task to take.
+///
+/// **The run completes** there, its step never opened: it found nothing to do, as one leaving by the
+/// way out for nothing to take does. It holds no task, so there is none to hand back. **The automation
+/// is marked as waiting**, and the app's watch starts a run of it once a task turns up
+/// ([`start_waiting`]). So waiting leaves no run standing, counted among those under way, and no step or
+/// stretch.
+pub(crate) fn wait_for_a_task(tx: &WriteTx<'_>, run: AutomationRun) -> Result<AutomationRun> {
+    let automation_id = run.automation_id;
+    let ended = crate::ops::automation_stop::ended(tx, run, crate::ops::automation_stop::Ending::Completed)?;
+    let automation =
+        read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    mark_waiting(tx, automation)?;
+    Ok(ended.run)
+}
+
+/// **Which of these waiting automations a run may be started of now** ([`start_waiting`]) — those a
+/// task has turned up for, with room under `max_concurrent_runs`, and those whose newest saved entry no
+/// longer waits for one, whose wait [`start_waiting`] ends.
+///
+/// Only whether a task has turned up is asked, one row of the tasks each, never a count
+/// (`AMB-D-969`). It writes nothing: [`start_waiting`] asks all of it again, in the transaction it
+/// writes in. The caller says which to ask, so it can leave each one alone for a while after asking
+/// (`AMB-D-983`).
+pub fn tasks_turned_up(conn: &Connection, automations: &[i64]) -> Result<Vec<i64>> {
+    let mut due = Vec::new();
+    for &automation_id in automations {
+        let Some(automation) = read::automation(conn, automation_id)? else { continue };
+        if automation.waits_for_task_since.is_none() || automation.archived || automation.stopped || automation.export_only {
+            continue;
+        }
+        if read::automation_run_ids_under_way(conn, automation_id)?.len() >= automation.max_concurrent_runs as usize {
+            continue;
+        }
+        let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+        let turned_up = match entry_builtin(conn, &pic)? {
+            Some(e) => crate::ops::automation_builtin::turned_up(
+                conn,
+                automation.project_id,
+                &e.roles,
+                e.builtin.as_deref(),
+                &e.cfg,
+            )?,
+            None => None,
+        };
+        if turned_up != Some(false) {
+            due.push(automation_id);
+        }
+    }
+    Ok(due)
+}
+
+/// **Start a run of an automation waiting for a task, now that one has turned up** — `Some(run)` where
+/// it did, `None` where there was nothing to start.
+///
+/// It starts none where the automation is not waiting, is archived, stopped or kept for export only,
+/// has its most runs under way, or no task has turned up after all: the wait goes on, and nothing is
+/// written.
+/// Where its newest saved entry no longer waits for a task, the wait ends and no run is made — a run
+/// started then would start for no task.
+///
+/// The run is a launch like any other ([`launch_handing`]) of the newest saved version, with nothing
+/// handed to it, and the wait ends in the same transaction. A launch its checks refuse is an error, and
+/// the transaction takes nothing with it: the automation goes on waiting.
+pub fn start_waiting(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result<Option<AutomationRun>> {
+    let before = read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    if before.waits_for_task_since.is_none() || before.archived || before.stopped || before.export_only {
+        return Ok(None);
+    }
+    if read::automation_run_ids_under_way(tx.conn(), automation_id)?.len() >= before.max_concurrent_runs as usize {
+        return Ok(None);
+    }
+    let (pic, _) = definition(tx.conn(), &before, ReadsFrom::Saved)?;
+    let turned_up = match entry_builtin(tx.conn(), &pic)? {
+        Some(e) => crate::ops::automation_builtin::turned_up(
+            tx.conn(),
+            before.project_id,
+            &e.roles,
+            e.builtin.as_deref(),
+            &e.cfg,
+        )?,
+        None => None,
+    };
+    match turned_up {
+        Some(false) => return Ok(None),
+        None => {
+            stop_waiting(tx, automation_id)?;
+            return Ok(None);
+        }
+        Some(true) => {}
+    }
+    let run = launch_handing(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved)?;
+    stop_waiting(tx, automation_id)?;
+    Ok(Some(run))
+}
+
+/// **Stop an automation waiting for a task** — a person saying not to start a run once one turns up, or
+/// [`start_waiting`] having started one. One that is not waiting is answered as it stands, with nothing
+/// written.
+pub fn stop_waiting(tx: &WriteTx<'_>, automation_id: i64) -> Result<Automation> {
+    let before = read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    if before.waits_for_task_since.is_none() {
+        return Ok(before);
+    }
+    let after = Automation { waits_for_task_since: None, ..before.clone() };
+    crate::ops::emit_update(tx, record::automation(&before), record::automation(&after))?;
+    Ok(after)
+}
+
+/// **An automation waiting for a task**, as a person reads it: since when, and what its newest saved
+/// entry looks for (`None` where that entry no longer waits for anything).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct TaskWait {
+    pub since: Timestamp,
+    pub looks_for: Option<String>,
+}
+
+/// **Whether this automation is waiting for a task** ([`TaskWait`]), or `None` where it is not.
+pub fn task_wait(conn: &Connection, automation_id: i64) -> Result<Option<TaskWait>> {
+    let automation = read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    let Some(since) = automation.waits_for_task_since else { return Ok(None) };
+    let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+    let looks_for = entry_builtin(conn, &pic)?
+        .and_then(|e| crate::ops::automation_builtin::looks_for(e.builtin.as_deref(), &e.cfg));
+    Ok(Some(TaskWait { since, looks_for }))
+}
+
+/// **What is keeping this automation waiting** (`AMB-D-999`) — the tasks its newest saved entry looks
+/// for that cannot be taken, by what stops them. `None` for an automation that is not waiting. Read
+/// when a person is about to look, never by the watch's look.
+pub fn task_wait_held_back(
+    conn: &Connection,
+    automation_id: i64,
+) -> Result<Option<crate::ops::automation_builtin::HeldBack>> {
+    let automation = read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    if automation.waits_for_task_since.is_none() {
+        return Ok(None);
+    }
+    let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+    let Some(e) = entry_builtin(conn, &pic)? else { return Ok(None) };
+    crate::ops::automation_builtin::held_back(conn, automation.project_id, &e.roles, e.builtin.as_deref(), &e.cfg)
+}
+
 /// **Whether the runs under way leave a trigger room to file a task** — `under_way` being the
-/// automation's runs `running` or `paused`, and `max` its `max_concurrent_runs`. An `every` files one
-/// while there is room for one more run; an `idle` only once there is none under way.
+/// automation's runs `running` or `paused`, and `max` its `max_concurrent_runs`. An `every`, a `tasks`
+/// or a `script` files one while there is room for one more run; an `idle` only once there is none
+/// under way.
 fn has_room(when: &crate::model::TriggerWhen, under_way: usize, max: u32) -> bool {
     match when {
-        crate::model::TriggerWhen::Every { .. } => under_way < max as usize,
+        crate::model::TriggerWhen::Every { .. }
+        | crate::model::TriggerWhen::Tasks
+        | crate::model::TriggerWhen::Script => under_way < max as usize,
         crate::model::TriggerWhen::Idle => under_way == 0,
     }
 }
 
-/// [`launch_handing`], counting the runs under way only where `limited`.
+/// **Whether a trigger's condition lets it file a task** — fewer than `below` tasks of the automation's
+/// project (`project_id`) matching its filter. One with no condition always does.
+fn condition_holds(conn: &Connection, project_id: i64, trigger: &crate::model::AutomationTrigger) -> Result<bool> {
+    let Some(condition) = &trigger.condition else { return Ok(true) };
+    let matched = crate::query::count(conn, crate::reach::Reach::binding(project_id), &condition.filter)?;
+    Ok(matched < condition.below as usize)
+}
+
+/// The version of the `output.json` a trigger's script writes.
+pub const TRIGGER_OUTPUT_VERSION: u64 = 1;
+
+/// **The programs a trigger runs outside any write** ([`TriggersDue::ask`]): the one it asks whether
+/// to file a task ([`crate::model::AutomationTrigger::script`]), and the one that writes what the task
+/// says ([`crate::model::TriggerTask::Script`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TriggerScripts {
+    pub ask: Option<StepScript>,
+    pub write: Option<StepScript>,
+}
+
+impl TriggerScripts {
+    /// The programs `trigger` runs — `None` where it runs none.
+    pub fn of(trigger: &crate::model::AutomationTrigger) -> Option<Self> {
+        let scripts = TriggerScripts { ask: trigger.script.clone(), write: trigger.task.script().cloned() };
+        (scripts.ask.is_some() || scripts.write.is_some()).then_some(scripts)
+    }
+}
+
+/// **What a trigger's programs said** ([`ask_trigger`]) — that it is to file a task, and handed to
+/// [`fire`] with the programs that said so.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ScriptsSaid {
+    /// The programs that were run, as they stood when they were.
+    pub scripts: TriggerScripts,
+    /// The title and notes the program that writes the task wrote — `None` where there is none.
+    pub wrote: Option<(String, String)>,
+}
+
+/// **Run a trigger's programs** — first the one that asks whether to file a task ([`ask_script`]),
+/// then the one that writes what it says ([`write_script`]), each stopped at its timeout or once
+/// `stop` answers `true`. `Ok(None)` is the first saying no, which leaves the second unrun. Like
+/// [`ask_script`], it writes nothing to the store and may run for hours, so it is run outside any
+/// write, and what it said is handed to [`fire`]. `Err` is why one of them said nothing, in a
+/// sentence; the trigger files nothing then.
+pub fn ask_trigger(
+    scripts: &TriggerScripts,
+    mut stop: impl FnMut() -> bool,
+) -> std::result::Result<Option<ScriptsSaid>, String> {
+    if let Some(script) = &scripts.ask {
+        if !ask_script(script, &mut stop)? {
+            return Ok(None);
+        }
+    }
+    let wrote = scripts.write.as_ref().map(|script| write_script(script, &mut stop)).transpose()?;
+    Ok(Some(ScriptsSaid { scripts: scripts.clone(), wrote }))
+}
+
+/// **Ask a trigger's script whether to file a task** — run it once ([`automation_script::run`]), with
+/// no inputs, stopping it at its timeout or once `stop` answers `true`, and read its answer. It writes
+/// nothing to the store and may run for hours, so it is run outside any write, and what it said is
+/// handed to [`fire`].
+///
+/// It answers in `output.json`, `{"version":1,"file":true}` to file one and `"file":false` not to —
+/// never in its exit code, which says only whether it ran to the end (`AMB-D-1016`): a script that
+/// fell over is not taken for one that said no. `Err` is why it said neither, in a sentence: it could
+/// not be started, ran out of time, was stopped, ended other than with 0, or left no `output.json` or
+/// one not in that shape. The trigger files nothing then either.
+pub fn ask_script(script: &StepScript, stop: impl FnMut() -> bool) -> std::result::Result<bool, String> {
+    script_said(script, &automation_script::run(script, &[], stop).ended)
+}
+
+/// **Have the program of a [`crate::model::TriggerTask::Script`] write what the task says** — run as
+/// [`ask_script`] runs a trigger's own script, with no inputs, and answered the same way, in
+/// `output.json` alone: `{"version":1,"title":"…","notes":"…"}`, the notes left out where there are
+/// none. The title and the notes are handed back in that order. `Err` is why it wrote nothing that
+/// can be filed — a blank title included.
+pub fn write_script(script: &StepScript, stop: impl FnMut() -> bool) -> std::result::Result<(String, String), String> {
+    script_wrote(script, &automation_script::run(script, &[], stop).ended)
+}
+
+/// What a trigger's script said, from how its run `ended` ([`ask_script`]).
+fn script_said(script: &StepScript, ended: &automation_script::Ended) -> std::result::Result<bool, String> {
+    let output = script_output(script, ended)?;
+    let unshaped = |what: &str| format!("output.json is not in the shape {{\"version\":1,\"file\":true|false}}: {what}");
+    if output.get("version").and_then(|v| v.as_u64()) != Some(TRIGGER_OUTPUT_VERSION) {
+        return Err(unshaped("\"version\" is not 1"));
+    }
+    output.get("file").and_then(|v| v.as_bool()).ok_or_else(|| unshaped("\"file\" is not true or false"))
+}
+
+/// What the program of a trigger's task wrote, from how its run `ended` ([`write_script`]).
+fn script_wrote(script: &StepScript, ended: &automation_script::Ended) -> std::result::Result<(String, String), String> {
+    let output = script_output(script, ended)?;
+    let unshaped =
+        |what: &str| format!("output.json is not in the shape {{\"version\":1,\"title\":\"…\",\"notes\":\"…\"}}: {what}");
+    if output.get("version").and_then(|v| v.as_u64()) != Some(TRIGGER_OUTPUT_VERSION) {
+        return Err(unshaped("\"version\" is not 1"));
+    }
+    let title = match output.get("title").and_then(|v| v.as_str()).map(str::trim) {
+        Some(title) if !title.is_empty() => title.to_string(),
+        Some(_) => return Err(unshaped("\"title\" is blank")),
+        None => return Err(unshaped("\"title\" is not a string")),
+    };
+    let notes = match output.get("notes") {
+        None | Some(serde_json::Value::Null) => String::new(),
+        Some(notes) => notes.as_str().ok_or_else(|| unshaped("\"notes\" is not a string"))?.to_string(),
+    };
+    Ok((title, notes))
+}
+
+/// The `output.json` a trigger's program wrote, from how its run `ended` — or why there is none.
+fn script_output<'a>(
+    script: &StepScript,
+    ended: &'a automation_script::Ended,
+) -> std::result::Result<&'a serde_json::Value, String> {
+    use automation_script::Ended;
+    match ended {
+        Ended::NotStarted(why) => Err(format!("the program could not be started: {why}")),
+        Ended::TimedOut => Err(format!(
+            "the program was still running after {} minutes, and was stopped",
+            script.timeout_minutes
+        )),
+        Ended::Stopped => Err("the program was stopped before it ended".to_string()),
+        Ended::Failed(status) => Err(match status.code() {
+            Some(code) => format!("the program ended with exit code {code}"),
+            None => format!("the program ended without an exit code ({status})"),
+        }),
+        Ended::NoOutput => Err("the program ended with exit code 0 and wrote no output.json".to_string()),
+        Ended::NotJson(why) => Err(format!("output.json is not JSON: {why}")),
+        Ended::Wrote { output, .. } => Ok(output),
+    }
+}
+
+/// **Read what a [`crate::model::TriggerTask::File`] says** — the file at `path`, as it stands now: its
+/// first line that is not blank is the title, and what follows it the notes, blank lines around them
+/// left out. `Err` is why it says nothing that can be filed: it cannot be read as UTF-8 text, or has
+/// no line that is not blank.
+pub fn task_from_file(path: &str) -> std::result::Result<(String, String), String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("the file '{path}' could not be read: {e}"))?;
+    let text = text.trim_start();
+    if text.is_empty() {
+        return Err(format!("the file '{path}' is blank, so it has no title"));
+    }
+    let (title, mut notes) = text.split_once('\n').unwrap_or((text, ""));
+    // Blank lines before the notes are left out whole, so notes that open indented keep their indent.
+    while let Some((line, rest)) = notes.split_once('\n') {
+        if !line.trim().is_empty() {
+            break;
+        }
+        notes = rest;
+    }
+    Ok((title.trim().to_string(), notes.trim_end().to_string()))
+}
+
+/// [`launch_handing`], counting the runs under way only where `limited`, and making no run where the
+/// entry would wait for a task only where `may_wait` ([`start`]).
 fn hand(
     tx: &WriteTx<'_>,
     automation_id: i64,
@@ -1658,7 +2300,8 @@ fn hand(
     handed: &HandedAtLaunch,
     reads: ReadsFrom,
     limited: bool,
-) -> Result<AutomationRun> {
+    may_wait: bool,
+) -> Result<Started> {
     let who = match (handed.files.is_empty(), by.by) {
         (true, _) => None,
         (false, Some(who)) => Some(who),
@@ -1668,7 +2311,10 @@ fn hand(
             ))
         }
     };
-    let run = launch_asking(tx, automation_id, by, handed, reads, limited, |_| true)?;
+    let run = match launch_asking(tx, automation_id, by, handed, reads, limited, may_wait, |_| true)? {
+        Started::Run(run) => run,
+        waits @ Started::Waits(_) => return Ok(waits),
+    };
     if let Some(who) = who {
         for file in &handed.files {
             crate::ops::attachment::add_blob(
@@ -1683,7 +2329,7 @@ fn hand(
             )?;
         }
     }
-    Ok(run)
+    Ok(Started::Run(run))
 }
 
 /// [`launch`], with the check's two reasons about how a task is held let through — the lines that
@@ -1699,9 +2345,10 @@ pub(crate) fn launch_past_the_task_checks(
     automation_id: i64,
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
-    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, true, |unmet| {
+    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, true, false, |unmet| {
         !matches!(unmet, Unmet::LeavesTaskOpen { .. } | Unmet::HandsOnTaskTaken { .. })
-    })
+    })?
+    .run()
 }
 
 /// [`launch_past_the_task_checks`], with a setting that names what the project does not have let through
@@ -1714,7 +2361,7 @@ pub(crate) fn launch_past_the_setting_checks(
     automation_id: i64,
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
-    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, true, |unmet| {
+    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, true, false, |unmet| {
         !matches!(
             unmet,
             Unmet::LeavesTaskOpen { .. }
@@ -1723,12 +2370,18 @@ pub(crate) fn launch_past_the_setting_checks(
                 | Unmet::CfgValueClosed { .. }
                 | Unmet::FolderUnchosen { .. }
         )
-    })
+    })?
+    .run()
 }
 
 /// [`launch`] of the definition `reads` names, refusing only over what `counts` says counts — and over
 /// the runs under way only where `limited` — and keeping what was `handed` on the run. The files are the
 /// caller's to attach once the run exists.
+///
+/// Where `may_wait`, an entry that would wait for a task with none to take makes no run, and the
+/// automation waits instead ([`start`]). Asked last, once nothing refuses the launch: an automation
+/// that could not be launched is not one to wait on.
+#[allow(clippy::too_many_arguments)]
 fn launch_asking(
     tx: &WriteTx<'_>,
     automation_id: i64,
@@ -1736,8 +2389,9 @@ fn launch_asking(
     handed: &HandedAtLaunch,
     reads: ReadsFrom,
     limited: bool,
+    may_wait: bool,
     counts: impl Fn(&Unmet) -> bool,
-) -> Result<AutomationRun> {
+) -> Result<Started> {
     let automation: Automation = read::automation(tx.conn(), automation_id)?
         .ok_or_else(|| not_found("automation", automation_id))?;
     if automation.archived {
@@ -1757,7 +2411,7 @@ fn launch_asking(
         )));
     }
     let (pic, version) = definition(tx.conn(), &automation, reads)?;
-    let unmet: Vec<Unmet> = check_picture(tx.conn(), &automation, &pic, by.startable, by.models)?
+    let unmet: Vec<Unmet> = check_picture(tx.conn(), &automation, &pic, by.startable, by.models, by.default_agent)?
         .into_iter()
         .filter(|u| counts(u))
         .collect();
@@ -1796,6 +2450,20 @@ fn launch_asking(
     let handed_task = entry_reads(tx.conn(), &automation, &pic, handed)?
         .map(|task| serde_json::to_string(&task).map_err(Error::from))
         .transpose()?;
+    if may_wait {
+        if let Some(e) = entry_builtin(tx.conn(), &pic)? {
+            let waits = crate::ops::automation_builtin::waits_now(
+                tx.conn(),
+                automation.project_id,
+                &e.roles,
+                e.builtin.as_deref(),
+                &e.cfg,
+            )?;
+            if waits {
+                return Ok(Started::Waits(Box::new(mark_waiting(tx, automation)?)));
+            }
+        }
+    }
     let now = Timestamp::now();
     let run = AutomationRun {
         id: read::next_id(tx.conn(), "automation_run")?,
@@ -1817,8 +2485,8 @@ fn launch_asking(
         updated_at: now,
     };
     emit_create(tx, record::automation_run(&run))?;
-    copy_down(tx, run.id, &pic, version, now)?;
-    Ok(run)
+    copy_down(tx, run.id, &pic, version, by.default_agent, now)?;
+    Ok(Started::Run(run))
 }
 
 /// **Copy every step of `automation` down onto the run** — [`snapshot`] for each step of each
@@ -1832,8 +2500,17 @@ fn launch_asking(
 /// records the saved version it is — `version`, `None` for the draft. **What is copied of each placement
 /// is the version of the action it stands on** ([`ActionDef::placed`]), not the action as it has since
 /// been written on.
-fn copy_down(tx: &WriteTx<'_>, run_id: i64, pic: &Picture, version: Option<i64>, now: Timestamp) -> Result<()> {
+fn copy_down(
+    tx: &WriteTx<'_>,
+    run_id: i64,
+    pic: &Picture,
+    version: Option<i64>,
+    default_agent: Option<&str>,
+    now: Timestamp,
+) -> Result<()> {
     let defs = defs_of(tx.conn(), &pic.placements)?;
+    let by_id: BTreeMap<i64, &AutomationPlacement> = pic.placements.iter().map(|p| (p.id, p)).collect();
+    let roles = roles_by_placement(pic, &by_id, &defs);
     let mut steps = Vec::new();
     for placement in &pic.placements {
         let def = &defs[&placement.id];
@@ -1844,7 +2521,8 @@ fn copy_down(tx: &WriteTx<'_>, run_id: i64, pic: &Picture, version: Option<i64>,
     }
     steps.sort_by_key(|(_, _, entry)| !entry);
     for (placement, step, entry) in steps {
-        if let Some(def) = snapshot(tx, run_id, version, pic, placement, &defs, &step, entry, now)? {
+        let carried = carrier(pic, &roles, placement.id, step.id, default_agent);
+        if let Some(def) = snapshot(tx, run_id, version, pic, placement, &defs, &step, carried, entry, now)? {
             emit_create(tx, record::automation_run_def(&def))?;
         }
     }
@@ -1862,9 +2540,10 @@ pub(crate) fn copy_down_again(
     run: &AutomationRun,
     startable: Option<&[String]>,
     models: &ModelsHere,
+    default_agent: Option<&str>,
 ) -> Result<AutomationRunDef> {
-    let (pic, version) = checked_saved(tx.conn(), run, startable, models)?;
-    copy_down(tx, run.id, &pic, version, Timestamp::now())?;
+    let (pic, version) = checked_saved(tx.conn(), run, startable, models, default_agent)?;
+    copy_down(tx, run.id, &pic, version, default_agent, Timestamp::now())?;
     entry_def(tx.conn(), run.id)?.ok_or_else(|| {
         Error::invalid(format!("run '{}' was copied down with no step to start at", run.id))
     })
@@ -1878,6 +2557,7 @@ fn checked_saved(
     run: &AutomationRun,
     startable: Option<&[String]>,
     models: &ModelsHere,
+    default_agent: Option<&str>,
 ) -> Result<(Picture, Option<i64>)> {
     let automation: Automation =
         read::automation(conn, run.automation_id)?.ok_or_else(|| not_found("automation", run.automation_id))?;
@@ -1899,7 +2579,7 @@ fn checked_saved(
         )));
     }
     let (pic, version) = definition(conn, &automation, ReadsFrom::Saved)?;
-    let unmet = check_picture(conn, &automation, &pic, startable, models)?;
+    let unmet = check_picture(conn, &automation, &pic, startable, models, default_agent)?;
     if !unmet.is_empty() {
         return Err(not_ready("launch", &automation.name, &unmet));
     }
@@ -1939,6 +2619,7 @@ pub fn take_up_newer(
     run_id: i64,
     startable: Option<&[String]>,
     models: &ModelsHere,
+    default_agent: Option<&str>,
 ) -> Result<TakenUp> {
     let run = read::automation_run(tx.conn(), run_id)?.ok_or_else(|| not_found("run", run_id))?;
     let Waiting::Step(standing) = next_def(tx.conn(), run_id)? else { return Ok(TakenUp::Same) };
@@ -1951,7 +2632,7 @@ pub fn take_up_newer(
     if standing.automation_version.is_some_and(|copied| copied >= saved.version) {
         return Ok(TakenUp::Same);
     }
-    let refused = match checked_saved(tx.conn(), &run, startable, models) {
+    let refused = match checked_saved(tx.conn(), &run, startable, models, default_agent) {
         Ok((pic, version)) => match files_a_task(tx.conn(), &pic)? {
             Some(step) => format!(
                 "cannot pick up run '{}' at version {}: the entry '{step}' files a task, and only a launch \
@@ -1959,7 +2640,7 @@ pub fn take_up_newer(
                 run.id, saved.version
             ),
             None => {
-                copy_down(tx, run.id, &pic, version, Timestamp::now())?;
+                copy_down(tx, run.id, &pic, version, default_agent, Timestamp::now())?;
                 let entry = entry_def(tx.conn(), run.id)?.ok_or_else(|| {
                     Error::invalid(format!("run '{}' was copied down with no step to start at", run.id))
                 })?;
@@ -2039,6 +2720,8 @@ fn entry_reads(
                 title: title.to_string(),
                 notes: handed.notes().map(str::to_string),
                 classification,
+                role_id: handed.role_id,
+                trigger: handed.trigger.clone(),
             }))
         }
         false if handed.for_a_task() => {
@@ -2119,14 +2802,14 @@ fn refused_over(head: String, code: ErrorCode, field: &'static str, name: &str, 
 /// edge ([`onward`], [`wired_into`]). Each input carries the outputs wired into it, resolved here, so a
 /// run hands a value along the wires it launched with (`AMB-D-961`). The settings are the placement's —
 /// the action's declarations with this spot's answers written in — because a step reads them by name and
-/// the answer is given once, where the action is placed. The agent and the model are the placement's too
-/// — chosen there, step by step (`AMB-D-960`). The prompt, the agent, the model and the three flags are
-/// resolved here rather than kept as a pointer, so the step is not read halfway through the run as
-/// whatever it had since been edited into.
+/// the answer is given once, where the action is placed. The agent and the model are `carried` — the
+/// step's own choice at the placement, else its role's default, else Amenbo's ([`carrier`]). The prompt,
+/// the agent, the model and the three flags are resolved here rather than kept as a pointer, so the
+/// step is not read halfway through the run as whatever it had since been edited into.
 ///
-/// **A step nobody is chosen for is not copied**, and `None` says so. The launch check refuses a run
-/// that could open one ([`Unmet::AgentUnchosen`]), so the only such step left here stands on a
-/// placement no run reaches — copied, it would need an agent it does not have. A built-in is copied
+/// **A step none of the three names an agent for is not copied**, and `None` says so. The launch
+/// check refuses a run that could open one ([`Unmet::AgentUnchosen`]), so the only such step left here
+/// stands on a placement no run reaches — copied, it would need an agent it does not have. A built-in is copied
 /// with nobody named and no prompt: Amenbo carries it out itself (`AMB-D-964`). A script is copied with
 /// nobody named too: its program is what is started (`AMB-D-1016`).
 ///
@@ -2142,6 +2825,7 @@ fn snapshot(
     placement: &AutomationPlacement,
     defs: &Defs,
     step: &AutomationStep,
+    carried: Option<Carrier>,
     entry: bool,
     now: Timestamp,
 ) -> Result<Option<AutomationRunDef>> {
@@ -2149,11 +2833,11 @@ fn snapshot(
     let def = &defs[&placement.id];
     // A built-in is carried out by Amenbo and a script by its program, so nobody was chosen for either
     // and its copy names nobody.
-    let chosen = if step.builtin.is_some() || step.script.is_some() {
-        AutomationPlacementStep::default()
+    let (agent, model) = if step.builtin.is_some() || step.script.is_some() {
+        (String::new(), None)
     } else {
-        match pic.chosen(placement.id, step.id) {
-            Some(chosen) => chosen.clone(),
+        match carried {
+            Some(carried) => (carried.agent, carried.model),
             None => return Ok(None),
         }
     };
@@ -2179,16 +2863,12 @@ fn snapshot(
         Some(_) => read::automation_action(conn, placement.action_id)?.and_then(|a| a.builtin_version),
         None => None,
     };
-    let cfg: Vec<RunDefCfg> = answers(pic, placement, def)
-        .into_iter()
-        .map(|c| RunDefCfg {
-            name: c.name,
-            kind: c.kind,
-            required: c.required,
-            options: c.options,
-            value: c.value,
-        })
-        .collect();
+    let cfg: Vec<RunDefCfg> = answers(pic, placement, def).into_iter().map(run_def_cfg).collect();
+    // The roles whose round starts here: those naming this placement, on the copy of its first step.
+    let roles: Vec<i64> = match def.entry_step_id == Some(step.id) {
+        true => pic.roles().iter().filter(|r| r.entry_placement_id == Some(placement.id)).map(|r| r.id).collect(),
+        false => Vec::new(),
+    };
     Ok(Some(AutomationRunDef {
         id: read::next_id(conn, "automation_run_def")?,
         run_id,
@@ -2202,8 +2882,8 @@ fn snapshot(
         builtin_version,
         automation_version,
         script: step.script.clone(),
-        agent: chosen.agent,
-        model: chosen.model,
+        agent,
+        model,
         interactive: step.interactive,
         work_dir_ref: step.work_dir_ref.clone(),
         report_to_task: step.report_to_task,
@@ -2218,6 +2898,7 @@ fn snapshot(
         ins: serde_json::to_string(&ins).map_err(Error::from)?,
         cfg: serde_json::to_string(&cfg).map_err(Error::from)?,
         entry,
+        roles: serde_json::to_string(&roles).map_err(Error::from)?,
         created_at: now,
         updated_at: now,
     }))
@@ -2409,8 +3090,11 @@ pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64
     let Some(exit) = exit else { return Ok(Onward::Nowhere) };
     let exits: Vec<RunDefExit> = serde_json::from_str(&def.exits).map_err(Error::from)?;
     let Some(taken) = exits.into_iter().find(|e| e.id == exit) else { return Ok(Onward::Nowhere) };
+    if let Some(routed) = by_role(conn, def, &taken)? {
+        return Ok(routed);
+    }
     let Some(line) = taken.then else {
-        // **An error way out nobody drew a line from halts the run and calls a person** (`AMB-D-966`)
+        // **An error way out nobody drew a line from halts the run**, and the round is filed as a failure
         // — which is why the launch check never asks for one. That holds for the step's own error way
         // out left without a line inside the action, and for one returned to an action's way out the
         // automation draws nothing after: the launch check lets that through only for the action's
@@ -2434,6 +3118,62 @@ pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64
             }
         }
     })
+}
+
+/// **Where the built-in that takes a task goes once it has taken one, in a run whose copies start roles'
+/// rounds** — on to the copy the round's role starts at ([`AutomationRunDef::roles`]), whatever line is
+/// drawn from it. `None` for any other way out, and for every way out of a run whose automation defines
+/// no role that names where its round starts: that run walks its picture as it is drawn.
+///
+/// The role is the one the round was taken under ([`crate::model::AutomationRunTask::role_id`]). Only a
+/// task of a role the copies start a round of is taken ([`roles_started`]), so a round with none has
+/// nowhere to go ([`Onward::Nowhere`]) — which a task whose role was changed under the run as it was being
+/// taken is the one way to reach.
+///
+/// No line is drawn for it, so the line it hands back is made up: on the automation's picture, from the
+/// placement it leaves, with no edge (`edge_id` 0) and no limit on how often it is taken. That it is on the
+/// automation's picture is what lets a pause asked for take hold on it, as on any line between two
+/// placements.
+fn by_role(conn: &Connection, def: &AutomationRunDef, taken: &RunDefExit) -> Result<Option<Onward>> {
+    if def.builtin.as_deref() != Some(TAKE_TASK.key)
+        || !taken.outs.iter().any(|p| p.kind == AutomationPortKind::TaskTake)
+    {
+        return Ok(None);
+    }
+    let defs = current_defs(conn, def.run_id)?;
+    if defs.iter().all(|d| d.role_ids().is_empty()) {
+        return Ok(None);
+    }
+    let role = read::automation_run_task_last(conn, def.run_id)?.and_then(|stretch| stretch.role_id);
+    let Some(next) = role.and_then(|role| defs.into_iter().find(|d| d.role_ids().contains(&role))) else {
+        return Ok(Some(Onward::Nowhere));
+    };
+    let line = RunDefLine {
+        edge_id: 0,
+        picture: AutomationPictureOwner::Automation,
+        from_id: def.placement_id.unwrap_or_default(),
+        exit_id: taken.returns_to.unwrap_or(taken.id),
+        ends: AutomationEnds::Go,
+        placement_id: next.placement_id,
+        step_id: next.step_id,
+        max_times: None,
+    };
+    Ok(Some(Onward::Go { def: Box::new(next), line }))
+}
+
+/// **The roles a run's copies start rounds of** ([`AutomationRunDef::roles`]), as it was last copied down,
+/// each once. Empty for a run whose automation defines no role that names where its round starts.
+///
+/// Where there are any, the built-in that takes a task takes only a task of one of them, so a task with
+/// no role, or one of a role no copy starts, is not taken.
+pub(crate) fn roles_started(conn: &Connection, run_id: i64) -> Result<Vec<i64>> {
+    let mut roles = Vec::new();
+    for role in current_defs(conn, run_id)?.iter().flat_map(|d| d.role_ids()) {
+        if !roles.contains(&role) {
+            roles.push(role);
+        }
+    }
+    Ok(roles)
 }
 
 /// **Which of an action's ways out one way out of a step inside it returns to** — the action's way out
@@ -2553,24 +3293,27 @@ pub(crate) fn goes_round(
     Ok(entry_def(conn, run_id)?.is_some_and(|entry| crate::ops::automation_stop::takes_a_task(&entry)))
 }
 
-/// **Whether this run stands before a built-in that is waiting** for something to turn up
-/// (`AMB-D-969`) — `running`, with nothing under way, and the step it would open next set to wait
-/// with nothing yet for it. Asked by a face that says so beside the run.
+/// **Whether this run stands before a built-in that would wait** for something to turn up
+/// (`AMB-D-969`) — `running`, with nothing under way, and the step it would open next set to wait with
+/// nothing yet for it. Such a run is ended the next time that step is opened, and its automation waits
+/// instead ([`wait_for_a_task`]); until then a pause before its next task takes hold at once.
 pub fn is_waiting(conn: &Connection, run_id: i64) -> Result<bool> {
     let Waiting::Step(def) = next_def(conn, run_id)? else { return Ok(false) };
     let Some(run) = read::automation_run(conn, run_id)? else { return Ok(false) };
     crate::ops::automation_builtin::waiting(conn, &run, &def)
 }
 
-/// **What is keeping a run waiting** (`AMB-D-999`) — `None` for a run that is not waiting on a
-/// built-in. Read when a person is about to look, never by the watch's once-a-second look.
+/// **What is keeping a run waiting** (`AMB-D-999`) — `None` for a run that is not standing before a
+/// built-in that would wait ([`is_waiting`]).
 pub fn held_back(conn: &Connection, run_id: i64) -> Result<Option<crate::ops::automation_builtin::HeldBack>> {
     let Waiting::Step(def) = next_def(conn, run_id)? else { return Ok(None) };
     let Some(run) = read::automation_run(conn, run_id)? else { return Ok(None) };
     if !crate::ops::automation_builtin::waiting(conn, &run, &def)? {
         return Ok(None);
     }
-    crate::ops::automation_builtin::held_back(conn, &run, &def)
+    let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
+    let roles = roles_started(conn, run.id)?;
+    crate::ops::automation_builtin::held_back(conn, run.project_id, &roles, def.builtin.as_deref(), &cfg)
 }
 
 /// **A run kept out of an action that takes one run at a time** ([`waits_for_room`]): the action, and
@@ -2703,7 +3446,7 @@ pub struct Trail {
     /// has left that spot, and before it opens one there. A step passed twice is two of these.
     pub steps: Vec<PassedStep>,
     /// The step under way, or the one the run is about to open or waiting on — the first step of the
-    /// spot for a run waiting for a task. `None` where [`Trail::at`] is `None`, and where the copy
+    /// spot for a run that has not opened one there yet. `None` where [`Trail::at`] is `None`, and where the copy
     /// names no step.
     pub step: Option<i64>,
 }
@@ -2816,7 +3559,7 @@ pub fn trail(conn: &Connection, run_id: i64) -> Result<Trail> {
 mod tests {
     use super::*;
     use crate::model::{AutomationAction, AutomationEdge, AutomationPlacement};
-    use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewScript, NewStep};
+    use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep};
     use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
     use crate::ops::test_support::{exit_id, mk_exit, mk_in, mk_out, mk_placed, mk_project, only_step, with_tx};
 
@@ -2897,6 +3640,7 @@ mod tests {
     /// open.
     fn here<'a>(startable: &'a [String]) -> Launcher<'a> {
         Launcher {
+            default_agent: None,
             startable: Some(startable),
             models: nothing_asked(),
             workspace_open: Some(true),
@@ -2913,7 +3657,7 @@ mod tests {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![],
             );
             let run = launch(tx, automation.id, &here(&claude())).expect("launch");
@@ -2928,7 +3672,7 @@ mod tests {
         with_tx(|tx| {
             let automation = mk_automation(tx, "空");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::NoSteps],
                 "nothing else is worth saying about it",
             );
@@ -2941,7 +3685,7 @@ mod tests {
             let (automation, _, _) = launchable(tx);
             automation::set_entry(tx, automation.id, None).expect("clear entry");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::NoEntry],
                 "with no entry nothing is reachable, so every other check is asked of nothing",
             );
@@ -2960,20 +3704,20 @@ mod tests {
                 .expect("add automation");
             assert_eq!(empty.failures_to, None, "born with nobody unless somebody is named");
             assert_eq!(
-                check(tx.conn(), empty.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), empty.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::NoFailuresTo, Unmet::NoSteps],
             );
 
             let (automation, _, _) = launchable(tx);
             automation::update(tx, automation.id, None, None, None, None, Some(None)).expect("leave it unsaid");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::NoFailuresTo],
             );
             let refused = launch(tx, automation.id, &here(&claude())).expect_err("nobody to file to");
             assert_eq!(refused.error_code(), ErrorCode::NotReadyAutomation, "{refused}");
             assert!(refused.to_string().contains("failed round"), "{refused}");
-            let refused = automation::save(tx, automation.id).expect_err("a save asks the same");
+            let refused = automation::save(tx, automation.id, None).expect_err("a save asks the same");
             assert!(matches!(refused, Error::NotReady(_)), "{refused}");
             assert_eq!(Unmet::NoFailuresTo.placement(), None);
             assert_eq!(Unmet::NoFailuresTo.code(), ErrorCode::NotReadyAutomationNoFailuresTo);
@@ -2986,7 +3730,7 @@ mod tests {
             .expect("a role");
             let to_role = Some(Some(FailuresTo::Role { role_id: role.id }));
             automation::update(tx, automation.id, None, None, None, None, to_role).expect("to the role");
-            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), vec![]);
             launch(tx, automation.id, &here(&claude())).expect("launch");
         });
     }
@@ -3005,7 +3749,7 @@ mod tests {
             )
             .expect("written before automations had roles");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::ExportOnly],
                 "nothing else is worth saying about it",
             );
@@ -3034,13 +3778,13 @@ mod tests {
             )
             .expect("mark it as still being written");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::ActionDraft { action: "直す".into(), placement: placement.id }],
             );
 
             automation::action_save(tx, action.id).expect("save it");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![],
             );
         });
@@ -3054,7 +3798,7 @@ mod tests {
             let (automation, action, placement) = launchable(tx);
             automation::action_set_entry(tx, action.id, None).expect("take the entry off");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::ActionEmpty { action: "直す".into(), placement: Some(placement.id) }],
             );
         });
@@ -3076,7 +3820,7 @@ mod tests {
             .expect("edge");
             automation::set_entry(tx, automation.id, Some(placement.id)).expect("entry");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::EntryTakesNoTask { step: "取る".into(), builtin: None, placement: placement.id }],
             );
         });
@@ -3095,7 +3839,7 @@ mod tests {
     }
 
     fn checked(tx: &WriteTx<'_>, automation: &Automation) -> Vec<Unmet> {
-        check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check")
+        check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check")
     }
 
     /// **A line that ends the run with the task still open is refused** (`AMB-D-967`), named by the way
@@ -3309,7 +4053,7 @@ mod tests {
                 automation::exit_add(tx, AutomationOwner::Action, action.id, Some("直すところがある"))
                     .expect("exit");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::OpenExit {
                     step: "直す".into(),
                     exit: exit.name.clone(),
@@ -3329,7 +4073,7 @@ mod tests {
             // refuse the automation every other test here launches.
             let (automation, _, _) = launchable(tx);
             let unmet =
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check");
             assert_eq!(unmet, vec![], "the error way out is carried from birth, not written");
         });
     }
@@ -3349,7 +4093,7 @@ mod tests {
             )
             .expect("port");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::UnwiredInput {
                     step: "直す".into(),
                     port: "下書き".into(),
@@ -3402,7 +4146,7 @@ mod tests {
             )
             .expect("wire back into itself");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::UnwiredInput {
                     step: "直す".into(),
                     port: "下書き".into(),
@@ -3461,7 +4205,7 @@ mod tests {
             )
             .expect("wire");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::UnwiredInput {
                     step: "直す".into(),
                     port: "下書き".into(),
@@ -3488,7 +4232,7 @@ mod tests {
             )
             .expect("cfg");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::UnansweredCfg {
                     step: "直す".into(),
                     cfg: "作業フォルダ".into(),
@@ -3498,7 +4242,7 @@ mod tests {
                 "the declaration is the action's and the answer is the placement's",
             );
             automation::cfg_set(tx, placement.id, "作業フォルダ", Some("\"~/work\"")).expect("answer");
-            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), vec![]);
         });
     }
 
@@ -3518,9 +4262,9 @@ mod tests {
             )
             .expect("cfg");
             automation::cfg_set(tx, placement.id, "どれ", Some(r#""b""#)).expect("answer");
-            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), vec![]);
             automation::cfg_update(tx, cfg.id, None, None, None, Some(Some(r#"["a"]"#))).expect("take b off");
-            let unmet = check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
+            let unmet = check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check");
             assert!(
                 matches!(
                     unmet.as_slice(),
@@ -3537,11 +4281,11 @@ mod tests {
         with_tx(|tx| {
             let (automation, _, placement) = launchable(tx);
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&[]), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&[]), nothing_asked(), None).expect("check"),
                 vec![Unmet::AgentMissing { step: "直す".into(), agent: "claude".into(), placement: placement.id }],
             );
             assert_eq!(
-                check(tx.conn(), automation.id, None, nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, None, nothing_asked(), None).expect("check"),
                 vec![],
                 "a machine nobody asked is not a machine with nothing on it (AMB-D-792)",
             );
@@ -3574,8 +4318,9 @@ mod tests {
             .expect("choose who carries it out");
     }
 
-    /// **A step nobody is chosen for where it is placed is refused** (`AMB-D-960`), even on a machine
-    /// nobody has asked what it can start — there is no agent to ask about at all.
+    /// **A step none of the three chooses for is refused** — not at its placement, not by a role, and
+    /// with no default of Amenbo's — even on a machine nobody has asked what it can start: there is no
+    /// agent to ask about at all.
     #[test]
     fn a_step_nobody_is_chosen_for_where_it_is_placed_is_refused() {
         with_tx(|tx| {
@@ -3583,7 +4328,7 @@ mod tests {
             let step = only_step(tx, &action);
             automation::placement_step_clear(tx, placement.id, step.id).expect("take the choice back");
             assert_eq!(
-                check(tx.conn(), automation.id, None, nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, None, nothing_asked(), None).expect("check"),
                 vec![Unmet::AgentUnchosen { step: "直す".into(), placement: placement.id }],
             );
             let err = launch(tx, automation.id, &here(&claude())).expect_err("refused");
@@ -3592,6 +4337,139 @@ mod tests {
                 msg.parts().iter().map(|p| p.code()).collect::<Vec<_>>(),
                 vec![Some(ErrorCode::NotReadyAutomationAgentUnchosen)],
             );
+        });
+    }
+
+    /// Who carries `step` at `placement` in the draft, with `default_agent` as Amenbo's own.
+    fn carried(
+        tx: &WriteTx<'_>,
+        automation: &Automation,
+        placement: &AutomationPlacement,
+        step: &AutomationStep,
+        default_agent: Option<&str>,
+    ) -> Option<Carrier> {
+        carriers(tx.conn(), automation.id, ReadsFrom::Draft, default_agent)
+            .expect("carriers")
+            .remove(&(placement.id, step.id))
+    }
+
+    /// A role named `name` whose round starts at `entry`, falling back to `agent` and `model`.
+    fn role_at(
+        tx: &WriteTx<'_>,
+        automation: &Automation,
+        name: &str,
+        entry: i64,
+        agent: Option<&str>,
+        model: Option<&str>,
+    ) -> crate::model::AutomationRole {
+        let new = NewRole {
+            name: name.into(),
+            entry_placement_id: Some(entry),
+            agent: agent.map(str::to_string),
+            model: model.map(str::to_string),
+            ..NewRole::default()
+        };
+        automation::role_add(tx, automation.id, new).expect("a role")
+    }
+
+    /// **A step's agent is chosen from three, in order** — the step at its placement, then the role whose
+    /// round reaches the placement, then Amenbo's own default — and the model comes from wherever the
+    /// agent did: Amenbo's names none, and a step's own choice never takes its role's model.
+    #[test]
+    fn a_step_falls_back_to_its_role_and_then_to_amenbo() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let step = only_step(tx, &action);
+            automation::placement_step_clear(tx, placement.id, step.id).expect("take the choice back");
+
+            assert_eq!(carried(tx, &automation, &placement, &step, None), None, "none of the three");
+            assert_eq!(
+                carried(tx, &automation, &placement, &step, Some("codex")),
+                Some(Carrier { agent: "codex".into(), model: None, at: ChosenAt::Amenbo }),
+            );
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), Some("claude")).expect("check"),
+                vec![],
+                "Amenbo's default carries a step nobody chose for",
+            );
+
+            let role = role_at(tx, &automation, "実装", placement.id, Some("claude"), Some("opus"));
+            assert_eq!(
+                carried(tx, &automation, &placement, &step, Some("codex")),
+                Some(Carrier { agent: "claude".into(), model: Some("opus".into()), at: ChosenAt::Role { role_id: role.id } }),
+                "the role comes before Amenbo, with its model",
+            );
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), vec![]);
+
+            automation::placement_step_set(tx, placement.id, step.id, "gemini", None).expect("choose");
+            assert_eq!(
+                carried(tx, &automation, &placement, &step, Some("codex")),
+                Some(Carrier { agent: "gemini".into(), model: None, at: ChosenAt::Step }),
+                "the step's own choice comes first, and the role's model does not come with it",
+            );
+        });
+    }
+
+    /// **A placement more than one round reaches takes the first role defined** that names an agent, and
+    /// a round stops where the automation's entry or another role's round begins.
+    #[test]
+    fn a_placement_falls_back_to_the_first_role_whose_round_reaches_it() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let step = only_step(tx, &action);
+            automation::placement_step_clear(tx, placement.id, step.id).expect("take the choice back");
+            let entry = automation.entry_placement_id.expect("an entry");
+
+            // Defined first, and starting at the automation's entry — but the work placement is where
+            // another role's round begins, so this round stops short of it.
+            role_at(tx, &automation, "受付", entry, Some("codex"), None);
+            role_at(tx, &automation, "名無し", placement.id, None, None);
+            let first = role_at(tx, &automation, "実装", placement.id, Some("claude"), None);
+            role_at(tx, &automation, "予備", placement.id, Some("gemini"), None);
+
+            assert_eq!(
+                carried(tx, &automation, &placement, &step, None),
+                Some(Carrier { agent: "claude".into(), model: None, at: ChosenAt::Role { role_id: first.id } }),
+            );
+        });
+    }
+
+    /// **The round reaching a placement is the first role defined whose round does**, a role naming no
+    /// agent included — unlike the role a step falls back to, which passes such a role by.
+    #[test]
+    fn a_placement_is_in_the_round_of_the_first_role_reaching_it_with_or_without_an_agent() {
+        with_tx(|tx| {
+            let (automation, _, placement) = launchable(tx);
+            let entry = automation.entry_placement_id.expect("an entry");
+            let rounds = || rounds_by_placement(tx.conn(), automation.id, ReadsFrom::Draft).expect("rounds");
+            assert_eq!(rounds(), BTreeMap::new(), "no role, no round");
+
+            let reception = role_at(tx, &automation, "受付", entry, Some("codex"), None);
+            let unnamed = role_at(tx, &automation, "名無し", placement.id, None, None);
+            role_at(tx, &automation, "実装", placement.id, Some("claude"), None);
+
+            let rounds = rounds();
+            assert_eq!(rounds.get(&entry), Some(&reception.id));
+            assert_eq!(rounds.get(&placement.id), Some(&unnamed.id), "the role defined first, though it names no agent");
+        });
+    }
+
+    /// **A launch copies the agent a step falls back to** into the run, so the pane opens on it.
+    #[test]
+    fn a_launch_copies_the_agent_a_step_falls_back_to() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let step = only_step(tx, &action);
+            automation::placement_step_clear(tx, placement.id, step.id).expect("take the choice back");
+            let startable = claude();
+            let by = Launcher { default_agent: Some("claude"), ..here(&startable) };
+            let run = launch(tx, automation.id, &by).expect("launch");
+            let copy = read::automation_run_defs_of(tx.conn(), run.id)
+                .expect("defs")
+                .into_iter()
+                .find(|def| def.step_id == Some(step.id))
+                .expect("the step is copied");
+            assert_eq!((copy.agent.as_str(), copy.model.as_deref()), ("claude", None));
         });
     }
 
@@ -3629,9 +4507,9 @@ mod tests {
                 program: program.to_string_lossy().into_owned(),
                 placement: placement.id,
             }];
-            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), missing);
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), missing);
             std::fs::create_dir(&program).expect("a folder where the program should be");
-            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), missing);
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), missing);
             let err = launch(tx, automation.id, &here(&claude())).expect_err("refused");
             let Error::NotReady(msg) = err else { panic!("a launch that cannot go ahead is not_ready") };
             assert_eq!(
@@ -3656,7 +4534,7 @@ mod tests {
             std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o644)).expect("not executable");
             runs_a_script(tx, &action, &program);
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::ScriptNotExecutable {
                     step: "直す".into(),
                     program: program.to_string_lossy().into_owned(),
@@ -3664,10 +4542,10 @@ mod tests {
                 }],
             );
             std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).expect("executable");
-            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"), vec![]);
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), vec![]);
             automation::placement_step_clear(tx, placement.id, only_step(tx, &action).id).expect("nobody chosen");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![],
                 "a script needs nobody chosen to carry it out",
             );
@@ -3707,7 +4585,7 @@ mod tests {
             let (automation, action, placement) = launchable(tx);
             goes_on_to(tx, &action, &placement, "書く", "codex");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::AgentMissing { step: "書く".into(), agent: "codex".into(), placement: placement.id }],
                 "the check walks the picture inside the action, not its entry alone",
             );
@@ -3721,7 +4599,7 @@ mod tests {
             automation::step_add(tx, action.id, NewStep::new("書く", "続ける"))
                 .expect("a step with no line into it");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![],
                 "no pane comes up on it, so the agent it names cannot hold the launch back",
             );
@@ -3747,6 +4625,7 @@ mod tests {
                     automation.id,
                     Some(&claude()),
                     &offering("claude", &["sonnet", "haiku"]),
+                    None,
                 )
                 .expect("check"),
                 vec![Unmet::ModelMissing {
@@ -3762,6 +4641,7 @@ mod tests {
                     automation.id,
                     Some(&claude()),
                     &offering("claude", &["sonnet", "opus-9"]),
+                    None,
                 )
                 .expect("check"),
                 vec![],
@@ -3776,12 +4656,12 @@ mod tests {
             let (automation, action, placement) = launchable(tx);
             names_model(tx, &placement, &action, "opus-9");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![],
                 "an agent nobody has asked says nothing about its models (AMB-D-865)",
             );
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), &offering("codex-cli", &["gpt"]))
+                check(tx.conn(), automation.id, Some(&claude()), &offering("codex-cli", &["gpt"]), None)
                     .expect("check"),
                 vec![],
                 "another agent's list is not this one's",
@@ -3799,6 +4679,7 @@ mod tests {
                     automation.id,
                     Some(&claude()),
                     &offering("claude", &["sonnet"]),
+                    None,
                 )
                 .expect("check"),
                 vec![],
@@ -3855,7 +4736,7 @@ mod tests {
             let (automation, action, _) = launchable(tx);
             automation::exit_add(tx, AutomationOwner::Action, action.id, Some("直すところがある"))
                 .expect("exit");
-            let err = automation::save(tx, automation.id).expect_err("refused");
+            let err = automation::save(tx, automation.id, None).expect_err("refused");
             let Error::NotReady(msg) = err else { panic!("a save that cannot go ahead is not_ready") };
             assert_eq!(msg.code(), Some(ErrorCode::NotReadyAutomation));
             assert_eq!(
@@ -3878,10 +4759,10 @@ mod tests {
 
             let (automation, _, placement) = launchable(tx);
             assert!(automation::unsaved(tx.conn(), automation.id).expect("unsaved"), "never saved");
-            let first = automation::save(tx, automation.id).expect("save");
+            let first = automation::save(tx, automation.id, None).expect("save");
             assert_eq!(first.version, 1);
             assert!(!automation::unsaved(tx.conn(), automation.id).expect("unsaved"));
-            let again = automation::save(tx, automation.id).expect("save with nothing written");
+            let again = automation::save(tx, automation.id, None).expect("save with nothing written");
             assert_eq!(again.id, first.id, "nothing written since, so no new version");
 
             automation::update(tx, automation.id, Some("2件やりきる"), None, None, None, None).expect("rename");
@@ -3892,7 +4773,7 @@ mod tests {
             automation::placement_move(tx, placement.id, crate::ops::Position::Top).expect("move");
             assert!(automation::unsaved(tx.conn(), automation.id).expect("unsaved"));
             launch(tx, automation.id, &here(&claude())).expect("launch");
-            let second = automation::save(tx, automation.id).expect("saved while a run goes on");
+            let second = automation::save(tx, automation.id, None).expect("saved while a run goes on");
             assert_eq!(second.version, 2);
             assert!(!automation::unsaved(tx.conn(), automation.id).expect("unsaved"));
         });
@@ -4135,7 +5016,7 @@ mod tests {
             let unsaved = launch(tx, automation.id, &here(&startable)).expect("launch");
             assert_eq!(copied(tx, &unsaved), ("claude".to_string(), None), "never saved: the draft");
 
-            automation::save(tx, automation.id).expect("save");
+            automation::save(tx, automation.id, None).expect("save");
             automation::placement_step_set(tx, placement.id, step.id, "codex", None).expect("choose another");
             let saved = launch(tx, automation.id, &here(&startable)).expect("launch");
             assert_eq!(copied(tx, &saved), ("claude".to_string(), Some(1)), "the saved version");
@@ -4210,7 +5091,7 @@ mod tests {
                 crate::ops::automation_step::Opened::NoAgent { agent, .. } => {
                     panic!("cannot start {agent}")
                 }
-                crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
+                crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::LeftToWait { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
                 crate::ops::automation_step::Opened::LeftTaskOpen { .. } => panic!("left a task open"),
                 crate::ops::automation_step::Opened::Script(_) => panic!("not a script"),
                 crate::ops::automation_step::Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
@@ -4324,7 +5205,7 @@ mod tests {
             crate::ops::automation_step::Opened::NoAgent { agent, .. } => {
                 panic!("cannot start {agent}")
             }
-            crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
+            crate::ops::automation_step::Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::LeftToWait { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
             crate::ops::automation_step::Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             crate::ops::automation_step::Opened::Script(_) => panic!("not a script"),
             crate::ops::automation_step::Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
@@ -4458,10 +5339,10 @@ mod tests {
         });
     }
 
-    /// **A run waiting for a task to take stands at the step it opens first** — the built-in that takes
-    /// one, though nothing is open there yet.
+    /// **A run just launched stands at the step it opens first** — the built-in that takes a task,
+    /// though nothing is open there yet.
     #[test]
-    fn a_run_waiting_for_a_task_stands_at_the_step_it_opens_first() {
+    fn a_run_just_launched_stands_at_the_step_it_opens_first() {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
             let run = crate::ops::automation_run::launch_past_the_task_checks(tx, automation.id, &here(&claude()))
@@ -4629,7 +5510,7 @@ mod tests {
             let (automation, action, placement) = launchable(tx);
             let second = a_second_step(tx, &action, &placement);
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::OpenExit {
                     step: "見直す".into(),
                     exit: crate::model::DONE_EXIT.into(),
@@ -4664,20 +5545,20 @@ mod tests {
             )
             .expect("return to it");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![],
             );
 
             automation::exit_rename(tx, mine.id, Some("戻す")).expect("rename");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![],
                 "both lines stay on the way out they key",
             );
 
             automation::exit_delete(tx, mine.id).expect("delete");
             let unmet =
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check");
             assert!(
                 unmet.contains(&Unmet::OpenExit {
                     step: "見直す".into(),
@@ -4709,7 +5590,7 @@ mod tests {
             )
             .expect("in");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::UnwiredInput {
                     step: "見直す".into(),
                     port: "下書き".into(),
@@ -4739,7 +5620,7 @@ mod tests {
             automation::wire_add(tx, on, first.id, None, "下書き", second.id, "下書き")
                 .expect("wire");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![],
                 "the first step inside hands it on",
             );
@@ -4781,7 +5662,7 @@ mod tests {
             automation::wire_add(tx, on, second.id, None, "下書き", second.id, "下書き")
                 .expect("wire back into itself");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::UnwiredInput {
                     step: "見直す".into(),
                     port: "下書き".into(),
@@ -4813,7 +5694,7 @@ mod tests {
             .expect("the step's input");
             automation::port_update(tx, port.id, None, None, Some(true)).expect("required inside");
             assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check"),
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::UnwiredInput {
                     step: "直す".into(),
                     port: "下書き".into(),
@@ -4846,7 +5727,7 @@ mod tests {
             )
             .expect("on to the second placement");
             let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
-            let unmet = check(tx.conn(), automation.id, Some(&claude()), nothing_asked()).expect("check");
+            let unmet = check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check");
             let about = |at: i64| Unmet::OpenExit {
                 step: "見直す".into(),
                 exit: crate::model::DONE_EXIT.into(),
@@ -4861,5 +5742,146 @@ mod tests {
             assert!(fields.contains(&("inside_step", second.id.to_string())), "{fields:?}");
             assert_eq!(Unmet::NoEntry.placement(), None);
         });
+    }
+
+    /// **What a trigger's script said is read from its `output.json` alone** — `"file"` true or false
+    /// under version 1. Every other way it ended, an exit code of 0 with no answer included, is not an
+    /// answer.
+    #[test]
+    fn a_trigger_script_answers_in_its_output_not_its_exit_code() {
+        use automation_script::Ended;
+        let script = StepScript { program: "/usr/local/bin/judge".into(), args: Vec::new(), timeout_minutes: 5 };
+        let wrote = |output: serde_json::Value| Ended::Wrote { output, files: Vec::new() };
+        assert_eq!(script_said(&script, &wrote(serde_json::json!({ "version": 1, "file": true }))), Ok(true));
+        assert_eq!(script_said(&script, &wrote(serde_json::json!({ "version": 1, "file": false }))), Ok(false));
+        for unshaped in [
+            serde_json::json!({ "file": true }),
+            serde_json::json!({ "version": 2, "file": true }),
+            serde_json::json!({ "version": 1 }),
+            serde_json::json!({ "version": 1, "file": "yes" }),
+        ] {
+            let said = script_said(&script, &wrote(unshaped.clone()));
+            assert!(said.as_ref().is_err_and(|why| why.contains("not in the shape")), "{unshaped}: {said:?}");
+        }
+        for ended in [Ended::NotStarted("no such file".into()), Ended::TimedOut, Ended::Stopped, Ended::NoOutput] {
+            assert!(script_said(&script, &ended).is_err(), "{ended:?} is no answer");
+        }
+        assert_eq!(
+            script_said(&script, &Ended::TimedOut),
+            Err("the program was still running after 5 minutes, and was stopped".to_string())
+        );
+    }
+
+    /// **A trigger's script is run and heard**: what it writes to `AMENBO_OUTPUT` is its answer, and one
+    /// that ends other than with 0 has none, whatever it wrote.
+    #[cfg(unix)]
+    #[test]
+    fn a_trigger_script_is_run_and_its_answer_read() {
+        let sh = |body: &str| StepScript {
+            program: "/bin/sh".into(),
+            args: vec!["-c".into(), body.into()],
+            timeout_minutes: crate::model::DEFAULT_SCRIPT_TIMEOUT_MINUTES,
+        };
+        let yes = sh(r#"echo '{"version":1,"file":true}' > "$AMENBO_OUTPUT""#);
+        assert_eq!(ask_script(&yes, || false), Ok(true));
+        let no = sh(r#"echo '{"version":1,"file":false}' > "$AMENBO_OUTPUT""#);
+        assert_eq!(ask_script(&no, || false), Ok(false));
+        let fell = sh(r#"echo '{"version":1,"file":true}' > "$AMENBO_OUTPUT"; exit 3"#);
+        assert_eq!(ask_script(&fell, || false), Err("the program ended with exit code 3".to_string()));
+    }
+
+    /// **What the program of a trigger's task wrote is read from its `output.json` alone** — a title
+    /// that is not blank, and notes that may be left out, under version 1. Any other shape, and any
+    /// other way it ended, is nothing to file.
+    #[test]
+    fn a_trigger_task_script_writes_its_title_and_notes_in_its_output() {
+        use automation_script::Ended;
+        let script = StepScript { program: "/usr/local/bin/write-task".into(), args: Vec::new(), timeout_minutes: 5 };
+        let wrote = |output: serde_json::Value| Ended::Wrote { output, files: Vec::new() };
+        assert_eq!(
+            script_wrote(&script, &wrote(serde_json::json!({ "version": 1, "title": " 受信箱を見る ", "notes": "三通" }))),
+            Ok(("受信箱を見る".to_string(), "三通".to_string()))
+        );
+        assert_eq!(
+            script_wrote(&script, &wrote(serde_json::json!({ "version": 1, "title": "見る" }))),
+            Ok(("見る".to_string(), String::new())),
+            "no notes"
+        );
+        for unshaped in [
+            serde_json::json!({ "title": "見る" }),
+            serde_json::json!({ "version": 2, "title": "見る" }),
+            serde_json::json!({ "version": 1 }),
+            serde_json::json!({ "version": 1, "title": "  " }),
+            serde_json::json!({ "version": 1, "title": 3 }),
+            serde_json::json!({ "version": 1, "title": "見る", "notes": ["a"] }),
+        ] {
+            let said = script_wrote(&script, &wrote(unshaped.clone()));
+            assert!(said.as_ref().is_err_and(|why| why.contains("not in the shape")), "{unshaped}: {said:?}");
+        }
+        for ended in [Ended::NotStarted("no such file".into()), Ended::TimedOut, Ended::Stopped, Ended::NoOutput] {
+            assert!(script_wrote(&script, &ended).is_err(), "{ended:?} is nothing to file");
+        }
+    }
+
+    /// **A trigger's programs are run in turn**: the one that asks first, and the one that writes the
+    /// task only once it said yes. One saying no leaves the other unrun, and either falling over is no
+    /// answer at all.
+    #[cfg(unix)]
+    #[test]
+    fn a_trigger_asks_first_and_then_has_its_task_written() {
+        let sh = |body: &str| StepScript {
+            program: "/bin/sh".into(),
+            args: vec!["-c".into(), body.into()],
+            timeout_minutes: crate::model::DEFAULT_SCRIPT_TIMEOUT_MINUTES,
+        };
+        let yes = sh(r#"echo '{"version":1,"file":true}' > "$AMENBO_OUTPUT""#);
+        let no = sh(r#"echo '{"version":1,"file":false}' > "$AMENBO_OUTPUT""#);
+        let write = sh(r#"echo '{"version":1,"title":"見る","notes":"三通"}' > "$AMENBO_OUTPUT""#);
+        let fell = sh("exit 3");
+
+        let both = TriggerScripts { ask: Some(yes.clone()), write: Some(write.clone()) };
+        assert_eq!(
+            ask_trigger(&both, || false),
+            Ok(Some(ScriptsSaid { scripts: both.clone(), wrote: Some(("見る".into(), "三通".into())) }))
+        );
+        let asked = TriggerScripts { ask: Some(yes), write: None };
+        assert_eq!(ask_trigger(&asked, || false), Ok(Some(ScriptsSaid { scripts: asked.clone(), wrote: None })));
+        let written = TriggerScripts { ask: None, write: Some(write.clone()) };
+        assert!(ask_trigger(&written, || false).is_ok_and(|said| said.is_some_and(|said| said.wrote.is_some())));
+
+        // Saying no, the writer is never run: one that would fall over is not heard from.
+        assert_eq!(ask_trigger(&TriggerScripts { ask: Some(no), write: Some(fell.clone()) }, || false), Ok(None));
+        assert_eq!(
+            ask_trigger(&TriggerScripts { ask: Some(fell.clone()), write: Some(write) }, || false),
+            Err("the program ended with exit code 3".to_string())
+        );
+        assert!(ask_trigger(&TriggerScripts { ask: None, write: Some(fell) }, || false).is_err());
+    }
+
+    /// **A trigger's task is read from its file as it stands** — the first line that is not blank is
+    /// the title, the rest the notes. A file not there or blank says nothing to file.
+    #[test]
+    fn a_trigger_task_is_read_from_its_file() {
+        let dir = std::env::temp_dir().join(format!("amenbo-trigger-task-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let at = |name: &str, text: &str| {
+            let path = dir.join(name);
+            std::fs::write(&path, text).expect("write");
+            path.to_string_lossy().into_owned()
+        };
+        assert_eq!(
+            task_from_file(&at("full.md", "\n  受信箱を見る  \r\n\n- 三通\n- 急ぎ\n\n")),
+            Ok(("受信箱を見る".to_string(), "- 三通\n- 急ぎ".to_string()))
+        );
+        assert_eq!(
+            task_from_file(&at("indented.md", "見る\n  \n\n    code\n")),
+            Ok(("見る".to_string(), "    code".to_string())),
+            "a line of spaces is a blank line, and the indent of the notes is kept"
+        );
+        assert_eq!(task_from_file(&at("title.md", "見る")), Ok(("見る".to_string(), String::new())));
+        assert!(task_from_file(&at("blank.md", " \n\n")).is_err_and(|why| why.contains("blank")));
+        let gone = dir.join("gone.md").to_string_lossy().into_owned();
+        assert!(task_from_file(&gone).is_err_and(|why| why.contains("could not be read")));
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

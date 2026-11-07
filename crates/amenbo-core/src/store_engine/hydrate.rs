@@ -3,10 +3,14 @@
 //! This is the inverse of the [`super::record`] projection: the engine is the store's truth
 //! source, and this reads every read-model table back into the model shapes.
 //!
-//! **Nothing on a hot path calls this**: reads issue indexed SQL straight at the read-model, and
-//! this is O(rows). Its callers are the ones that genuinely need the whole model at once — backup and
-//! restore prove a snapshot hydrates before adopting it ([`mod@crate::archive`]), and the round-trip
-//! oracle below reads a `Database` out of the same rows the SQL path serves.
+//! **Nothing in production calls this**: reads issue indexed SQL straight at the read-model, and
+//! this is O(rows). Its callers are tests, which take an in-memory oracle from it (the round-trip
+//! oracle below reads a `Database` out of the same rows the SQL path serves), and the `seed`
+//! binary in `amenbo-cli`.
+//!
+//! It reads only a store already carried to this build's format: a store whose `format_version` is
+//! below [`LATEST_VERSION`] is refused with [`StoreEngineError::NotMigrated`]. Migrating is the
+//! chain's job ([`super::migrate::run`]), not this read's.
 //!
 //! Faithfulness: every dataset in [`super::schema`] round-trips field-for-field (the forward
 //! projection and this reverse read share the same column vocabulary). The store-level singleton
@@ -25,7 +29,8 @@ use rusqlite::{Connection, Row};
 
 use super::schema::col;
 use super::sql::{Col, ColType, Int, NotNull, Nullability, Nullable, Read, Text};
-use super::Result;
+use super::migrate::LATEST_VERSION;
+use super::{read_format_version, Result, StoreEngineError};
 use crate::model::{
     ActorKind, Attachment, AttachmentKind, AttachmentTarget, Automation, AutomationAction,
     AutomationActionVersion, AutomationCfg, AutomationCfgKind, AutomationCfgOwner, AutomationEdge,
@@ -36,7 +41,7 @@ use crate::model::{
     AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
     AutomationStep, AutomationStoppedReason, AutomationTrigger, AutomationVersion, AutomationWire, Database,
-    TriggerTask, TriggerWhen,
+    TriggerCondition, TriggerTask, TriggerWhen,
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
     DecisionMadeIn, DecisionStatus, DecisionTaskLink,
     Dimension, DimensionAppliesTo, DimensionCardinality,
@@ -536,9 +541,9 @@ fn failures_to(kind: Option<String>, role_id: Option<i64>) -> rusqlite::Result<O
     }
 }
 
-/// An automation's trigger, read back from its six columns. No kind of when is no trigger, and then
-/// every other column is NULL; a kind beside a missing part is a row nothing writes, and reads as an
-/// error.
+/// An automation's trigger, read back from its seventeen columns. No kind of when is no trigger, and
+/// then every other column is NULL (the scripts' arguments '', as a step's are); a kind beside a missing
+/// part is a row nothing writes, and reads as an error.
 fn trigger(r: &Row) -> rusqlite::Result<Option<AutomationTrigger>> {
     const C: col::automation::Cols = col::automation::ALL;
     let Some(when_kind) = get(r, C.trigger_when_kind)? else { return Ok(None) };
@@ -547,18 +552,55 @@ fn trigger(r: &Row) -> rusqlite::Result<Option<AutomationTrigger>> {
             minutes: u32::try_from(minutes).map_err(|_| bad(format!("bad trigger_every_minutes {minutes}")))?,
         },
         ("idle", None) => TriggerWhen::Idle,
+        ("tasks", None) => TriggerWhen::Tasks,
+        ("script", None) => TriggerWhen::Script,
         (kind, minutes) => return Err(bad(format!("bad trigger_when {kind:?} with minutes {minutes:?}"))),
     };
+    let condition = match (get(r, C.trigger_condition_filter)?, get(r, C.trigger_condition_below)?) {
+        (None, None) => None,
+        (Some(filter), Some(below)) => Some(TriggerCondition {
+            filter,
+            below: u32::try_from(below).map_err(|_| bad(format!("bad trigger_condition_below {below}")))?,
+        }),
+        (filter, below) => return Err(bad(format!("bad trigger_condition {filter:?} below {below:?}"))),
+    };
+    if when == TriggerWhen::Tasks && condition.is_none() {
+        return Err(bad("a tasks trigger with no condition".to_string()));
+    }
+    let ask_script = script(r, C.trigger_script_program, C.trigger_script_args, C.trigger_script_timeout_minutes)?;
+    if when == TriggerWhen::Script && ask_script.is_none() {
+        return Err(bad("a script trigger with no script".to_string()));
+    }
     let task_kind: Option<String> = get(r, C.trigger_task_kind)?;
     let task = match task_kind.as_deref() {
         Some("fixed") => TriggerTask::Fixed {
             title: get(r, C.trigger_task_title)?.unwrap_or_default(),
             notes: get(r, C.trigger_task_notes)?.unwrap_or_default(),
         },
+        Some("file") => TriggerTask::File {
+            path: get(r, C.trigger_task_path)?.ok_or_else(|| bad("a file trigger_task with no path".to_string()))?,
+        },
+        Some("script") => TriggerTask::Script {
+            script: script(
+                r,
+                C.trigger_task_script_program,
+                C.trigger_task_script_args,
+                C.trigger_task_script_timeout_minutes,
+            )?
+            .ok_or_else(|| bad("a script trigger_task with no program".to_string()))?,
+        },
         kind => return Err(bad(format!("bad trigger_task {kind:?}"))),
     };
     let next_at = ts_opt(r, C.trigger_next_at)?.ok_or_else(|| bad("a trigger with no trigger_next_at".to_string()))?;
-    Ok(Some(AutomationTrigger { when, task, next_at }))
+    Ok(Some(AutomationTrigger {
+        name: get(r, C.trigger_name)?.unwrap_or_default(),
+        role_id: get(r, C.trigger_role_id)?,
+        when,
+        condition,
+        script: ask_script,
+        task,
+        next_at,
+    }))
 }
 
 pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
@@ -579,6 +621,7 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
         export_only: get(r, C.export_only)?,
         trigger: trigger(r)?,
         stopped: get(r, C.stopped)?,
+        waits_for_task_since: ts_opt(r, C.waits_for_task_since)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,
@@ -835,6 +878,7 @@ pub(super) fn automation_run_def_row(r: &Row) -> rusqlite::Result<AutomationRunD
         ins: get(r, C.ins)?,
         cfg: get(r, C.cfg)?,
         entry: get(r, C.entry)?,
+        roles: get(r, C.roles)?,
         created_at,
         updated_at,
     })
@@ -850,6 +894,8 @@ pub(super) fn automation_run_task_row(r: &Row) -> rusqlite::Result<AutomationRun
         task_id: get(r, C.task_id)?,
         started_at: ts_opt(r, C.started_at)?,
         ended_at: ts_opt(r, C.ended_at)?,
+        role_id: get(r, C.role_id)?,
+        incident_task_id: get(r, C.incident_task_id)?,
         created_at,
         updated_at,
     })
@@ -930,6 +976,10 @@ pub(super) fn row_by_id<T>(
 /// come from their read-model tables; the store-level singleton scalar `schema_version` comes from the
 /// `store_meta` KV table (see the module docs).
 pub fn hydrate_database(conn: &Connection) -> Result<Database> {
+    let found = read_format_version(conn)?;
+    if found < LATEST_VERSION {
+        return Err(StoreEngineError::NotMigrated { found, latest: LATEST_VERSION });
+    }
     let projects = rows(conn, "project", project_row)?;
     let tasks = rows(conn, "task", task_row)?;
     let task_dependencies = rows(conn, "task_dependency", task_dependency_row)?;
@@ -975,8 +1025,10 @@ mod tests {
     use crate::store_engine::record;
 
     /// Flush the fixture `Database` into the truth source through **the production write mapping**
-    /// ([`record::put_database`]).
+    /// ([`record::put_database`]). The in-memory engine is born at this build's shape but carries no
+    /// `format_version`, so it is stamped as genesis would stamp it.
     fn project_database(db: &Database, engine: &StoreEngine) -> crate::store_engine::Result<()> {
+        engine.stamp_format_version()?;
         let tx = engine.write()?;
         record::put_database(&tx, db)?;
         tx.commit()
@@ -1255,6 +1307,25 @@ mod tests {
             read::task(conn, 999).unwrap().is_none(),
             "an absent id loads to None, not an error"
         );
+    }
+
+    /// A store the chain has not carried to this build's format is refused by name, not left to fail
+    /// on whichever column a later step added.
+    #[test]
+    fn a_store_below_the_latest_format_is_refused_as_not_migrated() {
+        let engine = StoreEngine::open_in_memory().unwrap();
+        project_database(&fixture_database(), &engine).unwrap();
+        let older = LATEST_VERSION - 1;
+        engine
+            .set_meta(crate::store_engine::META_FORMAT_VERSION, Some(&older.to_string()))
+            .unwrap();
+
+        match hydrate_database(engine.conn()) {
+            Err(StoreEngineError::NotMigrated { found, latest }) => {
+                assert_eq!((found, latest), (older, LATEST_VERSION));
+            }
+            other => panic!("expected NotMigrated, got {other:?}"),
+        }
     }
 
     fn json<T: serde::Serialize>(v: &T) -> serde_json::Value {

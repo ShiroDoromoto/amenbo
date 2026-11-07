@@ -14,6 +14,8 @@
 //! sits in, not by a number anybody types back, so every `add` here prints the id the next command
 //! takes.
 
+use std::collections::BTreeMap;
+
 use serde_json::{json, Value};
 
 use amenbo_core::model::{
@@ -29,7 +31,9 @@ use amenbo_core::model::AutomationPictureOwner;
 use amenbo_core::model::{AutomationRole, FailuresTo};
 use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep, RoleChange};
 use amenbo_core::ops::automation_report::{Next, Produced};
-use amenbo_core::ops::automation_run::{ForRoom, HandedAtLaunch, HandedFile, Launcher};
+use amenbo_core::ops::automation_run::{
+    Carrier, ChosenAt, ForRoom, HandedAtLaunch, HandedFile, Launcher, ReadsFrom, Started, TaskWait,
+};
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
 use amenbo_core::ops::automation_view::{
     ActionView, AutomationView, PlacementView, SavedVersion, Showing, StepView,
@@ -408,7 +412,19 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             if flags.json {
                 print_json(&serde_json::to_value(&view).unwrap());
             } else {
-                render_automation(flags, &view);
+                // Who carries each step out, as a launch would choose it: the step's own choice, else
+                // its role's default, else Amenbo's.
+                let reads = if saved { ReadsFrom::Saved } else { ReadsFrom::Draft };
+                let default_agent = store.automation_default_agent(id).map_err(CliError::from)?;
+                let carriers = amenbo_core::ops::automation_run::carriers(
+                    store.read_model().conn(),
+                    id,
+                    reads,
+                    default_agent.as_deref(),
+                )
+                .map_err(CliError::from)?;
+                let waits = store.automation_task_wait(id).map_err(CliError::from)?;
+                render_automation(flags, &view, &carriers, waits.as_ref());
             }
         }
         AutomationCmd::Export { id, out, force } => {
@@ -480,19 +496,67 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.update", "automation", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated automation: {} ({})", a.name, a.id));
         }
-        AutomationCmd::Trigger { id, every, when_idle, title, notes, off } => {
-            use amenbo_core::model::{TriggerTask, TriggerWhen};
-            let when = match (every, when_idle) {
-                (Some(minutes), _) => Some(TriggerWhen::Every { minutes }),
-                (None, true) => Some(TriggerWhen::Idle),
-                (None, false) => None,
+        AutomationCmd::Trigger {
+            id,
+            every,
+            when_idle,
+            if_tasks,
+            fewer_than,
+            if_script,
+            script_args,
+            script_timeout_minutes,
+            title,
+            notes,
+            task_from_file,
+            task_from_script,
+            task_script_args,
+            task_script_timeout_minutes,
+            off,
+        } => {
+            use amenbo_core::model::{TriggerCondition, TriggerWhen};
+            use amenbo_core::ops::automation::NewTriggerTask;
+            let condition = match (if_tasks, fewer_than) {
+                (Some(filter), Some(below)) => Some(TriggerCondition { filter, below }),
+                // clap asks for both or neither.
+                _ => None,
             };
-            let trigger = match (off, when, title) {
-                (false, Some(when), Some(title)) => Some(amenbo_core::ops::automation::NewTrigger {
-                    when,
-                    task: TriggerTask::Fixed { title, notes: body_arg_opt(notes)?.unwrap_or_default() },
-                }),
-                // clap asks for a when and a title unless --off is given, and refuses them beside it.
+            let script = if_script.map(|program| NewScript {
+                program,
+                args: script_args,
+                timeout_minutes: script_timeout_minutes,
+            });
+            let when = match (every, when_idle, &condition, &script) {
+                (Some(minutes), _, _, _) => Some(TriggerWhen::Every { minutes }),
+                (None, true, _, _) => Some(TriggerWhen::Idle),
+                (None, false, Some(_), _) => Some(TriggerWhen::Tasks),
+                (None, false, None, Some(_)) => Some(TriggerWhen::Script),
+                (None, false, None, None) => None,
+            };
+            let task = match (title, task_from_file, task_from_script) {
+                (Some(title), _, _) => Some(NewTriggerTask::Fixed { title, notes: body_arg_opt(notes)?.unwrap_or_default() }),
+                (None, Some(path), _) => Some(NewTriggerTask::File { path }),
+                (None, None, Some(program)) => Some(NewTriggerTask::Script(NewScript {
+                    program,
+                    args: task_script_args,
+                    timeout_minutes: task_script_timeout_minutes,
+                })),
+                (None, None, None) => None,
+            };
+            let trigger = match (off, when, task) {
+                (false, Some(when), Some(task)) => {
+                    // The CLI writes no name or role: the trigger is called blank and files
+                    // its task under no role.
+                    Some(amenbo_core::ops::automation::NewTrigger {
+                        name: String::new(),
+                        role_id: None,
+                        when,
+                        condition,
+                        script,
+                        task,
+                    })
+                }
+                // clap asks for a when and one of --title, --task-from-file and --task-from-script unless
+                // --off is given, and refuses them beside it.
                 _ => None,
             };
             let a = store.automation_trigger_set(id, trigger).map_err(CliError::from)?;
@@ -509,7 +573,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 (false, _) => format!("✓ Automation {} ({}) starts new rounds again", a.name, a.id),
                 (true, true) => format!("✓ Stopped automation {} ({}) — it starts no new round", a.name, a.id),
                 (true, false) => format!(
-                    "✓ Stopped automation {} ({}) — it starts no new round; paused run(s) waiting for a task: {}",
+                    "✓ Stopped automation {} ({}) — it starts no new round; paused run(s) waiting for room to take a task: {}",
                     a.name,
                     a.id,
                     done.paused.iter().map(|r| r.id.to_string()).collect::<Vec<_>>().join(", ")
@@ -558,25 +622,14 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let resource = json!({ "id": v.id, "automation_id": v.automation_id, "version": v.version });
             write_envelope(flags, "automation.discard", "automation_version", resource, None, !unsaved, line);
         }
-        AutomationCmd::PlaceAdd { automation, action, builtin, axis } => {
+        AutomationCmd::PlaceAdd { automation, action, builtin } => {
             // clap holds exactly one of the two: `--action` is required unless `--builtin` is given.
             let (p, what) = match (action, builtin) {
                 (_, Some(key)) => {
-                    let axis = match axis {
-                        Some(axis) => Some(store.resolve_dimension(None, &axis).map_err(CliError::from)?),
-                        None => None,
-                    };
-                    let p = store.automation_builtin_place(automation, &key, axis).map_err(CliError::from)?;
+                    let p = store.automation_builtin_place(automation, &key).map_err(CliError::from)?;
                     (p, format!("the built-in '{key}'"))
                 }
                 (Some(action), None) => {
-                    // clap cannot hold this one: it skips `requires` for an argument whose counterpart
-                    // conflicts with one that is there, so `--axis` would be dropped without a word.
-                    if axis.is_some() {
-                        return Err(CliError::from(amenbo_core::Error::invalid(
-                            "--axis names the axis the built-in 'split_by_dim' splits by — a library action takes none",
-                        )));
-                    }
                     (store.automation_placement_add(automation, action).map_err(CliError::from)?, format!("action {action}"))
                 }
                 (None, None) => unreachable!("clap requires --action or --builtin"),
@@ -1094,7 +1147,6 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let defs = store.automation_run_defs(id).map_err(CliError::from)?;
             let stretches = store.automation_run_tasks(id).map_err(CliError::from)?;
             let moves = store.automation_run_steps(id).map_err(CliError::from)?;
-            let waiting = store.automation_run_waiting(id).map_err(CliError::from)?;
             let room = store.automation_run_waits_for_room(id).map_err(CliError::from)?;
             if flags.json {
                 let mut walked = Vec::with_capacity(moves.len());
@@ -1111,7 +1163,6 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 }
                 print_json(&json!({
                     "run": serde_json::to_value(&run).unwrap(),
-                    "waiting": waiting,
                     "waits_for_room": serde_json::to_value(room).unwrap(),
                     "versions": taken_up(&defs)
                         .iter()
@@ -1121,7 +1172,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     "steps": walked,
                 }));
             } else {
-                render_run(store, flags, &run, waiting, room, &defs, &stretches, &moves)?;
+                render_run(store, flags, &run, room, &defs, &stretches, &moves)?;
             }
         }
 
@@ -1169,6 +1220,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
             let known = startable(store);
             let by = Launcher {
+                default_agent: None,
                 startable: known.as_deref(),
                 // Nothing is claimed about the models either: asking a provider what it offers is a
                 // login shell and that provider starting up, and the answers the app keeps are in the
@@ -1181,9 +1233,26 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 workspace_open: None,
                 by: Some(flags.facet()?),
             };
-            let r = store.automation_launch(id, &by, &handed).map_err(CliError::from)?;
-            let line = format!("✓ Run {} started from version {}", r.id, saved.version);
-            write_envelope(flags, "automation.start", "automation_run", serde_json::to_value(&r).unwrap(), None, false, line);
+            match store.automation_launch(id, &by, &handed).map_err(CliError::from)? {
+                Started::Run(r) => {
+                    let line = format!("✓ Run {} started from version {}", r.id, saved.version);
+                    write_envelope(flags, "automation.start", "automation_run", serde_json::to_value(&r).unwrap(), None, false, line);
+                }
+                // Its entry would have waited for a task with none to take: no run is made, and the app
+                // starts one once a task turns up (`AMB-D-969`).
+                Started::Waits(a) => {
+                    let line = format!(
+                        "✓ Automation {} ({}) waits for a task to take — the app starts a run once one turns up",
+                        a.name, a.id
+                    );
+                    write_envelope(flags, "automation.start", "automation", serde_json::to_value(&a).unwrap(), None, false, line);
+                }
+            }
+        }
+        AutomationCmd::StopWaiting { id } => {
+            let a = store.automation_wait_stop(id).map_err(CliError::from)?;
+            let line = format!("✓ Automation {} ({}) is not waiting for a task", a.name, a.id);
+            write_envelope(flags, "automation.stop-waiting", "automation", serde_json::to_value(&a).unwrap(), None, false, line);
         }
         AutomationCmd::TestRun { id, title, notes, dim } => {
             // Nothing is started, so the app need not be running, and nothing is kept, so there is no
@@ -1192,6 +1261,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let handed = HandedAtLaunch { title, notes, classification: classification_of(&dim)?, ..Default::default() };
             let known = startable(store);
             let by = Launcher {
+                default_agent: None,
                 startable: known.as_deref(),
                 models: amenbo_core::ops::automation_run::nothing_asked(),
                 workspace_open: None,
@@ -1209,7 +1279,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let verb = if before_next_task { "pause --before-next-task" } else { "pause" };
             not_from_its_own_step(store, run, verb)?;
             // `--before-next-task` stops at the next take_task rather than the end of the action
-            // (`AMB-D-1019`); a run waiting there for a task comes back already paused.
+            // (`AMB-D-1019`); a run waiting there for room comes back already paused.
             let paused = match before_next_task {
                 true => store.automation_pause_run_before_next_task(run),
                 false => store.automation_pause(run),
@@ -1483,7 +1553,12 @@ fn next_line(next: &Next) -> String {
 // ───────────────────────── what was built ─────────────────────────
 
 /// One automation in full: the placements on it, and what each runs under.
-fn render_automation(flags: &Flags, view: &AutomationView) {
+fn render_automation(
+    flags: &Flags,
+    view: &AutomationView,
+    carriers: &BTreeMap<(i64, i64), Carrier>,
+    waits: Option<&TaskWait>,
+) {
     let a = &view.automation;
     human(flags, format!("Automation {}  {}", a.id, a.name));
     let entry = match a.entry_placement_id {
@@ -1510,6 +1585,9 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
     if let Some(trigger) = &a.trigger {
         human(flags, trigger_line(trigger));
     }
+    if let Some(waits) = waits {
+        human(flags, task_wait_line(a.id, waits));
+    }
     human(flags, saved_line(view.saved.as_ref(), view.unsaved));
     if let Some(line) = showing_line(view.showing, view.saved.as_ref()) {
         human(flags, line);
@@ -1519,21 +1597,47 @@ fn render_automation(flags: &Flags, view: &AutomationView) {
         human(flags, format!("role {}", one_role(role)));
     }
     for placement in &view.placements {
-        render_placement(flags, view, placement);
+        render_placement(flags, view, placement, carriers);
     }
 }
 
-/// What an automation's trigger does, and when it is next asked (for an `idle`, the soonest it may be).
+/// What an automation's trigger does, the tasks it looks at and the program it asks first, the task it
+/// files (or the file or program that says it), and when it is next asked (for an `idle`, a `tasks` or
+/// a `script`, the soonest it may be).
 fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
     use amenbo_core::model::{TriggerTask, TriggerWhen};
+    let fewer = trigger.condition.as_ref().map(|c| match c.filter.as_str() {
+        "" => format!("fewer than {} task(s) are in its project", c.below),
+        filter => format!("fewer than {} task(s) match \"{filter}\"", c.below),
+    });
+    let says = trigger.script.as_ref().map(|s| format!("\"{}\" says so", s.program));
     let (when, next) = match trigger.when {
         TriggerWhen::Every { minutes } => (format!("every {minutes} minute(s)"), "next at"),
         TriggerWhen::Idle => ("whenever none of its runs is under way".to_string(), "not before"),
+        TriggerWhen::Tasks | TriggerWhen::Script => ("whenever".to_string(), "not before"),
+    };
+    let first: Vec<String> = fewer.into_iter().chain(says).collect();
+    let when = match (trigger.when, first.join(" and ")) {
+        (_, first) if first.is_empty() => when,
+        (TriggerWhen::Tasks | TriggerWhen::Script, first) => format!("{when} {first}"),
+        (_, first) => format!("{when} while {first}"),
     };
     let task = match &trigger.task {
         TriggerTask::Fixed { title, .. } => format!("\"{title}\""),
+        TriggerTask::File { path } => format!("the task \"{path}\" says"),
+        TriggerTask::Script { script } => format!("the task \"{}\" writes", script.program),
     };
     format!("starts a run on its own {when}, filing {task} — {next} {}", trigger.next_at.to_rfc3339_z())
+}
+
+/// An automation Amenbo is waiting on a task for: since when, what for, and how to stop it.
+fn task_wait_line(id: i64, waits: &TaskWait) -> String {
+    let what = waits.looks_for.as_deref().map(|f| format!(" ({f})")).unwrap_or_default();
+    format!(
+        "waiting for a task to take{what} since {} — the app starts a run once one turns up; \
+         `automation stop-waiting {id}` stops it",
+        waits.since.to_rfc3339_z()
+    )
 }
 
 /// An automation from before automations had roles, which is kept only to be written out, and what to
@@ -1592,7 +1696,12 @@ fn one_role(role: &AutomationRole) -> String {
 
 /// One placement: which action stands there, what it takes, what it is set to, and what happens after
 /// each way out.
-fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementView) {
+fn render_placement(
+    flags: &Flags,
+    view: &AutomationView,
+    placement: &PlacementView,
+    carriers: &BTreeMap<(i64, i64), Carrier>,
+) {
     let row = &placement.placement;
     let boxes: Vec<i64> = view.placements.iter().map(|p| p.placement.id).collect();
     let back = lines_back(view.automation.entry_placement_id, &boxes, &view.edges);
@@ -1616,7 +1725,7 @@ fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementV
         // Nobody is chosen for a built-in or a script, and nobody ever will be: Amenbo carries a
         // built-in out itself (`AMB-D-964`) and a script runs its own program (`AMB-D-1016`), so
         // naming an agent or "nobody chosen" there misreads what runs it.
-        let who = match (&one.step.builtin, &one.step.script, &one.chosen) {
+        let who = match (&one.step.builtin, &one.step.script, carriers.get(&(row.id, one.step.id))) {
             (Some(key), _, _) => format!("carried out by Amenbo (built-in {key})"),
             (None, Some(script), _) => {
                 let mut line = format!("carried out by a script: {}", script.program);
@@ -1626,10 +1735,20 @@ fn render_placement(flags: &Flags, view: &AutomationView, placement: &PlacementV
                 }
                 line
             }
-            (None, None, Some(c)) => match &c.model {
-                Some(model) => format!("carried out by {} ({model})", c.agent),
-                None => format!("carried out by {}", c.agent),
-            },
+            (None, None, Some(c)) => {
+                let by = match &c.model {
+                    Some(model) => format!("carried out by {} ({model})", c.agent),
+                    None => format!("carried out by {}", c.agent),
+                };
+                match &c.at {
+                    ChosenAt::Step => by,
+                    ChosenAt::Role { role_id } => {
+                        let role = view.roles.iter().find(|r| r.id == *role_id).map_or("?", |r| r.name.as_str());
+                        format!("{by}  — role {role_id} {role}'s default")
+                    }
+                    ChosenAt::Amenbo => format!("{by}  — Amenbo's default"),
+                }
+            }
             (None, None, None) => "nobody chosen to carry it out".to_string(),
         };
         human(flags, format!("    step {} {}  {who}", one.step.id, one.step.name));
@@ -1947,18 +2066,14 @@ fn one_edge(
 /// spent on that task under it. The order is the order it happened in, which is the only order a run
 /// reads in.
 ///
-/// **A run waiting for a task says so**, as its pane does. A round that came to the end of the picture
-/// closed its stretch; one a line brought back to the entry leaves it open until the next task is taken,
-/// but every step of it has ended — so it is written as over, not as still going.
-///
-/// **So does a run waiting for room** before an action that takes one run at a time, naming the action
+/// **A run waiting for room says so** before an action that takes one run at a time, naming the action
 /// and the run it waits behind. Its stretch is still going: the task it took is not done with yet.
-#[allow(clippy::too_many_arguments)]
+///
+/// No run waits for a task: one that would ends, and its automation waits instead (`automation show`).
 fn render_run(
     store: &mut Store,
     flags: &Flags,
     run: &AutomationRun,
-    waiting: bool,
     room: Option<ForRoom>,
     defs: &[AutomationRunDef],
     stretches: &[AutomationRunTask],
@@ -1999,9 +2114,6 @@ fn render_run(
         };
         human(flags, format!("acknowledged: {seen}"));
     }
-    if waiting {
-        human(flags, "waiting: for a task — the next step opens once one turns up");
-    }
     if let Some(room) = room {
         human(
             flags,
@@ -2012,27 +2124,17 @@ fn render_run(
         );
     }
     let switched = switches(defs, moves);
-    let last = stretches.last().map(|s| s.id);
     for stretch in stretches {
         let about = match stretch.task_id {
             Some(task_id) => task_label(task_id),
             None => "no task".to_string(),
         };
-        let stood = if waiting && Some(stretch.id) == last && stretch.ended_at.is_none() {
-            let ended = moves
-                .iter()
-                .filter(|m| m.run_task_id == Some(stretch.id))
-                .filter_map(|m| m.ended_at)
-                .max();
-            match (stretch.started_at, ended) {
-                (Some(from), Some(to)) => format!("{} → {}  (over)", from.to_rfc3339_z(), to.to_rfc3339_z()),
-                (Some(from), None) => format!("{} → over", from.to_rfc3339_z()),
-                (None, _) => "over".to_string(),
-            }
-        } else {
-            span(stretch.started_at, stretch.ended_at)
-        };
+        let stood = span(stretch.started_at, stretch.ended_at);
         human(flags, format!("\ntask {} — {about}  {stood}", stretch.seq));
+        // A round that failed was filed as a task, and the round's task waits on it.
+        if let Some(filed) = stretch.incident_task_id {
+            human(flags, format!("  failure filed as {}", task_label(filed)));
+        }
         for m in moves.iter().filter(|m| m.run_task_id == Some(stretch.id)) {
             render_move(store, flags, defs, &switched, m)?;
         }

@@ -45,13 +45,16 @@
 use amenbo_core::model::{
     ActorKind, AutomationCfg, AutomationCfgKind, AutomationCfgOwner, AutomationEdge,
     AutomationOwner, AutomationPictureOwner, AutomationPort, AutomationPortDirection,
-    AutomationPortKind, AutomationPortOwner, AutomationRunStatus,
+    AutomationPortKind, AutomationPortOwner, AutomationRole, AutomationRunStatus,
     AutomationWire,
 };
-use amenbo_core::ops::automation::{ActionShelf, EdgeTarget, NewAutomation, NewScript, NewStep};
+use amenbo_core::ops::automation::{
+    ActionShelf, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep, RoleChange,
+};
+use amenbo_core::ops::Position;
 use amenbo_core::ops::automation_builtin;
 use amenbo_core::ops::automation_rehearse::Cut;
-use amenbo_core::ops::automation_run::{self, Unmet};
+use amenbo_core::ops::automation_run::{self, Carrier, ReadsFrom, Unmet};
 use amenbo_core::ops::automation_stop::Ending;
 use amenbo_core::ops::automation_stop::Ended;
 use amenbo_core::ops::automation_step::Opened;
@@ -64,18 +67,18 @@ use crate::dto::{
     AutomationBuiltinExitDto, AutomationBuiltinRunDto, AutomationCardDto, AutomationCfgDto,
     AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationHeldBackDto,
     AutomationHeldByRecordDto, AutomationHeldByValueDto, AutomationLaunchAsksDto,
-    AutomationLaunchAxisDto, AutomationLaunchBlockDto,
+    AutomationCarrierDto, AutomationLaunchAxisDto, AutomationLaunchBlockDto,
     AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto,
-    AutomationPlacementStepDto, AutomationPortDto, AutomationRunCardDto, AutomationRunEndingsDto,
-    AutomationRunHistoryDto, AutomationRunPassDto, AutomationRunPassedStepDto, AutomationRunStartedDto,
+    AutomationPlacementStepDto, AutomationPortDto, AutomationRoleDto, AutomationRunCardDto, AutomationRunEndingsDto,
+    AutomationRunHistoryDto, AutomationRunIncidentDto, AutomationRunStartedDto,
     AutomationRunTaskDto,
-    AutomationRunTrailDto, AutomationSavedDto, AutomationStepDto, AutomationStepScriptDto,
+    AutomationSavedDto, AutomationStepDto, AutomationStepScriptDto,
     AutomationStepOpenDto, AutomationStepRunDto, AutomationTestRunDto, AutomationTestStepDto,
     AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
     WriteAck,
 };
 use crate::error::CmdError;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 
@@ -304,8 +307,7 @@ pub fn automation_builtin_page() -> Result<Vec<AutomationBuiltinDto>, CmdError> 
     let conn = store.read_model().conn();
     let mut out = Vec::new();
     for one in automation_builtin::all() {
-        // The one that splits by an axis has an action per axis, and an automation placing two of them
-        // is still one automation.
+        // One action per version of it, and an automation placing two of them is still one automation.
         let mut placing = std::collections::BTreeSet::new();
         for action in read::automation_actions_builtin(conn, one.key)? {
             placing.extend(automation_view::automations_placing(conn, action.id)?);
@@ -350,12 +352,11 @@ fn builtin_port_dto(port: &automation_builtin::BuiltinPort) -> AutomationPortDto
 /// **Put a built-in on a picture**, standing on its own — how the first placement comes in, which is
 /// one of the built-ins a run starts at (`AMB-D-977`). Its library action is written from the
 /// definition the first time any automation places it
-/// ([`amenbo_core::ops::automation_builtin::action_on`]). `axis` is the axis the one that splits by an
-/// axis splits by, and nothing for any other (`AMB-D-973`).
+/// ([`amenbo_core::ops::automation_builtin::action`]).
 #[tauri::command]
-pub fn automation_builtin_place(automation_id: i64, key: String, axis: Option<i64>) -> Result<WriteAck, CmdError> {
+pub fn automation_builtin_place(automation_id: i64, key: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_place(automation_id, &key, axis)?;
+        store.automation_builtin_place(automation_id, &key)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
@@ -363,27 +364,26 @@ pub fn automation_builtin_place(automation_id: i64, key: String, axis: Option<i6
 
 /// **Put a built-in in on a line** ([`automation_step_insert`] for a built-in) — the way out that was
 /// pressed comes to point at the new placement, in one transaction with the library action written
-/// where none was yet. `axis` as for [`automation_builtin_place`].
+/// where none was yet.
 #[tauri::command]
-pub fn automation_builtin_insert(edge_id: i64, key: String, axis: Option<i64>) -> Result<WriteAck, CmdError> {
+pub fn automation_builtin_insert(edge_id: i64, key: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_insert(edge_id, &key, axis)?;
+        store.automation_builtin_insert(edge_id, &key)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
 /// **Put a built-in on after a way out that says nothing yet** — [`automation_builtin_insert`] for a
-/// way out with no line to press. `axis` as for [`automation_builtin_place`].
+/// way out with no line to press.
 #[tauri::command]
 pub fn automation_builtin_insert_at_exit(
     from_id: i64,
     exit_name: Option<String>,
     key: String,
-    axis: Option<i64>,
 ) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_insert_at_exit(from_id, exit_name.as_deref(), &key, axis)?;
+        store.automation_builtin_insert_at_exit(from_id, exit_name.as_deref(), &key)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
@@ -1250,6 +1250,108 @@ pub fn automation_placement_version_set(placement_id: i64, version: i64) -> Resu
     Ok(WriteAck::new(&["automations"]))
 }
 
+/// **Define a role in an automation**, after the roles already there
+/// ([`amenbo_core::ops::automation::role_add`]). Only the name is required. `model` is named beside
+/// `agent` and with no agent is refused by core: the model is the agent's model.
+#[tauri::command]
+pub fn automation_role_add(
+    automation_id: i64,
+    name: String,
+    icon: Option<String>,
+    entry_placement_id: Option<i64>,
+    agent: Option<String>,
+    model: Option<String>,
+) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_role_add(
+            automation_id,
+            NewRole { name, icon, entry_placement_id, agent, model },
+        )?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Change a role's name, icon, the placement its round starts at, or its default agent and model**
+/// ([`amenbo_core::ops::automation::role_update`]). Only the fields named are written.
+///
+/// Each of the four taken-away fields has a third answer — written, cleared, or left alone — and is
+/// carried as the pair `x` / `clear_x` for the reason [`automation_step_edit`]'s `work_dir` is: the
+/// clear beats a value beside it. Clearing the agent clears the model with it.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub fn automation_role_edit(
+    id: i64,
+    name: Option<String>,
+    icon: Option<String>,
+    clear_icon: Option<bool>,
+    entry_placement_id: Option<i64>,
+    clear_entry: Option<bool>,
+    agent: Option<String>,
+    clear_agent: Option<bool>,
+    model: Option<String>,
+    clear_model: Option<bool>,
+) -> Result<WriteAck, CmdError> {
+    let change = RoleChange {
+        name,
+        icon: write_or_clear(icon, clear_icon),
+        entry_placement_id: write_or_clear(entry_placement_id, clear_entry),
+        agent: write_or_clear(agent, clear_agent),
+        model: write_or_clear(model, clear_model),
+    };
+    with_store_mut(|store| {
+        store.automation_role_update(id, change)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// A field with three answers, from the pair a screen writes it with: cleared where `clear` says so,
+/// written where a value came, left alone otherwise.
+fn write_or_clear<T>(value: Option<T>, clear: Option<bool>) -> Option<Option<T>> {
+    match (clear, value) {
+        (Some(true), _) => Some(None),
+        (_, Some(value)) => Some(Some(value)),
+        _ => None,
+    }
+}
+
+/// **Reorder a role among its automation's roles** ([`amenbo_core::ops::automation::role_move`]).
+/// `position` is one of `top` / `bottom` / `before` / `after`, the last two placed against
+/// `anchor_id` — another role of the same automation. No index is taken: the order is the roles'
+/// order keys (`AMB-D-42`).
+#[tauri::command]
+pub fn automation_role_move(
+    id: i64,
+    position: String,
+    anchor_id: Option<i64>,
+) -> Result<WriteAck, CmdError> {
+    let pos = match position.as_str() {
+        "top" => Position::Top,
+        "bottom" => Position::Bottom,
+        "before" => Position::Before(anchor_id.ok_or("position 'before' needs an anchor_id to place against")?),
+        "after" => Position::After(anchor_id.ok_or("position 'after' needs an anchor_id to place against")?),
+        other => return Err(format!("position '{other}' is not one of top / bottom / before / after").into()),
+    };
+    with_store_mut(|store| {
+        store.automation_role_move(id, pos)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Take a role out of its automation** ([`amenbo_core::ops::automation::role_delete`]). The
+/// placement its round started at stays on the picture, and the tasks worked under it are left with
+/// no role.
+#[tauri::command]
+pub fn automation_role_remove(id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_role_delete(id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
 /// **Put a library action in on a line** — the one road by which an action already on the shelf joins
 /// a picture already drawn. The way out that was pressed comes to point at the new placement, and the
 /// new placement goes on to where that way out used to reach.
@@ -1479,10 +1581,18 @@ pub fn automation_detail(id: i64) -> Result<Option<AutomationDetailDto>, CmdErro
     let held_by =
         run_cards(&store, automation_view::run_ids_holding_automation(store.read_model().conn(), id)?)?;
     // Asked the way the save asks it (`amenbo_core::ops::automation::save`): without the agents and
-    // models of this machine, which are the launch's to judge and not the definition's.
+    // models of this machine, which are the launch's to judge and not the definition's, and with
+    // Amenbo's own default agent, which a step nobody chose for falls back to.
+    let default_agent = store.automation_default_agent(id)?;
+    let conn = store.read_model().conn();
     let save_blocks =
-        automation_run::check(store.read_model().conn(), id, None, automation_run::nothing_asked())?;
-    Ok(Some(detail_dto(view, held_by, &save_blocks)))
+        automation_run::check(conn, id, None, automation_run::nothing_asked(), default_agent.as_deref())?;
+    // Read off the draft, as `view` is.
+    let who = Who {
+        carriers: automation_run::carriers(conn, id, ReadsFrom::Draft, default_agent.as_deref())?,
+        rounds: automation_run::rounds_by_placement(conn, id, ReadsFrom::Draft)?,
+    };
+    Ok(Some(detail_dto(view, held_by, &save_blocks, who)))
 }
 
 /// Whether this automation could be started, and what is in the way — core's launch check, named for
@@ -1508,11 +1618,13 @@ pub fn automation_launch_check(
 ) -> Result<AutomationLaunchCheckDto, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_launch_check");
     let store = open_store_read()?;
+    let default_agent = store.automation_default_agent(id)?;
     let unmet = automation_run::check(
         store.read_model().conn(),
         id,
         agents.as_deref(),
         &crate::agent_models::offered_here(),
+        default_agent.as_deref(),
     )?;
     Ok(AutomationLaunchCheckDto {
         ready: unmet.is_empty(),
@@ -1599,12 +1711,13 @@ pub fn automation_launch(
     // refused at the press rather than met inside the pane the run just opened.
     let offered = crate::agent_models::offered_here();
     let by = automation_run::Launcher {
+        default_agent: None,
         startable: agents.as_deref(),
         models: &offered,
         workspace_open: Some(workspace_open),
         by: Some(ActorKind::Human),
     };
-    let run = with_store_mut(|store| {
+    let started = with_store_mut(|store| {
         let mut handed = automation_run::HandedAtLaunch {
             title,
             notes,
@@ -1617,7 +1730,12 @@ pub fn automation_launch(
         Ok(store.automation_launch(id, &by, &handed)?)
     })?;
     crate::automation_watch::wake();
-    Ok(AutomationRunStartedDto { run: run.id })
+    Ok(AutomationRunStartedDto {
+        run: match started {
+            automation_run::Started::Run(run) => Some(run.id),
+            automation_run::Started::Waits(_) => None,
+        },
+    })
 }
 
 /// **Walk this automation through as a test run** — the build screen's "test run"
@@ -1640,6 +1758,7 @@ pub fn automation_test_run(
     let _perf = amenbo_core::perf::Timer::start("automation_test_run");
     let offered = crate::agent_models::offered_here();
     let by = automation_run::Launcher {
+        default_agent: None,
         startable: agents.as_deref(),
         models: &offered,
         workspace_open: None,
@@ -1832,7 +1951,7 @@ fn run_card(
     let version = amenbo_core::ops::automation_run::entry_def(conn, run.id)?
         .and_then(|def| def.automation_version);
     // The stretch it is in now. A run walks one per task, and a run between tasks is on none.
-    let stretch = read::automation_run_task_last(conn, run.id)?.map(|one| one.id);
+    let stretch = read::automation_run_task_last(conn, run.id)?;
     // The steps that owed the task their report and could not leave it, the task being closed.
     let mut report_withheld = Vec::new();
     for step in steps.iter().filter(|one| one.report_withheld) {
@@ -1868,7 +1987,10 @@ fn run_card(
         placement,
         steps_done: steps.len(),
         exit_name,
-        task: worked_task(store, stretch)?,
+        task: worked_task(store, stretch.as_ref().map(|one| one.id))?,
+        role: stretch.as_ref().and_then(|one| one.role_id),
+        role_started_at: stretch.as_ref().and_then(|one| one.started_at).map(|at| at.to_rfc3339_z()),
+        incident: incident_of(store, stretch.as_ref().and_then(|one| one.incident_task_id))?,
         report_withheld,
         acknowledged: run.acknowledged_at.is_some(),
         acknowledged_by: run.acknowledged_by_kind.map(|by| by.as_str()),
@@ -1953,39 +2075,6 @@ pub fn automation_run_held_back(run_id: i64) -> Result<Option<AutomationHeldBack
         first_start: held.first_start.map(|day| day.format("%Y-%m-%d").to_string()),
         drafts: held.drafts,
     }))
-}
-
-/// **The way a run has come on the task it is working** (`automation_run::trail`) — the spots it
-/// passed with the way out and the line it left each by, the spot it stands at now, and the steps it
-/// passed inside that spot and the one it stands at. What the picture on the run's pane lights up.
-#[tauri::command]
-pub fn automation_run_trail(run_id: i64) -> Result<AutomationRunTrailDto, CmdError> {
-    let _perf = amenbo_core::perf::Timer::start("automation_run_trail");
-    let store = open_store_read()?;
-    let trail = automation_run::trail(store.read_model().conn(), run_id)?;
-    Ok(AutomationRunTrailDto {
-        passed: trail
-            .passed
-            .into_iter()
-            .map(|pass| AutomationRunPassDto {
-                placement: pass.placement_id,
-                status: pass.status.as_str(),
-                exit: pass.exit_id,
-                edge: pass.edge_id,
-            })
-            .collect(),
-        at: trail.at,
-        steps: trail
-            .steps
-            .into_iter()
-            .map(|step| AutomationRunPassedStepDto {
-                step: step.step_id,
-                status: step.status.as_str(),
-                edge: step.edge_id,
-            })
-            .collect(),
-        step: trail.step,
-    })
 }
 
 /// The event the workspace hears when a step of a run is ready to be drawn.
@@ -2182,16 +2271,16 @@ fn open_one(
     // for as long as it takes — a worktree cut from a fetch is not instant (`AMB-D-964`). Carried out,
     // it is told again below, in the same place.
     //
-    // **Not while it waits** (`AMB-D-969`): the watch opens a waiting built-in on every look, and the
-    // pane already stands on the card that says it is waiting.
+    // **Not where it would wait for a task** (`AMB-D-969`): nothing is carried out — the run ends there
+    // and its automation waits instead.
     //
     // **Nor while it waits for room** in an action that takes one run at a time: nothing is carried
     // out until the action is free, and the watch opens it again on every look.
     let mut about_to = read::automation_run_def(store.read_model().conn(), def_id)?
-        .filter(|def| def.builtin.is_some())
-        .filter(|_| standing_wait(app, run_id).is_none());
+        .filter(|def| def.builtin.is_some());
     if about_to.is_some()
-        && amenbo_core::ops::automation_run::waits_for_room(store.read_model().conn(), run_id)?.is_some()
+        && (amenbo_core::ops::automation_run::is_waiting(store.read_model().conn(), run_id)?
+            || amenbo_core::ops::automation_run::waits_for_room(store.read_model().conn(), run_id)?.is_some())
     {
         about_to = None;
     }
@@ -2268,27 +2357,15 @@ fn open_one(
             log::warn!("run {run_id} went for its next task with the last one still in progress");
             (run.project_id, None, None, Vec::new())
         }
-        // A built-in set to wait found nothing to act on, and nothing was written (`AMB-D-969`). The
-        // pane stands on the card that says it is waiting — told once, since the watch opens it again
-        // on every look. A pause asked for while it waited took hold here instead, and the paused
-        // run has no pane to stand on until it is picked up again.
-        Opened::Waiting { run } => {
-            use amenbo_core::model::AutomationRunStatus::Running;
-            match (run.status, standing_wait(app, run_id)) {
-                (Running, Some(told)) => return Ok(told),
-                (Running, None) => {
-                    let def = read::automation_run_def(store.read_model().conn(), def_id)?.ok_or_else(|| {
-                        CmdError::from(amenbo_core::error::Error::not_found(format!(
-                            "step '{def_id}' of run '{run_id}' not found"
-                        )))
-                    })?;
-                    let (project, mut builtin) = builtin_about_to(store, run_id, &def)?;
-                    builtin.waiting = true;
-                    builtin.looks_for = amenbo_core::ops::automation_builtin::looks_for(&def)?;
-                    (project, None, Some(builtin), Vec::new())
-                }
-                _ => (run.project_id, None, None, Vec::new()),
-            }
+        // The run was paused before this step, which was not opened: before its next task
+        // (`AMB-D-1009`), or where a pause asked for met a built-in that would wait. The paused run has
+        // no pane to stand on until it is picked up again.
+        Opened::Waiting { run } => (run.project_id, None, None, Vec::new()),
+        // A built-in set to wait found nothing to act on (`AMB-D-969`): the run ended there with
+        // nothing written, and its automation waits for a task in its place. Its pane is taken down.
+        Opened::LeftToWait { run } => {
+            log::info!("run {run_id} found no task to take, and its automation waits for one");
+            (run.project_id, None, None, Vec::new())
         }
         // The action this step goes into takes one run at a time, and another run is in it or came to
         // it first. Nothing was written and nothing moved, so the pane is left as it stands and the
@@ -2343,12 +2420,7 @@ fn open_one(
     // The run has just moved, so the thread that keeps it going looks again now rather than sleeping
     // out the interval it was on (`crate::automation_watch`). Called from the watch's own path too,
     // where it costs nothing: that loop is about to come round anyway.
-    //
-    // **Except where nothing moved**: a built-in that is waiting is opened again on every look, and
-    // waking the watch from there would have it look again at once, round and round without a pause.
-    if !matches!(builtin, Some(AutomationBuiltinRunDto { waiting: true, .. })) {
-        crate::automation_watch::wake();
-    }
+    crate::automation_watch::wake();
     let dto = AutomationStepOpenDto { run: run_id, project, step, builtin, session, missing };
     tell(app, dto.clone());
     // Waited for only once its card has been told under way, so a program that ends at once is not
@@ -2378,13 +2450,6 @@ fn tell(app: &tauri::AppHandle, dto: AutomationStepOpenDto) {
     }
 }
 
-/// What this run's pane stands on, where that is the card of a built-in that is waiting.
-fn standing_wait(app: &tauri::AppHandle, run_id: i64) -> Option<AutomationStepOpenDto> {
-    let standing = app.state::<StepsStanding>();
-    let standing = standing.0.lock().expect("steps standing lock");
-    standing.get(&run_id).filter(|one| one.builtin.as_ref().is_some_and(|b| b.waiting)).cloned()
-}
-
 /// **Take up what has been saved since a run's copy was taken, before its entry is opened**
 /// (`AMB-D-1015`, [`automation_run::take_up_newer`]) — and answer the step to open now, or `None`
 /// where the newer version did not pass and the run failed.
@@ -2393,8 +2458,8 @@ fn standing_wait(app: &tauri::AppHandle, run_id: i64) -> Option<AutomationStepOp
 /// step on every look, and nearly always nothing has been saved since: the entry and the versions are
 /// read first, and the write is opened only where there is something newer to take up.
 ///
-/// **The card a waiting run stood on is the old entry's**, so it is dropped: opening the new entry
-/// tells its own card, rather than handing back the old one ([`open_one`]). A run that failed is told
+/// **The card the run stood on is dropped**: opening the new entry tells its own card, rather than
+/// handing back the old one ([`open_one`]). A run that failed is told
 /// with nothing to stand on, which takes its pane down.
 pub(crate) fn take_up_newer(
     app: &tauri::AppHandle,
@@ -2771,6 +2836,22 @@ fn worked_task(
     }))
 }
 
+/// **The task a failed round was filed as**, by its id `filed`, and who it went to. Nothing where the
+/// round filed none, or the task has since been deleted.
+fn incident_of(
+    store: &amenbo_core::Store,
+    filed: Option<i64>,
+) -> Result<Option<AutomationRunIncidentDto>, CmdError> {
+    let Some(id) = filed else { return Ok(None) };
+    Ok(read::task(store.read_model().conn(), id)?.map(|task| AutomationRunIncidentDto {
+        id,
+        r#ref: amenbo_core::idref::task(id),
+        role: task.role_id,
+        person: task.role_id.is_none()
+            && task.assignee_kind == Some(ActorKind::Human),
+    }))
+}
+
 /// **Force-cancel a run** — stop it now, whatever it is in the middle of (`AMB-D-1002`). What the
 /// force-cancel of a running run presses, once the person has said yes to what it may leave behind.
 /// Closing the pane a run is drawn in does not stop it: that press is offered only once the run is
@@ -2837,11 +2918,21 @@ fn stop_if_going(
 // Core resolves (amenbo_core::ops::automation_view); what is left here is naming. Nothing below
 // reads the store — a DTO is the same rows under the names a screen draws them by.
 
+/// **Who works each placement and carries out each step** — core's answers, read beside the view and
+/// handed to [`detail_dto`] so the shaping below reads no store.
+struct Who {
+    /// Keyed by (placement, step) ([`automation_run::carriers`]).
+    carriers: BTreeMap<(i64, i64), Carrier>,
+    /// Placement id → the role whose round reaches it ([`automation_run::rounds_by_placement`]).
+    rounds: BTreeMap<i64, i64>,
+}
+
 /// One automation's whole definition, under the names the build screen draws it by.
 fn detail_dto(
     view: automation_view::AutomationView,
     held_by: Vec<AutomationRunCardDto>,
     save_blocks: &[Unmet],
+    mut who: Who,
 ) -> AutomationDetailDto {
     let names = exit_names(view.placements.iter().flat_map(|p| p.exits.iter()));
     let wires = view.wires.iter().map(|w| wire_dto(w, &names, |id| view.port_name(id))).collect();
@@ -2856,7 +2947,8 @@ fn detail_dto(
         max_concurrent_runs: a.max_concurrent_runs,
         edges: view.edges.into_iter().map(|e| edge_dto(e, &names)).collect(),
         wires,
-        placements: view.placements.into_iter().map(placement_dto).collect(),
+        roles: view.roles.into_iter().map(role_dto).collect(),
+        placements: view.placements.into_iter().map(|p| placement_dto(p, &mut who)).collect(),
         held_by,
         saved: view.saved.map(saved_dto),
         unsaved: view.unsaved,
@@ -2980,7 +3072,7 @@ fn wire_dto<'a>(
 /// **Flattened because an action opens one step today.** Drawing the whole column inside an action is
 /// its own screen's (`AMB-T-5315`); until there is one, a spot reads exactly as the step it was folded
 /// out of did.
-fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto {
+fn placement_dto(view: automation_view::PlacementView, who: &mut Who) -> AutomationPlacementDto {
     let placement = view.placement;
     let action = view.action;
     let opens = view.entry_step;
@@ -2993,6 +3085,7 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
         id: placement.id,
         name: action.as_ref().map(|one| one.name.clone()).unwrap_or_default(),
         action_id: placement.action_id,
+        role_id: who.rounds.get(&placement.id).copied(),
         global: action.as_ref().is_some_and(|one| one.project_id.is_none()),
         builtin: action.as_ref().and_then(|one| one.builtin.clone()),
         draft: action.as_ref().is_some_and(|one| one.draft),
@@ -3015,6 +3108,7 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
             .steps
             .into_iter()
             .map(|one| AutomationPlacementStepDto {
+                carrier: who.carriers.remove(&(placement.id, one.step.id)).map(carrier_dto),
                 step_id: one.step.id,
                 name: one.step.name,
                 agent: one.chosen.as_ref().map(|c| c.agent.clone()),
@@ -3022,6 +3116,21 @@ fn placement_dto(view: automation_view::PlacementView) -> AutomationPlacementDto
             })
             .collect(),
     }
+}
+
+fn role_dto(role: AutomationRole) -> AutomationRoleDto {
+    AutomationRoleDto {
+        id: role.id,
+        name: role.name,
+        icon: role.icon,
+        entry_placement_id: role.entry_placement_id,
+        agent: role.agent,
+        model: role.model,
+    }
+}
+
+fn carrier_dto(carrier: Carrier) -> AutomationCarrierDto {
+    AutomationCarrierDto { agent: carrier.agent, model: carrier.model, chosen_at: carrier.at.into() }
 }
 
 fn exit_dto(view: automation_view::ExitView) -> AutomationExitDto {
@@ -3087,5 +3196,80 @@ mod tests {
         let live = runs_still_standing(1..=6, |run| Ok(statuses.get(&run).copied()))
             .expect("nothing to fail");
         assert_eq!(live, HashSet::from([1, 2]));
+    }
+
+    /// **Where a step's agent was chosen goes out as a bare value** (`AMB-D-396`): its kind, and the
+    /// role's id where a role was fallen back to — the words are the GUI's to put on it.
+    #[test]
+    fn where_a_carrier_was_chosen_goes_out_as_its_kind_and_role() {
+        use amenbo_core::ops::automation_run::ChosenAt;
+        let json = |at: ChosenAt| {
+            serde_json::to_value(carrier_dto(Carrier { agent: "claude".into(), model: None, at })).expect("json")
+        };
+        assert_eq!(json(ChosenAt::Step), serde_json::json!({ "agent": "claude", "chosenAt": { "kind": "step" } }));
+        assert_eq!(
+            json(ChosenAt::Role { role_id: 7 }),
+            serde_json::json!({ "agent": "claude", "chosenAt": { "kind": "role", "roleId": 7 } }),
+        );
+        assert_eq!(json(ChosenAt::Amenbo)["chosenAt"], serde_json::json!({ "kind": "amenbo" }));
+    }
+
+    /// **The four role doors write through core and read back on the detail.** A role is added with
+    /// its agent and model, renamed, reordered against another, has its agent cleared — the model
+    /// going with it — and is taken away. A model with no agent and a role that is not there are
+    /// core's refusals, passed on rather than reworded.
+    #[test]
+    fn roles_are_added_edited_reordered_and_removed() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("automation-roles");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        let automation_id = {
+            let mut store = amenbo_core::Store::open().unwrap();
+            let project = store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "Roles".into(),
+                    view: amenbo_core::model::View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap();
+            store.automation_add(project.id, NewAutomation { name: "Dev".into(), ..Default::default() }).unwrap().id
+        };
+        let roles = || automation_detail(automation_id).unwrap().expect("the automation").roles;
+
+        automation_role_add(automation_id, "Alice".into(), None, None, Some("claude".into()), Some("opus".into()))
+            .unwrap();
+        automation_role_add(automation_id, "Bob".into(), Some("eye".into()), None, None, None).unwrap();
+        assert!(
+            automation_role_add(automation_id, "Alice".into(), None, None, None, Some("opus".into())).is_err(),
+            "a model with no agent names nothing"
+        );
+        let names = |roles: &[AutomationRoleDto]| roles.iter().map(|r| r.name.clone()).collect::<Vec<_>>();
+        let listed = roles();
+        assert_eq!(names(&listed), ["Alice", "Bob"]);
+        let (alice, bob) = (listed[0].id, listed[1].id);
+        assert_eq!((listed[0].agent.as_deref(), listed[0].model.as_deref()), (Some("claude"), Some("opus")));
+
+        automation_role_move(bob, "before".into(), Some(alice)).unwrap();
+        assert_eq!(names(&roles()), ["Bob", "Alice"]);
+        assert!(automation_role_move(bob, "before".into(), None).is_err(), "before needs an anchor");
+        assert!(automation_role_move(bob, "middle".into(), None).is_err());
+
+        automation_role_edit(bob, Some("Carol".into()), None, Some(true), None, None, None, None, None, None).unwrap();
+        automation_role_edit(alice, None, None, None, None, None, None, Some(true), None, None).unwrap();
+        let listed = roles();
+        assert_eq!(names(&listed), ["Carol", "Alice"]);
+        assert_eq!(listed[0].icon, None, "the clear takes the icon away");
+        assert_eq!((listed[1].agent.as_deref(), listed[1].model.as_deref()), (None, None), "the model goes with the agent");
+        assert!(
+            automation_role_edit(alice, None, None, None, None, None, None, None, Some("opus".into()), None).is_err(),
+            "a model with no agent is refused on an edit too"
+        );
+
+        automation_role_remove(bob).unwrap();
+        assert_eq!(names(&roles()), ["Alice"]);
+        assert!(automation_role_remove(bob).is_err(), "a role that is gone is not found");
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

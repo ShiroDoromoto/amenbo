@@ -147,9 +147,34 @@ export type Say = {
   /** The task the run is working, or null where it is on none — yet, or while a built-in waits for
    *  the next one (`../shell/WorkspaceFace`). */
   readonly task: Worked | null;
+  /** **The round the run is in now** (`AutomationRunCardDto.role`) — which role's card the pane draws,
+   *  and what its time is counted from (`../shell/RunPicture`). Absent until the run has been read,
+   *  and where it has begun no round. */
+  readonly round?: Round;
   /** Where the run stands, or null until the first answer about it lands — and then the row says
    *  nothing about the state rather than guessing it from the step. */
   readonly state: RunState | null;
+};
+
+/** A round of a run (`amenbo_core::model::AutomationRunTask`). */
+export type Round = {
+  /** The role it is worked under, by its id — or null where the automation defines no role, the
+   *  round has not taken its task yet, or the role has since been taken out. */
+  readonly role: number | null;
+  /** When the round began, in milliseconds since the epoch, or null where nothing is written for it. */
+  readonly startedAt: number | null;
+  /** **The task the round was filed as**, where it failed (`AutomationRunCardDto.incident`) — what
+   *  the line under the run's pane names. Absent where it has not failed or filed nothing. */
+  readonly incident?: Incident;
+};
+
+/** The task a failed round was filed as, and who it went to. */
+export type Incident = {
+  readonly ref: string;
+  /** The role it was filed to, by its id, or null where it went to a person or the role is gone. */
+  readonly role: number | null;
+  /** Whether it went to a person rather than a role. */
+  readonly person: boolean;
 };
 
 /** Who carries a step out, as the step's line says it. */

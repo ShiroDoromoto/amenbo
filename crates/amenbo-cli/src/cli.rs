@@ -1901,33 +1901,77 @@ pub enum AutomationCmd {
         #[arg(long, conflicts_with = "failures_to")]
         no_failures_to: bool,
     },
-    /// Give an automation a trigger: every so many minutes, or whenever none of its runs is under way,
-    /// it files a task and starts a run of the automation on it, with nobody pressing start (the entry
-    /// has to be make_task) — or take it away with --off. Only the app runs triggers
+    /// Give an automation a trigger: every so many minutes, whenever none of its runs is under way,
+    /// whenever few enough tasks match a filter, or whenever a program says so, it files a task — the
+    /// one written here, the one a file says, or the one a program writes — and starts a run of the
+    /// automation on it, with nobody pressing start (the entry has to be make_task) — or take it away
+    /// with --off. Only the app runs triggers
     Trigger {
         /// automation id
         id: i64,
         /// file a task every this many minutes, counted from now and then from each task filed
-        #[arg(long, value_name = "MINUTES", required_unless_present_any = ["off", "when_idle"], conflicts_with = "when_idle", value_parser = clap::value_parser!(u32).range(i64::from(amenbo_core::model::MIN_TRIGGER_EVERY_MINUTES)..))]
+        #[arg(long, value_name = "MINUTES", required_unless_present_any = ["off", "when_idle", "if_tasks", "if_script"], conflicts_with = "when_idle", value_parser = clap::value_parser!(u32).range(i64::from(amenbo_core::model::MIN_TRIGGER_EVERY_MINUTES)..))]
         every: Option<u32>,
         /// file a task whenever none of the automation's runs is running or paused, a minute after it
         /// last filed one at the soonest
         #[arg(long)]
         when_idle: bool,
+        /// file a task only while fewer than --fewer-than tasks of the automation's project match this
+        /// filter (what `task list --filter` takes; no `project:`). On its own, with no --every or
+        /// --when-idle, it files one whenever that holds, a minute after it last filed one at the soonest
+        #[arg(long, value_name = "FILTER", requires = "fewer_than")]
+        if_tasks: Option<String>,
+        /// how few tasks matching --if-tasks let it file one (1 or more)
+        #[arg(long, value_name = "N", requires = "if_tasks", value_parser = clap::value_parser!(u32).range(1..))]
+        fewer_than: Option<u32>,
+        /// file a task only once this program, by its full path, says so: it writes
+        /// {"version":1,"file":true} (or false) to the file named in AMENBO_OUTPUT, and its exit code says
+        /// only whether it ran to the end. On its own, with no --every, --when-idle or --if-tasks, it is
+        /// asked whenever there is room for a run, a minute after it last filed one at the soonest
+        #[arg(long, value_name = "PATH")]
+        if_script: Option<String>,
+        /// one argument handed to the --if-script program as it is, with no shell in between — repeat it
+        /// for each
+        #[arg(long = "script-arg", value_name = "ARG", requires = "if_script", allow_hyphen_values = true)]
+        script_args: Vec<String>,
+        /// how long the --if-script program may run before it is stopped, 1 to 360 minutes (30 unless
+        /// given)
+        #[arg(long, value_name = "MINUTES", requires = "if_script")]
+        script_timeout_minutes: Option<i64>,
         /// the title of the task it files
-        #[arg(long, required_unless_present = "off")]
+        #[arg(long, required_unless_present_any = ["off", "task_from_file", "task_from_script"], conflicts_with_all = ["task_from_file", "task_from_script"])]
         title: Option<String>,
         /// that task's notes, in Markdown (`-` reads it from stdin)
-        #[arg(long)]
+        #[arg(long, conflicts_with_all = ["task_from_file", "task_from_script"])]
         notes: Option<String>,
+        /// instead of --title, read the task it files from this file, by its full path, each time it
+        /// files one: its first line that is not blank is the title, and the rest the notes
+        #[arg(long, value_name = "PATH", conflicts_with = "task_from_script")]
+        task_from_file: Option<String>,
+        /// instead of --title, have this program, by its full path, write the task each time it files
+        /// one: it writes {"version":1,"title":"…","notes":"…"} to the file named in AMENBO_OUTPUT (the
+        /// notes may be left out), and its exit code says only whether it ran to the end
+        #[arg(long, value_name = "PATH")]
+        task_from_script: Option<String>,
+        /// one argument handed to the --task-from-script program as it is, with no shell in between —
+        /// repeat it for each
+        // clap lets `requires` go when the arg it asks for conflicts with one given, so --title and
+        // --task-from-file are refused beside these outright.
+        #[arg(long = "task-script-arg", value_name = "ARG", requires = "task_from_script", conflicts_with_all = ["title", "notes", "task_from_file"], allow_hyphen_values = true)]
+        task_script_args: Vec<String>,
+        /// how long the --task-from-script program may run before it is stopped, 1 to 360 minutes (30
+        /// unless given)
+        #[arg(long, value_name = "MINUTES", requires = "task_from_script", conflicts_with_all = ["title", "notes", "task_from_file"])]
+        task_script_timeout_minutes: Option<i64>,
         /// take the trigger away
-        #[arg(long, conflicts_with_all = ["every", "when_idle", "title", "notes"])]
+        #[arg(long, conflicts_with_all = ["every", "when_idle", "if_tasks", "fewer_than", "if_script", "script_args", "script_timeout_minutes", "title", "notes", "task_from_file", "task_from_script", "task_script_args", "task_script_timeout_minutes"])]
         off: bool,
     },
     /// Stop an automation from starting new rounds, or let it start them again with --off. While it is
     /// stopped, a start and its trigger are refused, and a run of it finishes the round it is on and
-    /// pauses before it takes its next task — one waiting for a task pauses at once. Picking such a run up
-    /// again (`resume`) is refused until the automation is started again
+    /// pauses before it takes its next task — one waiting for room to take one pauses at once, and a wait
+    /// for a task ends. Picking such a run up again (`resume`) is refused until the automation is started
+    /// again
     Stop {
         /// automation id
         id: i64,
@@ -1968,18 +2012,15 @@ pub enum AutomationCmd {
     PlaceAdd {
         /// automation id
         automation: i64,
-        /// the library action to place. Each of its steps starts out carried by the default agent —
-        /// the project's, else the one a pane was last opened with — and `agent-set` changes it
+        /// the library action to place. A step nobody chooses for with `agent-set` is carried out by
+        /// its role's default agent, else by Amenbo's — the project's, else the one a pane was last
+        /// opened with
         #[arg(long, value_name = "ID", required_unless_present = "builtin", conflicts_with = "builtin")]
         action: Option<i64>,
         /// place one of Amenbo's built-ins instead (`automation builtin-list` names them). Placed first,
         /// make_task comes set to take the task it files, the one way a run can start from it
         #[arg(long, value_name = "KEY")]
         builtin: Option<String>,
-        /// the axis `split_by_dim` splits by (name or ID) — one a task holds one value of. Its ways out
-        /// are that axis's values, and the one for a task with none
-        #[arg(long, value_name = "AXIS", requires = "builtin")]
-        axis: Option<String>,
     },
     /// Take a placement off its automation with the answers and lines hanging on it — confirms unless -y
     PlaceRm {
@@ -2094,9 +2135,9 @@ pub enum AutomationCmd {
         id: i64,
     },
     /// Add a step to a library action. One step is one terminal, and it carries its own prompt; who
-    /// carries it out is chosen where the action is placed (`agent-set`). Where the action is placed
-    /// already, the new step starts out there with the default agent, as a placed step does. With
-    /// `--program` the step is a script instead, and runs that program rather than a prompt
+    /// carries it out is chosen where the action is placed (`agent-set`), else falls back to its
+    /// role's default agent and then Amenbo's. With `--program` the step is a script instead, and runs
+    /// that program rather than a prompt
     StepAdd {
         /// action id
         action: i64,
@@ -2340,7 +2381,8 @@ pub enum AutomationCmd {
         filter: Box<TaskFilterArgs>,
     },
     /// Choose who carries one step out at one placement — the agent, and the model where one is named.
-    /// A step nobody is chosen for is refused at launch
+    /// A step nobody is chosen for falls back to its role's default, then Amenbo's; with neither, it
+    /// is refused at launch
     AgentSet {
         /// placement id
         placement: i64,
@@ -2353,7 +2395,7 @@ pub enum AutomationCmd {
         /// which model; left out, the agent's own default stands
         #[arg(long, conflicts_with = "clear")]
         model: Option<String>,
-        /// leave nobody chosen for it
+        /// leave nobody chosen for it here, so it falls back to its role's default, then Amenbo's
         #[arg(long)]
         clear: bool,
     },
@@ -2445,7 +2487,7 @@ pub enum AutomationCmd {
         /// goes round to the entry
         #[arg(long, conflicts_with = "halt")]
         done: bool,
-        /// end the run failed (halted) and call a person: its task goes back to todo, assigned to the human, with the step's report on it
+        /// end the run failed (halted): its task goes back to todo, keeping its assignee and role, and waits on a task filed to whoever the automation sends a failed round to (--failures-to), carrying why it failed and the step's report
         #[arg(long)]
         halt: bool,
         /// how often this edge may be taken for one task (left out: 10, the standing limit) — counted only
@@ -2471,7 +2513,7 @@ pub enum AutomationCmd {
         /// goes round to the entry
         #[arg(long, conflicts_with = "halt")]
         done: bool,
-        /// end the run failed (halted) and call a person: its task goes back to todo, assigned to the human, with the step's report on it
+        /// end the run failed (halted): its task goes back to todo, keeping its assignee and role, and waits on a task filed to whoever the automation sends a failed round to (--failures-to), carrying why it failed and the step's report
         #[arg(long)]
         halt: bool,
         /// how often this edge may be taken for one task
@@ -2557,6 +2599,12 @@ pub enum AutomationCmd {
         /// placement leaves open — a value on each of those is required
         #[arg(long = "dim", value_name = "AXIS=VALUE")]
         dim: Vec<String>,
+    },
+    /// Stop an automation waiting for a task: the app no longer starts a run of it once a task its
+    /// take_task entry looks for turns up. One that is not waiting is answered as it stands
+    StopWaiting {
+        /// automation id
+        id: i64,
     },
 
     /// Walk an automation's draft, unsaved changes included, from its entry to its end without running

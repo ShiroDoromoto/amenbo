@@ -31,8 +31,6 @@
 //! does its work first ([`work_outside`]), reading the store only to find its way, and the transaction
 //! that opens the step writes down what came of it.
 
-use std::borrow::Cow;
-
 use rusqlite::Connection;
 use serde::Serialize;
 
@@ -51,7 +49,6 @@ use crate::ops::automation_builtin_fetch::FETCH;
 use crate::ops::automation_builtin_fold::FOLD_WORKTREE;
 use crate::ops::automation_builtin_hand_back::HAND_BACK_TASK;
 use crate::ops::automation_builtin_make::MAKE_TASK;
-use crate::ops::automation_builtin_split::SPLIT_BY_DIM;
 use crate::ops::automation_builtin_take::TAKE_TASK;
 use crate::ops::automation_builtin_wait::WAIT;
 use crate::ops::automation_report::{self, Next, Produced};
@@ -114,23 +111,11 @@ pub enum Work {
     /// A built-in of this kind takes no input, never waits and takes no task: those are what the
     /// opening decides after this work is done, so none of them could hold it back.
     Outside(fn(&Outside<'_>) -> Result<Worked>),
-    /// Inside that transaction too, but **leaving by a way out the data names** rather than one the code
-    /// holds ([`Named`]) — the ways out of the built-in that splits by an axis are that axis's values
-    /// (`AMB-D-972`), written onto its action from the axis rather than from [`Builtin::exits`].
-    Named(fn(&Carry<'_, '_>) -> Result<Named>),
     /// **Nothing carried out: its step is held open** for as long as the answers where it was placed
     /// say ([`hold`]), and ended by the watch once that time has passed ([`time_up`]) — the built-in that
     /// waits (`AMB-D-983`). The step stands under way in the meantime, as an agent's does while it works,
     /// so a pause or a stop acts on it as on any other.
     Holds(fn(&[RunDefCfg]) -> Result<chrono::Duration>),
-}
-
-/// **How a built-in leaving by a way out the data names finished** — [`Carried`], with a name that is
-/// not the code's.
-#[derive(Debug)]
-pub struct Named {
-    pub exit: String,
-    pub report: String,
 }
 
 /// **What a built-in working outside the store is handed**: the store to read, the run, and the task the
@@ -237,12 +222,15 @@ pub struct BuiltinExit {
 /// **How a built-in waits** where it is set to, rather than leave by the way out that says there was
 /// nothing to do.
 ///
-/// **Waiting writes nothing.** The step is not opened until what it waits for has turned up, so the
-/// run stands before it — `running`, with no execution under way — and every look of the watch asks
-/// again ([`waiting`]). A pause or a stop acts on that run as on any other.
+/// **Amenbo waits, not the run.** A run that comes to it with nothing for it to act on ends there, its
+/// step never opened, and its automation is marked as waiting
+/// ([`crate::ops::automation_run::wait_for_a_task`]); a launch that would come to it so makes no run at
+/// all. The app's watch asks again every so often and starts a run once something has turned up
+/// ([`crate::ops::automation_run::start_waiting`]). So the time spent waiting leaves no run, no step and
+/// no stretch behind it.
 ///
-/// **What is asked is only whether one has turned up** ([`Waits::turned_up`]): it is asked once a
-/// second, and a count or a list of every candidate would be asked of every task there is.
+/// **What is asked is only whether one has turned up** ([`Waits::turned_up`]): it is asked on every
+/// look, and a count or a list of every candidate would be asked of every task there is.
 pub struct Waits {
     /// The setting that says whether it waits, and the choice on it that means it does.
     pub setting: &'static str,
@@ -250,15 +238,16 @@ pub struct Waits {
     /// The way out it would otherwise leave by. Set to wait, it never does, so the launch check asks
     /// no line of it.
     pub instead_of: &'static str,
-    /// Whether what it waits for is there now, read from the answers where it was placed.
-    pub turned_up: fn(&Connection, &AutomationRun, &[RunDefCfg]) -> Result<bool>,
-    /// What it looks for, as a person reads it beside the run while it waits — read from the same
-    /// answers. What it would find is not listed or counted: that is asked of every task there is.
+    /// Whether what it waits for is there now in the project, read from the answers where it was
+    /// placed — of the roles the run starts a round of, where it starts any (`roles_started`).
+    pub turned_up: fn(&Connection, i64, &[i64], &[RunDefCfg]) -> Result<bool>,
+    /// What it looks for, as a person reads it beside the automation while it waits — read from the
+    /// same answers. What it would find is not listed or counted: that is asked of every task there is.
     pub looks_for: fn(&[RunDefCfg]) -> String,
     /// **What is keeping it waiting** ([`HeldBack`], `AMB-D-999`) — read from the same answers, and
-    /// only when a person is about to look: as the wait begins and when the store changes. Never by
-    /// the once-a-second look, which is the reason [`Waits::looks_for`] counts nothing.
-    pub held_back: fn(&Connection, &AutomationRun, &[RunDefCfg]) -> Result<HeldBack>,
+    /// only when a person is about to look. Never by the watch's look, which is the reason
+    /// [`Waits::looks_for`] counts nothing.
+    pub held_back: fn(&Connection, i64, &[i64], &[RunDefCfg]) -> Result<HeldBack>,
 }
 
 /// **What keeps the tasks a waiting built-in looks for from being taken** (`AMB-D-999`): the tasks its
@@ -334,34 +323,68 @@ pub fn answer<'c>(cfg: &'c [RunDefCfg], name: &str) -> Option<&'c str> {
 /// nothing yet for it to act on ([`Waits`]). Anything else — an agent's step, a built-in that never
 /// waits, a key this build does not know — is opened as it always is.
 pub fn waiting(conn: &Connection, run: &AutomationRun, def: &AutomationRunDef) -> Result<bool> {
-    let Some(waits) = def.builtin.as_deref().and_then(find).and_then(|b| b.waits.as_ref()) else {
-        return Ok(false);
-    };
     let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
-    if !waits.chosen(answer(&cfg, waits.setting)) {
+    let roles = crate::ops::automation_run::roles_started(conn, run.id)?;
+    waits_now(conn, run.project_id, &roles, def.builtin.as_deref(), &cfg)
+}
+
+/// [`waiting`], for the built-in `key` with the answers `cfg` in `project_id`, for a run starting rounds
+/// of `roles` — where nothing has been copied onto a run yet, as at a launch.
+pub fn waits_now(
+    conn: &Connection,
+    project_id: i64,
+    roles: &[i64],
+    key: Option<&str>,
+    cfg: &[RunDefCfg],
+) -> Result<bool> {
+    let Some(waits) = waits_of(key) else { return Ok(false) };
+    if !waits.chosen(answer(cfg, waits.setting)) {
         return Ok(false);
     }
-    Ok(!(waits.turned_up)(conn, run, &cfg)?)
+    Ok(!(waits.turned_up)(conn, project_id, roles, cfg)?)
 }
 
-/// **What this copy of a step looks for while it waits** ([`Waits::looks_for`]), or `None` for a step
-/// that does not wait.
-pub fn looks_for(def: &AutomationRunDef) -> Result<Option<String>> {
-    let Some(waits) = def.builtin.as_deref().and_then(find).and_then(|b| b.waits.as_ref()) else {
-        return Ok(None);
-    };
-    let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
-    Ok(Some((waits.looks_for)(&cfg)))
+/// **Whether what the built-in `key` waits for has turned up** in `project_id`, for a run starting
+/// rounds of `roles` ([`Waits::turned_up`]) — `None` for a built-in that never waits, or is not set to
+/// wait by the answers `cfg`.
+pub fn turned_up(
+    conn: &Connection,
+    project_id: i64,
+    roles: &[i64],
+    key: Option<&str>,
+    cfg: &[RunDefCfg],
+) -> Result<Option<bool>> {
+    match waits_of(key) {
+        Some(waits) if waits.chosen(answer(cfg, waits.setting)) => {
+            Ok(Some((waits.turned_up)(conn, project_id, roles, cfg)?))
+        }
+        _ => Ok(None),
+    }
 }
 
-/// **What is keeping this copy of a step waiting** ([`Waits::held_back`]), or `None` for a step that
-/// does not wait.
-pub fn held_back(conn: &Connection, run: &AutomationRun, def: &AutomationRunDef) -> Result<Option<HeldBack>> {
-    let Some(waits) = def.builtin.as_deref().and_then(find).and_then(|b| b.waits.as_ref()) else {
-        return Ok(None);
-    };
-    let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
-    Ok(Some((waits.held_back)(conn, run, &cfg)?))
+/// **What the built-in `key` looks for while it waits** ([`Waits::looks_for`]), or `None` for one that
+/// never waits.
+pub fn looks_for(key: Option<&str>, cfg: &[RunDefCfg]) -> Option<String> {
+    waits_of(key).map(|waits| (waits.looks_for)(cfg))
+}
+
+/// **What is keeping the built-in `key` waiting** in `project_id`, for a run starting rounds of `roles`
+/// ([`Waits::held_back`]), or `None` for one that never waits.
+pub fn held_back(
+    conn: &Connection,
+    project_id: i64,
+    roles: &[i64],
+    key: Option<&str>,
+    cfg: &[RunDefCfg],
+) -> Result<Option<HeldBack>> {
+    match waits_of(key) {
+        Some(waits) => Ok(Some((waits.held_back)(conn, project_id, roles, cfg)?)),
+        None => Ok(None),
+    }
+}
+
+fn waits_of(key: Option<&str>) -> Option<&'static Waits> {
+    key.and_then(find).and_then(|b| b.waits.as_ref())
 }
 
 /// **The way out a placed built-in never leaves by**, as it is set there — the launch check asks no
@@ -453,7 +476,6 @@ const BUILTINS: &[Builtin] = &[
     HAND_BACK_TASK,
     DEFER_TASK,
     FETCH,
-    SPLIT_BY_DIM,
     WAIT,
 ];
 #[cfg(test)]
@@ -466,7 +488,6 @@ const BUILTINS: &[Builtin] = &[
     HAND_BACK_TASK,
     DEFER_TASK,
     FETCH,
-    SPLIT_BY_DIM,
     WAIT,
     tests::STAMP,
     tests::FALLS,
@@ -579,40 +600,15 @@ fn step_of(tx: &WriteTx<'_>, action_id: i64, builtin: &Builtin) -> Result<crate:
 /// wired in.
 pub fn action(tx: &WriteTx<'_>, key: &str) -> Result<AutomationAction> {
     let builtin = known(key)?;
-    if builtin.key == SPLIT_BY_DIM.key {
-        return Err(Error::invalid(format!(
-            "the built-in '{key}' splits by an axis, and there is one of it per axis — name the axis"
-        )));
-    }
     if let Some(written) = read::automation_action_builtin(tx.conn(), key, builtin.version)? {
         return Ok(written);
     }
-    write_action(tx, builtin, None, None)
+    write_action(tx, builtin)
 }
 
-/// **The library action for a built-in, on an axis where it splits by one** — [`action`] for any other,
-/// and for the built-in that splits by an axis, the one written for that axis
-/// ([`crate::ops::automation_builtin_split::action`]). An axis named for any other is refused rather
-/// than dropped.
-pub fn action_on(tx: &WriteTx<'_>, key: &str, axis: Option<i64>) -> Result<AutomationAction> {
-    match (key == SPLIT_BY_DIM.key, axis) {
-        (true, Some(axis)) => crate::ops::automation_builtin_split::action(tx, axis),
-        (false, Some(_)) => Err(Error::invalid(format!(
-            "the built-in '{key}' does not split by an axis, so it takes none"
-        ))),
-        (_, None) => action(tx, key),
-    }
-}
-
-/// **Write a built-in's library action** from its definition — in the device's library, or in the
-/// project's where it splits by that project's axis (`AMB-D-972`), marked with the axis too.
-pub(crate) fn write_action(
-    tx: &WriteTx<'_>,
-    builtin: &Builtin,
-    project_id: Option<i64>,
-    axis: Option<i64>,
-) -> Result<AutomationAction> {
-    let action = automation::action_add(tx, project_id, builtin.name, builtin.does)?;
+/// **Write a built-in's library action** from its definition, in the device's library.
+fn write_action(tx: &WriteTx<'_>, builtin: &Builtin) -> Result<AutomationAction> {
+    let action = automation::action_add(tx, None, builtin.name, builtin.does)?;
     unborn_unless_declared(tx, builtin, AutomationOwner::Action, action.id)?;
     let step = step_of(tx, action.id, builtin)?;
     for exit in builtin.exits {
@@ -681,7 +677,6 @@ pub(crate) fn write_action(
     let entered = automation::action_set_entry(tx, action.id, Some(step.id))?;
     let mut marked = entered.clone();
     marked.builtin = Some(builtin.key.to_string());
-    marked.builtin_dimension_id = axis;
     marked.builtin_version = Some(builtin.version);
     marked.updated_at = Timestamp::now();
     emit_update(tx, record::automation_action(&entered), record::automation_action(&marked))?;
@@ -737,14 +732,13 @@ pub(crate) fn carry_out(
     let carried = known(key).and_then(|builtin| {
         let carry = Carry { tx, run, run_step, task_id, exits, ins, cfg: &cfg, version: version_of(def) };
         match &builtin.work {
-            Work::InStore(work) => work(&carry).map(|c| (Cow::Borrowed(c.exit), c.report)),
-            Work::Named(work) => work(&carry).map(|n| (Cow::Owned(n.exit), n.report)),
+            Work::InStore(work) => work(&carry).map(|c| (c.exit, c.report)),
             Work::Outside(_) => match outside.filter(|done| done.run_def_id == def.id) {
                 Some(done) => done.worked.and_then(|worked| {
                     for (port, value) in &worked.hands {
                         carry.put(worked.exit, port, Produced::Value(value))?;
                     }
-                    Ok((Cow::Borrowed(worked.exit), worked.report))
+                    Ok((worked.exit, worked.report))
                 }),
                 None => Err(Error::invalid(say("outsideNotDone"))),
             },
@@ -755,10 +749,10 @@ pub(crate) fn carry_out(
         Ok(carried) => carried,
         // Worded for the reader: a refusal from another operation is said from the screen's template for
         // its code, and one of the built-in's own already is (`AMB-D-976`).
-        Err(e) => (Cow::Borrowed(ERROR_EXIT), crate::run_wording::error(tx.language(), &e)),
+        Err(e) => (ERROR_EXIT, crate::run_wording::error(tx.language(), &e)),
     };
     let leaves_by = |name: &str| exits.iter().find(|e| e.name == name).map(|e| e.id);
-    let Some(exit_id) = leaves_by(&exit) else {
+    let Some(exit_id) = leaves_by(exit) else {
         return fell_over(tx, run_step, exits, &say("undeclaredExit"));
     };
     match automation_report::done(tx, run_step.id, Some(exit_id), &report) {
@@ -989,6 +983,7 @@ mod tests {
     fn launched(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
         let startable = vec!["claude".to_string()];
         let by = Launcher {
+            default_agent: None,
             startable: Some(&startable),
             models: nothing_asked(),
             workspace_open: Some(true),
@@ -1155,7 +1150,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, "test_stamp");
             let startable = vec!["claude".to_string()];
-            let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked()).expect("check");
+            let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked(), None).expect("check");
             // The picture ends with the task open, and takes it at a step of its own rather than a
             // built-in — each its own reason, and neither the one asked here.
             let gaps: Vec<_> = unmet

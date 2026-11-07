@@ -610,10 +610,15 @@ fn an_automation_is_stopped_and_started_again() {
     assert!(!text.contains("  stopped"), "{text}");
 }
 
-/// `automation trigger` writes a trigger — every so many minutes, or whenever no run is under way —
-/// `show` says what it files and when it is next asked, and `--off` takes it away. A wait under a
-/// minute, a trigger with no title or no when, `--every` beside `--when-idle`, and `--off` beside a
-/// part of one are refused.
+/// `automation trigger` writes a trigger — every so many minutes, whenever no run is under way,
+/// whenever few enough tasks match a filter, or whenever a program says so, the last two laid on the
+/// others too — `show` says what it files and when it is next asked, and `--off` takes it away. A wait
+/// under a minute, a trigger with no title or no when, `--every` beside `--when-idle`, a filter with no
+/// count or a count of 0, a filter that does not read or names a project, a program not named by its
+/// full path, a script's argument or timeout with no program, a timeout out of range, and `--off`
+/// beside a part of one are refused. The task may be read from a file or written by a program instead
+/// of `--title`; either beside `--title` or the other, a path that is not a full one, and a task
+/// script's argument or timeout with no program are refused.
 #[test]
 fn a_trigger_is_written_shown_and_taken_away() {
     let cli = Cli::new();
@@ -636,6 +641,65 @@ fn a_trigger_is_written_shown_and_taken_away() {
     let (text, _) = cli.run(&["automation", "show", &a]);
     assert!(text.contains("whenever none of its runs is under way, filing \"Look over the inbox\" — not before"), "{text}");
 
+    let counted = cli.json(&[
+        "automation", "trigger", &a, "--when-idle", "--if-tasks", "status:todo", "--fewer-than", "3", "--title", "Look over the inbox", "--json",
+    ]);
+    let trigger = &counted["automation"]["trigger"];
+    assert_eq!(trigger["when"], serde_json::json!({ "kind": "idle" }), "{counted}");
+    assert_eq!(trigger["condition"], serde_json::json!({ "filter": "status:todo", "below": 3 }), "{counted}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains("whenever none of its runs is under way while fewer than 3 task(s) match \"status:todo\""), "{text}");
+
+    let alone = cli.json(&["automation", "trigger", &a, "--if-tasks", "status:todo", "--fewer-than", "1", "--title", "x", "--json"]);
+    assert_eq!(alone["automation"]["trigger"]["when"], serde_json::json!({ "kind": "tasks" }), "{alone}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains("whenever fewer than 1 task(s) match \"status:todo\", filing \"x\" — not before"), "{text}");
+
+    // A program is registered by its full path, and Windows only counts a path with its drive as one.
+    let program = if cfg!(windows) { r"C:\Windows\System32\cmd.exe" } else { "/bin/echo" };
+    let asked = cli.json(&[
+        "automation", "trigger", &a, "--if-script", program, "--script-arg", "--quiet", "--script-timeout-minutes", "5",
+        "--title", "x", "--json",
+    ]);
+    let trigger = &asked["automation"]["trigger"];
+    assert_eq!(trigger["when"], serde_json::json!({ "kind": "script" }), "{asked}");
+    assert_eq!(
+        trigger["script"],
+        serde_json::json!({ "program": program, "args": ["--quiet"], "timeout_minutes": 5 }),
+        "{asked}"
+    );
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains(&format!("whenever \"{program}\" says so, filing \"x\" — not before")), "{text}");
+
+    let both = cli.json(&[
+        "automation", "trigger", &a, "--every", "60", "--if-tasks", "status:todo", "--fewer-than", "3", "--if-script", program,
+        "--title", "x", "--json",
+    ]);
+    assert_eq!(both["automation"]["trigger"]["script"]["timeout_minutes"], serde_json::json!(30), "{both}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(
+        text.contains(&format!("every 60 minute(s) while fewer than 3 task(s) match \"status:todo\" and \"{program}\" says so")),
+        "{text}"
+    );
+
+    let file = if cfg!(windows) { r"C:\amenbo\task.md" } else { "/tmp/amenbo/task.md" };
+    let read = cli.json(&["automation", "trigger", &a, "--every", "60", "--task-from-file", file, "--json"]);
+    assert_eq!(read["automation"]["trigger"]["task"], serde_json::json!({ "kind": "file", "path": file }), "{read}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains(&format!("every 60 minute(s), filing the task \"{file}\" says")), "{text}");
+
+    let written = cli.json(&[
+        "automation", "trigger", &a, "--when-idle", "--task-from-script", program, "--task-script-arg", "--quiet",
+        "--task-script-timeout-minutes", "5", "--json",
+    ]);
+    assert_eq!(
+        written["automation"]["trigger"]["task"],
+        serde_json::json!({ "kind": "script", "script": { "program": program, "args": ["--quiet"], "timeout_minutes": 5 } }),
+        "{written}"
+    );
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains(&format!("filing the task \"{program}\" writes")), "{text}");
+
     for wrong in [
         vec!["automation", "trigger", a.as_str(), "--every", "0", "--title", "x"],
         vec!["automation", "trigger", a.as_str(), "--every", "5"],
@@ -643,6 +707,27 @@ fn a_trigger_is_written_shown_and_taken_away() {
         vec!["automation", "trigger", a.as_str(), "--off", "--every", "5"],
         vec!["automation", "trigger", a.as_str(), "--every", "5", "--when-idle", "--title", "x"],
         vec!["automation", "trigger", a.as_str(), "--off", "--when-idle"],
+        vec!["automation", "trigger", a.as_str(), "--if-tasks", "status:todo", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--fewer-than", "3", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--if-tasks", "status:todo", "--fewer-than", "0", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--if-tasks", "status:nope", "--fewer-than", "3", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--if-tasks", "project:1", "--fewer-than", "3", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--off", "--if-tasks", "status:todo", "--fewer-than", "3"],
+        vec!["automation", "trigger", a.as_str(), "--if-script", "judge", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--script-arg", "a", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--script-timeout-minutes", "5", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--if-script", program, "--script-timeout-minutes", "0", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--if-script", program, "--script-timeout-minutes", "361", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--off", "--if-script", program],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--title", "x", "--task-from-file", file],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--notes", "y", "--task-from-script", program],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--task-from-file", file, "--task-from-script", program],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--task-from-file", "task.md"],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--task-from-script", "write-task"],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--task-script-arg", "a", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--task-script-timeout-minutes", "5", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--task-from-script", program, "--task-script-timeout-minutes", "0"],
+        vec!["automation", "trigger", a.as_str(), "--off", "--task-from-file", file],
     ] {
         let (_, code) = cli.run_err(&wrong);
         assert_ne!(code, 0, "{wrong:?} is refused");
@@ -743,20 +828,6 @@ fn an_action_moves_between_libraries_and_is_refused_where_another_project_places
 
     let back = cli.json(&["automation", "action-scope-set", &action, "--project", &p, "--json"]);
     assert_eq!(back["automation_action"]["project_id"].to_string(), p, "every placement is in this project");
-}
-
-/// `--axis` belongs to the built-in that splits by one. Passed with a library action it is refused
-/// rather than dropped, and nothing is placed.
-#[test]
-fn an_axis_given_with_a_library_action_is_refused() {
-    let cli = Cli::new();
-    let (p, a, action, _) = an_automation(&cli);
-    let before = cli.json(&["automation", "show", &a, "--json"]);
-    let (refused, code) = cli.run_err(&["automation", "place-add", &a, "--action", &action, "--axis", "x", "--json"]);
-    assert_ne!(code, 0, "{refused}");
-    assert!(refused.contains("--axis"), "{refused}");
-    let after = cli.json(&["automation", "show", &a, "--json"]);
-    assert_eq!(before, after, "nothing was placed in project {p}");
 }
 
 /// An id naming nothing is a refusal, not an empty account — the same road `run show` takes.
@@ -1235,32 +1306,6 @@ fn inside_a_step_its_own_run_is_not_paused_or_force_canceled() {
     cli.json(&["automation", "cancel", &own, "--force", "--json"]);
 }
 
-/// **A run waiting for a task is paused by the time the asking returns** (`AMB-D-1019`) — with no
-/// watch looking on to open its step again.
-#[test]
-fn pause_before_next_task_pauses_a_run_waiting_for_a_task_at_once() {
-    let cli = Cli::new();
-    let _app = cli.the_app_up();
-    let (a, _, _, take) = a_picture(&cli, false);
-    cli.json(&[
-        "automation", "cfg-set", &take, "--name", "着手できるタスクが無いとき",
-        "--choice", "着手できるタスクが出るまで待つ", "--json",
-    ]);
-    saved(&cli, &a);
-    let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
-    assert_eq!(cli.json(&["automation", "run-show", &run, "--json"])["waiting"].as_bool(), Some(true));
-
-    let asked = cli.json(&["automation", "pause", &run, "--before-next-task", "--json"]);
-    assert_eq!(asked["automation_run"]["state"].as_str(), Some("paused"), "{asked}");
-
-    let shown = cli.json(&["automation", "run-show", &run, "--json"]);
-    assert_eq!(shown["run"]["status"].as_str(), Some("paused"), "{shown}");
-    assert_eq!(shown["run"]["pause_before_next_task"].as_bool(), Some(false), "{shown}");
-
-    let canceled = cli.json(&["automation", "cancel", &run, "--json"]);
-    assert_eq!(canceled["automation_run"]["status"].as_str(), Some("canceled"), "{canceled}");
-}
-
 /// **Only a failure is waiting to be seen** (`AMB-D-989`): a run a person stopped needs nobody, so
 /// saying it has been seen is refused, and its account says nothing about being seen. That a failure
 /// takes the mark, with whoever set it, is held by the core's own tests — a terminal has no way to make
@@ -1282,11 +1327,10 @@ fn only_a_failed_run_is_acknowledged() {
     assert!(!shown.contains("acknowledged:"), "a cancel is not waiting on anyone: {shown}");
 }
 
-/// **A run waiting for a task says so** on `run-show`, in the same answer its pane is drawn from: an
-/// entry set to wait, with nothing to take, leaves the run running and waiting. A run that is no longer
-/// running waits for nothing.
+/// **A start with nothing to take makes no run** where the entry is set to wait for a task: the
+/// automation waits instead, `show` says since when and what for, and `stop-waiting` ends the wait.
 #[test]
-fn run_show_says_when_a_run_is_waiting_for_a_task() {
+fn a_start_with_nothing_to_take_waits_and_stop_waiting_ends_it() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
     let (a, _, _, take) = a_picture(&cli, false);
@@ -1295,19 +1339,18 @@ fn run_show_says_when_a_run_is_waiting_for_a_task() {
         "--choice", "着手できるタスクが出るまで待つ", "--json",
     ]);
     saved(&cli, &a);
-    let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
 
-    let shown = cli.json(&["automation", "run-show", &run, "--json"]);
-    assert_eq!(shown["run"]["status"].as_str(), Some("running"), "{shown}");
-    assert_eq!(shown["waiting"].as_bool(), Some(true), "{shown}");
-    let (text, _) = cli.run(&["automation", "run-show", &run]);
-    assert!(text.contains("waiting: for a task"), "{text}");
+    let started = cli.json(&["automation", "start", &a, "--json"]);
+    assert!(started["automation_run"].is_null(), "no run is made: {started}");
+    assert!(started["automation"]["waits_for_task_since"].is_string(), "{started}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains("waiting for a task to take"), "{text}");
+    assert!(text.contains(&format!("automation stop-waiting {a}")), "{text}");
 
-    cli.json(&["automation", "cancel", &run, "--force", "--json"]);
-    let shown = cli.json(&["automation", "run-show", &run, "--json"]);
-    assert_eq!(shown["waiting"].as_bool(), Some(false), "{shown}");
-    let (text, _) = cli.run(&["automation", "run-show", &run]);
-    assert!(!text.contains("waiting:"), "{text}");
+    let stopped = cli.json(&["automation", "stop-waiting", &a, "--json"]);
+    assert!(stopped["automation"]["waits_for_task_since"].is_null(), "{stopped}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(!text.contains("waiting for a task"), "{text}");
 }
 
 /// **A run waiting for room says so** on `run-show`: two runs come to an action that takes one run at a
@@ -1351,7 +1394,6 @@ fn run_show_says_when_a_run_is_waiting_for_room() {
 
     let shown = cli.json(&["automation", "run-show", &second, "--json"]);
     assert_eq!(shown["run"]["status"].as_str(), Some("running"), "{shown}");
-    assert_eq!(shown["waiting"].as_bool(), Some(false), "{shown}");
     assert_eq!(id_str(&shown["waits_for_room"]["action_id"]), action, "{shown}");
     assert_eq!(id_str(&shown["waits_for_room"]["behind"]), first, "{shown}");
     let (text, _) = cli.run(&["automation", "run-show", &second]);
@@ -1371,7 +1413,7 @@ fn run_show_says_when_a_run_is_waiting_for_room() {
 }
 
 /// **A run picked up after a pause before its next task goes on from the newest saved version**
-/// (`AMB-D-1015`), and `run-show` says which versions it was copied from, in turn. A run waiting at its
+/// (`AMB-D-1015`), and `run-show` says which versions it was copied from, in turn. A run standing at its
 /// entry has run no step yet, so which version each step ran on is not held here.
 #[test]
 fn run_show_names_the_versions_a_run_was_copied_from() {
@@ -1383,7 +1425,13 @@ fn run_show_names_the_versions_a_run_was_copied_from() {
         "--choice", "着手できるタスクが出るまで待つ", "--json",
     ]);
     saved(&cli, &a);
+    // A start with nothing to take makes no run, so there is one to take as it starts. Taken by
+    // somebody else straight after, it leaves the run standing before a take that would wait.
+    let project = cli.json(&["automation", "show", &a, "--json"])["automation"]["project_id"].to_string();
+    let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &project, "--json"])["task"]["id"]);
+    cli.finish_creating(&t);
     let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
+    cli.json(&["task", "status", &t, "in_progress", "--json"]);
     let shown = cli.json(&["automation", "run-show", &run, "--json"]);
     let versions: Vec<Option<i64>> =
         shown["versions"].as_array().unwrap().iter().map(|v| v["version"].as_i64()).collect();
@@ -1566,8 +1614,9 @@ fn a_launch_is_refused_until_the_automation_is_saved_and_a_test_run_tries_the_dr
     assert!(out.contains("started from version 1"), "{out}");
 }
 
-/// Who carries a step out is chosen where its action is placed (`AMB-D-960`): with nobody chosen the
-/// launch is refused and says so, `show` lists the choice at each spot, and `--clear` takes it back.
+/// Who carries a step out is chosen where its action is placed, ahead of its role's default and
+/// Amenbo's: with none of the three naming one the launch is refused and says so, `show` lists the
+/// choice at each spot, and `--clear` takes it back.
 #[test]
 fn a_step_is_carried_out_by_whoever_is_chosen_where_it_is_placed() {
     let cli = Cli::new();
@@ -1597,6 +1646,26 @@ fn a_step_is_carried_out_by_whoever_is_chosen_where_it_is_placed() {
 
     let (err, code) = cli.run_err(&["automation", "agent-set", &placement, "--step", &step, "--json"]);
     assert_eq!(code, 2, "an agent or --clear has to be said: {err}");
+}
+
+/// A step nobody chose for where it is placed falls back to the default of the role whose round reaches
+/// it: `show` says whose default carries it, and the save passes on it.
+#[test]
+fn a_step_nobody_chose_for_is_carried_out_by_its_roles_default() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, placement, step) = a_launchable(&cli);
+    cli.json(&["automation", "agent-set", &placement, "--step", &step, "--clear", "--json"]);
+
+    let added = cli.json(&[
+        "automation", "role-add", &a, "--name", "実装", "--entry", &placement, "--agent", "codex", "--model",
+        "gpt-5", "--json",
+    ]);
+    let role = id_of(&added, "automation_role");
+    let (shown, _) = cli.run(&["automation", "show", &a]);
+    assert!(shown.contains(&format!("carried out by codex (gpt-5)  — role {role} 実装's default")), "{shown}");
+    assert!(!shown.contains("nobody chosen to carry it out"), "{shown}");
+    cli.json(&["automation", "save", &a, "--json"]);
 }
 
 /// **A role is defined in an automation by the ids the other commands hand back**: its round starts at

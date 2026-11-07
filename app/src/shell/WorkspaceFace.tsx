@@ -47,7 +47,7 @@ import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { fetchRunCards, useRunCards } from "../core/automations";
-import { roomWaitState, runSayOf, waitingState } from "../core/runWords";
+import { roomWaitState, roundOf, runSayOf, waitingState } from "../core/runWords";
 import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 
 /** How long the pane a path was handed to keeps its ring on. Long enough for an eye that was in the
@@ -471,6 +471,8 @@ export function WorkspaceFace({
       // A built-in waiting for the next task is on none: what it still carries is the task
       // the run closed before it, and a line naming that one would say the run was on it.
       task: builtin?.waiting ? null : on.task ?? null,
+      // The round the step is in, and the role it is worked under, are the run's (`roundOf`).
+      ...roundOf(runCardOf.get(frame.run)),
       // Whether the run is going, held or over, and where a failure failed
       // (`AMB-T-5506`). Null until it has been read. A run whose built-in is waiting
       // for a task, or for room before an action that takes one run at a time, is still
@@ -1807,6 +1809,18 @@ export function WorkspaceFace({
                   onGrab={panes.length > 1 ? (e) => grabPane(e, frame.id) : undefined}
                   onStretch={(e) => stretchPane(e, frame.id, { across, down })}
                   size={frame.size}
+                  // A round pressed on the bar over this run's terminal (`./RunPicture`): that run's
+                  // pane is brought up with its page, and a run with no pane yet is stood one, as a
+                  // row of the "running" tab does.
+                  onGoToRun={(run) => {
+                    const id = runFrameId(run);
+                    setLayout((was) => {
+                      if (was.frames.some((one) => one.id === id)) return focusOn(was, id);
+                      const stood = stoodForRun(was, frame.project, run);
+                      return focusOn(stood.layout, stood.frame.id);
+                    });
+                    landOn(id);
+                  }}
                   onSize={(to) => {
                     // As the corner does on letting go: the question about where a pane works
                     // would otherwise stand on whatever page this lands on.

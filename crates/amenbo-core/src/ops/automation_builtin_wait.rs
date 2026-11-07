@@ -149,7 +149,7 @@ mod tests {
     }
 
     fn launched(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
-        let by = Launcher { startable: None, models: nothing_asked(), workspace_open: Some(true), by: Some(ActorKind::Ai) };
+        let by = Launcher { default_agent: None, startable: None, models: nothing_asked(), workspace_open: Some(true), by: Some(ActorKind::Ai) };
         launch(tx, automation.id, &by).expect("launch")
     }
 

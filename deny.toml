@@ -7,11 +7,19 @@
 # undistributable under that license. Nothing here is judged by a human at bump time —
 # Dependabot bumps are auto-merged — so the allow-list below is the only thing that would
 # notice a license changing under us.
+#
+# Allowed is not the same as carried: the notices themselves travel in THIRD-PARTY-NOTICES, written
+# by scripts/gen-third-party-notices.mjs and checked by the same job. That file also covers what
+# this list cannot see — license texts of C sources vendored inside a crate, which sit beside
+# those sources rather than at the crate's top level
+# (SQLCipher, SQLite and libtomcrypt in sqlcipher-src, OpenSSL in openssl-src).
 
 [licenses]
-# Permissive, plus weak (file-level) copyleft. MPL-2.0 obliges us to publish changes to the
-# LICENSED FILES themselves, which we do not make: those crates (dirs' option-ext, and the CSS
-# stack under Tauri) are used unmodified, so linking them into an Apache-2.0 binary is fine.
+# Permissive, plus weak (file-level) copyleft. MPL-2.0 and EPL-2.0 oblige us to publish changes
+# to the LICENSED FILES themselves, which we do not make: those packages (dirs' option-ext and the
+# CSS stack under Tauri for MPL-2.0; elkjs, which mermaid needs for its ELK layout, for EPL-2.0)
+# are shipped unmodified, so bundling them into an Apache-2.0 app only needs their notices kept.
+# elkjs is dual-licensed "EPL-2.0 OR GPL-3.0-or-later"; we take it under EPL-2.0.
 allow = [
   "Apache-2.0",
   "Apache-2.0 WITH LLVM-exception",
@@ -24,9 +32,17 @@ allow = [
   "Unlicense",
   "CC0-1.0",
   "MPL-2.0",
+  "EPL-2.0",
   # Not code: webpki-roots ships Mozilla's CA root store under a permissive DATA license.
   "CDLA-Permissive-2.0",
 ]
 
 # amenbo's own crates carry no license text of their own to detect.
 private = { ignore = true }
+
+# rusqlite's bundled SQLCipher build pulls in `sqlcipher-src`, which vendors SQLite (the
+# public-domain "blessing") and libtomcrypt (WTFPL). Neither puts any obligation on us, but they
+# are allowed for this crate alone rather than for the whole tree.
+[[licenses.exceptions]]
+crate = "sqlcipher-src"
+allow = ["blessing", "WTFPL"]

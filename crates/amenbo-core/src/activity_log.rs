@@ -88,6 +88,12 @@ pub mod event {
         json!({ "kind": "task.created", "title": title })
     }
 
+    /// A task was filed by an automation's trigger, named `name` (`AMB-D-1119`). Written only beside a
+    /// task the trigger actually filed: a time it decides not to file one leaves no line.
+    pub fn task_filed_by_trigger(name: &str) -> Value {
+        json!({ "kind": "task.filed_by_trigger", "name": name })
+    }
+
     /// A task's status moved.
     pub fn task_status_changed(old: &str, new: &str) -> Value {
         json!({ "kind": "task.status_changed", "field": "status", "old": old, "new": new })

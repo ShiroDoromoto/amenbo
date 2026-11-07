@@ -86,7 +86,7 @@ portable-pty = "0.9"
 # than seven or thirty-one, 155 KB per pane, 64 KB of binary. What it costs is synchronised updates
 # (`?2026`), which it reads and drops; measured over 1,429 samples of the one product that uses them,
 # that changed no verdict.
-vt100 = "0.16.2"
+vt100 = "0.18.1"
 # What a chunk of terminal output travels to the webview as. The bytes a PTY hands back are not
 # text — an escape sequence is split wherever the read happened to end, and a multi-byte character
 # with it — so they are carried whole and decoded on the far side by the terminal that understands
@@ -159,7 +159,7 @@ tempfile = "3"
 # `seed_handover` writes the handover account onto `store_meta` itself — core opens no write path to that
 # row from outside, and no test here stands up the older store the migration would write it from. Match
 # core's version and features.
-rusqlite = { version = "0.40", features = ["bundled-sqlcipher-vendored-openssl"] }
+rusqlite = { version = "0.41", features = ["bundled-sqlcipher-vendored-openssl"] }
 
 # Asks `statfs(2)` whether the store's directory sits on a network filesystem (`store_watch`). On NFS
 # an inotify watch attaches happily and then never reports another host's writes, so the filesystem

@@ -1803,10 +1803,10 @@ pub struct AutomationAction {
     /// ([`crate::ops::automation_builtin`]).
     #[serde(default)]
     pub builtin: Option<String>,
-    /// **The axis it splits by**, for the built-in whose ways out are an axis's values (`AMB-D-972`),
-    /// and `None` on every other action. There is one such action per axis: the ways out are the
-    /// action's rows, and they follow the axis's values ([`crate::ops::automation_builtin_split`]).
-    /// `None` on one of them is an axis deleted from under it.
+    /// **The axis it split by**, on an action of the built-in `split_by_dim` an automation written before
+    /// automations had roles still places, and `None` on every other action. That built-in is gone —
+    /// where a round goes is its task's role — and an automation placing it is only exported, which
+    /// writes the axis out by name. `None` on one of them is an axis deleted from under it.
     #[serde(default)]
     pub builtin_dimension_id: Option<i64>,
     /// **Which version of the built-in's definition these rows were written from**, or `None` for an
@@ -1883,6 +1883,13 @@ pub struct Automation {
     /// automation's, not part of a saved version.
     #[serde(default)]
     pub stopped: bool,
+    /// **Since when Amenbo has been waiting for a task to start a run of this automation on**
+    /// (`AMB-D-969`), or `None` where it is not. Set where its entry, the built-in that takes a task set
+    /// to wait, found none to take; cleared once a run is started on one or a person stops the wait
+    /// ([`crate::ops::automation_run::start_waiting`]). While it waits, no run stands. Like
+    /// `archived`, it is the automation's, not part of a saved version.
+    #[serde(default)]
+    pub waits_for_task_since: Option<Timestamp>,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -1917,22 +1924,42 @@ impl FailuresTo {
 }
 
 /// The fewest minutes a trigger waits between two tasks it files: the least a [`TriggerWhen::Every`]
-/// may be written with, and the rest a [`TriggerWhen::Idle`] always takes after each one.
+/// may be written with, and the rest a [`TriggerWhen::Idle`], a [`TriggerWhen::Tasks`] or a
+/// [`TriggerWhen::Script`] always takes after each one.
 pub const MIN_TRIGGER_EVERY_MINUTES: u32 = 1;
 
 /// **An automation's trigger** ([`Automation::trigger`]) — what starts a run with nobody pressing
-/// start, in three parts: [`TriggerWhen`] answers whether to file a task now, [`TriggerTask`] writes
-/// what the task says, and the run is the automation's own, started on the task filed. No agent works
-/// on the first two; the third is a run like any other.
+/// start, in three parts: [`TriggerWhen`], with its [`TriggerCondition`] and its script if it has them,
+/// answers whether to file a task now, [`TriggerTask`] writes what the task says, and the run is the
+/// automation's own, started on the task filed. No agent works on the first two; the third is a run
+/// like any other.
 ///
 /// A time it answers no leaves nothing behind — no task, no run, no record — so the only thing it
-/// keeps is `next_at`, which moves on only when a task is filed.
+/// keeps is `next_at`, which moves on only when a task is filed. A time it files one leaves a line in
+/// that task's timeline naming it by `name` ([`crate::activity_log::event::task_filed_by_trigger`]).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AutomationTrigger {
+    /// What it is called, as the timeline of a task it filed names it. May be blank.
+    #[serde(default)]
+    pub name: String,
+    /// The role the task it files is worked under — one of the same automation's own
+    /// ([`AutomationRole`]) — or `None` for none, which leaves the task to be worked in a session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role_id: Option<i64>,
     pub when: TriggerWhen,
+    /// The tasks it looks at before filing one, on top of `when` — `None` where it looks at none. A
+    /// [`TriggerWhen::Tasks`] always has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<TriggerCondition>,
+    /// The program it asks before filing one, on top of `when` and `condition` — `None` where it asks
+    /// none. It files one only where the program says so in its `output.json`
+    /// (`{"version":1,"file":true}`, [`crate::ops::automation_run::ask_script`]). A
+    /// [`TriggerWhen::Script`] always has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub script: Option<StepScript>,
     pub task: TriggerTask,
-    /// When it is next asked whether to file a task (for an `idle`, the soonest it may file one): set
-    /// when the trigger is written, and moved on each time it files one.
+    /// When it is next asked whether to file a task (for an `idle`, a `tasks` or a `script`, the soonest
+    /// it may file one): set when the trigger is written, and moved on each time it files one.
     pub next_at: Timestamp,
 }
 
@@ -1948,6 +1975,14 @@ pub enum TriggerWhen {
     /// [`MIN_TRIGGER_EVERY_MINUTES`] after it is written and after each task it files, so a run that
     /// ends at once is not followed by another on every look.
     Idle,
+    /// Whenever its [`TriggerCondition`] holds, with nothing else to wait for — but, like an `every`,
+    /// not while the automation has its most runs under way. It waits [`MIN_TRIGGER_EVERY_MINUTES`]
+    /// after it is written and after each task it files, as an `idle` does.
+    Tasks,
+    /// Whenever its script says to, with nothing else to wait for — held back, like a `tasks`, only by
+    /// the automation having its most runs under way, and waiting [`MIN_TRIGGER_EVERY_MINUTES`] after it
+    /// is written and after each task it files.
+    Script,
 }
 
 impl TriggerWhen {
@@ -1956,6 +1991,8 @@ impl TriggerWhen {
         match self {
             TriggerWhen::Every { .. } => "every",
             TriggerWhen::Idle => "idle",
+            TriggerWhen::Tasks => "tasks",
+            TriggerWhen::Script => "script",
         }
     }
 
@@ -1963,18 +2000,41 @@ impl TriggerWhen {
     pub fn after(&self, from: Timestamp) -> Timestamp {
         let minutes = match self {
             TriggerWhen::Every { minutes } => *minutes,
-            TriggerWhen::Idle => MIN_TRIGGER_EVERY_MINUTES,
+            TriggerWhen::Idle | TriggerWhen::Tasks | TriggerWhen::Script => MIN_TRIGGER_EVERY_MINUTES,
         };
         Timestamp(from.0 + chrono::Duration::minutes(i64::from(minutes)))
     }
 }
 
-/// **What the task a trigger files says** — the second part of [`AutomationTrigger`].
+/// **The tasks a trigger looks at before it files one** ([`AutomationTrigger::condition`]): it files
+/// one only while fewer than `below` tasks of the automation's project match `filter`. So a trigger
+/// keeps a queue topped up rather than piling tasks onto one nobody is working through.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TriggerCondition {
+    /// What `task list --filter` takes, read inside the automation's project — so it may not name a
+    /// `project:` of its own. Empty counts every task of the project.
+    pub filter: String,
+    /// It files a task only while fewer than this many match: 1 or more.
+    pub below: u32,
+}
+
+/// **What the task a trigger files says** — the second part of [`AutomationTrigger`]. A time it cannot
+/// say anything — the file not read, the program not answering — files nothing, as a time it decides no
+/// does ([`crate::ops::automation_run::fire`]).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum TriggerTask {
     /// The same title and notes every time, as written on the trigger.
     Fixed { title: String, notes: String },
+    /// What the file at `path`, by its full path, says when the task is filed: its first line that is
+    /// not blank is the title, and what follows it the notes
+    /// ([`crate::ops::automation_run::task_from_file`]).
+    File { path: String },
+    /// What the program writes in its `output.json` when the task is filed,
+    /// `{"version":1,"title":"…","notes":"…"}` with the notes left out where it has none
+    /// ([`crate::ops::automation_run::ask_trigger`]). Run, like the trigger's own script, outside any
+    /// write.
+    Script { script: StepScript },
 }
 
 impl TriggerTask {
@@ -1982,6 +2042,16 @@ impl TriggerTask {
     pub fn kind_str(&self) -> &'static str {
         match self {
             TriggerTask::Fixed { .. } => "fixed",
+            TriggerTask::File { .. } => "file",
+            TriggerTask::Script { .. } => "script",
+        }
+    }
+
+    /// The program that writes what the task says, where it is a [`TriggerTask::Script`].
+    pub fn script(&self) -> Option<&StepScript> {
+        match self {
+            TriggerTask::Script { script } => Some(script),
+            TriggerTask::Fixed { .. } | TriggerTask::File { .. } => None,
         }
     }
 }
@@ -2008,7 +2078,7 @@ pub struct AutomationPlacement {
 
 /// **One step of one action**, and one terminal when it is opened. Its `prompt` is its own — an action
 /// holds the prompts rather than being one. Who carries it out is not: that is chosen where the action
-/// is placed ([`AutomationPlacementStep`], `AMB-D-960`).
+/// is placed ([`AutomationPlacementStep`]), else falls back to its role's default and then Amenbo's.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationStep {
     pub id: i64,
@@ -2078,9 +2148,11 @@ pub struct StepScript {
     pub timeout_minutes: i64,
 }
 
-/// **Who carries one step out at one placement** — chosen where the action is placed, step by step
-/// (`AMB-D-960`). A step with no row here has nobody chosen, and the launch check refuses a run that
-/// would open it.
+/// **Who carries one step out at one placement** — chosen where the action is placed, step by step.
+/// It is the first of the three a step's agent is chosen from: a step with no row here falls back to the
+/// default of the role whose round reaches the placement ([`AutomationRole`]), and then to Amenbo's own
+/// ([`crate::ops::automation_run::Launcher::default_agent`]). Where none of the three names an agent,
+/// the launch check refuses a run that would open the step.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationPlacementStep {
     pub id: i64,
@@ -2103,9 +2175,13 @@ pub struct AutomationPlacementStep {
 /// **The way it works is where its round starts** (`entry_placement_id`), a placement of the same
 /// automation. `None` while it is still being built, as the automation's own entry is.
 ///
-/// **`agent` and `model` are defaults, nothing more** (`AMB-D-960`). The choice made for a step where its
-/// action is placed ([`AutomationPlacementStep`]) stays where it is; which of the two is asked first is
-/// not decided here. `model` is named only beside an agent, and `None` leaves the agent's own default.
+/// **`agent` and `model` are defaults, nothing more.** A step's agent is chosen from three, in order: the
+/// choice made for the step where its action is placed ([`AutomationPlacementStep`]), then this default
+/// for every placement the role's round reaches from `entry_placement_id` — up to where the
+/// automation's entry or another role's round begins — then Amenbo's own
+/// ([`crate::ops::automation_run::Launcher::default_agent`]). A placement more than one round reaches
+/// takes the first of those roles in the order they are defined in. `model` is named only beside an
+/// agent and comes with it, and `None` leaves the agent's own default.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationRole {
     pub id: i64,
@@ -2376,8 +2452,8 @@ pub enum AutomationStoppedReason {
     /// it was out ([`crate::ops::automation_run::Waiting::NoWayOn`]), or a way out leads to a spot the
     /// run never copied down.
     NoWayOn,
-    /// A step left through a way out the picture wires to "stop and call a person" — an ending the
-    /// author of the automation chose, rather than one the machinery ran into.
+    /// A step left through a way out the picture wires to halt the run — an ending the author of the
+    /// automation chose, rather than one the machinery ran into. Its round is filed as any failure's is.
     Halted,
     /// The run went on — to the next task, or to its end — with the task it had taken still in progress
     /// (`AMB-D-967`). The launch check refuses a picture that can do this, so reaching it means the
@@ -2593,6 +2669,12 @@ pub struct AutomationRunDef {
     /// the picture stood at launch.
     #[serde(default)]
     pub entry: bool,
+    /// **The roles whose round starts at this step** — JSON, an array of [`AutomationRole`] ids. A role
+    /// names the placement its round starts at (`entry_placement_id`), and this is the copy of that
+    /// placement's first step, as the roles stood at launch. `[]` on every other copy, and on one written
+    /// before roles were copied.
+    #[serde(default)]
+    pub roles: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
@@ -2602,6 +2684,12 @@ impl AutomationRunDef {
     /// [`DEFAULT_EXPECTED_MINUTES`] on a copy written before that was copied.
     pub fn expected_minutes_or_default(&self) -> i64 {
         self.expected_minutes.unwrap_or(DEFAULT_EXPECTED_MINUTES)
+    }
+
+    /// **The roles whose round starts at this copy** ([`AutomationRunDef::roles`]) — none where its JSON
+    /// is empty or does not read.
+    pub fn role_ids(&self) -> Vec<i64> {
+        serde_json::from_str(&self.roles).unwrap_or_default()
     }
 
     /// **The name one port of this copy was declared under**, by the id the run's values key it by
@@ -2772,6 +2860,17 @@ pub struct AutomationRunTask {
     pub started_at: Option<Timestamp>,
     #[serde(default)]
     pub ended_at: Option<Timestamp>,
+    /// **The role the round is worked under** — the role the task named when it was taken, among the
+    /// roles the run's copies start ([`AutomationRunDef::roles`]). `None` for a round of a run whose
+    /// automation defines no role, for one that has not taken its task yet, and where the role has since
+    /// been taken out.
+    #[serde(default)]
+    pub role_id: Option<i64>,
+    /// **The task this round was filed as when it failed** — filed to whoever the automation sends a
+    /// failed round to ([`Automation::failures_to`]), with `task_id` waiting on it. `None` for a round
+    /// that did not fail, and where that task has since been deleted.
+    #[serde(default)]
+    pub incident_task_id: Option<i64>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
@@ -2849,10 +2948,11 @@ pub struct AutomationRunValue {
 
 /// A serde-shaped vessel holding every record of one store at once. It is **not the store's contents**:
 /// the truth source is SQLite, and [`crate::store::Store`] does not hold one of these. The shape exists
-/// for the two places that need the records handed over **as a single lump**: verifying a backup or a
-/// restore (that this vessel can be raised from a snapshot is the proof that the snapshot has not just the
-/// structure but the contents — [`mod@crate::archive`]), and the projection-parity tests (raise the vessel
-/// from the truth source, project it back onto the engine, and compare for fidelity). It is not the
+/// for the places that need the records handed over **as a single lump**, none of them in production:
+/// the projection-parity tests (raise the vessel from the truth source with
+/// [`crate::store_engine::hydrate_database`], project it back onto the engine, and compare for
+/// fidelity), and the `seed` binary in `amenbo-cli`. Backup and restore do not raise it: they prove a
+/// snapshot with `integrity_check` and row counts ([`mod@crate::archive`]). It is not the
 /// substrate of export: export streams rows straight out of the read model and never
 /// hydrates into this ([`crate::export`]). Nor is there any way to load rows into a store through it.
 #[derive(Clone, Debug, Serialize, Deserialize)]

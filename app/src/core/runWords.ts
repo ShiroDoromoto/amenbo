@@ -8,7 +8,7 @@
 import type { AutomationRunCardDto } from "../bindings/bindings";
 import { t } from "./i18n";
 import { builtinWord } from "./builtinWords";
-import type { RunState, Say } from "../talk/nameplate";
+import type { Round, RunState, Say } from "../talk/nameplate";
 
 /** The name core gives the error way out — `../screens/automationLayout`'s `ERROR_EXIT`. */
 const ERROR_EXIT = "*";
@@ -147,6 +147,24 @@ export function runSayOf(run: AutomationRunCardDto | undefined): Say | null {
     action: run.actionName === undefined ? null : builtinWord(run.builtin, run.actionName),
     // A run waiting for the next task still carries the one it closed before (`../shell/WorkspaceFace`).
     task: run.waiting ? null : run.task ?? null,
+    ...roundOf(run),
     state: run.waiting ? waitingState(run) : roomWaitState(run),
+  };
+}
+
+/**
+ * **The round a run is in now** (`../shell/RunPicture`), as a part of its {@link Say}: nothing where
+ * it has begun none — or has not been read yet.
+ */
+export function roundOf(run: AutomationRunCardDto | undefined): { round?: Round } {
+  if (run === undefined || (run.role === undefined && run.roleStartedAt === undefined)) return {};
+  return {
+    round: {
+      role: run.role ?? null,
+      startedAt: run.roleStartedAt === undefined ? null : Date.parse(run.roleStartedAt),
+      ...(run.incident === undefined
+        ? {}
+        : { incident: { ref: run.incident.ref, role: run.incident.role ?? null, person: run.incident.person } }),
+    },
   };
 }

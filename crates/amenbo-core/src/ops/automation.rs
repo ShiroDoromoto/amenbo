@@ -50,7 +50,7 @@ use crate::model::{
     AutomationStep, AutomationVersion, AutomationWire, StepScript, ACTION_BOUNDARY,
     DEFAULT_MAX_CONCURRENT_RUNS, DEFAULT_MAX_TIMES, DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
     ERROR_EXIT, FailuresTo, MAX_CONCURRENT_RUNS_LIMIT, MAX_EXPECTED_MINUTES, MAX_SCRIPT_TIMEOUT_MINUTES,
-    AutomationTrigger, TriggerTask, TriggerWhen, MIN_TRIGGER_EVERY_MINUTES,
+    AutomationTrigger, TriggerCondition, TriggerTask, TriggerWhen, MIN_TRIGGER_EVERY_MINUTES,
 };
 use crate::ops::{automation_builtin, automation_run, emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
@@ -375,103 +375,6 @@ fn delete_exit_row(tx: &WriteTx<'_>, pictures: &[AutomationPictureOwner], exit_i
         delete_port_row(tx, pictures, port)?;
     }
     tx.delete_record("automation_exit", exit_id)?;
-    Ok(())
-}
-
-/// **Make a built-in's ways out the ones named, in that order** — for the built-in whose ways out are an
-/// axis's values (`AMB-D-972`, [`crate::ops::automation_builtin_split`]). Both halves follow: the ways
-/// out of the one step inside the action and of the action itself, with the action's line that returns
-/// each from the step to the action. The error way out is left where it is.
-///
-/// `renamed` is a value renamed in the same stroke. Its way out is renamed rather than deleted and
-/// written again, so the lines an automation hangs on it stay (`AMB-D-961`). A value gone takes the
-/// automations' lines on its way out too: the built-in is rewritten where it stands rather than saved
-/// as a new version, so no placement still reads the way out.
-///
-/// **Written past the guard.** What it writes is Amenbo's own, from the axis, so the guard that refuses
-/// a person's edit to a built-in is not for it.
-pub(crate) fn builtin_exits_follow(
-    tx: &WriteTx<'_>,
-    action_id: i64,
-    wanted: &[String],
-    renamed: Option<(&str, &str)>,
-) -> Result<()> {
-    let action = live_action(tx, action_id)?;
-    let step_id = action
-        .entry_step_id
-        .ok_or_else(|| Error::invalid(format!("the built-in action '{}' holds no step", action.name)))?;
-    let owners = [(AutomationOwner::Step, step_id), (AutomationOwner::Action, action_id)];
-    let named = |kind, id, name: &str| read::automation_exit_by_name(tx.conn(), kind, id, Some(name));
-    if let Some((from, to)) = renamed {
-        for (kind, id) in owners {
-            if let (Some(before), None) = (named(kind, id, from)?, named(kind, id, to)?) {
-                let after = AutomationExit { name: to.to_string(), updated_at: Timestamp::now(), ..before.clone() };
-                emit_update(tx, record::automation_exit(&before), record::automation_exit(&after))?;
-            }
-        }
-    }
-    for (kind, id) in owners {
-        for exit in read::automation_exits_of(tx.conn(), kind, id)? {
-            if exit.name != ERROR_EXIT && !wanted.contains(&exit.name) {
-                delete_exit_row(
-                    tx,
-                    &[AutomationPictureOwner::Action, AutomationPictureOwner::Automation],
-                    exit.id,
-                )?;
-            }
-        }
-    }
-    for name in wanted {
-        let from = match named(AutomationOwner::Step, step_id, name)? {
-            Some(exit) => exit,
-            None => add_exit_row(tx, AutomationOwner::Step, step_id, name.clone())?,
-        };
-        let to = match named(AutomationOwner::Action, action_id, name)? {
-            Some(exit) => exit,
-            None => add_exit_row(tx, AutomationOwner::Action, action_id, name.clone())?,
-        };
-        if read::automation_edge_for_exit(tx.conn(), AutomationPictureOwner::Action, step_id, from.id)?.is_none() {
-            let sibs = read::automation_edge_siblings(tx.conn(), AutomationPictureOwner::Action, action_id, None)?;
-            let now = Timestamp::now();
-            let edge = AutomationEdge {
-                id: read::next_id(tx.conn(), "automation_edge")?,
-                owner_kind: AutomationPictureOwner::Action,
-                owner_id: action_id,
-                from_id: step_id,
-                exit_id: from.id,
-                to_id: None,
-                ends: AutomationEnds::Exit,
-                exit_to_id: Some(to.id),
-                max_times: None,
-                order_key: place(&sibs, &Position::Bottom)?,
-                created_at: now,
-                updated_at: now,
-            };
-            emit_create(tx, record::automation_edge(&edge))?;
-        }
-    }
-    // In the axis's order, after the error way out — only where it has moved, so a value added at the
-    // bottom rewrites nothing else.
-    for (kind, id) in owners {
-        let standing: Vec<String> = read::automation_exits_of(tx.conn(), kind, id)?
-            .into_iter()
-            .map(|e| e.name)
-            .filter(|n| n != ERROR_EXIT)
-            .collect();
-        if standing == wanted {
-            continue;
-        }
-        for name in wanted {
-            let before = named(kind, id, name)?.ok_or_else(|| Error::invalid("the way out was not written"))?;
-            let sibs = read::automation_exit_siblings(tx.conn(), kind, id, Some(before.id))?;
-            let after = AutomationExit {
-                order_key: place(&sibs, &Position::Bottom)?,
-                updated_at: Timestamp::now(),
-                ..before.clone()
-            };
-            emit_update(tx, record::automation_exit(&before), record::automation_exit(&after))?;
-        }
-    }
     Ok(())
 }
 
@@ -1284,6 +1187,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Auto
         export_only: false,
         trigger: None,
         stopped: false,
+        waits_for_task_since: None,
         order_key,
         created_at: now,
         updated_at: now,
@@ -1300,6 +1204,19 @@ fn checked_failures_to(tx: &WriteTx<'_>, automation_id: i64, to: Option<Failures
         return Err(Error::invalid(format!(
             "role '{role_id}' belongs to another automation, so a failed round of this one cannot be filed \
              to it"
+        )));
+    }
+    Ok(())
+}
+
+/// The task a trigger files is worked under one of **its own automation's** roles — a role of another
+/// automation is not one this automation's runs know.
+fn checked_trigger_role(tx: &WriteTx<'_>, automation_id: i64, role_id: Option<i64>) -> Result<()> {
+    let Some(role_id) = role_id else { return Ok(()) };
+    if live_role(tx, role_id)?.automation_id != automation_id {
+        return Err(Error::invalid(format!(
+            "role '{role_id}' belongs to another automation, so the task this one's trigger files cannot be \
+             worked under it"
         )));
     }
     Ok(())
@@ -1349,12 +1266,32 @@ pub fn update(
     Ok(after)
 }
 
-/// **What a trigger is written as** ([`trigger_set`]): when it files a task and what the task says.
-/// When it is next asked is not the writer's to say — it is counted from the write.
+/// **What a trigger is written as** ([`trigger_set`]): what it is called and the role the task it
+/// files is worked under, when it files a task, the tasks it looks at and the program it asks first,
+/// and what the task says. When it is next asked is not the writer's to say — it is counted from the
+/// write.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NewTrigger {
+    /// [`AutomationTrigger::name`]. Trimmed; blank is kept blank.
+    pub name: String,
+    /// [`AutomationTrigger::role_id`] — one of this automation's own roles, or `None`.
+    pub role_id: Option<i64>,
     pub when: TriggerWhen,
-    pub task: TriggerTask,
+    pub condition: Option<TriggerCondition>,
+    pub script: Option<NewScript>,
+    pub task: NewTriggerTask,
+}
+
+/// **What the task a trigger files is written to say** ([`NewTrigger::task`]) — a [`TriggerTask`] as
+/// it is written, the program's timeout left out where it is [`DEFAULT_SCRIPT_TIMEOUT_MINUTES`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NewTriggerTask {
+    /// [`TriggerTask::Fixed`].
+    Fixed { title: String, notes: String },
+    /// [`TriggerTask::File`].
+    File { path: String },
+    /// [`TriggerTask::Script`].
+    Script(NewScript),
 }
 
 /// **Write an automation's trigger** (`Some`), or take it away (`None`) — what files a task on its own
@@ -1365,8 +1302,14 @@ pub struct NewTrigger {
 /// at launch as any other is, and one refused there files nothing ([`automation_run::fire`]).
 ///
 /// Refused on an automation kept for export only, which is never launched. A task with no title is
-/// refused, as is an `every` of fewer than [`MIN_TRIGGER_EVERY_MINUTES`] minutes. Taking a trigger away
-/// that is not there writes nothing.
+/// refused, as is an `every` of fewer than [`MIN_TRIGGER_EVERY_MINUTES`] minutes. A condition is
+/// refused where its filter names a `project:` — it counts inside the automation's project — or does
+/// not read, which counting it once here finds out, and where it asks for fewer than none; a `tasks`
+/// with no condition is refused. A script is refused as a script step's is ([`checked_script`]), and a
+/// `script` with none is refused; it is not run here. What the task says is refused the same way: a
+/// file not named by its full path, and a program that writes it as a script is; neither is read or
+/// run here, so one missing now is only found out when the task is filed. A role that is not this
+/// automation's own is refused. Taking a trigger away that is not there writes nothing.
 pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Result<Automation> {
     let before = live_automation(tx, id)?;
     if before.trigger.is_none() && trigger.is_none() {
@@ -1382,25 +1325,68 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
     let mut after = before.clone();
     after.trigger = match trigger {
         None => None,
-        Some(NewTrigger { when, task }) => {
+        Some(NewTrigger { name, role_id, when, condition, script, task }) => {
+            checked_trigger_role(tx, id, role_id)?;
             match when {
                 TriggerWhen::Every { minutes } if minutes < MIN_TRIGGER_EVERY_MINUTES => {
                     return Err(Error::invalid(format!(
                         "a trigger waits at least {MIN_TRIGGER_EVERY_MINUTES} minute(s) between tasks, not {minutes}"
                     )));
                 }
-                TriggerWhen::Every { .. } | TriggerWhen::Idle => {}
+                TriggerWhen::Tasks if condition.is_none() => {
+                    return Err(Error::invalid("a trigger that files on its condition alone needs a condition"));
+                }
+                TriggerWhen::Script if script.is_none() => {
+                    return Err(Error::invalid("a trigger that files on its script's say alone needs a script"));
+                }
+                TriggerWhen::Every { .. } | TriggerWhen::Idle | TriggerWhen::Tasks | TriggerWhen::Script => {}
             }
+            let script = script.map(checked_script).transpose()?;
+            let condition = match condition {
+                None => None,
+                Some(TriggerCondition { filter, below }) => {
+                    if below == 0 {
+                        return Err(Error::invalid(
+                            "a trigger's condition files a task while fewer than N tasks match, N being 1 or more, not 0",
+                        ));
+                    }
+                    let filter = filter.trim().to_string();
+                    if crate::query::Filter::parse(&filter, crate::time::today())?.project_ref.is_some() {
+                        return Err(Error::invalid(
+                            "a trigger's condition counts the tasks of its own automation's project, so it names no `project:`",
+                        ));
+                    }
+                    crate::query::count(tx.conn(), crate::reach::Reach::binding(before.project_id), &filter)?;
+                    Some(TriggerCondition { filter, below })
+                }
+            };
             let task = match task {
-                TriggerTask::Fixed { title, notes } => {
+                NewTriggerTask::Fixed { title, notes } => {
                     let title = title.trim();
                     if title.is_empty() {
                         return Err(Error::invalid("the task a trigger files needs a title"));
                     }
                     TriggerTask::Fixed { title: title.to_string(), notes }
                 }
+                NewTriggerTask::File { path } => {
+                    if !std::path::Path::new(&path).is_absolute() {
+                        return Err(Error::invalid(format!(
+                            "the file a trigger's task is read from is named by its full path, and '{path}' is not one"
+                        )));
+                    }
+                    TriggerTask::File { path }
+                }
+                NewTriggerTask::Script(script) => TriggerTask::Script { script: checked_script(script)? },
             };
-            Some(AutomationTrigger { when, task, next_at: when.after(now) })
+            Some(AutomationTrigger {
+                name: name.trim().to_string(),
+                role_id,
+                when,
+                condition,
+                script,
+                task,
+                next_at: when.after(now),
+            })
         }
     };
     after.updated_at = now;
@@ -1409,7 +1395,7 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
 }
 
 /// **What stopping an automation did** ([`stop`]): the automation as it now stands, and the runs of it
-/// that were waiting at their entry to take a task and so were paused there and then.
+/// that were waiting for room in the action that takes a task and so were paused there and then.
 #[derive(Clone, Debug)]
 pub struct Stopped {
     pub automation: Automation,
@@ -1424,12 +1410,14 @@ pub struct Stopped {
 ///   task, which would start a round from the entry ([`automation_run`]).
 /// - **Its trigger files nothing** while it is stopped, and `next_at` stays where it was.
 /// - **A run of it finishes the round it is on**, and pauses where the round is over, before it takes
-///   its next task. One standing at its entry waiting for a task to take, or for room in the action that
-///   takes one, is paused here at once ([`Stopped::paused`]). A run that takes no tasks has no round to
-///   finish and goes on to its end.
+///   its next task. One standing at its entry waiting for room in the action that takes one is paused
+///   here at once ([`Stopped::paused`]). A run that takes no tasks has no round to finish and goes on to
+///   its end.
+/// - **It stops waiting for a task** ([`Automation::waits_for_task_since`]): no run of it is started
+///   once one turns up.
 ///
-/// Letting it start again picks up no run: those paused stay paused until somebody resumes them. Writing
-/// what already stands writes nothing.
+/// Letting it start again picks up no run and waits for no task: those paused stay paused until somebody
+/// resumes them, and a start waits again. Writing what already stands writes nothing.
 pub fn stop(tx: &WriteTx<'_>, id: i64, stopped: bool) -> Result<Stopped> {
     let before = live_automation(tx, id)?;
     if before.stopped == stopped {
@@ -1437,6 +1425,9 @@ pub fn stop(tx: &WriteTx<'_>, id: i64, stopped: bool) -> Result<Stopped> {
     }
     let mut after = before.clone();
     after.stopped = stopped;
+    if stopped {
+        after.waits_for_task_since = None;
+    }
     after.updated_at = Timestamp::now();
     emit_update(tx, record::automation(&before), record::automation(&after))?;
     let paused = match stopped {
@@ -1563,15 +1554,18 @@ fn not_an_entry(what: &str) -> Error {
 ///
 /// Refused as `not_ready` with the launch check's reasons ([`automation_run::check`]), asked without the
 /// agents and models this machine has: those belong to the machine the run is launched on, not to the
-/// definition. Not refused while a run of it goes on (`AMB-D-1015`), nor while it is archived — archiving
+/// definition. `default_agent` is Amenbo's own default ([`automation_run::Launcher::default_agent`]):
+/// a step nobody chose for and no role covers is carried out by it, and is not refused while it names
+/// one. Not refused while a run of it goes on (`AMB-D-1015`), nor while it is archived — archiving
 /// keeps it out of the lists and says nothing about its picture.
 ///
 /// A draft with nothing changed since the newest version saves nothing, and that version is what comes
 /// back.
-pub fn save(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVersion> {
+pub fn save(tx: &WriteTx<'_>, automation_id: i64, default_agent: Option<&str>) -> Result<AutomationVersion> {
     rewritable(tx, Def::Automation(automation_id))?;
     let automation = live_automation(tx, automation_id)?;
-    let unmet = automation_run::check(tx.conn(), automation_id, None, automation_run::nothing_asked())?;
+    let unmet =
+        automation_run::check(tx.conn(), automation_id, None, automation_run::nothing_asked(), default_agent)?;
     if !unmet.is_empty() {
         return Err(automation_run::not_ready("save", &automation.name, &unmet));
     }
@@ -2328,7 +2322,8 @@ fn delete_placement_row(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 }
 
 /// **Choose who carries one step out at one placement** — the agent, and the model where one is
-/// named (`AMB-D-960`). `model` `None` leaves the agent's own default.
+/// named. `model` `None` leaves the agent's own default. It is the first of the three a step's agent is
+/// chosen from, ahead of its role's default and Amenbo's ([`automation_run::check`]).
 ///
 /// The step has to be one of the action standing on the placement: a choice for any other step would
 /// be written and never read. The row is written the first time somebody chooses and rewritten after
@@ -2380,55 +2375,10 @@ pub fn placement_step_set(
     Ok(chosen)
 }
 
-/// **Write the default agent onto every step of a placement that nobody has chosen for yet** — what
-/// placing an action leaves behind, so the steps do not each have to be chosen again before a launch
-/// will take them. `agent` is the answer a pane would open with ([`crate::wake::step_agent`]); `None`
-/// leaves the steps as they are, with nobody chosen.
-///
-/// **What is written belongs to the placement from then on.** It is an ordinary choice, the one
-/// [`placement_step_set`] writes, and a later change to the default does not reach it. The model is
-/// left out, which is the agent's own default. A built-in step is skipped: Amenbo carries it out
-/// itself (`AMB-D-964`).
-pub fn placement_steps_default(
-    tx: &WriteTx<'_>,
-    placement_id: i64,
-    agent: Option<&str>,
-) -> Result<()> {
-    if agent.is_none() {
-        return Ok(());
-    }
-    let placement = live_placement(tx, placement_id)?;
-    for step in read::automation_action_steps_of(tx.conn(), placement.action_id)? {
-        placement_step_default(tx, placement_id, &step, agent)?;
-    }
-    Ok(())
-}
-
-/// **Write the default agent onto one step at one placement, where nobody has chosen for it yet** —
-/// [`placement_steps_default`] for a single step. It is also what a step added to an action already
-/// placed is given at each of its placements (`AMB-T-5531`), so the new step does not stand there
-/// with nobody chosen while the steps placed with the action have somebody.
-///
-/// A choice already made stays, a built-in is passed by, and `None` writes nothing.
-pub fn placement_step_default(
-    tx: &WriteTx<'_>,
-    placement_id: i64,
-    step: &AutomationStep,
-    agent: Option<&str>,
-) -> Result<()> {
-    let Some(agent) = agent else { return Ok(()) };
-    if step.builtin.is_some()
-        || read::automation_placement_step_for(tx.conn(), placement_id, step.id)?.is_some()
-    {
-        return Ok(());
-    }
-    placement_step_set(tx, placement_id, step.id, agent, None)?;
-    Ok(())
-}
-
 /// **Take back the choice of who carries one step out at one placement**, leaving nobody chosen there.
-/// A launch that would open the step is then refused until somebody chooses again. Nothing chosen is
-/// nothing to take back, and that is not an error.
+/// The step then falls back to its role's default, else Amenbo's; where neither names an agent, a
+/// launch that would open it is refused. Nothing chosen is nothing to take back, and that is not an
+/// error.
 pub fn placement_step_clear(tx: &WriteTx<'_>, placement_id: i64, step_id: i64) -> Result<()> {
     let placement = live_placement(tx, placement_id)?;
     rewritable(tx, Def::Automation(placement.automation_id))?;
@@ -2592,8 +2542,22 @@ pub fn role_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     rewritable(tx, Def::Automation(role.automation_id))?;
     take_role_off_tasks(tx, id)?;
     stop_filing_failures_to(tx, &role)?;
+    take_role_off_trigger(tx, &role)?;
     tx.delete_record("automation_role", id)?;
     Ok(())
+}
+
+/// Where a role that is about to go is the one its automation's trigger files tasks under, have the
+/// trigger file them under none. `automation.trigger_role_id` is `RESTRICT`, so this goes before the
+/// role's row does. The trigger keeps its `next_at`.
+fn take_role_off_trigger(tx: &WriteTx<'_>, role: &AutomationRole) -> Result<()> {
+    let before = live_automation(tx, role.automation_id)?;
+    let Some(trigger) = before.trigger.as_ref().filter(|t| t.role_id == Some(role.id)) else {
+        return Ok(());
+    };
+    let trigger = AutomationTrigger { role_id: None, ..trigger.clone() };
+    let after = Automation { trigger: Some(trigger), updated_at: Timestamp::now(), ..before.clone() };
+    emit_update(tx, record::automation(&before), record::automation(&after))
 }
 
 /// Where a role that is about to go is where its automation files failed rounds, leave that unsaid.
@@ -2661,7 +2625,7 @@ pub struct NewStep {
 
 /// A script as it is written: the timeout may be left out, and then it is
 /// [`DEFAULT_SCRIPT_TIMEOUT_MINUTES`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NewScript {
     pub program: String,
     pub args: Vec<String>,
@@ -4254,14 +4218,22 @@ mod tests {
         });
     }
 
-    /// **A trigger is written, counted from the write, and taken away** — an `every` or an `idle`. A wait
-    /// under a minute, a task with no title and an automation kept for export only are refused; taking
-    /// away one that is not there writes nothing.
+    /// **A trigger is written, counted from the write, and taken away** — an `every`, an `idle`, a
+    /// `tasks` or a `script`, with or without a condition or a script. A wait under a minute, a task with
+    /// no title, a condition whose filter does not read or names a project, one below 0, a `tasks` with
+    /// no condition, a `script` with no script, a program not named by its full path, a timeout out of
+    /// range and an automation kept for export only are refused; taking away one that is not there
+    /// writes nothing. What the task says may be read from a file or written by a program, each named
+    /// by its full path, which neither is read nor run here.
     #[test]
     fn a_trigger_is_written_and_taken_away() {
         let hourly = |title: &str| NewTrigger {
+            name: String::new(),
+            role_id: None,
             when: TriggerWhen::Every { minutes: 60 },
-            task: TriggerTask::Fixed { title: title.into(), notes: "メモ".into() },
+            condition: None,
+            script: None,
+            task: NewTriggerTask::Fixed { title: title.into(), notes: "メモ".into() },
         };
         with_tx(|tx| {
             let automation = mk_automation(tx);
@@ -4289,6 +4261,89 @@ mod tests {
             let read_back = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
             assert_eq!(read_back.when, TriggerWhen::Idle, "kept with no minutes");
             assert_eq!(set.trigger, Some(read_back));
+
+            let below = |filter: &str, below: u32| Some(TriggerCondition { filter: filter.into(), below });
+            let counted = NewTrigger { condition: below(" status:todo,in_progress ", 3), ..hourly("見る") };
+            let set = trigger_set(tx, automation.id, Some(counted)).expect("an every with a condition");
+            let read_back = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
+            assert_eq!(read_back.condition, below("status:todo,in_progress", 3), "kept trimmed");
+            assert_eq!(set.trigger, Some(read_back));
+            let alone = NewTrigger { when: TriggerWhen::Tasks, condition: below("", 1), ..hourly("見る") };
+            let set = trigger_set(tx, automation.id, Some(alone)).expect("a condition alone, over every task");
+            assert_eq!(set.trigger.map(|t| (t.when, t.condition)), Some((TriggerWhen::Tasks, below("", 1))));
+
+            for wrong in [
+                NewTrigger { condition: below("status:nope", 3), ..hourly("見る") },
+                NewTrigger { condition: below("project:1", 3), ..hourly("見る") },
+                NewTrigger { condition: below("status:todo", 0), ..hourly("見る") },
+                NewTrigger { when: TriggerWhen::Tasks, ..hourly("見る") },
+            ] {
+                let refused = trigger_set(tx, automation.id, Some(wrong.clone()));
+                assert!(refused.is_err(), "{wrong:?} is refused");
+            }
+            assert_eq!(live_automation(tx, automation.id).expect("read").trigger.map(|t| t.when), Some(TriggerWhen::Tasks));
+
+            let program = |program: &str, timeout_minutes: Option<i64>| {
+                Some(NewScript { program: program.into(), args: vec!["--quiet".into()], timeout_minutes })
+            };
+            let judge = a_program();
+            let asked = NewTrigger { when: TriggerWhen::Script, script: program(&judge, None), ..hourly("見る") };
+            let set = trigger_set(tx, automation.id, Some(asked)).expect("a script alone");
+            let read_back = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
+            assert_eq!(read_back.when, TriggerWhen::Script);
+            assert_eq!(
+                read_back.script,
+                Some(StepScript {
+                    program: judge.clone(),
+                    args: vec!["--quiet".into()],
+                    timeout_minutes: DEFAULT_SCRIPT_TIMEOUT_MINUTES,
+                }),
+                "kept with the timeout it is given unless written"
+            );
+            assert_eq!(set.trigger, Some(read_back));
+            let laid = NewTrigger { script: program(&judge, Some(5)), ..hourly("見る") };
+            let set = trigger_set(tx, automation.id, Some(laid)).expect("an every with a script");
+            assert_eq!(set.trigger.and_then(|t| t.script).map(|s| s.timeout_minutes), Some(5));
+
+            for wrong in [
+                NewTrigger { when: TriggerWhen::Script, ..hourly("見る") },
+                NewTrigger { script: program("judge", None), ..hourly("見る") },
+                NewTrigger { script: program(&judge, Some(0)), ..hourly("見る") },
+                NewTrigger { script: program(&judge, Some(MAX_SCRIPT_TIMEOUT_MINUTES + 1)), ..hourly("見る") },
+            ] {
+                let refused = trigger_set(tx, automation.id, Some(wrong.clone()));
+                assert!(matches!(refused, Err(Error::Invalid(_))), "{wrong:?} is refused");
+            }
+
+            // Not there yet, and never read here.
+            let path = std::env::temp_dir().join("trigger-task.md").to_string_lossy().into_owned();
+            let from_file = NewTrigger { task: NewTriggerTask::File { path: path.clone() }, ..hourly("") };
+            let set = trigger_set(tx, automation.id, Some(from_file)).expect("a task read from a file");
+            let read_back = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
+            assert_eq!(read_back.task, TriggerTask::File { path });
+            assert_eq!(set.trigger, Some(read_back));
+            let written = NewTriggerTask::Script(NewScript { program: judge.clone(), args: Vec::new(), timeout_minutes: None });
+            let set = trigger_set(tx, automation.id, Some(NewTrigger { task: written, ..hourly("") }))
+                .expect("a task a program writes");
+            let read_back = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
+            assert_eq!(
+                read_back.task,
+                TriggerTask::Script {
+                    script: StepScript { program: judge.clone(), args: Vec::new(), timeout_minutes: DEFAULT_SCRIPT_TIMEOUT_MINUTES },
+                },
+                "kept with the timeout it is given unless written"
+            );
+            assert_eq!(set.trigger, Some(read_back));
+
+            for task in [
+                NewTriggerTask::File { path: "trigger-task.md".into() },
+                NewTriggerTask::Script(NewScript { program: "write-task".into(), args: Vec::new(), timeout_minutes: None }),
+                NewTriggerTask::Script(NewScript { program: judge.clone(), args: Vec::new(), timeout_minutes: Some(0) }),
+            ] {
+                let wrong = NewTrigger { task, ..hourly("") };
+                let refused = trigger_set(tx, automation.id, Some(wrong.clone()));
+                assert!(matches!(refused, Err(Error::Invalid(_))), "{wrong:?} is refused");
+            }
 
             let off = trigger_set(tx, automation.id, None).expect("take it away");
             assert_eq!(off.trigger, None);
@@ -7330,41 +7385,6 @@ mod tests {
         });
     }
 
-    /// **Placing writes the default onto the steps nobody has chosen for**, leaves a choice already
-    /// made alone, writes nothing where there is no default, and passes a built-in by.
-    #[test]
-    fn the_default_agent_is_written_only_where_nobody_has_chosen() {
-        with_tx(|tx| {
-            let automation = mk_automation(tx);
-            let (action, here) = mk_placed(tx, &automation, "調べる");
-            let step = only_step(tx, &action);
-            let chosen = |p: i64| {
-                read::automation_placement_step_for(tx.conn(), p, step.id)
-                    .unwrap()
-                    .map(|c| (c.agent, c.model))
-            };
-
-            placement_steps_default(tx, here.id, None).expect("no default");
-            assert_eq!(chosen(here.id), None, "no default leaves nobody chosen");
-
-            placement_steps_default(tx, here.id, Some("claude-code")).expect("default");
-            assert_eq!(chosen(here.id), Some(("claude-code".to_string(), None)));
-
-            placement_step_set(tx, here.id, step.id, "codex-cli", Some("o3")).expect("choose");
-            placement_steps_default(tx, here.id, Some("claude-code")).expect("default again");
-            assert_eq!(
-                chosen(here.id),
-                Some(("codex-cli".to_string(), Some("o3".to_string()))),
-                "a choice already made stays",
-            );
-
-            let builtin = crate::ops::automation_builtin::action(tx, "take_task").expect("built-in");
-            let spot = placement_add(tx, automation.id, builtin.id).expect("place it");
-            placement_steps_default(tx, spot.id, Some("claude-code")).expect("a built-in is passed by");
-            assert!(read::automation_placement_step_ids(tx.conn(), spot.id).unwrap().is_empty());
-        });
-    }
-
     /// A choice for a step of some other action would be written and never read, so it is refused.
     #[test]
     fn a_choice_for_a_step_outside_the_placed_action_is_refused() {
@@ -7451,6 +7471,7 @@ mod rewritten_under_a_run {
     fn launched(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
         let startable = vec!["claude".to_string()];
         let launcher = Launcher {
+            default_agent: None,
             startable: Some(&startable),
             models: nothing_asked(),
             workspace_open: Some(true),

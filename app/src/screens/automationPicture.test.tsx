@@ -11,7 +11,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { t, tf } from "../core/i18n";
+import { listLabel, t, tf } from "../core/i18n";
 import { AutomationPicture } from "./AutomationPicture";
 import { automationGraph, TAKES_INSET, type PicGraph } from "./automationLayout";
 import type { AutomationDetailDto, AutomationPlacementDto } from "../bindings/bindings";
@@ -683,13 +683,44 @@ describe("one role's round, as the build screen draws it", () => {
     expect(nodes().map((one) => one.querySelector(".autopic__nodename")!.textContent)).toEqual(["書く", "確かめる"]);
   });
 
-  it("says the round starts where the automation does, and ends at done where it hands on to nobody", async () => {
+  it("says the round receives from people where nothing else hands it its task, and ends at done where it hands on to nobody", async () => {
     await render({ graph: automationGraph(rounds({ edges: [] }), 10) });
     const ends = [...container.querySelectorAll(".autopic__end")].map((one) => one.textContent);
-    expect(ends).toEqual([t("auto.pic.receives") + t("auto.pic.entry"), t("auto.pic.handsOn") + t("auto.pic.handsNone")]);
+    expect(ends).toEqual([t("auto.pic.receives") + t("auto.pic.fromPeople"), t("auto.pic.handsOn") + t("auto.pic.handsNone")]);
   });
 
-  it("says the round starts where the automation does when the built-in it starts with hands it the task", async () => {
+  it("says a failed round's incident first, then each trigger by name, then the roles, in one row", async () => {
+    await render({
+      graph: automationGraph(
+        rounds({
+          failuresTo: { kind: "role", roleId: 20 },
+          triggers: [
+            {
+              id: 1,
+              enabled: true,
+              name: "Daily check",
+              roleId: 20,
+              when: { kind: "every", minutes: 60 },
+              task: { kind: "fixed", title: "Check", notes: "" },
+              nextAt: "2026-11-07T00:00:00Z",
+            },
+          ],
+        }),
+        20,
+      ),
+    });
+    const ends = [...container.querySelectorAll(".autopic__end")].map((one) => one.textContent);
+    expect(ends[0]).toBe(
+      t("auto.pic.receives") +
+        listLabel([
+          t("auto.pic.fromFailures"),
+          tf("auto.pic.fromTrigger", { name: "Daily check" }),
+          tf("auto.pic.fromRole", { role: "Research" }),
+        ]),
+    );
+  });
+
+  it("says a person files the round's task when the built-in the automation starts with hands it on", async () => {
     const r = rounds();
     await render({
       graph: automationGraph(
@@ -702,7 +733,7 @@ describe("one role's round, as the build screen draws it", () => {
       ),
     });
     const ends = [...container.querySelectorAll(".autopic__end")].map((one) => one.textContent);
-    expect(ends[0]).toBe(t("auto.pic.receives") + t("auto.pic.entry"));
+    expect(ends[0]).toBe(t("auto.pic.receives") + t("auto.pic.fromPeople"));
   });
 
   it("writes the steps inside the action, what it takes in and hands on, and the loop back into it", async () => {

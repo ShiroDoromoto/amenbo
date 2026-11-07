@@ -42,16 +42,17 @@
 // the same of the action, each input with the number of the box it comes from.
 //
 // **On the build screen it draws one role's round** (`automationGraph` with a role), in one row from
-// left to right inside one frame: "receives" — the automation's start, or the roles that hand this one
-// its task — then the actions the round passes through, each with its steps inside it, laid out across
-// (`layOutAcross`), and "hands on" — the roles it hands on to, or none where it ends at done — with an
-// arrow between each of them. The row never wraps: in a frame too narrow the words of the two ends
-// wrap first, down to their heading on one line, and only then does the picture scroll across inside
-// it. Each box is as big as what it says (`roundSize`), so the actions of a round are seen side by
-// side. How wide the row has to be for the whole picture to be seen is told to the screen
-// (`onRowNeeds`, `rowNeeds`), which gives the row the screen's whole width where the middle of its
-// three places is narrower. A line going back is no line there but a loop under the box it goes back
-// to, saying which box and which way out it comes back from.
+// left to right inside one frame: "receives" — a failed round's incident, the triggers and the roles
+// that hand this one its task, or people where nothing else does — then the actions the round passes
+// through, each with its steps inside it, laid out across (`layOutAcross`), and "hands on" — the
+// roles it hands on to, or none where it ends at done — with an arrow between each of them. The row
+// never wraps: in a frame too narrow the words of the two ends wrap first, down to their heading on
+// one line, and only then does the picture scroll across inside it. Each box is as big as what it
+// says (`roundSize`), so the actions of a round are seen side by side. How wide the row has to be for
+// the whole picture to be seen is told to the screen (`onRowNeeds`, `rowNeeds`), which gives the row
+// the screen's whole width where the middle of its three places is narrower. A line going back is no
+// line there but a loop under the box it goes back to, saying which box and which way out it comes
+// back from.
 //
 // **It scrolls, and it does nothing else.** No zoom, and no folding a stretch away by hand: an
 // automation is tens of steps, and a picture with a state of its own is one more thing to put back
@@ -107,13 +108,15 @@ function RoundEnd({ head, words }: { head: string; words: string }) {
   );
 }
 
-/** Where a role's round receives its task from, in words: the automation's start, then the roles. */
+/** Where a role's round receives its task from, in words: a failed round's incident, then the triggers
+ *  by name, then the roles — or people, where none of them hands it one. */
 function receivesWords(round: PicRound): string {
   const all = [
-    ...(round.receives.start ? [t("auto.pic.entry")] : []),
+    ...(round.receives.failures ? [t("auto.pic.fromFailures")] : []),
+    ...round.receives.triggers.map((name) => tf("auto.pic.fromTrigger", { name })),
     ...round.receives.roles.map((role) => tf("auto.pic.fromRole", { role })),
   ];
-  return all.length === 0 ? t("auto.pic.receivesNone") : listLabel(all);
+  return all.length === 0 ? t("auto.pic.fromPeople") : listLabel(all);
 }
 
 /** Under the box on a role's picture: the lines that come back into it, each from the box it leaves. */

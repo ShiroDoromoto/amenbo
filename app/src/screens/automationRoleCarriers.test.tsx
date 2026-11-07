@@ -62,6 +62,7 @@ function detail(): AutomationDetailDto {
     notes: "",
     archived: false,
     maxConcurrentRuns: 1,
+    triggers: [],
     roles: [
       { id: 1, name: "Alice", agent: "claude-code", model: "opus", entryPlacementId: 2, passes: [] },
       { id: 2, name: "Bob", agent: "codex", passes: [] },

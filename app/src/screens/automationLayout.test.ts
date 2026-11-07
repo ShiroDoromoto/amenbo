@@ -87,6 +87,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
     notes: "",
     archived: false,
     maxConcurrentRuns: 1,
+    triggers: [],
     roles: [],
     placements: [],
     edges: [],
@@ -2297,6 +2298,7 @@ describe("one role's round, as the build screen draws it", () => {
     entryPlacementId: 1,
     archived: false,
     maxConcurrentRuns: 1,
+    triggers: [],
     roles,
     placements: [
       step({

@@ -1,21 +1,26 @@
 // @vitest-environment jsdom
-// An automation's trigger, written on its dialog. The write door and the confirm are stubbed; every
-// field, chip and press runs for real.
+// An automation's first trigger, written on its dialog. The trigger writes and the confirm are stubbed;
+// every field, chip and press runs for real.
 //
 // What these guard: **a new trigger starts as one that files every hour, and the save sends what was
-// typed**; **a trigger already written opens as it stands and goes back unchanged**; **"while fewer
+// typed** as a trigger added; **a trigger already written opens as it stands and goes back unchanged**,
+// rewritten under its id, the others left alone; **"while fewer
 // than N tasks match" always carries its condition, and "when a script says so" its script**, while
 // with the other kinds each is sent only when asked for; **the note and the preview say what will be
 // filed** — its title, role, who works it and the trigger's name; **a refusal is drawn and the dialog
-// stays open**; and **"Remove trigger" sends nothing in its place**.
+// stays open**; and **"Remove trigger" takes that one away by its id**.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AutomationDetailDto, AutomationTriggerDto } from "../bindings/bindings";
 
-const hoisted = vi.hoisted(() => ({ set: vi.fn(), confirm: vi.fn() }));
+const hoisted = vi.hoisted(() => ({ add: vi.fn(), update: vi.fn(), remove: vi.fn(), confirm: vi.fn() }));
 
-vi.mock("../core/automations", () => ({ setAutomationTrigger: hoisted.set }));
+vi.mock("../core/automations", () => ({
+  addAutomationTrigger: hoisted.add,
+  updateAutomationTrigger: hoisted.update,
+  removeAutomationTrigger: hoisted.remove,
+}));
 vi.mock("../core/dialog", () => ({ confirmDialog: hoisted.confirm }));
 
 import { t, tf } from "../core/i18n";
@@ -26,7 +31,7 @@ import { AutomationTrigger, formOf, inputOf } from "./AutomationTrigger";
 let container: HTMLDivElement;
 let root: Root;
 
-function detail(trigger?: AutomationTriggerDto): AutomationDetailDto {
+function detail(...triggers: AutomationTriggerDto[]): AutomationDetailDto {
   return {
     id: 7,
     projectId: 1,
@@ -34,7 +39,7 @@ function detail(trigger?: AutomationTriggerDto): AutomationDetailDto {
     notes: "",
     archived: false,
     maxConcurrentRuns: 1,
-    trigger,
+    triggers,
     roles: [
       { id: 1, name: "Alice", passes: [] },
       { id: 2, name: "Bob", passes: [] },
@@ -49,6 +54,8 @@ function detail(trigger?: AutomationTriggerDto): AutomationDetailDto {
 }
 
 const written: AutomationTriggerDto = {
+  id: 31,
+  enabled: true,
   name: "Top up the reviews",
   roleId: 2,
   when: { kind: "idle" },
@@ -110,8 +117,10 @@ beforeEach(() => {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  hoisted.set.mockReset();
-  hoisted.set.mockResolvedValue(undefined);
+  for (const write of [hoisted.add, hoisted.update, hoisted.remove]) {
+    write.mockReset();
+    write.mockResolvedValue(undefined);
+  }
   hoisted.confirm.mockReset();
   hoisted.confirm.mockResolvedValue(true);
 });
@@ -181,7 +190,7 @@ describe("the dialog", () => {
     await press(buttonNamed("Alice"));
     await press(buttonNamed(t("auto.trigger.save")));
 
-    expect(hoisted.set).toHaveBeenCalledWith(7, {
+    expect(hoisted.add).toHaveBeenCalledWith(7, {
       name: "Morning check",
       roleId: 1,
       when: { kind: "every", minutes: 1440 },
@@ -204,6 +213,15 @@ describe("the dialog", () => {
     expect(buttonNamed("Bob")?.getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("rewrites the first trigger under its id, leaving the others", async () => {
+    const other: AutomationTriggerDto = { ...written, id: 32, name: "Daily check" };
+    await draw(detail(written, other));
+    await type(box(t("auto.trigger.name")), "Top up the reviews again");
+    await press(buttonNamed(t("auto.trigger.save")));
+    expect(hoisted.update).toHaveBeenCalledWith(31, expect.objectContaining({ name: "Top up the reviews again" }));
+    expect(hoisted.add).not.toHaveBeenCalled();
+  });
+
   it("keeps the condition on for a tasks trigger, with no box to turn it off", async () => {
     await draw(detail());
     expect(page().querySelector(`[aria-label="${t("auto.trigger.filter")}"]`)).toBeNull();
@@ -212,7 +230,7 @@ describe("the dialog", () => {
     await type(box(t("auto.trigger.filter")), "status:todo");
     await type(box(t("auto.trigger.below")), "5");
     await press(buttonNamed(t("auto.trigger.save")));
-    expect(hoisted.set.mock.calls[0]?.[1]).toMatchObject({
+    expect(hoisted.add.mock.calls[0]?.[1]).toMatchObject({
       when: { kind: "tasks" },
       condition: { filter: "status:todo", below: 5 },
     });
@@ -225,7 +243,7 @@ describe("the dialog", () => {
     expect(tick(t("auto.trigger.asked"))).toBeUndefined();
     await type(box(t("auto.step.program")), "/usr/bin/python3");
     await press(buttonNamed(t("auto.trigger.save")));
-    expect(hoisted.set.mock.calls[0]?.[1]).toMatchObject({
+    expect(hoisted.add.mock.calls[0]?.[1]).toMatchObject({
       when: { kind: "script" },
       script: { program: "/usr/bin/python3", args: [] },
     });
@@ -256,7 +274,7 @@ describe("the dialog", () => {
   });
 
   it("draws what core refused and stays open with what was typed", async () => {
-    hoisted.set.mockRejectedValue(new Error("a trigger files every 1 minute or more"));
+    hoisted.add.mockRejectedValue(new Error("a trigger files every 1 minute or more"));
     const { onClose } = await draw(detail());
     await type(box(t("auto.trigger.minutes")), "0");
     await press(buttonNamed(t("auto.trigger.save")));
@@ -269,7 +287,7 @@ describe("the dialog", () => {
     const { onClose } = await draw(detail(written));
     await press(buttonNamed(t("auto.trigger.remove")));
     expect(hoisted.confirm).toHaveBeenCalledWith(tf("auto.trigger.removeConfirm", { name: "Top up the reviews" }));
-    expect(hoisted.set).toHaveBeenCalledWith(7, null);
+    expect(hoisted.remove).toHaveBeenCalledWith(31);
     expect(onClose).toHaveBeenCalled();
   });
 

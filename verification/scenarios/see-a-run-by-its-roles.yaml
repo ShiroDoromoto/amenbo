@@ -1,25 +1,23 @@
-# A reader watching a run wants to know where it is and where it has been, which a terminal's output
-# does not say. So a run's pane opens on the automation's picture: the box the run is on is grown with
-# its action's picture inside, the step under way there wears a heavier border and is brought to the middle, and what
-# it has passed on the task it is working is lit. A step that may wait for a person turns the pane to
-# its terminal while it runs, so the question it asks is not left behind the picture; once it is over,
-# the pane goes back to the picture. The line over the pane turns it either way by hand.
+# A reader watching a run wants to know which role is doing what, which a terminal's output does not
+# say. So a run's pane opens on its roles: a role whose round is under way is a card, saying the task,
+# the step under way and how long the round has run. A step that may wait for a person turns the pane
+# to its terminal while it runs, so the question it asks is not left behind the cards; once it is over,
+# the pane goes back to its roles. The line over the pane turns it either way by hand.
 #
-# The picture is the one hold-a-run-from-its-pane walks, with its first step made one that may wait for
-# a person.
-id: see-a-run-on-its-picture
-title: A run's pane shows where the run is on its picture, and turns to the terminal while a step may wait for a person
+# The automation is the one hold-a-run-from-its-pane walks, with its first step made one that may wait
+# for a person. It defines no role, so its round is one card named after the automation.
+id: see-a-run-by-its-roles
+title: A run's pane shows its round as a card, and turns to the terminal while a step may wait for a person
 description: >
   Start a run whose first step may wait for a person, and read its pane: turned to the terminal while
-  that step runs. Report the step, and the pane is back on the picture, with the box of the next step
-  grown with its step in the middle under a heavier border and the boxes it passed lit. Turn it to the terminal and
-  back from the line over the pane.
+  that step runs. Report the step, and the pane is back on its roles, with the round's card saying the
+  next step. Turn it to the terminal and back from the line over the pane.
 given:
   # Two rather than one because the terminal's premise stands its programs up in front of the
   # machine's own and cannot make a row shorter than two; the step names the first of them either way.
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
   # The task the built-in takes on the screen.
-  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the run is watched on its picture over }, as: seed }
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the run is watched by its roles over }, as: seed }
   - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
   - { type: action, domain: task, op: finish-creating, with: { target: seed } }
   # The action the run opens once the built-in has taken the task, holding the one step it runs. Its
@@ -35,12 +33,12 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
   # The action the run goes on to, whose step does not wait for a person: the pane goes back to its
-  # picture once the run reaches it.
+  # roles once the run reaches it.
   - { type: action, domain: automation, op: action-add, with: { name: after }, as: after }
   - { type: action, domain: automation, op: step-add, with: { target: after, name: wait, prompt: carry on with the task }, as: wait }
   - { type: action, domain: automation, op: action-entry, with: { target: after, step: wait } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: wait, exit_to: "" } }
-  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one watched on its picture" }, as: auto }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one watched by its roles" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
@@ -93,10 +91,10 @@ steps_gui:
       face: workspace
 
   # The first step may wait for a person, so its pane is on the terminal, though a run's pane opens on
-  # its picture.
+  # its roles.
   - type: assert
     domain: automation
-    op: run-picture
+    op: run-roles
     with:
       target: run
       face: terminal
@@ -107,21 +105,18 @@ steps_gui:
     with:
       target: run
       exit: got one
-      report: worked the task, and the pane goes back to its picture
+      report: worked the task, and the pane goes back to its roles
 
-  # The step after does not wait for a person, so the pane is back on the picture: the run is on the
-  # box of the action it went on to, grown with that action's step inside it under a heavier border, and what it
-  # passed to get there is lit.
+  # The step after does not wait for a person, so the pane is back on its roles: the round's card,
+  # named after the automation, says the step it went on to.
   - type: assert
     domain: automation
-    op: run-picture
+    op: run-roles
     with:
       target: run
-      face: picture
-      box: after
+      face: roles
+      card: "SCENARIO SEED — one watched by its roles"
       step: wait
-      passed: [take]
-      passed_builtins: [take_task]
 
   - type: action
     domain: automation
@@ -133,7 +128,7 @@ steps_gui:
 
   - type: assert
     domain: automation
-    op: run-picture
+    op: run-roles
     with:
       target: run
       face: terminal
@@ -143,14 +138,14 @@ steps_gui:
     op: press-run
     with:
       target: run
-      press: picture
+      press: roles
       on: pane
 
   - type: assert
     domain: automation
-    op: run-picture
+    op: run-roles
     with:
       target: run
-      face: picture
-      box: after
+      face: roles
+      card: "SCENARIO SEED — one watched by its roles"
       step: wait

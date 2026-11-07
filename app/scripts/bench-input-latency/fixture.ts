@@ -1,20 +1,18 @@
-// The run the picture panes draw: an automation of twelve boxes in a row, the run in the sixth, and
-// inside it an action of six steps with the run at the fourth. That is about the size of the runs
-// the panes are watched on, and enough for the box under way to be grown with a picture of its own.
+// The run the roles panes draw: an automation of twelve boxes in a row, the run in the sixth, and
+// its roles with the round under way in one of them. That is about the size of the runs the panes
+// are watched on.
 import type {
-  AutomationActionDetailDto,
   AutomationDetailDto,
   AutomationEdgeDto,
   AutomationPlacementDto,
-  AutomationRunTrailDto,
-  AutomationStepDto,
+  TaskRoleDto,
 } from "@app/bindings/bindings";
 import type { Say } from "@app/talk/nameplate";
 
 const BOXES = 12;
-const STEPS = 6;
 const AT_BOX = 6;
-const AT_STEP = 4;
+const ROLES = 8;
+const AT_ROLE = 3;
 
 const exits = (id: number) => [
   { id: id * 10, name: "完了", outputs: [] },
@@ -34,8 +32,6 @@ function chain(ids: number[], base: number): AutomationEdgeDto[] {
 }
 
 const boxIds = Array.from({ length: BOXES }, (_, i) => i + 1);
-const stepIds = Array.from({ length: STEPS }, (_, i) => 101 + i);
-const ACTION_ID = 900 + AT_BOX;
 
 const placements: AutomationPlacementDto[] = boxIds.map((id) => ({
   id,
@@ -66,50 +62,17 @@ export const automation: AutomationDetailDto = {
   saveBlocks: [],
 };
 
-const steps: AutomationStepDto[] = stepIds.map((id) => ({
-  id,
-  name: `part-${id - 100}`,
-  prompt: "",
-  interactive: false,
-  ...shown,
-  exits: exits(id),
-  inputs: [],
+/**
+ * The automation's roles: eight, the round under way in the third. That is about as many as an
+ * automation is split into, and enough for the bar to hold more than one icon.
+ */
+export const roles: TaskRoleDto[] = Array.from({ length: ROLES }, (_, i) => ({
+  id: 200 + i,
+  name: `role-${i + 1}`,
+  icon: i % 2 === 0 ? "robot" : null,
+  automationId: automation.id,
+  automationName: automation.name,
 }));
-
-export const action: AutomationActionDetailDto = {
-  id: ACTION_ID,
-  name: `step-${AT_BOX}`,
-  note: "",
-  global: false,
-  oneAtATime: false,
-  usedBy: 1,
-  entryStepId: stepIds[0],
-  steps,
-  edges: chain(stepIds, 1000),
-  wires: [],
-  exits: exits(ACTION_ID),
-  inputs: [],
-  settings: [],
-  heldBy: [],
-  placedOn: [],
-  unsaved: false,
-  saveBlocks: [],
-};
-
-export const trail: AutomationRunTrailDto = {
-  passed: boxIds.slice(0, AT_BOX).map((id) => ({
-    placement: id,
-    status: id === AT_BOX ? ("running" as const) : ("done" as const),
-    edge: id === AT_BOX ? undefined : id * 2,
-  })),
-  at: AT_BOX,
-  steps: stepIds.slice(0, AT_STEP).map((id, i) => ({
-    step: id,
-    status: i + 1 === AT_STEP ? ("running" as const) : ("done" as const),
-    edge: i + 1 === AT_STEP ? undefined : 1000 + id * 2,
-  })),
-  step: stepIds[AT_STEP - 1],
-};
 
 /** What a run's pane is handed for the run, made afresh on every draw as the workspace makes it. */
 export function say(run: number): Say {
@@ -126,7 +89,8 @@ export function say(run: number): Say {
     command: null,
     startedAt: null,
     action: `step-${AT_BOX}`,
-    task: null,
+    task: { ref: "AMB-T-1", title: "Fix the search filter", seq: 1 },
+    round: { role: 200 + AT_ROLE - 1, startedAt: Date.now() },
     state: {
       status: "running",
       word: "Running",

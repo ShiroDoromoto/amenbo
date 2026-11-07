@@ -6,8 +6,8 @@
 // Everything a key pressed in the box sets going is the app's: the page holds every pane's draft, so
 // a key draws the page again with every handler and every run made afresh, as the workspace does.
 //
-// `?panes=1|4` is how many panes there are; `?mode=terminal|picture` is whether they are ordinary
-// panes or runs' panes turned to their pictures.
+// `?panes=1|4` is how many panes there are; `?mode=terminal|roles` is whether they are ordinary
+// panes or runs' panes turned to their roles.
 import "./host";
 import "@app/styles/tokens.css";
 import "@app/styles/global.css";
@@ -22,7 +22,7 @@ import { say } from "./fixture";
 
 const query = new URLSearchParams(location.search);
 const PANES = Number(query.get("panes") ?? "1");
-const PICTURE = query.get("mode") === "picture";
+const ROLES = query.get("mode") === "roles";
 const frames = Array.from({ length: PANES }, (_, i) => `pane-${i + 1}`);
 const names = new Map();
 
@@ -32,12 +32,12 @@ function at(i: number) {
   return { gridColumn: `${(i % 2) * 6 + 1} / span 6`, gridRow: `${Math.floor(i / 2) + 1} / span 1` };
 }
 
-/** Whether every pane has its box, and every picture pane its picture with the run's box in it. */
+/** Whether every pane has its box, and every roles pane its roles with the round's card in them. */
 function drawn(): boolean {
   if (document.querySelectorAll(".compose__box").length < PANES) return false;
-  if (!PICTURE) return true;
-  return document.querySelectorAll(".runpic").length === PANES
-    && document.querySelectorAll(".runpic .autopic__node").length > PANES;
+  if (!ROLES) return true;
+  return document.querySelectorAll(".runroles").length === PANES
+    && document.querySelectorAll(".runroles .runroles__card").length === PANES;
 }
 
 function Page() {
@@ -63,7 +63,7 @@ function Page() {
             project={1}
             names={names}
             start={{ frame, cwd: `/work/${frame}` }}
-            run={PICTURE ? say(100 + i) : null}
+            run={ROLES ? say(100 + i) : null}
             autoStart
             focused={i === 0}
             written={written[frame] ?? ""}

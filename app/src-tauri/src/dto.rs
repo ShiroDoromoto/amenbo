@@ -4157,73 +4157,6 @@ pub struct AutomationHeldByRecordDto {
     pub(crate) count: usize,
 }
 
-/// **The way a run has come on the task it is working** (`amenbo_core::ops::automation_run::Trail`)
-/// — what the picture on its pane lights up. It starts again with each task the run takes.
-#[derive(Serialize, TS, Clone)]
-#[ts(export, export_to = "../../src/bindings/bindings.ts")]
-#[serde(rename_all = "camelCase")]
-pub struct AutomationRunTrailDto {
-    /// The spots it passed, in the order it passed them. A spot passed twice is here twice.
-    pub(crate) passed: Vec<AutomationRunPassDto>,
-    /// The placement whose step is under way, or the one the run is about to open or waiting on.
-    /// Absent for a run that is not going.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional, type = "number")]
-    pub(crate) at: Option<i64>,
-    /// The steps it passed inside the spot it is in, in the order it passed them. Empty once it has
-    /// left that spot, and before it opens one there.
-    pub(crate) steps: Vec<AutomationRunPassedStepDto>,
-    /// The step under way, or the one it is about to open or waiting on ([`AutomationStepDto`]'s
-    /// `id`). Absent where `at` is absent, and where the run's copy names no step.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional, type = "number")]
-    pub(crate) step: Option<i64>,
-}
-
-/// **One pass through one step inside a spot**, keyed the way the action's picture keys its boxes
-/// and lines.
-#[derive(Serialize, TS, Clone)]
-#[ts(export, export_to = "../../src/bindings/bindings.ts")]
-#[serde(rename_all = "camelCase")]
-pub struct AutomationRunPassedStepDto {
-    /// The step ([`AutomationStepDto`]'s `id`). Absent where the run's copy names no step.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional, type = "number")]
-    pub(crate) step: Option<i64>,
-    #[ts(type = "\"running\" | \"done\" | \"failed\" | \"stopped\"")]
-    pub(crate) status: &'static str,
-    /// The line on the action's picture it walked from there to the next step
-    /// ([`AutomationEdgeDto`]'s `id`). Absent while the step is under way, and where it left the spot
-    /// from it.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional, type = "number")]
-    pub(crate) edge: Option<i64>,
-}
-
-/// **One pass through one spot**, keyed the way the automation's picture keys its boxes and lines.
-#[derive(Serialize, TS, Clone)]
-#[ts(export, export_to = "../../src/bindings/bindings.ts")]
-#[serde(rename_all = "camelCase")]
-pub struct AutomationRunPassDto {
-    /// The placement. Absent where the run's copy names no spot.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional, type = "number")]
-    pub(crate) placement: Option<i64>,
-    /// How the last step the run opened there stands.
-    #[ts(type = "\"running\" | \"done\" | \"failed\" | \"stopped\"")]
-    pub(crate) status: &'static str,
-    /// The action's way out it left the spot by ([`AutomationExitDto`]'s `id`). Absent while it is
-    /// still inside the spot, and where it left by no way out of the action.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional, type = "number")]
-    pub(crate) exit: Option<i64>,
-    /// The line on the automation's picture it walked from there ([`AutomationEdgeDto`]'s `id`).
-    /// Absent while it is still inside the spot, and where nothing was drawn after the way out.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional, type = "number")]
-    pub(crate) edge: Option<i64>,
-}
-
 /// **A built-in step of a run, as its pane draws it** — the one card Amenbo puts up in place of a
 /// terminal while it carries the step out itself (`AMB-D-964`).
 ///
@@ -4381,6 +4314,24 @@ pub struct AutomationRunTaskDto {
     /// stretch per task, so this and not the step count says how many tasks in a reader is.
     #[ts(type = "number")]
     pub(crate) seq: i64,
+}
+
+/// **The task a failed round was filed as**, and who it was filed to
+/// (`amenbo_core::ops::automation_stop`): a role, which works it by the AI, or a person.
+#[derive(Serialize, TS, Clone, PartialEq)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationRunIncidentDto {
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    pub(crate) r#ref: String,
+    /// The role it was filed to, by its id. Absent where it went to a person, and where the role has
+    /// since been taken off the task.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) role: Option<i64>,
+    /// Whether it went to a person — the human assignee rather than a role.
+    pub(crate) person: bool,
 }
 
 /// **One thing standing in the way of a launch**, as core named it
@@ -4557,6 +4508,25 @@ pub struct AutomationRunCardDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) task: Option<AutomationRunTaskDto>,
+    /// **The role the stretch it is in now is worked under**, by its id
+    /// ([`amenbo_core::model::AutomationRunTask::role_id`]) — which role's card the run's pane draws.
+    /// Absent where the automation defines no role, before the stretch has taken its task, and where
+    /// the role has since been taken out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) role: Option<i64>,
+    /// When the stretch it is in now began, as RFC 3339 — what the time on that role's card is counted
+    /// from. Absent before the run has begun one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) role_started_at: Option<String>,
+    /// **The task the round it is in now was filed as**, where that round failed
+    /// ([`amenbo_core::model::AutomationRunTask::incident_task_id`]) — what the line under the run's
+    /// pane names. Absent where the round has not failed, and where its task was closed by then, which
+    /// files nothing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) incident: Option<AutomationRunIncidentDto>,
     /// **The steps whose report was kept off the task**, by name, in the order they ran: each was
     /// built to carry its report onto the task, and the task was closed by then (`AMB-D-963`). Empty
     /// where every report went where it was owed.

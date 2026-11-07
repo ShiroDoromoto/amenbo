@@ -4618,16 +4618,13 @@ const REGISTRY: &[OpSpec] = &[
     // screen is drawn. The pane outlives the step it was opened for, which is why a run that is over
     // is read here at all.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-pane", required: &[], refs: &["target", "task"], strings: &["step", "action", "state", "reason"], binds: false },
-    // **Which face that pane's body is turned to** (`face`): the automation's picture, or the
-    // terminal. A run's pane opens on its picture, and is turned to its terminal while a step that may
-    // wait for a person runs. On the picture, the box the run is on — named the way `pick-box` names
-    // one, by `box` or, for a built-in, by its key (`builtin`) — wears a heavier border, stands picked and is brought
-    // to the middle. Where its action has steps, the box is drawn grown with the action's picture
-    // inside, and it is the step under way there (`step`, by name) that does so, the box's border lit.
-    // What it has passed on the task it is working is lit: the boxes listed under `passed`
-    // (by name) and `passed_builtins` (by key), with the lines between them. A box is read
-    // off the picture as drawn, so a road names what it is sure of and leaves the rest out.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-picture", required: &["face"], refs: &["target"], strings: &["face", "box", "builtin", "step"], binds: false },
+    // **Which face that pane's body is turned to** (`face`): its roles, or the terminal. A run's pane
+    // opens on its roles, and is turned to its terminal while a step that may wait for a person runs.
+    // On the roles, a role whose round is under way is a card, standing in the order the roles are
+    // defined in; a role with no round is an icon on the bar under the cards. `card` is the name the
+    // card carries — the role's, or the automation's where it defines no role — and `step` the step
+    // under way that the card says. A road names what it is sure of and leaves the rest out.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-roles", required: &["face"], refs: &["target"], strings: &["face", "card", "step"], binds: false },
     // **Whether the program in that pane has ended**, once its run is over. The pane outlives the
     // run, and its last lines stay on the screen either way, so words on it cannot say whether the
     // terminal is still taking lines — a line typed at it is what does. A run that is over leaves no
@@ -4718,8 +4715,8 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `on: pane` presses the same moves on the line over the pane the run is drawn in rather than on
     // the tab's row: a reader watching a run is in its pane. Left off, or `on: row`, it is the row.
-    // `open` is the row's alone, the pane being where it leads; `picture` and `terminal` are the
-    // pane's alone — the two faces its body is turned to (`run-picture`).
+    // `open` is the row's alone, the pane being where it leads; `roles` and `terminal` are the
+    // pane's alone — the two faces its body is turned to (`run-roles`).
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-run", required: &["press"], refs: &["target"], strings: &["press", "on"], binds: false },
     //
     // **The automations the sidebar opens**, every project's on one list (`open-view` with

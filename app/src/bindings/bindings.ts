@@ -974,6 +974,25 @@ exitName?: string,
  */
 task?: AutomationRunTaskDto, 
 /**
+ * **The role the stretch it is in now is worked under**, by its id
+ * ([`amenbo_core::model::AutomationRunTask::role_id`]) — which role's card the run's pane draws.
+ * Absent where the automation defines no role, before the stretch has taken its task, and where
+ * the role has since been taken out.
+ */
+role?: number, 
+/**
+ * When the stretch it is in now began, as RFC 3339 — what the time on that role's card is counted
+ * from. Absent before the run has begun one.
+ */
+roleStartedAt?: string, 
+/**
+ * **The task the round it is in now was filed as**, where that round failed
+ * ([`amenbo_core::model::AutomationRunTask::incident_task_id`]) — what the line under the run's
+ * pane names. Absent where the round has not failed, and where its task was closed by then, which
+ * files nothing.
+ */
+incident?: AutomationRunIncidentDto, 
+/**
  * **The steps whose report was kept off the task**, by name, in the order they ran: each was
  * built to carry its report onto the task, and the task was closed by then (`AMB-D-963`). Empty
  * where every report went where it was owed.
@@ -1028,43 +1047,19 @@ pageSize: number,
 byEnding: AutomationRunEndingsDto, };
 
 /**
- * **One pass through one spot**, keyed the way the automation's picture keys its boxes and lines.
+ * **The task a failed round was filed as**, and who it was filed to
+ * (`amenbo_core::ops::automation_stop`): a role, which works it by the AI, or a person.
  */
-export type AutomationRunPassDto = { 
+export type AutomationRunIncidentDto = { id: number, ref: string, 
 /**
- * The placement. Absent where the run's copy names no spot.
+ * The role it was filed to, by its id. Absent where it went to a person, and where the role has
+ * since been taken off the task.
  */
-placement?: number, 
+role?: number, 
 /**
- * How the last step the run opened there stands.
+ * Whether it went to a person — the human assignee rather than a role.
  */
-status: "running" | "done" | "failed" | "stopped", 
-/**
- * The action's way out it left the spot by ([`AutomationExitDto`]'s `id`). Absent while it is
- * still inside the spot, and where it left by no way out of the action.
- */
-exit?: number, 
-/**
- * The line on the automation's picture it walked from there ([`AutomationEdgeDto`]'s `id`).
- * Absent while it is still inside the spot, and where nothing was drawn after the way out.
- */
-edge?: number, };
-
-/**
- * **One pass through one step inside a spot**, keyed the way the action's picture keys its boxes
- * and lines.
- */
-export type AutomationRunPassedStepDto = { 
-/**
- * The step ([`AutomationStepDto`]'s `id`). Absent where the run's copy names no step.
- */
-step?: number, status: "running" | "done" | "failed" | "stopped", 
-/**
- * The line on the action's picture it walked from there to the next step
- * ([`AutomationEdgeDto`]'s `id`). Absent while the step is under way, and where it left the spot
- * from it.
- */
-edge?: number, };
+person: boolean, };
 
 /**
  * **A run, just launched** — what the press is answered with.
@@ -1089,31 +1084,6 @@ export type AutomationRunTaskDto = { id: number, ref: string, title: string,
  * stretch per task, so this and not the step count says how many tasks in a reader is.
  */
 seq: number, };
-
-/**
- * **The way a run has come on the task it is working** (`amenbo_core::ops::automation_run::Trail`)
- * — what the picture on its pane lights up. It starts again with each task the run takes.
- */
-export type AutomationRunTrailDto = { 
-/**
- * The spots it passed, in the order it passed them. A spot passed twice is here twice.
- */
-passed: Array<AutomationRunPassDto>, 
-/**
- * The placement whose step is under way, or the one the run is about to open or waiting on.
- * Absent for a run that is not going.
- */
-at?: number, 
-/**
- * The steps it passed inside the spot it is in, in the order it passed them. Empty once it has
- * left that spot, and before it opens one there.
- */
-steps: Array<AutomationRunPassedStepDto>, 
-/**
- * The step under way, or the one it is about to open or waiting on ([`AutomationStepDto`]'s
- * `id`). Absent where `at` is absent, and where the run's copy names no step.
- */
-step?: number, };
 
 /**
  * **One saved version of an automation**: its number, and when it was saved.

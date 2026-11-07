@@ -142,8 +142,7 @@ export const ERROR_EXIT = "*";
 /** The name core gives the way out every step and action is born with — core's `DONE_EXIT`. */
 export const DONE_EXIT = "完了";
 
-/** How big a box is, and how much room is left around it. All of it fixed, save the one box a run's
- *  pane grows (`PicGrow`). Two lines tall — the name, and under it where the action comes from or
+/** How big a box is, and how much room is left around it. All of it fixed. Two lines tall — the name, and under it where the action comes from or
  *  what it is missing — as the mock draws it. */
 const NODE_W = 220;
 const NODE_H = 46;
@@ -334,24 +333,6 @@ export type PicMark = {
 
 /** A rectangle of the picture, in its own pixels. */
 export type PicRect = { x: number; y: number; w: number; h: number };
-
-/**
- * **One box drawn bigger than the rest** (`AMB-T-6505`): the one a run is under way in, with its
- * action's own picture inside it. Its row is as tall as it is, its column as wide, and the rows and
- * boxes around it stand as much further off.
- */
-export type PicGrow = { boxId: number; w: number; h: number };
-
-/** Over the picture inside a grown box, the room its head takes: the action's name, and which of its
- *  steps the run is at. */
-export const GROWN_HEAD = 28;
-/** Round the picture inside a grown box, for the box's own border. */
-const GROWN_EDGE = 2;
-
-/** How big the box `boxId` grows to hold the picture `inner`. */
-export function grownTo(boxId: number, inner: Pick<Picture, "width" | "height">): PicGrow {
-  return { boxId, w: Math.max(NODE_W, inner.width + GROWN_EDGE * 2), h: GROWN_HEAD + inner.height + GROWN_EDGE };
-}
 
 /** One picture, laid out. */
 export type Picture = {
@@ -777,12 +758,12 @@ const LAYOUT_ROUNDS = 16;
  * Standing two boxes further apart need not move a name off the leg it ran over, so the rows are laid
  * out `rounds` times at the most, and the picture of the last is drawn as it stands.
  */
-export function layOut(graph: PicGraph | null, rounds = LAYOUT_ROUNDS, grow?: PicGrow): Picture {
+export function layOut(graph: PicGraph | null, rounds = LAYOUT_ROUNDS): Picture {
   let legs = new Map<string, number>();
   let turns = new Map<number, number>();
   let gaps = new Map<number, number>();
   for (let round = 1; ; round++) {
-    const { picture, legsOf, turnsOf, gapsOf } = layOutWith(graph, legs, turns, gaps, grow);
+    const { picture, legsOf, turnsOf, gapsOf } = layOutWith(graph, legs, turns, gaps);
     const more = [...legsOf].filter(([key, count]) => count > (legs.get(key) ?? 0));
     const lower = [...turnsOf].filter(([boxId, count]) => count > (turns.get(boxId) ?? 1));
     const wider = [...gapsOf].filter(([boxId, gap]) => gap > (gaps.get(boxId) ?? 0));
@@ -795,14 +776,12 @@ export function layOut(graph: PicGraph | null, rounds = LAYOUT_ROUNDS, grow?: Pi
 
 /** Lay one picture out with `legs` lines leaving each box for each of the margins at the most, its
  *  lines down to the next row turning at `turns` heights, `gaps` of room at the least before the
- *  next box in its row, and the box `grow` names grown, and say how many each box turned out to need
- *  of each. */
+ *  next box in its row, and say how many each box turned out to need of each. */
 function layOutWith(
   graph: PicGraph | null,
   legs: ReadonlyMap<string, number>,
   turns: ReadonlyMap<number, number>,
   gaps: ReadonlyMap<number, number>,
-  grow: PicGrow | undefined,
 ): { picture: Picture; legsOf: Map<string, number>; turnsOf: Map<number, number>; gapsOf: Map<number, number> } {
   const legsOf = new Map<string, number>();
   const turnsOf = new Map<number, number>();
@@ -812,8 +791,6 @@ function layOutWith(
 
   const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
   const nodeH = graph.boundary !== undefined ? STEP_H : NODE_H;
-  const wOf = (boxId: number) => (boxId === grow?.boxId ? grow.w : NODE_W);
-  const hOf = (boxId: number) => (boxId === grow?.boxId ? grow.h : nodeH);
   const { laps, live, back: goesBack } = walk(graph);
   // The action's ways out, the error one last — the order the declaration lists them in.
   const outs = [...(graph.boundary?.exits ?? [])].sort(
@@ -891,24 +868,24 @@ function layOutWith(
       0,
       ...undecidedOf(box).map(
         (exit, nth) =>
-          Math.min(ATTACH + (lines + nth) * EXIT_GAP, wOf(box.id) - ATTACH) -
+          Math.min(ATTACH + (lines + nth) * EXIT_GAP, NODE_W - ATTACH) -
           6 +
           wordW(exitWord({ exitName: exit.name, builtin: box.builtin })) +
           BESIDE / 2 +
           pressW,
       ),
     );
-    return Math.max(COL_GAP, reach + BESIDE - wOf(box.id) - ATTACH, gaps.get(box.id) ?? 0);
+    return Math.max(COL_GAP, reach + BESIDE - NODE_W - ATTACH, gaps.get(box.id) ?? 0);
   };
   /** Where each box of a row stands from the row's left edge, and how wide the row is. */
   const columnsOf = (row: readonly number[]): { xs: number[]; w: number } => {
     const xs: number[] = [];
     let x = 0;
     row.forEach((_, column) => {
-      if (column > 0) x += wOf(row[column - 1]!) + gapAfter(boxes.get(row[column - 1])!);
+      if (column > 0) x += NODE_W + gapAfter(boxes.get(row[column - 1])!);
       xs.push(x);
     });
-    return { xs, w: row.length === 0 ? 0 : x + wOf(row[row.length - 1]!) };
+    return { xs, w: row.length === 0 ? 0 : x + NODE_W };
   };
   const contentW = Math.max(
     NODE_W,
@@ -950,7 +927,7 @@ function layOutWith(
       if (depth > 0) {
         rowY += rowH + (hang === 0 ? ROW_GAP : Math.max(ROW_GAP, hang + LEG_CLEAR + ROW_GAP / 2)) + stair;
       }
-      rowH = Math.max(...row.map(hOf));
+      rowH = Math.max(...row.map(() => nodeH));
       hang = Math.max(0, ...row.map((boxId) => hangOf(boxes.get(boxId)!)));
       stair = Math.max(0, ...row.map((boxId) => ((turns.get(boxId) ?? 1) - 1) * WORD_H));
       const columns = columnsOf(row);
@@ -967,8 +944,8 @@ function layOutWith(
           name: builtinWord(box.builtin, box.name),
           x: startX + columns.xs[column],
           y: rowY,
-          w: wOf(boxId),
-          h: hOf(boxId),
+          w: NODE_W,
+          h: nodeH,
           no: nodes.length + 1,
           takes: takesTask(box),
           global: box.global,

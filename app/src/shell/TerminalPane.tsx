@@ -39,7 +39,7 @@ import { PaneModel } from "./PaneModel";
 import { PaneSize } from "./PaneSize";
 import { RunActs } from "./RunActs";
 import { BuiltinCard } from "./BuiltinCard";
-import { RunPicture } from "./RunPicture";
+import { RunRoles } from "./RunPicture";
 import { RunOverCard, RunPausedCard } from "./RunBody";
 import { useBoxNumber } from "../screens/boxNumber";
 import type { BuiltinRun } from "../talk/automationStep";
@@ -86,24 +86,17 @@ async function handOver(session: string, paths: string[]) {
   }
 }
 
-/** What a run's pane shows under its row: the automation's picture, or the terminal (`AMB-T-5775`). */
-type Face = "picture" | "terminal";
+/** What a run's pane shows under its row: its roles, or the terminal (`./RunPicture`). */
+type Face = "roles" | "terminal";
 
 /**
  * **The face each run's pane was last turned to**, by run. A pane comes down when it is carried onto
  * another page or its project is left, and goes up again for the same run, which is the pane still, and
- * should come back as the reader left it. A run not in here opens on its picture — every run does, the
+ * should come back as the reader left it. A run not in here opens on its roles — every run does, the
  * first time — and nothing is kept for the app as a whole: one reader turning one pane to its terminal
  * says nothing about the next run.
  */
 const faces = new Map<number, Face>();
-
-/**
- * How many of the terminal's last rows show through a run's picture (`.runpic`). Counted in rows
- * rather than a length, so the same lines show whatever the pane's size; eight leaves three to five
- * lines of output above a CLI's own input line.
- */
-const CLEAR_ROWS = 8;
 
 /**
  * One slot of the workspace: a frame, and the terminal in it when there is one.
@@ -199,7 +192,6 @@ function Pane({
   // How many rows the terminal is drawing, as the emulator last measured it (`../talk/terminal`).
   // It is what turns the floor below into pixels, and it is 0 only before a terminal has said.
   const paneRows = useRef(0);
-  const bodyRef = useRef<HTMLDivElement>(null);
   // The height of one line in the box, taken while nothing is written in it. It is read rather than
   // computed from the line-height, so a font that rounds its lines differently is still one line.
   const oneLine = useRef(0);
@@ -209,10 +201,10 @@ function Pane({
    *  A refusal is said on the toast — the run may have ended a moment before the press. */
   const [pressing, setPressing] = useState(false);
   // Which face a run's pane is turned to. An ordinary pane has the terminal and nothing else.
-  const [face, setFace] = useState<Face>(() => (run === null ? "terminal" : faces.get(run.run) ?? "picture"));
+  const [face, setFace] = useState<Face>(() => (run === null ? "terminal" : faces.get(run.run) ?? "roles"));
   const runId = run?.run ?? null;
   // **A step that may wait for a person turns the pane to its terminal** (`AMB-T-5776`), so a question
-  // it asks is not left behind a picture nobody reads for it. Whether the agent is waiting is not
+  // it asks is not left behind the roles nobody reads it in. Whether the agent is waiting is not
   // something the app reads (`AMB-D-858`); the step's own `interactive` is what it goes by. The turn is
   // the step's, not the reader's: it is not kept, and once the step is over the pane goes back to the
   // face the reader last chose — the terminal, where that is what they chose. A press while the step
@@ -221,13 +213,13 @@ function Pane({
   const stepAt = run === null ? null : `${run.placement ?? ""}:${run.step}`;
   useEffect(() => {
     if (runId === null) return;
-    setFace(asks ? "terminal" : faces.get(runId) ?? "picture");
+    setFace(asks ? "terminal" : faces.get(runId) ?? "roles");
   }, [runId, asks, stepAt]);
   const turn = (to: Face) => {
     if (runId !== null) faces.set(runId, to);
     setFace(to);
   };
-  const onPicture = run !== null && face === "picture";
+  const onRoles = run !== null && face === "roles";
   const press = async (act: () => Promise<unknown>) => {
     setPressing(true);
     try {
@@ -333,47 +325,8 @@ function Pane({
     return () => watch.disconnect();
   }, [live]);
 
-  /**
-   * Measure how much of the bottom of a run's picture is to be clear (`.runpic`): the band and the
-   * box under the terminal, and {@link CLEAR_ROWS} of its rows above them. It is written onto the
-   * body as `--runpic-clear`. A row's height is the emulator's, worked out from the rows it said it
-   * draws, as the box's floor is (`../talk/terminal`). Until it has said, the picture keeps its own
-   * length.
-   */
-  const clearBand = () => {
-    const body = bodyRef.current;
-    const face = paneRef.current;
-    if (body === null || face === null || paneRows.current === 0) return;
-    const at = face.getBoundingClientRect();
-    const under = body.getBoundingClientRect().bottom - at.bottom;
-    body.style.setProperty("--runpic-clear", `${under + (at.height / paneRows.current) * CLEAR_ROWS}px`);
-  };
-  const clearing = useRef(clearBand);
-  clearing.current = clearBand;
   // Whether this pane draws a script step's terminal, which nobody writes into (`builtin`).
   const script = builtin?.program !== undefined;
-  // Whether the terminal face is drawn — not while a built-in stands where it would.
-  const termShown = running && (builtin === null || script);
-
-  // The box opening, folding or growing moves the terminal's bottom, and so does the pane changing
-  // size; each is the terminal changing height, so watching it and the body is enough. With no
-  // terminal there is nothing to follow through the picture, so the length measured for the last one
-  // is taken off and the picture is drawn whole (`.slot__body--bare`).
-  useEffect(() => {
-    if (!onPicture) return;
-    const body = bodyRef.current;
-    const face = paneRef.current;
-    if (body === null) return;
-    if (face === null) {
-      body.style.removeProperty("--runpic-clear");
-      return;
-    }
-    clearing.current();
-    const watch = new ResizeObserver(() => clearing.current());
-    watch.observe(body);
-    watch.observe(face);
-    return () => watch.disconnect();
-  }, [onPicture, termShown, live]);
 
   /** Send what has been written to the program in the pane, as the person's own line
    *  (`../talk/terminal`), and empty the box behind it. */
@@ -474,10 +427,10 @@ function Pane({
    *  **A pane with nothing running in it has neither** a box nor a terminal to put the keyboard in,
    *  so nothing is moved and it stays where the person left it.
    *
-   *  **Nor is anything moved in a run's pane turned to its picture.** Its terminal is still there under it, dimmed
-   *  (`AMB-T-5832`), and what is typed into it reaches the agent running there — which nobody
-   *  looking at a picture meant to type at. A press on the picture only picks the pane; the way to
-   *  the program is turning to the terminal.
+   *  **Nor is anything moved in a run's pane turned to its roles.** Its terminal is still there
+   *  under them, and what is typed into it reaches the agent running there — which nobody looking at
+   *  the roles meant to type at. A press on the roles only picks the pane; the way to the program is
+   *  turning to the terminal.
    *
    *  It comes after the emulator has had the press — that one takes the keyboard on its own
    *  mousedown, from an element inside this one — so this is the last word rather than the first.
@@ -485,7 +438,7 @@ function Pane({
   const pressedOn = () => {
     const moving = !focused;
     on.current.onFocus(frame);
-    if (!moving || onPicture) return;
+    if (!moving || onRoles) return;
     if (folded) focusTerminal(paneRef.current);
     else boxRef.current?.focus({ preventScroll: true });
   };
@@ -565,7 +518,6 @@ function Pane({
       sized: (_cols, rows) => {
         paneRows.current = rows;
         fitting.current();
-        clearing.current();
       },
       // The window's own title is not the pane's to say — a face holds several panes, in either of
       // the windows it is drawn in. The name goes to the store, and what draws it is the line above
@@ -655,9 +607,9 @@ function Pane({
   //
   // Those two are the whole of it. A pane that becomes the one being worked in later was pressed, and
   // the press has already said where the keyboard goes (`pressedOn`). A run's pane turned to its
-  // picture keeps the keyboard off its terminal here too, for the reason said there.
+  // roles keeps the keyboard off its terminal here too, for the reason said there.
   useEffect(() => {
-    if (live === null || !focused || onPicture) return;
+    if (live === null || !focused || onRoles) return;
     if (folded) focusTerminal(paneRef.current);
     else boxRef.current?.focus({ preventScroll: true });
     // `focused` is read as it stands: the two reasons are the ones said above.
@@ -889,11 +841,11 @@ function Pane({
               row says how it ended. **They are marks and not words** (`AMB-T-5529`), standing straight
               after the state they act on, so the row's words are left to the automation's name; each
               is named for a reader who cannot see it. Cancelling keeps the pane. */}
-          {/* **The picture or the terminal** (`AMB-T-5775`), on a run's pane only. Two presses, one
+          {/* **The roles or the terminal** (`./RunPicture`), on a run's pane only. Two presses, one
               pressed, rather than one that flips: what the reader needs to see is which face is up. */}
           {run !== null && (
             <span className="slot__faces" role="group">
-              {(["picture", "terminal"] as const).map((one) => (
+              {(["roles", "terminal"] as const).map((one) => (
                 <button
                   key={one}
                   type="button"
@@ -901,7 +853,7 @@ function Pane({
                   aria-pressed={face === one}
                   onClick={() => turn(one)}
                 >
-                  {t(one === "picture" ? "auto.run.facePicture" : "auto.run.faceTerminal")}
+                  {t(one === "roles" ? "auto.run.faceRoles" : "auto.run.faceTerminal")}
                 </button>
               ))}
             </span>
@@ -1078,17 +1030,12 @@ function Pane({
             onPointerDown={(e) => on.current.onStretch?.(e)}
           />
         )}
-        {/* Everything the terminal face is, kept mounted and in the layout while the picture is up:
+        {/* Everything the terminal face is, kept mounted and in the layout while the roles are up:
             the terminal is a program writing into the rows it was told it has, and taking its element
-            away would be ending what draws it. The picture is drawn over it and is clear over the
-            band, the box and the terminal's last eight rows (`clearBand`), and the face under it dims,
-            so the terminal can be followed through the picture and keeps its size when the face is
-            turned (`../talk/terminal`). With no terminal up, it is clear nowhere. */}
-        <div
-          ref={bodyRef}
-          className={`slot__body${onPicture ? " slot__body--away" : ""}${onPicture && !termShown ? " slot__body--bare" : ""}`}
-        >
-        {run !== null && face === "picture" && <RunPicture run={run} />}
+            away would be ending what draws it. The roles are drawn over it, so it keeps its size when
+            the face is turned (`../talk/terminal`). */}
+        <div className="slot__body">
+        {run !== null && face === "roles" && <RunRoles run={run} project={project} />}
         {/* **A run over, with no terminal up, says how it ended** (`./RunBody`) — in place of the card
             of a built-in it was stopped on too, which would otherwise go on saying it was at work. */}
         {/* **A script's tail, kept on the run** (`tail`), in place of either card below: it is what the

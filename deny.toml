@@ -9,17 +9,19 @@
 # notice a license changing under us.
 #
 # Allowed is not the same as carried: the notices themselves travel in THIRD-PARTY-NOTICES, written
-# by scripts/gen-third-party-notices.mjs and checked by the same job. That file also covers what
-# this list cannot see — license texts of C sources vendored inside a crate, which sit beside
-# those sources rather than at the crate's top level
+# by scripts/gen-third-party-notices.mjs and checked by the third-party-notices job, for the
+# shipped crates and the GUI's shipped npm packages alike. That file also covers what this list
+# cannot see — license texts of C sources vendored inside a crate, which sit beside those sources
+# rather than at the crate's top level
 # (SQLCipher, SQLite and libtomcrypt in sqlcipher-src, OpenSSL in openssl-src).
 
 [licenses]
 # Permissive, plus weak (file-level) copyleft. MPL-2.0 and EPL-2.0 oblige us to publish changes
 # to the LICENSED FILES themselves, which we do not make: those packages (dirs' option-ext and the
-# CSS stack under Tauri for MPL-2.0; elkjs, which mermaid needs for its ELK layout, for EPL-2.0)
-# are shipped unmodified, so bundling them into an Apache-2.0 app only needs their notices kept.
-# elkjs is dual-licensed "EPL-2.0 OR GPL-3.0-or-later"; we take it under EPL-2.0.
+# CSS stack under Tauri for MPL-2.0, and dompurify, which also offers Apache-2.0; elkjs, which
+# mermaid needs for its ELK layout, for EPL-2.0) are shipped unmodified, so bundling them into an
+# Apache-2.0 app only needs their notices kept — THIRD-PARTY-NOTICES reproduces their MPL-2.0 and
+# EPL-2.0 texts. elkjs is dual-licensed "EPL-2.0 OR GPL-3.0-or-later"; we take it under EPL-2.0.
 allow = [
   "Apache-2.0",
   "Apache-2.0 WITH LLVM-exception",

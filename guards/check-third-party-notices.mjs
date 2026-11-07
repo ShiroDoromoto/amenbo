@@ -5,8 +5,8 @@
 // The notices file is committed rather than written at release time, so a release can carry it as a
 // plain file beside LICENSE and a reader can open it to see what amenbo carries. That only
 // holds while it is what scripts/gen-third-party-notices.mjs would write for the current
-// Cargo.lock and app/src-tauri/Cargo.lock — and Dependabot bumps are auto-merged, so nobody would
-// regenerate it by hand.
+// Cargo.lock, app/src-tauri/Cargo.lock and app/package-lock.json — and Dependabot bumps are
+// auto-merged, so nobody would regenerate it by hand.
 //
 // Two questions, both a red:
 //   1. Do the bundled C sources still match BUNDLED_SOURCES? sqlcipher-src and openssl-src vendor
@@ -15,16 +15,19 @@
 //      read by a human before it ships.
 //   2. Is the committed file what the generator writes for this tree?
 //
-// Usage: node guards/check-third-party-notices.mjs   (from anywhere; needs cargo, fetches crates)
+// Usage: node guards/check-third-party-notices.mjs   (from anywhere; needs cargo, fetches crates, and
+//        reads app/node_modules — run `npm ci --ignore-scripts` in app/ first)
 
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import {
-  NoticeError,
   NOTICES,
   checkBundledSources,
+  collectNpm,
   collectShipped,
   generate,
+  isRefusal,
+  readNpmLock,
 } from '../scripts/gen-third-party-notices.mjs'
 
 // Pure: the committed text and the regenerated one in, the first lines that differ out (or null).
@@ -55,7 +58,8 @@ function main() {
     return 1
   }
 
-  const diff = firstDifference(committed, generate(packages))
+  const npm = collectNpm(readNpmLock())
+  const diff = firstDifference(committed, generate(packages, npm))
   if (diff) {
     console.error('✗ THIRD-PARTY-NOTICES is not what the lockfiles generate. First difference, line ' + diff.line + ':')
     console.error(`    committed: ${diff.committed}`)
@@ -64,7 +68,9 @@ function main() {
     return 1
   }
 
-  console.log(`✓ THIRD-PARTY-NOTICES matches the ${packages.length} shipped crates in the lockfiles`)
+  console.log(
+    `✓ THIRD-PARTY-NOTICES matches the ${packages.length} shipped crates and ${npm.length} shipped npm packages in the lockfiles`,
+  )
   return 0
 }
 
@@ -72,7 +78,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   try {
     process.exit(main())
   } catch (e) {
-    if (!(e instanceof NoticeError)) throw e
+    if (!isRefusal(e)) throw e
     console.error(`✗ ${e.message}`)
     process.exit(1)
   }

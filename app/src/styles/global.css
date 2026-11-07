@@ -589,6 +589,14 @@ input[type="color"] {
   display: flex; flex-direction: column; gap: var(--s-1);
   position: relative; isolation: isolate;
 }
+/* **With the roles or a card up, nothing in the body is drawn past its edge.** A pane at an eighth of
+   the page, or in the smallest window, gives the body less height than the bar over a run's terminal
+   and a card's padding take, neither of which can shrink: they ran on below the pane's frame, and
+   the roles drawn over the body went with it. The frame itself is not clipped (`.slot__frame`), so
+   the body is. A pane with a terminal up is left as it was: the model's list opens upwards past the
+   body (`.modelpick`). `clip` rather than `hidden`, so a press given the focus never scrolls the
+   body's own contents out from under the roles. */
+.slot__body:has(> .runroles, > .slot__builtin) { overflow: clip; }
 /* Where a finished run is read from now (`AMB-T-5539`), standing where its moves stood: a word, since
    it goes somewhere rather than acting on the run. */
 .slot__runlink {

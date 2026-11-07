@@ -194,6 +194,10 @@ pub fn delete(tx: &WriteTx<'_>, id: i64, actor: ActorKind) -> Result<Vec<String>
     for run_id in read::automation_run_ids_in_project(tx.conn(), id)? {
         orphaned.extend(crate::ops::automation::run_delete(tx, run_id)?);
     }
+    // A launch holds nothing but its runs, which name it, so it goes once they have gone.
+    for launch_id in read::automation_launch_ids_in_project(tx.conn(), id)? {
+        tx.delete_record("automation_launch", launch_id)?;
+    }
     for automation_id in read::automation_ids_in_project(tx.conn(), id)? {
         crate::ops::automation::delete(tx, automation_id)?;
     }
@@ -221,11 +225,18 @@ mod tests {
         Value::Text(s.to_string())
     }
 
-    /// One run, written straight at the six tables. Writing a run is the launch side's op, and this
-    /// fixture is not standing in for it: what the delete has to walk is rows, and these are the columns
-    /// the walk reads. Two step executions, because the reference that decides the order is between them
-    /// — the second's input says which execution produced it.
+    /// One run in a launch of its own, written straight at the six tables. Writing a run is the launch
+    /// side's op, and this fixture is not standing in for it: what the delete has to walk is rows, and
+    /// these are the columns the walk reads. Two step executions, because the reference that decides the
+    /// order is between them — the second's input says which execution produced it.
     fn mk_run(tx: &WriteTx<'_>, automation_id: i64, project_id: i64) -> i64 {
+        let launch = read::next_id(tx.conn(), "automation_launch").unwrap();
+        tx.put_record(
+            "automation_launch",
+            launch,
+            &[("automation_id", int(automation_id)), ("project_id", int(project_id)), ("status", text("ended"))],
+        )
+        .unwrap();
         let run = read::next_id(tx.conn(), "automation_run").unwrap();
         tx.put_record(
             "automation_run",
@@ -234,6 +245,7 @@ mod tests {
                 ("automation_id", int(automation_id)),
                 ("project_id", int(project_id)),
                 ("status", text("completed")),
+                ("launch_id", int(launch)),
             ],
         )
         .unwrap();
@@ -368,6 +380,7 @@ mod tests {
             assert!(read::automation_action_step(tx.conn(), step).unwrap().is_none());
             assert!(read::automation_action(tx.conn(), action.id).unwrap().is_none());
             assert!(read::automation_run_ids_in_project(tx.conn(), p).unwrap().is_empty());
+            assert!(read::automation_launch_ids_in_project(tx.conn(), p).unwrap().is_empty());
         });
     }
 

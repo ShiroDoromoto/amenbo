@@ -69,6 +69,8 @@ pub const ON_WORKER: &[&str] = &[
     "automation_running_page", "automation_run_cards", "automation_run_held_back",
     "automation_history_page", "automation_run_acknowledge", "automation_run_pause", "automation_run_resume",
     "automation_pause_before_next_task", "automation_run_stop", "automation_run_cancel",
+    "automation_launch_pause", "automation_launch_pause_before_next_task", "automation_launch_resume",
+    "automation_launch_cancel", "automation_launch_stop",
     "store_signature", "version_status", "check_updates_fresh",
     "activity_page", "changes_since", "change_cursor", "task_activity", "task_page", "task_search", "tasks_by_ids",
     "decision_page", "decision_search", "search", "decisions_by_ids", "resolve_ref", "task_add",

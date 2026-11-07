@@ -1320,4 +1320,176 @@ mod tests {
             );
         });
     }
+
+    // ───────────────────────────── one launch, side by side ─────────────────────────────
+
+    fn launch_of(tx: &WriteTx<'_>, launch: i64) -> crate::model::AutomationLaunch {
+        read::automation_launch(tx.conn(), launch).expect("read").expect("launch")
+    }
+
+    fn run_of(tx: &WriteTx<'_>, run: i64) -> AutomationRun {
+        read::automation_run(tx.conn(), run).expect("read").expect("run")
+    }
+
+    /// **One launch keeps its runs going side by side, up to its most, while there are tasks to take.**
+    /// A run is added only once every run of the launch has taken its task, it joins the same launch
+    /// and is started by whoever pressed it, and a most raised while the launch runs makes room at once.
+    #[test]
+    fn one_launch_tops_up_to_its_most_while_there_are_tasks() {
+        use crate::ops::automation_run::{launches_to_top_up, top_up};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, _) = picture(tx, project);
+            automation::update(tx, automation.id, None, None, None, Some(2), None).expect("room for two");
+            for title in ["one", "two", "three", "four"] {
+                for_ai(tx, title, project, None);
+            }
+
+            let first = launched(tx, &automation);
+            let launch = first.launch_id.expect("a run is started in a launch");
+            assert_eq!(launch_of(tx, launch).started_by_kind, Some(ActorKind::Ai));
+            assert!(
+                launches_to_top_up(tx.conn(), &[launch]).expect("ask").is_empty(),
+                "the first run has not taken its task yet",
+            );
+            open_entry(tx, &first);
+
+            assert_eq!(launches_to_top_up(tx.conn(), &[launch]).expect("ask"), vec![launch]);
+            let second = top_up(tx, launch, &launcher()).expect("top up").expect("a second run");
+            assert_eq!(second.launch_id, Some(launch), "it joins the same launch");
+            assert_eq!(second.started_by_kind, Some(ActorKind::Ai), "started by whoever pressed");
+            open_entry(tx, &second);
+            assert!(launches_to_top_up(tx.conn(), &[launch]).expect("ask").is_empty(), "two is its most");
+            assert!(top_up(tx, launch, &launcher()).expect("top up").is_none(), "nothing is written");
+
+            automation::update(tx, automation.id, None, None, None, Some(3), None).expect("room for three");
+            let third = top_up(tx, launch, &launcher()).expect("top up").expect("a third run");
+            assert_eq!(third.launch_id, Some(launch));
+            assert_eq!(
+                read::automation_launch_run_ids_under_way(tx.conn(), launch).expect("runs"),
+                vec![first.id, second.id, third.id],
+            );
+        });
+    }
+
+    /// **A launch with nothing to take is not topped up**, and it ends with its last run: the entry found
+    /// nothing, and the automation is not waiting for anything to start another on.
+    #[test]
+    fn a_launch_ends_with_its_last_run_where_nothing_waits() {
+        use crate::ops::automation_run::launches_to_top_up;
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, _) = picture(tx, project);
+            automation::update(tx, automation.id, None, None, None, Some(2), None).expect("room for two");
+
+            let run = launched(tx, &automation);
+            let launch = run.launch_id.expect("a launch");
+            assert!(launches_to_top_up(tx.conn(), &[launch]).expect("ask").is_empty());
+            open_entry(tx, &run);
+            assert_eq!(run_of(tx, run.id).status, AutomationRunStatus::Completed);
+            let ended = launch_of(tx, launch);
+            assert_eq!(ended.status, crate::model::AutomationLaunchStatus::Ended);
+            assert!(ended.ended_at.is_some());
+            assert!(read::automation_launch_standing(tx.conn(), automation.id).expect("read").is_none());
+
+            let next = launched(tx, &automation);
+            assert_ne!(next.launch_id, Some(launch), "a press after it opens a launch of its own");
+        });
+    }
+
+    /// **A launch whose automation waits for a task stays standing**, and the run started once one turns
+    /// up joins it. Ending the wait ends the launch, nothing being under way in it.
+    #[test]
+    fn a_waiting_launch_stands_and_the_run_started_on_a_task_joins_it() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = waiting_picture(tx, project);
+
+            let run = launched(tx, &automation);
+            let launch = run.launch_id.expect("a launch");
+            assert!(matches!(open_entry(tx, &run), Opened::LeftToWait { .. }));
+            assert_eq!(launch_of(tx, launch).status, crate::model::AutomationLaunchStatus::Running);
+
+            for_ai(tx, "new", project, None);
+            let next = start_waiting(tx, automation.id, &launcher()).expect("start").expect("a run");
+            assert_eq!(next.launch_id, Some(launch), "it joins the launch standing");
+            open_entry(tx, &next);
+            automation_stop::stop(tx, next.id, automation_stop::Ending::Canceled).expect("stop");
+            assert_eq!(launch_of(tx, launch).status, crate::model::AutomationLaunchStatus::Ended);
+        });
+    }
+
+    /// **A start of an automation whose entry would wait opens the launch the run joins later**, and a
+    /// person ending the wait ends it.
+    #[test]
+    fn a_start_that_waits_opens_a_launch_and_ending_the_wait_ends_it() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = waiting_picture(tx, project);
+            let started = start(tx, automation.id, &launcher(), &HandedAtLaunch::default()).expect("start");
+            assert!(matches!(started, Started::Waits(_)), "nothing to take, so it waits");
+            let launch = read::automation_launch_standing(tx.conn(), automation.id)
+                .expect("read")
+                .expect("a launch stands with no run");
+            stop_waiting(tx, automation.id).expect("stop waiting");
+            assert_eq!(launch_of(tx, launch.id).status, crate::model::AutomationLaunchStatus::Ended);
+        });
+    }
+
+    /// **A launch is paused, picked up and stopped as one.** Pausing asks each of its runs and starts no
+    /// run in it; a press joining it is refused while it is paused. Picking it up takes the asks back.
+    /// Canceling is refused while a run is running. Stopping ends every run and the launch with them,
+    /// each run handing its task back.
+    #[test]
+    fn a_launch_is_paused_picked_up_and_stopped_as_one() {
+        use crate::ops::automation_run::{launches_to_top_up, top_up};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, _) = picture(tx, project);
+            automation::update(tx, automation.id, None, None, None, Some(3), None).expect("room for three");
+            let tasks: Vec<i64> = ["one", "two", "three"].iter().map(|t| for_ai(tx, t, project, None)).collect();
+
+            let first = launched(tx, &automation);
+            let launch = first.launch_id.expect("a launch");
+            open_entry(tx, &first);
+            let second = top_up(tx, launch, &launcher()).expect("top up").expect("a second run");
+            open_entry(tx, &second);
+
+            let paused = automation_stop::pause_launch(tx, launch).expect("pause");
+            assert_eq!(paused.launch.status, crate::model::AutomationLaunchStatus::Paused);
+            assert_eq!(paused.runs.len(), 2);
+            assert!(paused.runs.iter().all(|run| run.pause_requested), "each run is asked");
+            assert!(launches_to_top_up(tx.conn(), &[launch]).expect("ask").is_empty(), "no run is added");
+            assert!(launched_or_refused(tx, &automation).is_err(), "a press does not join a paused launch");
+            assert!(
+                automation_stop::cancel_launch(tx, launch).is_err(),
+                "its runs are still running, so it is not canceled",
+            );
+
+            let resumed =
+                automation_stop::resume_launch(tx, launch, None, nothing_asked(), None).expect("pick it up");
+            assert_eq!(resumed.launch.status, crate::model::AutomationLaunchStatus::Running);
+            assert!(resumed.runs.iter().all(|run| !run.pause_requested), "the asks are taken back");
+
+            let stopped = automation_stop::stop_launch(tx, launch).expect("stop");
+            assert_eq!(stopped.launch.status, crate::model::AutomationLaunchStatus::Ended);
+            assert!(stopped.runs.iter().all(|run| run.status == AutomationRunStatus::Canceled));
+            assert!(read::automation_launch_run_ids_under_way(tx.conn(), launch).expect("runs").is_empty());
+            let taken: Vec<TaskStatus> = tasks.iter().map(|t| status(tx, *t)).collect();
+            assert!(taken.iter().all(|s| *s == TaskStatus::Todo), "every task is handed back: {taken:?}");
+            assert!(automation_stop::pause_launch(tx, launch).is_err(), "an ended launch is not paused");
+        });
+    }
+
+    fn launched_or_refused(tx: &WriteTx<'_>, automation: &Automation) -> crate::error::Result<AutomationRun> {
+        let claude = ["claude".to_string()];
+        let by = Launcher {
+            default_agent: None,
+            startable: Some(&claude),
+            models: nothing_asked(),
+            workspace_open: Some(true),
+            by: Some(ActorKind::Ai),
+        };
+        launch(tx, automation.id, &by)
+    }
 }

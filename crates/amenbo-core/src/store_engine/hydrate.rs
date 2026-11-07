@@ -36,7 +36,7 @@ use crate::model::{
     AutomationActionVersion, AutomationCfg, AutomationCfgKind, AutomationCfgOwner, AutomationEdge,
     AutomationEnds,
     AutomationExit, AutomationOwner, AutomationPictureOwner, AutomationPlacement,
-    AutomationPauseKind, AutomationPlacementStep, AutomationRole,
+    AutomationLaunch, AutomationLaunchStatus, AutomationPauseKind, AutomationPlacementStep, AutomationRole,
     AutomationPort, AutomationPortDirection, AutomationPortKind,
     AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunPass, AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
@@ -805,6 +805,22 @@ pub(super) fn automation_run_row(r: &Row) -> rusqlite::Result<AutomationRun> {
         handed_task: get(r, C.handed_task)?,
         acknowledged_by_kind: enum_opt(r, C.acknowledged_by_kind, ActorKind::parse)?,
         stopped_detail: get(r, C.stopped_detail)?,
+        launch_id: get(r, C.launch_id)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn automation_launch_row(r: &Row) -> rusqlite::Result<AutomationLaunch> {
+    const C: col::automation_launch::Cols = col::automation_launch::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationLaunch {
+        id: get(r, C.id)?,
+        automation_id: get(r, C.automation_id)?,
+        project_id: get(r, C.project_id)?,
+        status: enum_req(r, C.status, AutomationLaunchStatus::parse)?,
+        started_by_kind: enum_opt(r, C.started_by_kind, ActorKind::parse)?,
+        ended_at: ts_opt(r, C.ended_at)?,
         created_at,
         updated_at,
     })

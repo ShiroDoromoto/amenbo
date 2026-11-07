@@ -38,6 +38,12 @@
 //! a definition saved while one is under way is taken up as the next round starts — never in the middle
 //! of one.
 //!
+//! **One launch runs side by side** ([`AutomationLaunch`]). A person launches an automation once, and
+//! the launch keeps up to its `max_concurrent_runs` runs going while there are tasks to take: the app's
+//! look starts one more where there is room ([`top_up`]), so one that ends makes room for the next. A
+//! run a trigger starts ([`fire`]), or one started once a task turns up ([`start_waiting`]), joins the
+//! launch standing, and opens one where none is. A test run belongs to none.
+//!
 //! **Where a round goes after its task is taken is the task's role.** An automation's roles each name
 //! the placement their round starts at, and a launch copies that onto the run ([`AutomationRunDef::roles`]);
 //! the way out that hands on the task taken then goes on to where the task's role starts rather than
@@ -53,7 +59,8 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
     ActorKind, AttachmentTarget, Automation, AutomationCfg, AutomationCfgOwner, AutomationEnds, AutomationExit,
-    AutomationOwner, AutomationPictureOwner, AutomationPlacement, AutomationRole,
+    AutomationLaunch, AutomationLaunchStatus, AutomationOwner, AutomationPictureOwner, AutomationPlacement,
+    AutomationRole,
     AutomationPortDirection,
     AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStepStatus, AutomationStep, AutomationStoppedReason, AutomationEdge,
@@ -1973,16 +1980,17 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
     let mut found = TriggersDue::default();
     for automation in read::automations_triggered(conn)? {
         let enabled = || automation.triggers.iter().filter(|t| t.enabled);
-        let under_way = if enabled().any(|t| t.next_at <= now) {
-            read::automation_run_ids_under_way(conn, automation.id)?.len()
+        let (under_way, paused) = if enabled().any(|t| t.next_at <= now) {
+            (read::automation_run_ids_under_way(conn, automation.id)?.len(), launch_paused(conn, automation.id)?)
         } else {
-            0
+            (0, false)
         };
         for trigger in enabled() {
             if trigger.next_at <= now {
                 // A condition that no longer reads (an axis it names gone since) is left for `fire` to
                 // refuse, as a launch refused is, rather than stopping every other trigger on this look.
                 if has_room(&trigger.when, under_way, automation.max_concurrent_runs)
+                    && !paused
                     && condition_holds(conn, automation.project_id, trigger).unwrap_or(true)
                 {
                     match TriggerScripts::of(trigger) {
@@ -2001,22 +2009,22 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 /// **Fire one trigger of an automation** at `now`: decide whether to file a task, write what it says,
 /// and start a run of the automation on it — `Some(run)` when it did, `None` when it decided not to.
 ///
-/// 1. **Whether to file one.** Not before the trigger's `next_at`, and not while the automation's runs
-///    under way say no ([`has_room`]): an `every` or a `tasks` waits while the automation has its most
-///    runs under way (`max_concurrent_runs`), where a task filed would have no run to go to, and an
-///    `idle` waits until it has none at all. Nor while its condition does not hold
-///    ([`condition_holds`]). One with a script files one only where `said` was heard from those very
-///    scripts — the ones [`ask_trigger`] ran outside this write — so one rewritten since they were asked
-///    files nothing. A trigger not enabled files none, nor does one of an archived automation, a stopped
-///    one or one kept for export only, nor one taken away since it was found due.
+/// 1. **Whether to file one.** Not before the trigger's `next_at`, not while the launch standing is
+///    paused, and not while the automation's runs under way say no ([`has_room`]): an `every` or a
+///    `tasks` waits while the automation has its most runs under way (`max_concurrent_runs`), where a
+///    task filed would have no run to go to, and an `idle` waits until it has none at all. Nor while its
+///    condition does not hold ([`condition_holds`]). One with a script files one only where `said` was
+///    heard from those very scripts — the ones [`ask_trigger`] ran outside this write — so one rewritten
+///    since they were asked files nothing. A trigger not enabled files none, nor does one of an archived
+///    automation, a stopped one or one kept for export only, nor one taken away since it was found due.
 /// 2. **What it says** ([`crate::model::TriggerTask`]): the title and notes written on the trigger, the
 ///    ones read from its file now ([`task_from_file`]), or the ones its program wrote in `said`. A file
 ///    that says nothing it can file is an error, as a launch refused is.
-/// 3. **The run.** A launch like any other ([`launch_handing`]), of the newest saved version, the task
-///    handed to its entry as a person's would be — so it is the entry, the built-in that files a task,
-///    that files it. What `by` says is passed on as it stands. The task is handed with the trigger's
-///    role and name too: the entry files it under that role, and leaves a line in its timeline naming
-///    the trigger ([`crate::activity_log::event::task_filed_by_trigger`]).
+/// 3. **The run.** A launch like any other ([`launch_handing`]), joining the launch standing, of the
+///    newest saved version, the task handed to its entry as a person's would be — so it is the entry,
+///    the built-in that files a task, that files it. What `by` says is passed on as it stands. The task
+///    is handed with the trigger's role and name too: the entry files it under that role, and leaves a
+///    line in its timeline naming the trigger ([`crate::activity_log::event::task_filed_by_trigger`]).
 ///
 /// **A time it decides no leaves nothing**: no task, no run, and `next_at` where it was, so the next
 /// look asks again. A launch refused by its checks is an error, and the transaction it is written in
@@ -2041,6 +2049,7 @@ pub fn fire(
     }
     let under_way = read::automation_run_ids_under_way(tx.conn(), automation_id)?;
     if !has_room(&trigger.when, under_way.len(), automation.max_concurrent_runs)
+        || launch_paused(tx.conn(), automation_id)?
         || !condition_holds(tx.conn(), automation.project_id, &trigger)?
         || TriggerScripts::of(&trigger).is_some_and(|scripts| said.map(|said| &said.scripts) != Some(&scripts))
     {
@@ -2117,13 +2126,15 @@ fn mark_waiting(tx: &WriteTx<'_>, before: Automation) -> Result<Automation> {
 /// way out for nothing to take does. It holds no task, so there is none to hand back. **The automation
 /// is marked as waiting**, and the app's watch starts a run of it once a task turns up
 /// ([`start_waiting`]). So waiting leaves no run standing, counted among those under way, and no step or
-/// stretch.
+/// stretch. Its launch stays standing while the automation waits.
 pub(crate) fn wait_for_a_task(tx: &WriteTx<'_>, run: AutomationRun) -> Result<AutomationRun> {
     let automation_id = run.automation_id;
-    let ended = crate::ops::automation_stop::ended(tx, run, crate::ops::automation_stop::Ending::Completed)?;
+    // Marked first, so the run ending does not end its launch: the run started once a task turns up
+    // joins that launch.
     let automation =
         read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
     mark_waiting(tx, automation)?;
+    let ended = crate::ops::automation_stop::ended(tx, run, crate::ops::automation_stop::Ending::Completed)?;
     Ok(ended.run)
 }
 
@@ -2142,7 +2153,9 @@ pub fn tasks_turned_up(conn: &Connection, automations: &[i64]) -> Result<Vec<i64
         if automation.waits_for_task_since.is_none() || automation.archived || automation.stopped || automation.export_only {
             continue;
         }
-        if read::automation_run_ids_under_way(conn, automation_id)?.len() >= automation.max_concurrent_runs as usize {
+        if read::automation_run_ids_under_way(conn, automation_id)?.len() >= automation.max_concurrent_runs as usize
+            || launch_paused(conn, automation_id)?
+        {
             continue;
         }
         let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
@@ -2167,20 +2180,23 @@ pub fn tasks_turned_up(conn: &Connection, automations: &[i64]) -> Result<Vec<i64
 /// it did, `None` where there was nothing to start.
 ///
 /// It starts none where the automation is not waiting, is archived, stopped or kept for export only,
-/// has its most runs under way, or no task has turned up after all: the wait goes on, and nothing is
-/// written.
+/// has its most runs under way, has its launch paused, or no task has turned up after all: the wait
+/// goes on, and nothing is written.
 /// Where its newest saved entry no longer waits for a task, the wait ends and no run is made — a run
 /// started then would start for no task.
 ///
 /// The run is a launch like any other ([`launch_handing`]) of the newest saved version, with nothing
-/// handed to it, and the wait ends in the same transaction. A launch its checks refuse is an error, and
-/// the transaction takes nothing with it: the automation goes on waiting.
+/// handed to it, joining the launch standing, and the wait ends in the same transaction. A launch its
+/// checks refuse is an error, and the transaction takes nothing with it: the automation goes on
+/// waiting.
 pub fn start_waiting(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result<Option<AutomationRun>> {
     let before = read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
     if before.waits_for_task_since.is_none() || before.archived || before.stopped || before.export_only {
         return Ok(None);
     }
-    if read::automation_run_ids_under_way(tx.conn(), automation_id)?.len() >= before.max_concurrent_runs as usize {
+    if read::automation_run_ids_under_way(tx.conn(), automation_id)?.len() >= before.max_concurrent_runs as usize
+        || launch_paused(tx.conn(), automation_id)?
+    {
         return Ok(None);
     }
     let (pic, _) = definition(tx.conn(), &before, ReadsFrom::Saved)?;
@@ -2209,7 +2225,8 @@ pub fn start_waiting(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) ->
 
 /// **Stop an automation waiting for a task** — a person saying not to start a run once one turns up, or
 /// [`start_waiting`] having started one. One that is not waiting is answered as it stands, with nothing
-/// written.
+/// written. A launch standing with no run under way ends with the wait: nothing is left to start one in
+/// it.
 pub fn stop_waiting(tx: &WriteTx<'_>, automation_id: i64) -> Result<Automation> {
     let before = read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
     if before.waits_for_task_since.is_none() {
@@ -2217,6 +2234,7 @@ pub fn stop_waiting(tx: &WriteTx<'_>, automation_id: i64) -> Result<Automation> 
     }
     let after = Automation { waits_for_task_since: None, ..before.clone() };
     crate::ops::emit_update(tx, record::automation(&before), record::automation(&after))?;
+    crate::ops::automation_stop::settle_standing_launch(tx, automation_id)?;
     Ok(after)
 }
 
@@ -2252,6 +2270,116 @@ pub fn task_wait_held_back(
     let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
     let Some(e) = entry_builtin(conn, &pic)? else { return Ok(None) };
     crate::ops::automation_builtin::held_back(conn, automation.project_id, &e.roles, e.builtin.as_deref(), &e.cfg)
+}
+
+/// **The launch a run about to be made is started in** — the one standing for the automation, or a new
+/// one opened by `by` where none is ([`AutomationLaunch`]).
+///
+/// **A paused launch is refused.** A person paused it, and a run started in it would not be paused.
+fn join_launch(tx: &WriteTx<'_>, automation: &Automation, by: Option<ActorKind>) -> Result<AutomationLaunch> {
+    match read::automation_launch_standing(tx.conn(), automation.id)? {
+        Some(launch) if launch.status == AutomationLaunchStatus::Paused => Err(Error::invalid(format!(
+            "automation '{}' has its launch paused ({}) — pick it up again before launching it",
+            automation.name, launch.id
+        ))),
+        Some(launch) => Ok(launch),
+        None => {
+            let now = Timestamp::now();
+            let launch = AutomationLaunch {
+                id: read::next_id(tx.conn(), "automation_launch")?,
+                automation_id: automation.id,
+                project_id: automation.project_id,
+                status: AutomationLaunchStatus::Running,
+                started_by_kind: by,
+                ended_at: None,
+                created_at: now,
+                updated_at: now,
+            };
+            emit_create(tx, record::automation_launch(&launch))?;
+            Ok(launch)
+        }
+    }
+}
+
+/// **Whether the launch standing for this automation is paused** — where nothing starts a run of it
+/// until a person picks the launch up again.
+fn launch_paused(conn: &Connection, automation_id: i64) -> Result<bool> {
+    Ok(read::automation_launch_standing(conn, automation_id)?
+        .is_some_and(|launch| launch.status == AutomationLaunchStatus::Paused))
+}
+
+/// **Which of these launches may be given one more run now** ([`top_up`]), in the order asked.
+///
+/// It writes nothing: [`top_up`] asks all of it again, in the transaction it writes in.
+pub fn launches_to_top_up(conn: &Connection, launches: &[i64]) -> Result<Vec<i64>> {
+    let mut due = Vec::new();
+    for &launch_id in launches {
+        if tops_up(conn, launch_id)? {
+            due.push(launch_id);
+        }
+    }
+    Ok(due)
+}
+
+/// **Whether a launch may be given one more run now.** It is running, and its automation is neither
+/// archived, stopped, kept for export only nor waiting for a task (a run then is [`start_waiting`]'s
+/// to start). The automation has room under `max_concurrent_runs`, read as it stands now, so a most
+/// raised while the launch runs takes hold at once. No run of the launch stands about to take a task:
+/// that run would take the one found here. And the newest saved entry finds a task to take — an entry
+/// that is not the built-in that takes one is never topped up, its run walking the picture once.
+fn tops_up(conn: &Connection, launch_id: i64) -> Result<bool> {
+    let Some(launch) = read::automation_launch(conn, launch_id)? else { return Ok(false) };
+    if launch.status != AutomationLaunchStatus::Running {
+        return Ok(false);
+    }
+    let Some(automation) = read::automation(conn, launch.automation_id)? else { return Ok(false) };
+    if automation.archived || automation.stopped || automation.export_only || automation.waits_for_task_since.is_some()
+    {
+        return Ok(false);
+    }
+    if read::automation_run_ids_under_way(conn, automation.id)?.len() >= automation.max_concurrent_runs as usize {
+        return Ok(false);
+    }
+    for run_id in read::automation_launch_run_ids_under_way(conn, launch_id)? {
+        let Some(run) = read::automation_run(conn, run_id)? else { continue };
+        if run.status != AutomationRunStatus::Running {
+            continue;
+        }
+        let Waiting::Step(def) = next_def(conn, run_id)? else { continue };
+        if crate::ops::automation_stop::takes_a_task(&def) {
+            return Ok(false);
+        }
+    }
+    let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+    let Some(e) = entry_builtin(conn, &pic)? else { return Ok(false) };
+    if e.builtin.as_deref() != Some(TAKE_TASK.key) {
+        return Ok(false);
+    }
+    let there = crate::ops::automation_builtin::there_to_take(
+        conn,
+        automation.project_id,
+        &e.roles,
+        e.builtin.as_deref(),
+        &e.cfg,
+    )?;
+    Ok(there == Some(true))
+}
+
+/// **Start one more run in a running launch**, where there is room for it and a task to take
+/// ([`tops_up`]) — `Some(run)` where it did, `None` where there was nothing to start, and nothing is
+/// written then. This is how one launch keeps its runs going side by side, and how a run that ended
+/// makes room for the next.
+///
+/// The run is a launch like any other ([`launch_handing`]) of the newest saved version, with nothing
+/// handed to it, joining this launch, and started by whoever opened the launch: it is the same press. A
+/// launch its checks refuse is an error, and the transaction takes nothing with it.
+pub fn top_up(tx: &WriteTx<'_>, launch_id: i64, by: &Launcher<'_>) -> Result<Option<AutomationRun>> {
+    if !tops_up(tx.conn(), launch_id)? {
+        return Ok(None);
+    }
+    let launch = read::automation_launch(tx.conn(), launch_id)?.ok_or_else(|| not_found("launch", launch_id))?;
+    let by = Launcher { by: launch.started_by_kind, ..*by };
+    launch_handing(tx, launch.automation_id, &by, &HandedAtLaunch::default(), ReadsFrom::Saved).map(Some)
 }
 
 /// **Whether the runs under way leave a trigger room to file a task** — `under_way` being the
@@ -2511,6 +2639,10 @@ pub(crate) fn launch_past_the_setting_checks(
 /// Where `may_wait`, an entry that would wait for a task with none to take makes no run, and the
 /// automation waits instead ([`start`]). Asked last, once nothing refuses the launch: an automation
 /// that could not be launched is not one to wait on.
+///
+/// Where `limited`, the run joins the launch standing for the automation, or opens one
+/// ([`join_launch`]); a paused launch is refused. A launch opened for an entry that waits stands with
+/// no run, and the run started once a task turns up joins it.
 #[allow(clippy::too_many_arguments)]
 fn launch_asking(
     tx: &WriteTx<'_>,
@@ -2582,6 +2714,11 @@ fn launch_asking(
             ));
         }
     }
+    // A test run is thrown away with its transaction, and belongs to no launch.
+    let launch_id = match limited {
+        true => Some(join_launch(tx, &automation, by.by)?.id),
+        false => None,
+    };
     if may_wait {
         if let Some(e) = entry_builtin(tx.conn(), &pic)? {
             let waits = crate::ops::automation_builtin::waits_now(
@@ -2601,6 +2738,7 @@ fn launch_asking(
         id: read::next_id(tx.conn(), "automation_run")?,
         automation_id,
         project_id: automation.project_id,
+        launch_id,
         status: AutomationRunStatus::Running,
         pause_requested: false,
         pause_before_next_task: false,

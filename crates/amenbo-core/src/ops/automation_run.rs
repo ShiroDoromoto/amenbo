@@ -66,7 +66,7 @@ use crate::model::{
     AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStepStatus, AutomationStep, AutomationStoppedReason, AutomationEdge,
     RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, StepScript, ACTION_BOUNDARY,
-    DEFAULT_EXPECTED_MINUTES, ERROR_EXIT,
+    DEFAULT_EXPECTED_MINUTES, ERROR_EXIT, TakeOrder,
 };
 use crate::ops::automation::{ActionDef, Picture};
 use crate::ops::automation_script;
@@ -3758,6 +3758,24 @@ pub(crate) fn roles_started(conn: &Connection, run_id: i64) -> Result<Vec<i64>> 
         }
     }
     Ok(roles)
+}
+
+/// **The order a run takes its tasks in** — that of the one role it takes tasks of ([`roles_started`]), as
+/// the automation's newest saved version holds the role, and the draft's where nothing is saved yet or the
+/// version does not hold it. Read as it stands each time it is asked, as [`headcount`] is, so an order
+/// saved while a run goes on takes hold from its next task.
+///
+/// `None` where the run takes tasks of no role, or of more than one — a run launched before runs were
+/// given a role — which then lists them as the setting of the built-in that takes a task asks.
+pub(crate) fn take_order(conn: &Connection, run: &AutomationRun) -> Result<Option<TakeOrder>> {
+    let roles = roles_started(conn, run.id)?;
+    let &[role_id] = roles.as_slice() else { return Ok(None) };
+    let Some(automation) = read::automation(conn, run.automation_id)? else { return Ok(None) };
+    let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+    if let Some(role) = pic.roles().iter().find(|role| role.id == role_id) {
+        return Ok(Some(role.take_order));
+    }
+    Ok(read::automation_role(conn, role_id)?.map(|role| role.take_order))
 }
 
 /// **Which of an action's ways out one way out of a step inside it returns to** — the action's way out

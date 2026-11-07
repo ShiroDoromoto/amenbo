@@ -1,9 +1,9 @@
 //! **The built-in that takes a task** — find the task a run works next and reserve it (`AMB-D-964`).
 //!
 //! What a prompt used to be asked to do with `task list` and `step-take`, done here in the one
-//! transaction the step is opened in: list the tasks the filter matches, in the order it asks for, and
-//! reserve them from the top until one goes through. A task somebody else reserved first is not a
-//! failure — the next one is tried.
+//! transaction the step is opened in: list the tasks the filter matches, in the order the run's role
+//! takes them in, and reserve them from the top until one goes through. A task somebody else reserved
+//! first is not a failure — the next one is tried.
 //!
 //! **Not started and ready are always asked for.** Only a `todo` task whose premises all hold can be
 //! reserved, so the filter's own `status:` and `ready:` are dropped and those two put in their place:
@@ -13,6 +13,10 @@
 //! role at launch and keeps it until it ends, and a task is worked under the role it names, so one naming
 //! none, or another role, is left — for a person, or for a run of that role. An automation defining no
 //! role that says where its round starts takes any task the filter finds.
+//!
+//! **The role says in what order** ([`crate::model::TakeOrder`]): by priority, the oldest first within
+//! one, until somebody chooses its due date, when it was made, or the order a person put the tasks in.
+//! Only a run that takes tasks of no one role lists them in the order the filter's answer asks for.
 //!
 //! **Left unanswered, the filter is the tasks given to the AI** (`assignee:me-ai`). The built-in that
 //! hands a task back to a person gives it to the human, and so does a run a person canceled; a filter
@@ -40,7 +44,7 @@ use crate::ops::automation_builtin::{
     HeldByValue, Waits, Work,
 };
 use crate::ops::automation_report;
-use crate::ops::automation_run::roles_started;
+use crate::ops::automation_run::{roles_started, take_order};
 use crate::run_wording::builtin as say;
 use crate::ops::automation_step::{taskfilter_expr, taskfilter_sort, TASKFILTER_SORT_DEFAULT};
 use crate::query::{self, ListParams};
@@ -51,7 +55,8 @@ use crate::store_engine::read;
 pub const TAKEN: &str = "着手した";
 /// The way out it leaves by when no task the filter matches could be reserved.
 pub const NONE_TO_TAKE: &str = "着手できるタスクが無い";
-/// The setting that says which tasks it takes, and in what order.
+/// The setting that says which tasks it takes — and in what order, for a run that takes tasks of no one
+/// role ([`take_order`]).
 pub const FILTER: &str = "絞り込み";
 /// The output the reserved task is handed on through.
 pub const TASK: &str = "タスク";
@@ -231,8 +236,12 @@ fn titled(
         .collect()
 }
 
-/// One page of the tasks the filter answered with lists, in the order it asks for — of those worked under
-/// the role the run is a seat of, where it has one ([`roles_started`]).
+/// One page of the tasks the filter answered with lists — of those worked under the role the run is a
+/// seat of, where it has one ([`roles_started`]).
+///
+/// **In the order that role takes its tasks in** ([`take_order`]), whatever order the filter's answer
+/// asks for. A run that takes tasks of no role, or of more than one, lists them in the order the answer
+/// asks for, and by priority where it asks for none.
 fn search(
     conn: &Connection,
     run: &AutomationRun,
@@ -240,7 +249,10 @@ fn search(
     limit: usize,
     offset: usize,
 ) -> Result<query::TaskListResult> {
-    let sort = answer.map(taskfilter_sort).unwrap_or_else(|| TASKFILTER_SORT_DEFAULT.to_string());
+    let sort = match take_order(conn, run)? {
+        Some(order) => order.sort().to_string(),
+        None => answer.map(taskfilter_sort).unwrap_or_else(|| TASKFILTER_SORT_DEFAULT.to_string()),
+    };
     query::list_in_roles(
         conn,
         Reach::binding(run.project_id),
@@ -293,7 +305,7 @@ mod tests {
     use super::*;
     use crate::model::{
         ActorKind, Automation, AutomationPictureOwner, AutomationPlacement, AutomationPortKind,
-        AutomationRun, AutomationRunStatus, AutomationStoppedReason, Priority, TaskStatus,
+        AutomationRun, AutomationRunStatus, AutomationStoppedReason, Priority, Schedule, TakeOrder, TaskStatus,
     };
     use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewRole};
     use crate::ops::automation_builtin::action;
@@ -1376,6 +1388,60 @@ mod tests {
             open_entry(tx, &run);
             assert_eq!(status(tx, reviewed), TaskStatus::Todo, "a task of another role is not taken");
         });
+    }
+
+    /// **A run takes its role's tasks in the order the role takes them in** — by priority, the oldest
+    /// first within one, until the role is given another: the nearest deadline, the oldest, or the order a
+    /// person put them in. Each order picks a task the others do not, and none of them is the first task
+    /// filed, so no order is passed by falling back on the tasks' ids.
+    #[test]
+    fn a_run_takes_its_roles_tasks_in_the_order_the_role_takes_them_in() {
+        let cases = [
+            (None, "high, made first"),
+            (Some(TakeOrder::Priority), "high, made first"),
+            (Some(TakeOrder::Due), "due first"),
+            (Some(TakeOrder::Created), "made first of all"),
+            (Some(TakeOrder::Order), "put first"),
+        ];
+        for (order, first) in cases {
+            with_tx(|tx| {
+                let project = mk_project(tx, "amenbo");
+                let (automation, [_, (reviewer, _)]) = by_role(tx, project);
+                if order.is_some() {
+                    let change = automation::RoleChange { take_order: order, ..Default::default() };
+                    automation::role_update(tx, reviewer, change).expect("the order");
+                }
+                let day = |d: &str| Schedule::Day(d.parse().expect("a day"));
+                let mut ids = std::collections::BTreeMap::new();
+                for (title, priority, made, due) in [
+                    ("high, made later", Some(Priority::High), "2026-01-03T00:00:00Z", None),
+                    ("high, made first", Some(Priority::High), "2026-01-01T00:00:00Z", Some(day("2026-12-31"))),
+                    ("due first", Some(Priority::Low), "2026-01-02T00:00:00Z", Some(day("2026-12-01"))),
+                    ("made first of all", None, "2025-12-31T00:00:00Z", None),
+                    ("put first", None, "2026-01-05T00:00:00Z", None),
+                ] {
+                    let id = for_ai(tx, title, project, priority);
+                    under(tx, id, reviewer);
+                    if due.is_some() {
+                        task::update(tx, id, TaskPatch { due, ..Default::default() }).expect("due");
+                    }
+                    tx.conn()
+                        .execute("UPDATE task SET created_at = ?1 WHERE id = ?2", rusqlite::params![made, id])
+                        .expect("made then");
+                    ids.insert(title, id);
+                }
+                task::move_to(tx, ids["put first"], None, crate::ops::Position::Top, ActorKind::Human)
+                    .expect("put it first");
+
+                let run = launched(tx, &automation);
+                assert_eq!(run.role_id, Some(reviewer));
+                open_entry(tx, &run);
+                for (title, id) in &ids {
+                    let want = if *title == first { TaskStatus::InProgress } else { TaskStatus::Todo };
+                    assert_eq!(status(tx, *id), want, "{order:?}: {title}");
+                }
+            });
+        }
     }
 
     // ───────────────────────────── one launch, side by side ─────────────────────────────

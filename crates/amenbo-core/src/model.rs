@@ -1769,6 +1769,54 @@ pub(crate) fn default_role_headcount() -> u32 {
     DEFAULT_ROLE_HEADCOUNT
 }
 
+/// **The order a role takes its tasks in** ([`AutomationRole::take_order`]) — which of the tasks not
+/// started under it the built-in that takes a task reserves first. Four orders, and only these: the ops
+/// write a role's order as this type, and a word that is none of the four is refused where a row is
+/// read back ([`TakeOrder::parse`]) and where an exported file is read — not by a `CHECK`
+/// (`AMB-D-1124`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TakeOrder {
+    /// Highest priority first, and among tasks of the same priority the one made first. The default.
+    #[default]
+    Priority,
+    /// The nearest deadline first; a task with none comes after every task that has one.
+    Due,
+    /// The one made first, first.
+    Created,
+    /// The order a person put the tasks in by hand (`task move`, the task's `order_key`).
+    Order,
+}
+
+impl TakeOrder {
+    /// Every order, in the order they are offered in.
+    pub const ALL: [TakeOrder; 4] = [TakeOrder::Priority, TakeOrder::Due, TakeOrder::Created, TakeOrder::Order];
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TakeOrder::Priority => "priority",
+            TakeOrder::Due => "due",
+            TakeOrder::Created => "created",
+            TakeOrder::Order => "order",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<TakeOrder> {
+        TakeOrder::ALL.into_iter().find(|order| order.as_str() == s)
+    }
+
+    /// **The `task list --sort` the order lists by** (`store_engine::read::order_by`). The default
+    /// adds the time a task was made after its priority, so tasks of one priority are taken oldest first.
+    pub fn sort(&self) -> &'static str {
+        match self {
+            TakeOrder::Priority => "priority,created",
+            TakeOrder::Due => "due",
+            TakeOrder::Created => "created",
+            TakeOrder::Order => "order",
+        }
+    }
+}
+
 /// **The action itself, standing on its own picture** — what an [`AutomationWire`] names at the end
 /// that crosses the action's edge. A wire out of it hands an input the action declares to a step
 /// inside; a wire into it fills an output declared on the way out the run is leaving by.
@@ -2209,6 +2257,11 @@ pub struct AutomationRole {
     /// the role, so a saved version keeps it; one saved without it reads as the default.
     #[serde(default = "default_role_headcount")]
     pub headcount: u32,
+    /// **The order it takes its tasks in** — which of the tasks not started under it is reserved first.
+    /// [`TakeOrder::Priority`] until somebody changes it. It is part of the role, so a saved version
+    /// keeps it; one saved without it reads as the default.
+    #[serde(default)]
+    pub take_order: TakeOrder,
     /// The icon it is drawn with, by the name the GUI knows it under, or `None` for none chosen.
     #[serde(default)]
     pub icon: Option<String>,
@@ -2234,6 +2287,7 @@ impl Default for AutomationRole {
             automation_id: 0,
             name: String::new(),
             headcount: DEFAULT_ROLE_HEADCOUNT,
+            take_order: TakeOrder::Priority,
             icon: None,
             entry_placement_id: None,
             agent: None,

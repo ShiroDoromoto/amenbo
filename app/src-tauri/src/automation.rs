@@ -3358,7 +3358,13 @@ fn role_dto(
 }
 
 fn carrier_dto(carrier: Carrier) -> AutomationCarrierDto {
-    AutomationCarrierDto { agent: carrier.agent, model: carrier.model, chosen_at: carrier.at.into() }
+    AutomationCarrierDto {
+        agent: carrier.agent,
+        model: carrier.model,
+        chosen_at: carrier.at.into(),
+        agent_by_step: carrier.agent_by_step,
+        model_by_step: carrier.model_by_step,
+    }
 }
 
 fn exit_dto(view: automation_view::ExitView) -> AutomationExitDto {
@@ -3433,12 +3439,27 @@ mod tests {
     fn where_a_carrier_was_chosen_goes_out_as_its_kind_and_role() {
         use amenbo_core::ops::automation_run::ChosenAt;
         let json = |at: ChosenAt| {
-            serde_json::to_value(carrier_dto(Carrier { agent: "claude".into(), model: None, at })).expect("json")
+            let carrier =
+                Carrier { agent: "claude".into(), model: None, at, agent_by_step: false, model_by_step: false };
+            serde_json::to_value(carrier_dto(carrier)).expect("json")
         };
-        assert_eq!(json(ChosenAt::Step), serde_json::json!({ "agent": "claude", "chosenAt": { "kind": "step" } }));
+        assert_eq!(
+            json(ChosenAt::Step),
+            serde_json::json!({
+                "agent": "claude",
+                "chosenAt": { "kind": "step" },
+                "agentByStep": false,
+                "modelByStep": false,
+            }),
+        );
         assert_eq!(
             json(ChosenAt::Role { role_id: 7 }),
-            serde_json::json!({ "agent": "claude", "chosenAt": { "kind": "role", "roleId": 7 } }),
+            serde_json::json!({
+                "agent": "claude",
+                "chosenAt": { "kind": "role", "roleId": 7 },
+                "agentByStep": false,
+                "modelByStep": false,
+            }),
         );
         assert_eq!(json(ChosenAt::Amenbo)["chosenAt"], serde_json::json!({ "kind": "amenbo" }));
     }

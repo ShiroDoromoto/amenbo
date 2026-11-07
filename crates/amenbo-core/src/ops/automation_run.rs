@@ -715,6 +715,13 @@ pub struct Carrier {
     /// `None` leaves the agent's own default model.
     pub model: Option<String>,
     pub at: ChosenAt,
+    /// **Does the step's own choice set the agent apart** from the one it would otherwise fall back to
+    /// (the role's, else Amenbo's)? A step that wrote down the same agent as its fallback does not. Always
+    /// `false` away from [`ChosenAt::Step`].
+    pub agent_by_step: bool,
+    /// **Does the step's own choice set the model apart** from the one it would otherwise fall back to,
+    /// as [`Carrier::agent_by_step`] does for the agent.
+    pub model_by_step: bool,
 }
 
 /// **The role each placement falls back to** — for every role, in the order they are defined in, the
@@ -946,6 +953,9 @@ fn round_of(
 /// **The model comes from where the agent did.** It is the agent's model and is named only beside it
 /// (`AMB-D-865`), so a step's agent is never put with a role's model. Amenbo's default names no model,
 /// which is the agent's own default.
+///
+/// **The agent and the model are each marked as the step's own or not** (`agent_by_step`,
+/// `model_by_step`), so a step that set only the model apart shows only the model as its own.
 fn carrier(
     pic: &Picture,
     roles: &BTreeMap<i64, &AutomationRole>,
@@ -953,16 +963,44 @@ fn carrier(
     step_id: i64,
     default_agent: Option<&str>,
 ) -> Option<Carrier> {
-    if let Some(chosen) = pic.chosen(placement_id, step_id) {
-        return Some(Carrier { agent: chosen.agent.clone(), model: chosen.model.clone(), at: ChosenAt::Step });
-    }
+    let fallen = fallen_back(roles, placement_id, default_agent);
+    let Some(chosen) = pic.chosen(placement_id, step_id) else { return fallen };
+    // Each of the two is the step's own only where it differs from what the step would fall back to, so
+    // a choice that wrote the fallback's value down again is not told apart from it. A step that names no
+    // model leaves it to the agent's own default and sets no model of its own, whatever it falls back to.
+    // With nothing to fall back to, the agent is the step's.
+    let agent_by_step = fallen.as_ref().is_none_or(|fallen| chosen.agent != fallen.agent);
+    let model_by_step =
+        chosen.model.is_some() && fallen.as_ref().is_none_or(|fallen| chosen.model != fallen.model);
+    Some(Carrier {
+        agent: chosen.agent.clone(),
+        model: chosen.model.clone(),
+        at: ChosenAt::Step,
+        agent_by_step,
+        model_by_step,
+    })
+}
+
+/// **What a step falls back to where it chose nothing** — the default of the role the placement falls
+/// back to ([`roles_by_placement`]), else Amenbo's own default ([`carrier`]).
+fn fallen_back(
+    roles: &BTreeMap<i64, &AutomationRole>,
+    placement_id: i64,
+    default_agent: Option<&str>,
+) -> Option<Carrier> {
+    let fallen = |agent: String, model: Option<String>, at: ChosenAt| Carrier {
+        agent,
+        model,
+        at,
+        agent_by_step: false,
+        model_by_step: false,
+    };
     if let Some(role) = roles.get(&placement_id) {
         if let Some(agent) = &role.agent {
-            let at = ChosenAt::Role { role_id: role.id };
-            return Some(Carrier { agent: agent.clone(), model: role.model.clone(), at });
+            return Some(fallen(agent.clone(), role.model.clone(), ChosenAt::Role { role_id: role.id }));
         }
     }
-    default_agent.map(|agent| Carrier { agent: agent.to_string(), model: None, at: ChosenAt::Amenbo })
+    default_agent.map(|agent| fallen(agent.to_string(), None, ChosenAt::Amenbo))
 }
 
 /// **Who carries each step out**, keyed by (placement, step), for the definition `reads` names — every
@@ -4828,6 +4866,17 @@ mod tests {
         });
     }
 
+    /// A carrier a step fell back to: neither its agent nor its model is the step's own.
+    fn fell_back(agent: &str, model: Option<&str>, at: ChosenAt) -> Carrier {
+        Carrier {
+            agent: agent.into(),
+            model: model.map(str::to_string),
+            at,
+            agent_by_step: false,
+            model_by_step: false,
+        }
+    }
+
     /// Who carries `step` at `placement` in the draft, with `default_agent` as Amenbo's own.
     fn carried(
         tx: &WriteTx<'_>,
@@ -4873,7 +4922,7 @@ mod tests {
             assert_eq!(carried(tx, &automation, &placement, &step, None), None, "none of the three");
             assert_eq!(
                 carried(tx, &automation, &placement, &step, Some("codex")),
-                Some(Carrier { agent: "codex".into(), model: None, at: ChosenAt::Amenbo }),
+                Some(fell_back("codex", None, ChosenAt::Amenbo)),
             );
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), Some("claude")).expect("check"),
@@ -4884,7 +4933,7 @@ mod tests {
             let role = role_at(tx, &automation, "実装", placement.id, Some("claude"), Some("opus"));
             assert_eq!(
                 carried(tx, &automation, &placement, &step, Some("codex")),
-                Some(Carrier { agent: "claude".into(), model: Some("opus".into()), at: ChosenAt::Role { role_id: role.id } }),
+                Some(fell_back("claude", Some("opus"), ChosenAt::Role { role_id: role.id })),
                 "the role comes before Amenbo, with its model",
             );
             assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), vec![]);
@@ -4892,9 +4941,39 @@ mod tests {
             automation::placement_step_set(tx, placement.id, step.id, "gemini", None).expect("choose");
             assert_eq!(
                 carried(tx, &automation, &placement, &step, Some("codex")),
-                Some(Carrier { agent: "gemini".into(), model: None, at: ChosenAt::Step }),
+                Some(Carrier {
+                    agent: "gemini".into(),
+                    model: None,
+                    at: ChosenAt::Step,
+                    agent_by_step: true,
+                    model_by_step: false,
+                }),
                 "the step's own choice comes first, and the role's model does not come with it",
             );
+        });
+    }
+
+    /// **A step's choice marks as its own only what it sets apart** from the role it falls back to: the
+    /// agent and the model each, neither where it wrote the role's down again, and not the model where it
+    /// named none and left it to the agent's own default.
+    #[test]
+    fn a_step_marks_as_its_own_only_what_differs_from_its_fallback() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let step = only_step(tx, &action);
+            role_at(tx, &automation, "実装", placement.id, Some("claude"), Some("opus"));
+            let choices = [
+                ("claude", Some("haiku"), (false, true), "only the model"),
+                ("gemini", Some("opus"), (true, false), "only the agent"),
+                ("gemini", None, (true, false), "only the agent, with the agent's own default model"),
+                ("claude", Some("opus"), (false, false), "the role's, written down again"),
+            ];
+            for (agent, model, marked, why) in choices {
+                automation::placement_step_set(tx, placement.id, step.id, agent, model).expect("choose");
+                let carried = carried(tx, &automation, &placement, &step, Some("codex")).expect("a carrier");
+                assert_eq!(carried.at, ChosenAt::Step, "{why}");
+                assert_eq!((carried.agent_by_step, carried.model_by_step), marked, "{why}");
+            }
         });
     }
 
@@ -4917,7 +4996,7 @@ mod tests {
 
             assert_eq!(
                 carried(tx, &automation, &placement, &step, None),
-                Some(Carrier { agent: "claude".into(), model: None, at: ChosenAt::Role { role_id: first.id } }),
+                Some(fell_back("claude", None, ChosenAt::Role { role_id: first.id })),
             );
         });
     }

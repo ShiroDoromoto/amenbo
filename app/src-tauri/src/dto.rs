@@ -3634,6 +3634,10 @@ pub struct AutomationCarrierDto {
     #[ts(optional)]
     pub(crate) model: Option<String>,
     pub(crate) chosen_at: AutomationChosenAtDto,
+    /// Is the agent the step's own, set apart from what it falls back to? The build screen marks it ●.
+    pub(crate) agent_by_step: bool,
+    /// Is the model the step's own, set apart from what it falls back to? The build screen marks it ●.
+    pub(crate) model_by_step: bool,
 }
 
 /// **Where a step's agent was chosen** — the wire form of

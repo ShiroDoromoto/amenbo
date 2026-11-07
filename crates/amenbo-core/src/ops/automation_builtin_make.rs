@@ -350,6 +350,14 @@ pub(crate) fn answered_role(
     Some((name.to_string(), role_named(roles, name)))
 }
 
+/// **Whether the task it files is taken by the round that files it** ([`WHAT_THEN`] answered [`TAKE_IT`]).
+/// The round goes on to work it under the role it is filed under, so that is the same round turning to
+/// another role, not a task passed to another role's round — the built-in records no pass for it
+/// ([`record_pass`]), and the build screen draws none ([`crate::ops::automation_run::passes_by_role`]).
+pub(crate) fn answered_takes(settings: &[crate::model::AutomationCfg]) -> bool {
+    answered(settings, WHAT_THEN).ok().flatten().as_deref() == Some(TAKE_IT)
+}
+
 /// **Whether the task it files is set to depend on another** — on the task this run works
 /// ([`DEPENDS_ON`]), or on a task named ([`DEPENDS_ON_TASKS`]). What the build screen marks a task a
 /// role passes on with ([`crate::ops::automation_run::passes_by_role`]).
@@ -381,6 +389,8 @@ fn record_pass(carry: &Carry<'_, '_>, to_role_id: i64, task_id: i64) -> Result<(
     if round.role_id.is_none_or(|from| from == to_role_id) {
         return Ok(());
     }
+    let placement_id =
+        read::automation_run_def(tx.conn(), carry.run_step.run_def_id)?.and_then(|def| def.placement_id);
     let now = Timestamp::now();
     let pass = crate::model::AutomationRunPass {
         id: read::next_id(tx.conn(), "automation_run_pass")?,
@@ -388,6 +398,7 @@ fn record_pass(carry: &Carry<'_, '_>, to_role_id: i64, task_id: i64) -> Result<(
         run_task_id: round.id,
         to_role_id: Some(to_role_id),
         task_id: Some(task_id),
+        placement_id,
         created_at: now,
         updated_at: now,
     };
@@ -1438,6 +1449,9 @@ mod tests {
                 task_id: Some(filed.id),
             };
             assert_eq!(passed, vec![expected]);
+            let kept = read::automation_run_passes_of(tx.conn(), run.id).expect("passes");
+            let spots: Vec<Option<i64>> = kept.iter().map(|k| k.placement_id).collect();
+            assert_eq!(spots, vec![Some(p.make.id)], "the spot that filed it");
         });
         for (round_role, why) in [(true, "filed under the round's own role"), (false, "from a round under no role")] {
             with_tx(|tx| {
@@ -1454,8 +1468,9 @@ mod tests {
     }
 
     /// **The build screen reads what each role's round passes on** off the definition: the placement of
-    /// the built-in inside one role's round, answered with another role, and whether the task it files
-    /// depends on another. Answered with the round's own role, it passes nothing.
+    /// the built-in inside one role's round, answered with another role, whether the task it files
+    /// depends on another, and the task a run last passed on from there. Answered with the round's own
+    /// role, or set to take the task it files, it passes nothing — as a run records nothing there.
     #[test]
     fn what_a_roles_round_passes_on_is_read_off_the_definition() {
         use crate::ops::automation_run::{passes_by_role, RolePass};
@@ -1472,9 +1487,27 @@ mod tests {
             assert!(passes().is_empty(), "left unanswered, it passes nothing");
 
             answer(tx, &p, ROLE, "Bob");
-            let expected =
-                RolePass { from_role_id: alice.id, to_role_id: bob.id, placement_id: p.make.id, depends: false };
+            let expected = RolePass {
+                from_role_id: alice.id,
+                to_role_id: bob.id,
+                placement_id: p.make.id,
+                depends: false,
+                last_task_id: None,
+            };
             assert_eq!(passes(), vec![expected.clone()]);
+
+            answer(tx, &p, WHAT_THEN, TAKE_IT);
+            assert!(passes().is_empty(), "taking the task it files, it passes nothing");
+            answer(tx, &p, WHAT_THEN, LEAVE_IT);
+
+            let (_, _, run_step_id, _) = carried_under(tx, &p, false, None, Some(alice.id));
+            let (filed, _) = handed(tx, run_step_id);
+            assert_eq!(
+                passes(),
+                vec![RolePass { last_task_id: Some(filed.id), ..expected.clone() }],
+                "the task a run last passed on from here"
+            );
+            let expected = RolePass { last_task_id: Some(filed.id), ..expected };
 
             answer(tx, &p, DEPENDS_ON, THE_RUNS_TASK);
             assert_eq!(passes(), vec![RolePass { depends: true, ..expected.clone() }], "on the run's task");

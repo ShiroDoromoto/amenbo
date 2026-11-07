@@ -930,6 +930,7 @@ pub(super) fn automation_run_pass_row(r: &Row) -> rusqlite::Result<AutomationRun
         run_task_id: get(r, C.run_task_id)?,
         to_role_id: get(r, C.to_role_id)?,
         task_id: get(r, C.task_id)?,
+        placement_id: get(r, C.placement_id)?,
         created_at,
         updated_at,
     })

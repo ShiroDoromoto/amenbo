@@ -974,6 +974,7 @@ pub fn automation_run_pass(p: &AutomationRunPass) -> Record {
                 ("run_task_id", kv(p.run_task_id)),
                 ("to_role_id", kv_opt(&p.to_role_id)),
                 ("task_id", kv_opt(&p.task_id)),
+                ("placement_id", kv_opt(&p.placement_id)),
             ],
             &p.created_at,
             &p.updated_at,

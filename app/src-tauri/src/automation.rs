@@ -1616,11 +1616,17 @@ pub fn automation_detail(id: i64) -> Result<Option<AutomationDetailDto>, CmdErro
     let save_blocks =
         automation_run::check(conn, id, None, automation_run::nothing_asked(), default_agent.as_deref())?;
     // Read off the draft, as `view` is.
-    let who = Who {
+    let mut who = Who {
         carriers: automation_run::carriers(conn, id, ReadsFrom::Draft, default_agent.as_deref())?,
         rounds: automation_run::rounds_by_placement(conn, id, ReadsFrom::Draft)?,
         passes: automation_run::passes_by_role(conn, id, ReadsFrom::Draft)?,
+        passed_titles: BTreeMap::new(),
     };
+    for task in who.passes.iter().filter_map(|pass| pass.last_task_id) {
+        if let Some(title) = read::task_title(conn, task)? {
+            who.passed_titles.insert(task, title);
+        }
+    }
     Ok(Some(detail_dto(view, held_by, &save_blocks, who)))
 }
 
@@ -3055,6 +3061,8 @@ struct Who {
     rounds: BTreeMap<i64, i64>,
     /// What each role's round files for another role ([`automation_run::passes_by_role`]).
     passes: Vec<automation_run::RolePass>,
+    /// Task id → title, for the task each of `passes` last passed on that is still there.
+    passed_titles: BTreeMap<i64, String>,
 }
 
 /// One automation's whole definition, under the names the build screen draws it by.
@@ -3067,14 +3075,15 @@ fn detail_dto(
     let names = exit_names(view.placements.iter().flat_map(|p| p.exits.iter()));
     let wires = view.wires.iter().map(|w| wire_dto(w, &names, |id| view.port_name(id))).collect();
     let a = view.automation;
-    // What the build screen labels a task a role passes on by: the action standing on the spot that
-    // files it.
+    // What the build screen labels a task a role passes on by before a run has passed one from there:
+    // the action standing on the spot that files it.
     let spot_names: BTreeMap<i64, String> = view
         .placements
         .iter()
         .map(|p| (p.placement.id, p.action.as_ref().map(|one| one.name.clone()).unwrap_or_default()))
         .collect();
-    let roles = view.roles.into_iter().map(|role| role_dto(role, &who.passes, &spot_names)).collect();
+    let roles =
+        view.roles.into_iter().map(|role| role_dto(role, &who.passes, &spot_names, &who.passed_titles)).collect();
     AutomationDetailDto {
         id: a.id,
         project_id: a.project_id,
@@ -3258,15 +3267,21 @@ fn role_dto(
     role: AutomationRole,
     passes: &[automation_run::RolePass],
     spot_names: &BTreeMap<i64, String>,
+    passed_titles: &BTreeMap<i64, String>,
 ) -> AutomationRoleDto {
     let passes = passes
         .iter()
         .filter(|pass| pass.from_role_id == role.id)
-        .map(|pass| AutomationRolePassDto {
-            to_role: pass.to_role_id,
-            placement: pass.placement_id,
-            name: spot_names.get(&pass.placement_id).cloned().unwrap_or_default(),
-            depends: pass.depends,
+        .map(|pass| {
+            let last = pass.last_task_id.and_then(|task| passed_titles.get(&task).map(|title| (task, title)));
+            AutomationRolePassDto {
+                to_role: pass.to_role_id,
+                placement: pass.placement_id,
+                name: spot_names.get(&pass.placement_id).cloned().unwrap_or_default(),
+                depends: pass.depends,
+                task_ref: last.map(|(task, _)| amenbo_core::idref::task(task)),
+                task_title: last.map(|(_, title)| title.clone()),
+            }
         })
         .collect();
     AutomationRoleDto {
@@ -3367,23 +3382,36 @@ mod tests {
     }
 
     /// **A role carries what its own round passes on, and nothing of another's** — each to the role it
-    /// is filed under, labelled with the action standing on the spot that files it, and marked where
-    /// the task depends on another.
+    /// is filed under, labelled with the action standing on the spot that files it, marked where the
+    /// task depends on another, and with the title of the task a run last passed on from there.
     #[test]
     fn a_role_carries_what_its_own_round_passes_on() {
         use amenbo_core::ops::automation_run::RolePass;
         let role = |id: i64, name: &str| AutomationRole { id, name: name.into(), ..Default::default() };
         let passes = [
-            RolePass { from_role_id: 1, to_role_id: 2, placement_id: 10, depends: true },
-            RolePass { from_role_id: 2, to_role_id: 3, placement_id: 20, depends: false },
+            RolePass { from_role_id: 1, to_role_id: 2, placement_id: 10, depends: true, last_task_id: Some(7) },
+            RolePass { from_role_id: 1, to_role_id: 3, placement_id: 11, depends: false, last_task_id: None },
+            RolePass { from_role_id: 2, to_role_id: 3, placement_id: 20, depends: false, last_task_id: None },
         ];
-        let spots = BTreeMap::from([(10, "テストのタスクを起票する".to_string()), (20, "Report".to_string())]);
+        let spots = BTreeMap::from([
+            (10, "テストのタスクを起票する".to_string()),
+            (11, "Report".to_string()),
+            (20, "Report".to_string()),
+        ]);
+        let titles = BTreeMap::from([(7, "テストを足す：検索の絞り込み".to_string())]);
         let json = |id: i64, name: &str| {
-            serde_json::to_value(role_dto(role(id, name), &passes, &spots)).expect("json")["passes"].clone()
+            let dto = role_dto(role(id, name), &passes, &spots, &titles);
+            serde_json::to_value(dto).expect("json")["passes"].clone()
         };
         assert_eq!(
             json(1, "Alice"),
-            serde_json::json!([{ "toRole": 2, "placement": 10, "name": "テストのタスクを起票する", "depends": true }]),
+            serde_json::json!([
+                {
+                    "toRole": 2, "placement": 10, "name": "テストのタスクを起票する", "depends": true,
+                    "taskRef": "AMB-T-7", "taskTitle": "テストを足す：検索の絞り込み",
+                },
+                { "toRole": 3, "placement": 11, "name": "Report", "depends": false },
+            ]),
         );
         assert_eq!(json(3, "Carol"), serde_json::json!([]), "a role whose round passes nothing");
     }

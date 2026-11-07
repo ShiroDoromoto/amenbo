@@ -7,6 +7,11 @@
 # undistributable under that license. Nothing here is judged by a human at bump time —
 # Dependabot bumps are auto-merged — so the allow-list below is the only thing that would
 # notice a license changing under us.
+#
+# Allowed is not the same as carried: the notices themselves travel in THIRD-PARTY-NOTICES, written
+# by scripts/gen-third-party-notices.mjs and checked by the same job. That file also covers what
+# this list cannot see — C sources vendored inside a crate whose declaration does not name them
+# (SQLCipher and SQLite in libsqlite3-sys, OpenSSL in openssl-src).
 
 [licenses]
 # Permissive, plus weak (file-level) copyleft. MPL-2.0 and EPL-2.0 oblige us to publish changes

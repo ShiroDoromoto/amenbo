@@ -118,6 +118,11 @@ cargo_deps:
   - '.cargo/audit.toml'
   # The license allow-list the cargo-license job reads.
   - 'deny.toml'
+  # The notices the same job checks against the lockfiles: the committed file, the generator
+  # that writes it (and names the vendored C sources), and the gate with its tests.
+  - 'THIRD-PARTY-NOTICES'
+  - 'scripts/gen-third-party-notices.mjs'
+  - 'guards/check-third-party-notices*.mjs'
   - '.github/workflows/_ci.yml'
   - '.github/paths-filters.yml'
   - '.github/workflows/_rot-gates.yml'

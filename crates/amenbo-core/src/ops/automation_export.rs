@@ -535,6 +535,57 @@ mod tests {
         });
     }
 
+    /// **The built-in that splits by an axis is written out with the axis's name**, and with none once the
+    /// axis has been deleted.
+    #[test]
+    fn the_split_names_its_axis_until_the_axis_is_deleted() {
+        use crate::model::{DimensionAppliesTo, DimensionCardinality, DimensionRole};
+        use crate::ops::automation_builtin_split::SPLIT_BY_DIM;
+        use crate::ops::dimension::{self, NewDimension};
+        with_tx(|tx| {
+            let (automation, entry) = mk_automation(tx);
+            let axis = dimension::add(
+                tx,
+                automation.project_id,
+                NewDimension {
+                    name: "職能".into(),
+                    notes: String::new(),
+                    cardinality: DimensionCardinality::Single,
+                    ordered: true,
+                    role: DimensionRole::None,
+                    show_on_card: false,
+                    required: false,
+                    applies_to: DimensionAppliesTo::Both,
+                    sequential: false,
+                    slug: None,
+                },
+            )
+            .expect("axis")
+            .id;
+            dimension::value_add(tx, axis, "技術", None).expect("value");
+            let split = automation_builtin::action_on(tx, SPLIT_BY_DIM.key, Some(axis)).expect("split");
+            let placed = automation::placement_add(tx, automation.id, split.id).expect("place the split");
+            let take = automation_builtin::find("take_task").expect("take_task");
+            let on = AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, entry.id, Some(take.exits[0].name), EdgeTarget::Go(placed.id), None)
+                .expect("take, then split");
+            automation::edge_add(tx, on, placed.id, Some("技術"), EdgeTarget::Done, None).expect("a value's way out");
+            automation::version_add(tx, automation.id).expect("save the automation");
+
+            let named = |file: &AutomationFile| match &file.placements[1].stands_on {
+                StandsOn::Builtin(b) => (b.key.clone(), b.version, b.dimension.clone()),
+                other => panic!("the split is a built-in, not {other:?}"),
+            };
+            let file = export(tx.conn(), automation.id).expect("export");
+            assert_eq!(named(&file), (SPLIT_BY_DIM.key.to_string(), SPLIT_BY_DIM.version, Some("職能".to_string())));
+            assert!(file.edges.iter().any(|e| e.from == 1 && e.exit == "技術"), "the line on the value's way out");
+
+            dimension::delete(tx, axis).expect("delete the axis");
+            let file = export(tx.conn(), automation.id).expect("export again");
+            assert_eq!(named(&file).2, None, "no axis left to name");
+        });
+    }
+
     /// **Only what is saved is written out**: an automation nobody has saved, and one standing on an
     /// action nobody has saved, are refused.
     #[test]

@@ -14,14 +14,16 @@
 //!
 //! **A built-in is not read in.** The file names its key and the version it was placed at, and the
 //! placement stands on this build's version of it (`AMB-D-1000`): a file written by an older build is
-//! brought up to this one, and one written by a newer build is refused — as is one this build does not
-//! have, and `split_by_dim`, which stands on an axis a file is not read onto. A
-//! line or an answer on a built-in naming a way out, a port or a setting this build's version does not
-//! declare is left out, for the person to draw again.
+//! brought up to this one, and one written by a newer build is refused. The built-in that splits by an
+//! axis takes the axis of the same name in the project imported into (`AMB-D-973`). A line or an answer
+//! on a built-in naming a way out, a port or a setting this build's version does not declare is left
+//! out, for the person to draw again.
 //!
 //! **The picture is put down as it was drawn.** The first placement is not held to the built-ins a run
 //! starts at, nothing is added after a filed task, and the entry is the one the file names
 //! (`AMB-D-977`).
+
+use rusqlite::Connection;
 
 use crate::error::{Error, Result};
 use crate::model::{
@@ -30,6 +32,7 @@ use crate::model::{
 };
 use crate::ops::automation::{self, ActionDef, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep};
 use crate::ops::automation_builtin;
+use crate::ops::automation_builtin_split::SPLIT_BY_DIM;
 use crate::ops::automation_export::{
     ActionFile, AutomationFile, BuiltinFile, EdgeFile, ExitFile, PortFile, StandsOn, FORMAT,
 };
@@ -73,7 +76,7 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
                 let action = actions.get(*at).ok_or_else(|| no_such("action", *at))?;
                 (action.id, action.steps.as_slice(), false)
             }
-            StandsOn::Builtin(b) => (builtin_action(tx, b)?.id, &[][..], true),
+            StandsOn::Builtin(b) => (builtin_action(tx, project_id, b)?.id, &[][..], true),
         };
         let row = automation::placement_add_by_hand(tx, automation.id, action_id)?;
         let def = ActionDef::placed(tx.conn(), &row)?;
@@ -277,8 +280,9 @@ fn placement_end(place: Option<usize>) -> Result<usize> {
 }
 
 /// **The action this build has for a built-in the file names**, refused where it has none or has it at
-/// an older version than the file was written at.
-fn builtin_action(tx: &WriteTx<'_>, file: &BuiltinFile) -> Result<AutomationAction> {
+/// an older version than the file was written at. The one that splits by an axis takes the project's
+/// axis of the name the file gives.
+fn builtin_action(tx: &WriteTx<'_>, project_id: i64, file: &BuiltinFile) -> Result<AutomationAction> {
     let here = automation_builtin::find(&file.key)
         .ok_or_else(|| Error::invalid(format!("this Amenbo has no built-in '{}'", file.key)))?;
     if file.version > here.version {
@@ -288,7 +292,29 @@ fn builtin_action(tx: &WriteTx<'_>, file: &BuiltinFile) -> Result<AutomationActi
             file.key, file.version, here.version
         )));
     }
-    automation_builtin::action(tx, &file.key)
+    if file.key != SPLIT_BY_DIM.key {
+        return automation_builtin::action(tx, &file.key);
+    }
+    let name = file.dimension.as_deref().ok_or_else(|| {
+        Error::invalid(format!("the built-in '{}' in the file names no axis to split by", file.key))
+    })?;
+    let axis = axis_named(tx.conn(), project_id, name)?.ok_or_else(|| {
+        Error::invalid(format!(
+            "the built-in '{}' splits by '{name}', and this project has no axis called that",
+            file.key
+        ))
+    })?;
+    automation_builtin::action_on(tx, &file.key, Some(axis))
+}
+
+/// The project's axis of this name.
+fn axis_named(conn: &Connection, project_id: i64, name: &str) -> Result<Option<i64>> {
+    for id in read::dimension_ids_in_project(conn, project_id)? {
+        if read::dimension(conn, id)?.is_some_and(|d| d.name == name) {
+            return Ok(Some(id));
+        }
+    }
+    Ok(None)
 }
 
 /// A place in one of the file's lists that the list does not have.
@@ -299,13 +325,15 @@ fn no_such(what: &str, place: usize) -> Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{AutomationCfgKind, AutomationPortKind};
+    use crate::model::{AutomationCfgKind, AutomationPortKind, DimensionAppliesTo, DimensionCardinality, DimensionRole};
     use crate::ops::automation_export::export;
+    use crate::ops::dimension::{self, NewDimension};
     use crate::ops::test_support::{exit_id, mk_project, with_tx};
 
     /// An automation written out: it takes a task, looks at it twice with an action a person wrote
-    /// handing a value on, and closes it.
+    /// handing a value on, and splits by an axis.
     fn written_out(tx: &WriteTx<'_>, project: i64) -> AutomationFile {
+        axis(tx, project, "職能", &["技術"]);
         let automation =
             automation::add(tx, project, NewAutomation { name: "1件やりきる".into(), notes: "メモ".into(), failures_to: Some(crate::model::FailuresTo::Human) })
                 .expect("add automation");
@@ -325,14 +353,15 @@ mod tests {
 
         let first = automation::placement_add(tx, automation.id, action.id).expect("place it");
         let second = automation::placement_add(tx, automation.id, action.id).expect("place it again");
-        let close = automation_builtin::action(tx, "close_task").expect("built-in");
-        let third = automation::placement_add(tx, automation.id, close.id).expect("place the close");
+        let axis_id = axis_named(tx.conn(), project, "職能").expect("read").expect("axis");
+        let split = automation_builtin::action_on(tx, SPLIT_BY_DIM.key, Some(axis_id)).expect("split");
+        let third = automation::placement_add(tx, automation.id, split.id).expect("place the split");
         let on = AutomationPictureOwner::Automation;
         let took = automation_builtin::find("take_task").expect("take_task").exits[0].name;
         automation::edge_add(tx, on, entry.id, Some(took), EdgeTarget::Go(first.id), None).expect("edge");
         automation::edge_add(tx, on, first.id, None, EdgeTarget::Go(second.id), Some(3)).expect("edge");
         automation::edge_add(tx, on, second.id, None, EdgeTarget::Go(third.id), None).expect("edge");
-        automation::edge_add(tx, on, third.id, None, EdgeTarget::Done, None).expect("edge");
+        automation::edge_add(tx, on, third.id, Some("技術"), EdgeTarget::Done, None).expect("edge");
         automation::wire_add(tx, on, first.id, None, "結果", second.id, "前から").expect("wire");
         automation::cfg_set(tx, first.id, "深さ", Some("3")).expect("answer");
         let step = action.entry_step_id.expect("an entry step");
@@ -351,12 +380,37 @@ mod tests {
         export(tx.conn(), automation.id).expect("export")
     }
 
+    fn axis(tx: &WriteTx<'_>, project: i64, name: &str, values: &[&str]) -> i64 {
+        let axis = dimension::add(
+            tx,
+            project,
+            NewDimension {
+                name: name.to_string(),
+                notes: String::new(),
+                cardinality: DimensionCardinality::Single,
+                ordered: true,
+                role: DimensionRole::None,
+                show_on_card: false,
+                required: false,
+                applies_to: DimensionAppliesTo::Both,
+                sequential: false,
+                slug: None,
+            },
+        )
+        .expect("axis")
+        .id;
+        for value in values {
+            dimension::value_add(tx, axis, value, None).expect("value");
+        }
+        axis
+    }
+
     fn count(tx: &WriteTx<'_>, table: &str) -> i64 {
         tx.conn().query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0)).expect("count")
     }
 
     /// **What is read in is new, and writes back out as the file it came from**: the actions saved and
-    /// the automation not, in another project.
+    /// the automation not, in another project with an axis of the same name.
     #[test]
     fn a_file_comes_in_as_new_and_writes_back_out_the_same() {
         with_tx(|tx| {
@@ -365,6 +419,7 @@ mod tests {
             let text = serde_json::to_string(&file).expect("serialize");
 
             let into = mk_project(tx, "別のPJ");
+            axis(tx, into, "職能", &["技術"]);
             let actions_before = count(tx, "automation_action");
             let roles_before = count(tx, "automation_role");
             let imported = import(tx, into, &parse(&text).expect("parse")).expect("import");
@@ -379,7 +434,7 @@ mod tests {
             assert_eq!((action.project_id, action.draft, written.version), (Some(into), false, Some(1)));
             let saved = read::automation_action_version(tx.conn(), action.id, 1).expect("read").expect("version 1");
             assert!(action.one_at_a_time && saved.one_at_a_time, "one run at a time comes in, saved");
-            assert_eq!(count(tx, "automation_action"), actions_before + 1, "one written; the built-ins are this build's");
+            assert_eq!(count(tx, "automation_action"), actions_before + 2, "one written, one split on the new axis");
 
             automation::version_add(tx, imported.id).expect("save it");
             let back = export(tx.conn(), imported.id).expect("export again");
@@ -391,9 +446,9 @@ mod tests {
         });
     }
 
-    /// **A file of another format, a built-in newer than this build, and a built-in this build does not
-    /// read in are refused** — and the caller's transaction takes back what was written before the
-    /// refusal. `split_by_dim` is one: it stands on an axis, and a file is not read onto one.
+    /// **A file of another format, a built-in newer than this build, an axis the project lacks and one a
+    /// task can hold several values of are refused** — and the caller's transaction takes back what was
+    /// written before the refusal.
     #[test]
     fn what_cannot_be_read_in_is_refused() {
         with_tx(|tx| {
@@ -418,10 +473,14 @@ mod tests {
             }
             assert!(matches!(import(tx, project, &newer), Err(Error::Invalid(_))), "a newer built-in");
 
-            let mut split = file.clone();
-            split.placements[3].stands_on =
-                StandsOn::Builtin(BuiltinFile { key: "split_by_dim".into(), version: 1, dimension: Some("職能".into()) });
-            assert!(matches!(import(tx, project, &split), Err(Error::Invalid(_))), "a built-in that stands on an axis");
+            let elsewhere = mk_project(tx, "軸の無いPJ");
+            assert!(matches!(import(tx, elsewhere, &file), Err(Error::Invalid(_))), "no axis of that name");
+
+            let several = mk_project(tx, "複数値の軸のPJ");
+            let tags = axis(tx, several, "職能", &["技術"]);
+            dimension::update(tx, tags, None, None, Some(DimensionCardinality::Multi), None, None, None, None, None, None, None)
+                .expect("several values");
+            assert!(matches!(import(tx, several, &file), Err(Error::Invalid(_))), "an axis a task holds several values of");
         });
     }
 
@@ -443,7 +502,7 @@ mod tests {
             assert_eq!(placed.action_id, take.id, "this build's version");
             let edges = read::automation_edges_of(tx.conn(), AutomationPictureOwner::Automation, imported.id)
                 .expect("edges");
-            assert_eq!(edges.len(), 3, "the line on a way out the close does not have is left out");
+            assert_eq!(edges.len(), 3, "the line on a way out the split does not have is left out");
         });
     }
 }

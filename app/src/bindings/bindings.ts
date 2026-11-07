@@ -475,6 +475,13 @@ program?: string,
  */
 args?: Array<string>, 
 /**
+ * **How long a script step is expected to take, in minutes** (`automation_run_def.expected_minutes`,
+ * or the default where the run's copy predates it). Absent on a built-in, beside `program`: a
+ * script runs in a terminal whose silence is marked on its card (`app/src/talk/moving.ts`), and a
+ * built-in has no terminal.
+ */
+expectedMinutes?: number, 
+/**
  * **When the step was opened**, as an RFC3339 instant. Absent while it is about to be carried out
  * and nothing is written for it yet.
  */
@@ -1207,6 +1214,12 @@ folder?: string,
  * Whether this step may stop and wait for a person (`automation_action_step.interactive`).
  */
 interactive: boolean, 
+/**
+ * **How long the step is expected to take, in minutes** (`automation_run_def.expected_minutes`, or
+ * the default where the run's copy predates it). A silence in the step's terminal twice this long is
+ * marked on its card (`app/src/talk/moving.ts`).
+ */
+expectedMinutes: number, 
 /**
  * **When the step was opened**, as an RFC3339 instant (`automation_run_step.started_at`).
  */

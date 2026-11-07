@@ -1385,6 +1385,7 @@ export const nl: Translation = {
     "auto.run.roles.idleOne": "{name} (vrij)",
     "auto.run.roles.asks": "Wacht op invoer",
     "auto.run.roles.working": "Bezig",
+    "auto.run.roles.quiet": "Geen uitvoer {time}",
     "auto.run.roles.failed": "Mislukt",
     "auto.run.roles.none": "Er loopt nu voor geen enkele rol een ronde.",
     "auto.run.roles.filedRole": "De ronde van {role} is mislukt. Gemeld bij {to} als {ref}.",

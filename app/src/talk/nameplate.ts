@@ -140,6 +140,10 @@ export type Say = {
   /** When the step was opened, in milliseconds since the epoch — what the time it has run is counted
    *  from. Null where nothing is written for it yet, and on a pane no step has arrived in. */
   readonly startedAt: number | null;
+  /** **How long the step is expected to take, in minutes** (`automation_run_def.expected_minutes`) —
+   *  the run's own value for it, which a silence twice as long is marked by (`./moving`). Absent on a
+   *  built-in and on a pane no step has arrived in, neither of which has a terminal to fall silent. */
+  readonly expectedMinutes?: number;
   /** The action the spot this step was opened from stands on, or null where that spot has been taken
    *  off the picture since — and then the row says the step alone, as it does where the action is
    *  named after the step. */

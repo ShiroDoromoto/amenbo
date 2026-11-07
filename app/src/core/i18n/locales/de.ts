@@ -1389,6 +1389,7 @@ export const de: Translation = {
     "auto.run.roles.idleOne": "{name} (frei)",
     "auto.run.roles.asks": "Wartet auf Eingabe",
     "auto.run.roles.working": "Wird bearbeitet",
+    "auto.run.roles.quiet": "Keine Ausgabe {time}",
     "auto.run.roles.failed": "Fehlgeschlagen",
     "auto.run.roles.none": "Gerade läuft für keine Rolle eine Runde.",
     "auto.run.roles.filedRole": "Die Runde von {role} ist fehlgeschlagen. Als {ref} an {to} gemeldet.",

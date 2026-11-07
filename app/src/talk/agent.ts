@@ -205,11 +205,11 @@ export async function mountAgentFrame(
     frame.append(pane);
     const events: PaneEvents = {
       ...on,
-      opened: (session, where, running) => {
+      opened: (session, where, running, lastOutput) => {
         // What is running here settles the frame's folder — which for a terminal this pane took up is
         // the answer the invitation would otherwise have asked for a second time.
         folder = where ?? folder;
-        on.opened(session, where, running);
+        on.opened(session, where, running, lastOutput);
       },
       closed: (session, code, noWayBack) => {
         on.closed(session, code, noWayBack);

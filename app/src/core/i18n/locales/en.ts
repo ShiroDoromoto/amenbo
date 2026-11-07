@@ -1632,6 +1632,7 @@ const ui = {
   "auto.run.roles.idleOne": "{name} (idle)",
   "auto.run.roles.asks": "Waiting for input",
   "auto.run.roles.working": "Working",
+  "auto.run.roles.quiet": "No output {time}",
   "auto.run.roles.failed": "Failed",
   "auto.run.roles.none": "No role has a round going now.",
   "auto.run.roles.filedRole": "{role}'s round failed. Filed it to {to} as {ref}.",

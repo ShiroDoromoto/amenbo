@@ -2443,6 +2443,13 @@ button.feed__target:hover { color: var(--c-accent); }
 .runroles__open:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
 .runroles__card[data-state="asks"] { border-color: var(--c-human); }
 .runroles__card[data-state="failed"] { border-color: var(--c-stop); }
+/* A round whose terminal has gone quiet (`../shell/RunPicture`): past the first stage the border takes
+   the heed colour; past the second, the border is drawn twice as heavy — inset, so nothing moves — and
+   the ground takes the stop colour. */
+.runroles__card[data-quiet="1"] { border-color: var(--c-heed); }
+.runroles__card[data-quiet="2"] {
+  border-color: var(--c-stop); box-shadow: 0 0 0 1px var(--c-stop) inset; background: var(--c-stop-weak);
+}
 .runroles__top { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
 .runroles__top > .icon { flex: none; }
 .runroles__name { font-weight: var(--fw-bold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2470,6 +2477,10 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .runroles__chip[data-state="asks"] { border-color: var(--c-human); color: var(--c-human); }
 .runroles__chip[data-state="failed"] { border-color: var(--c-stop); color: var(--c-stop); }
+/* The clock on a quiet round, in the colour of the stage it is at. */
+.runroles__quiet { display: inline-flex; align-items: center; gap: 2px; font-variant-numeric: tabular-nums; }
+.runroles__quiet[data-quiet="1"] { border-color: var(--c-heed); color: var(--c-heed); background: var(--c-heed-weak); }
+.runroles__quiet[data-quiet="2"] { border-color: var(--c-stop); color: var(--c-on-stop); background: var(--c-stop); }
 /* "→ role": the other end of a line whose role has no card. Cut where a narrow card runs out. */
 .runroles__hand { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* A round as a row of the list: the role, what it is on, and what its card says at its foot, on one
@@ -2485,6 +2496,8 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .runroles__row[data-state="asks"] { box-shadow: 3px 0 0 var(--c-human) inset; }
 .runroles__row[data-state="failed"] { box-shadow: 3px 0 0 var(--c-stop) inset; }
+.runroles__row[data-quiet="1"] { box-shadow: 3px 0 0 var(--c-heed) inset; }
+.runroles__row[data-quiet="2"] { box-shadow: 3px 0 0 var(--c-stop) inset; background: var(--c-stop-weak); }
 .runroles__rowname { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .runroles__rowbody { min-width: 0; display: flex; flex-direction: column; }
 .runroles__rowbody > .runroles__task { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

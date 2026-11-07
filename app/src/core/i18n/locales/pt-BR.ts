@@ -1398,6 +1398,7 @@ export const ptBR: Translation = {
     "auto.run.roles.idleOne": "{name} (livre)",
     "auto.run.roles.asks": "Aguardando entrada",
     "auto.run.roles.working": "Em andamento",
+    "auto.run.roles.quiet": "Sem saída {time}",
     "auto.run.roles.failed": "Falhou",
     "auto.run.roles.none": "Nenhum papel tem uma rodada em andamento.",
     "auto.run.roles.filedRole": "A rodada de {role} falhou. Registrada para {to} como {ref}.",

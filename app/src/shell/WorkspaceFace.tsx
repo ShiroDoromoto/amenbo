@@ -465,6 +465,9 @@ export function WorkspaceFace({
         ? null
         : [builtin.program, ...(builtin.args ?? [])].join(" "),
       startedAt: on.startedAt === undefined ? null : Date.parse(on.startedAt),
+      // How long the step is expected to take, which a quiet terminal is measured against: an
+      // agent's step and a script step have one, a built-in has no terminal to be quiet.
+      ...(on.expectedMinutes === undefined ? {} : { expectedMinutes: on.expectedMinutes }),
       // Which spot of the picture this step was opened from, said by the action
       // standing there (`AMB-D-949`). Null where that spot has since been taken off.
       action: on.actionName === undefined ? null : builtinWord(builtin?.key, on.actionName),

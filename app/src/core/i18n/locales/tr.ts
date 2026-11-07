@@ -1385,6 +1385,7 @@ export const tr: Translation = {
     "auto.run.roles.idleOne": "{name} (boşta)",
     "auto.run.roles.asks": "Girdi bekliyor",
     "auto.run.roles.working": "Çalışıyor",
+    "auto.run.roles.quiet": "Çıktı yok {time}",
     "auto.run.roles.failed": "Başarısız",
     "auto.run.roles.none": "Şu an hiçbir rolün turu sürmüyor.",
     "auto.run.roles.filedRole": "{role} rolünün turu başarısız oldu. {ref} olarak {to} için kaydedildi.",

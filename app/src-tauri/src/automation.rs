@@ -2335,6 +2335,7 @@ fn open_one(
                     model: def.model.clone(),
                     folder,
                     interactive: def.interactive,
+                    expected_minutes: def.expected_minutes_or_default(),
                     started_at: ready.run_step.started_at.map(|at| at.to_rfc3339_z()),
                 }),
                 None,
@@ -2543,6 +2544,7 @@ fn builtin_about_to(
         held_until: None,
         program: def.script.as_ref().map(|s| s.program.clone()),
         args: def.script.as_ref().map(|s| s.args.clone()),
+        expected_minutes: def.script.as_ref().map(|_| def.expected_minutes_or_default()),
         started_at: None,
     }))
 }
@@ -2592,6 +2594,7 @@ fn builtin_of_step(
         held_until,
         program: def.script.as_ref().map(|s| s.program.clone()),
         args: def.script.as_ref().map(|s| s.args.clone()),
+        expected_minutes: def.script.as_ref().map(|_| def.expected_minutes_or_default()),
         started_at: run_step.started_at.map(|at| at.to_rfc3339_z()),
     }))
 }

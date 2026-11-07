@@ -1402,6 +1402,7 @@ export const pl: Translation = {
     "auto.run.roles.idleOne": "{name} (wolna)",
     "auto.run.roles.asks": "Czeka na dane",
     "auto.run.roles.working": "W toku",
+    "auto.run.roles.quiet": "Brak wyjścia {time}",
     "auto.run.roles.failed": "Nieudane",
     "auto.run.roles.none": "Żadna rola nie ma teraz trwającej rundy.",
     "auto.run.roles.filedRole": "Runda roli {role} nie powiodła się. Zgłoszono do {to} jako {ref}.",

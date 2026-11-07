@@ -1385,6 +1385,7 @@ export const hi: Translation = {
     "auto.run.roles.idleOne": "{name} (खाली)",
     "auto.run.roles.asks": "इनपुट की प्रतीक्षा",
     "auto.run.roles.working": "काम जारी",
+    "auto.run.roles.quiet": "कोई आउटपुट नहीं {time}",
     "auto.run.roles.failed": "विफल",
     "auto.run.roles.none": "अभी किसी भूमिका का दौर नहीं चल रहा।",
     "auto.run.roles.filedRole": "{role} का राउंड विफल हुआ। {to} के लिए {ref} के रूप में दर्ज किया गया।",

@@ -949,6 +949,7 @@ export const th: Translation = {
     "auto.build.roleNew": "บทบาท {n}",
     "auto.build.roleSteps": "จำนวนขั้นตอน: {n}",
     "auto.build.roleName": "ชื่อบทบาท",
+    "auto.build.roleIconRedo": "สร้างไอคอนใหม่",
     "auto.build.roleUp": "เลื่อนขึ้น",
     "auto.build.roleDown": "เลื่อนลง",
     "auto.build.roleRemove": "ลบบทบาท",

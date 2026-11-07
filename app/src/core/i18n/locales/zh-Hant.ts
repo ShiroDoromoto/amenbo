@@ -950,6 +950,7 @@ export const zhHant: Translation = {
     "auto.build.roleNew": "角色 {n}",
     "auto.build.roleSteps": "步驟數：{n}",
     "auto.build.roleName": "角色名稱",
+    "auto.build.roleIconRedo": "重新產生圖示",
     "auto.build.roleUp": "上移",
     "auto.build.roleDown": "下移",
     "auto.build.roleRemove": "刪除角色",

@@ -960,6 +960,7 @@ export const fr: Translation = {
     "auto.build.roleNew": "Rôle {n}",
     "auto.build.roleSteps": "Étapes : {n}",
     "auto.build.roleName": "Nom du rôle",
+    "auto.build.roleIconRedo": "Refaire l’icône",
     "auto.build.roleUp": "Monter",
     "auto.build.roleDown": "Descendre",
     "auto.build.roleRemove": "Retirer le rôle",

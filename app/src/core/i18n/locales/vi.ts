@@ -949,6 +949,7 @@ export const vi: Translation = {
     "auto.build.roleNew": "Vai trò {n}",
     "auto.build.roleSteps": "Số bước: {n}",
     "auto.build.roleName": "Tên vai trò",
+    "auto.build.roleIconRedo": "Tạo lại biểu tượng",
     "auto.build.roleUp": "Lên trên",
     "auto.build.roleDown": "Xuống dưới",
     "auto.build.roleRemove": "Xóa vai trò",

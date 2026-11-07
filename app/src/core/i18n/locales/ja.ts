@@ -954,6 +954,7 @@ export const ja: Translation = {
     "auto.build.roleNew": "役割 {n}",
     "auto.build.roleSteps": "ステップの数：{n}",
     "auto.build.roleName": "役割の名前",
+    "auto.build.roleIconRedo": "アイコンを作り直す",
     "auto.build.roleUp": "上へ",
     "auto.build.roleDown": "下へ",
     "auto.build.roleRemove": "役割を消す",

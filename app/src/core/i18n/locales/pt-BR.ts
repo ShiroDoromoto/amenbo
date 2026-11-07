@@ -961,6 +961,7 @@ export const ptBR: Translation = {
     "auto.build.roleNew": "Papel {n}",
     "auto.build.roleSteps": "Etapas: {n}",
     "auto.build.roleName": "Nome do papel",
+    "auto.build.roleIconRedo": "Refazer o ícone",
     "auto.build.roleUp": "Mover para cima",
     "auto.build.roleDown": "Mover para baixo",
     "auto.build.roleRemove": "Remover o papel",

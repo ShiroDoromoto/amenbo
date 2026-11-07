@@ -949,6 +949,7 @@ export const id: Translation = {
     "auto.build.roleNew": "Peran {n}",
     "auto.build.roleSteps": "Langkah: {n}",
     "auto.build.roleName": "Nama peran",
+    "auto.build.roleIconRedo": "Buat ulang ikon",
     "auto.build.roleUp": "Naikkan",
     "auto.build.roleDown": "Turunkan",
     "auto.build.roleRemove": "Hapus peran",

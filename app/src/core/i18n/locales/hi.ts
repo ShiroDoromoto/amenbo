@@ -948,6 +948,7 @@ export const hi: Translation = {
     "auto.build.roleNew": "भूमिका {n}",
     "auto.build.roleSteps": "चरण: {n}",
     "auto.build.roleName": "भूमिका का नाम",
+    "auto.build.roleIconRedo": "आइकन फिर से बनाएँ",
     "auto.build.roleUp": "ऊपर ले जाएँ",
     "auto.build.roleDown": "नीचे ले जाएँ",
     "auto.build.roleRemove": "भूमिका हटाएँ",

@@ -948,6 +948,7 @@ export const nl: Translation = {
     "auto.build.roleNew": "Rol {n}",
     "auto.build.roleSteps": "Stappen: {n}",
     "auto.build.roleName": "Naam van de rol",
+    "auto.build.roleIconRedo": "Pictogram opnieuw maken",
     "auto.build.roleUp": "Omhoog",
     "auto.build.roleDown": "Omlaag",
     "auto.build.roleRemove": "Rol verwijderen",

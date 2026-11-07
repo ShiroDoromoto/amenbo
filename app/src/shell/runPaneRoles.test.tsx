@@ -202,25 +202,32 @@ describe("the roles of a run", () => {
     expect(card.querySelector(".runroles__task")?.textContent).toBe("AMB-T-7 Fix the search filter");
     expect(card.querySelector(".runroles__step")?.textContent).toBe("write the tests");
     expect(card.querySelector(".runroles__time")?.textContent).toMatch(/1:0\d/);
+    expect(card.querySelector(".runroles__pulse")?.getAttribute("aria-label")).toBe(t("auto.run.roles.working"));
     // Another automation's role is not this run's.
     expect(idle().map((one) => one.dataset.role)).toEqual(["11", "13"]);
     expect(idle()[0]!.querySelector("[aria-label]")?.getAttribute("aria-label")).toBe(tf("auto.run.roles.idleOne", { name: "Alice" }));
     expect(container.querySelector(".runroles__idlecount")?.textContent).toBe(tf("auto.run.roles.idle", { n: 2 }));
   });
 
-  it("says a round that may wait for a person, and one that failed, on its card", async () => {
+  it("says a round that may wait for a person, and one that failed, on its card, and moves the dot of neither", async () => {
     roles = [role(12, "Bob")];
     await pane({ ...RUNNING, interactive: true, run: 42 });
     // The pane is turned to the terminal while such a step runs; the roles are turned to by hand.
     await act(async () => faces()[0]!.click());
     expect(cards()[0]!.dataset.state).toBe("asks");
     expect(cards()[0]!.querySelector(".runroles__chip")?.textContent).toBe(t("auto.run.roles.asks"));
+    expect(cards()[0]!.querySelector(".runroles__pulse"), "a round that may wait has the dot").toBeNull();
 
     await pane({ ...RUNNING, run: 43, state: FAILED.state });
     expect(cards()[0]!.dataset.state).toBe("failed");
     expect(cards()[0]!.querySelector(".runroles__chip")?.textContent).toBe(t("auto.run.roles.failed"));
     expect(cards()[0]!.querySelector(".runroles__time"), "a failed round went on counting").toBeNull();
+    expect(cards()[0]!.querySelector(".runroles__pulse"), "a failed round has the dot").toBeNull();
     expect(container.querySelector(".runroles__filed"), "a round that filed nothing has a line").toBeNull();
+
+    await pane({ ...RUNNING, run: 44, state: { ...FAILED.state!, status: "paused", word: "Paused" } });
+    expect(cards()[0]!.dataset.state).toBe("paused");
+    expect(cards()[0]!.querySelector(".runroles__pulse"), "a paused round has the dot").toBeNull();
   });
 
   it("puts one line under the pane for a failed round that was filed", async () => {

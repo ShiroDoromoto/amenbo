@@ -23,6 +23,12 @@
 // The roles' own definitions say nothing of which role hands on to which — the next role is the one
 // the handed task names when it is handed — so what the run carries today is the filing alone.
 //
+// **The only thing that moves is a small dot on a card whose round is under way**: it fades in and
+// out, slowly, so the eye finds which role is at work without the pane moving at the edge of sight all
+// day. A card that waits for a person, is paused or failed says so in words and stays still, and so
+// does a row of the list. Where the reader asks for less motion the dot stays lit and does not fade.
+// Nothing else is animated: a pane that changes size moves its cards only by where they stand.
+//
 // **One run is one pane** (`AMB-D-939`), and a run walks one round at a time, so the cards are its
 // round's role or none. An automation that defines no role still walks rounds: its round is drawn as
 // one card named after the automation, with no bar under it.
@@ -223,6 +229,7 @@ function Card({ card, run, now, away }: { card: RoleCard; run: Say; now: number;
       <span className="runroles__top">
         <Icon name={card.icon} />
         <span className="runroles__name">{card.name}</span>
+        {card.state === "running" && <span className="runroles__pulse" role="img" aria-label={t("auto.run.roles.working")} />}
       </span>
       {run.task !== null && (
         <span className="runroles__task" title={`${run.task.ref} ${run.task.title}`}>

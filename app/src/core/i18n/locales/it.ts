@@ -1369,6 +1369,7 @@ export const it: Translation = {
     "auto.run.roles.idle": "Ruoli liberi {n}",
     "auto.run.roles.idleOne": "{name} (libero)",
     "auto.run.roles.asks": "In attesa di input",
+    "auto.run.roles.working": "In corso",
     "auto.run.roles.failed": "Fallito",
     "auto.run.roles.none": "Nessun ruolo ha un giro in corso.",
     "auto.run.roles.filedRole": "Il giro di {role} è fallito. Segnalato a {to} come {ref}.",

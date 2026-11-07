@@ -1369,6 +1369,7 @@ export const es: Translation = {
     "auto.run.roles.idle": "Roles libres {n}",
     "auto.run.roles.idleOne": "{name} (libre)",
     "auto.run.roles.asks": "Esperando entrada",
+    "auto.run.roles.working": "En curso",
     "auto.run.roles.failed": "Falló",
     "auto.run.roles.none": "Ningún rol tiene una ronda en curso.",
     "auto.run.roles.filedRole": "La ronda de {role} falló. Se registró para {to} como {ref}.",

@@ -1358,6 +1358,7 @@ export const id: Translation = {
     "auto.run.roles.idle": "Peran yang senggang {n}",
     "auto.run.roles.idleOne": "{name} (senggang)",
     "auto.run.roles.asks": "Menunggu masukan",
+    "auto.run.roles.working": "Sedang bekerja",
     "auto.run.roles.failed": "Gagal",
     "auto.run.roles.none": "Saat ini tidak ada peran yang sedang menjalankan putaran.",
     "auto.run.roles.filedRole": "Putaran {role} gagal. Dicatat untuk {to} sebagai {ref}.",

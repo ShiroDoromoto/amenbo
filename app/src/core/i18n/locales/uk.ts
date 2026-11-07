@@ -1374,6 +1374,7 @@ export const uk: Translation = {
     "auto.run.roles.idle": "Вільні ролі {n}",
     "auto.run.roles.idleOne": "{name} (вільна)",
     "auto.run.roles.asks": "Чекає на введення",
+    "auto.run.roles.working": "У роботі",
     "auto.run.roles.failed": "Збій",
     "auto.run.roles.none": "Зараз жодна роль не має кола.",
     "auto.run.roles.filedRole": "Раунд ролі {role} завершився помилкою. Задачу {ref} заведено для {to}.",

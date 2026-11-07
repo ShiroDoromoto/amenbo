@@ -541,8 +541,8 @@ fn failures_to(kind: Option<String>, role_id: Option<i64>) -> rusqlite::Result<O
     }
 }
 
-/// An automation's trigger, read back from its eleven columns. No kind of when is no trigger, and then
-/// every other column is NULL (the script's arguments '', as a step's are); a kind beside a missing
+/// An automation's trigger, read back from its fifteen columns. No kind of when is no trigger, and then
+/// every other column is NULL (the scripts' arguments '', as a step's are); a kind beside a missing
 /// part is a row nothing writes, and reads as an error.
 fn trigger(r: &Row) -> rusqlite::Result<Option<AutomationTrigger>> {
     const C: col::automation::Cols = col::automation::ALL;
@@ -567,8 +567,8 @@ fn trigger(r: &Row) -> rusqlite::Result<Option<AutomationTrigger>> {
     if when == TriggerWhen::Tasks && condition.is_none() {
         return Err(bad("a tasks trigger with no condition".to_string()));
     }
-    let script = script(r, C.trigger_script_program, C.trigger_script_args, C.trigger_script_timeout_minutes)?;
-    if when == TriggerWhen::Script && script.is_none() {
+    let ask_script = script(r, C.trigger_script_program, C.trigger_script_args, C.trigger_script_timeout_minutes)?;
+    if when == TriggerWhen::Script && ask_script.is_none() {
         return Err(bad("a script trigger with no script".to_string()));
     }
     let task_kind: Option<String> = get(r, C.trigger_task_kind)?;
@@ -577,10 +577,22 @@ fn trigger(r: &Row) -> rusqlite::Result<Option<AutomationTrigger>> {
             title: get(r, C.trigger_task_title)?.unwrap_or_default(),
             notes: get(r, C.trigger_task_notes)?.unwrap_or_default(),
         },
+        Some("file") => TriggerTask::File {
+            path: get(r, C.trigger_task_path)?.ok_or_else(|| bad("a file trigger_task with no path".to_string()))?,
+        },
+        Some("script") => TriggerTask::Script {
+            script: script(
+                r,
+                C.trigger_task_script_program,
+                C.trigger_task_script_args,
+                C.trigger_task_script_timeout_minutes,
+            )?
+            .ok_or_else(|| bad("a script trigger_task with no program".to_string()))?,
+        },
         kind => return Err(bad(format!("bad trigger_task {kind:?}"))),
     };
     let next_at = ts_opt(r, C.trigger_next_at)?.ok_or_else(|| bad("a trigger with no trigger_next_at".to_string()))?;
-    Ok(Some(AutomationTrigger { when, condition, script, task, next_at }))
+    Ok(Some(AutomationTrigger { when, condition, script: ask_script, task, next_at }))
 }
 
 pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {

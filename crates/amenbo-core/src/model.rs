@@ -2002,12 +2002,23 @@ pub struct TriggerCondition {
     pub below: u32,
 }
 
-/// **What the task a trigger files says** — the second part of [`AutomationTrigger`].
+/// **What the task a trigger files says** — the second part of [`AutomationTrigger`]. A time it cannot
+/// say anything — the file not read, the program not answering — files nothing, as a time it decides no
+/// does ([`crate::ops::automation_run::fire`]).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum TriggerTask {
     /// The same title and notes every time, as written on the trigger.
     Fixed { title: String, notes: String },
+    /// What the file at `path`, by its full path, says when the task is filed: its first line that is
+    /// not blank is the title, and what follows it the notes
+    /// ([`crate::ops::automation_run::task_from_file`]).
+    File { path: String },
+    /// What the program writes in its `output.json` when the task is filed,
+    /// `{"version":1,"title":"…","notes":"…"}` with the notes left out where it has none
+    /// ([`crate::ops::automation_run::ask_trigger`]). Run, like the trigger's own script, outside any
+    /// write.
+    Script { script: StepScript },
 }
 
 impl TriggerTask {
@@ -2015,6 +2026,16 @@ impl TriggerTask {
     pub fn kind_str(&self) -> &'static str {
         match self {
             TriggerTask::Fixed { .. } => "fixed",
+            TriggerTask::File { .. } => "file",
+            TriggerTask::Script { .. } => "script",
+        }
+    }
+
+    /// The program that writes what the task says, where it is a [`TriggerTask::Script`].
+    pub fn script(&self) -> Option<&StepScript> {
+        match self {
+            TriggerTask::Script { script } => Some(script),
+            TriggerTask::Fixed { .. } | TriggerTask::File { .. } => None,
         }
     }
 }

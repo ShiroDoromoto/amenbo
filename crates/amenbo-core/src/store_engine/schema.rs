@@ -1148,7 +1148,8 @@ datasets! {
         // **The trigger**: what files a task on its own and starts a run with it, in three parts — when
         // to file one, what the task says, and the run, which is this automation's. NULL in
         // `trigger_when_kind` is no trigger, and then every other `trigger_` column is NULL too, but
-        // `trigger_script_args`, which is ''. Like `archived`, none of it is part of a saved version.
+        // `trigger_script_args` and `trigger_task_script_args`, which are ''. Like `archived`, none of
+        // it is part of a saved version.
         //
         // When to file one: `every` is every `trigger_every_minutes` minutes; `idle` is whenever the
         // automation has no run under way; `tasks` is whenever the condition below holds; `script` is
@@ -1167,10 +1168,17 @@ datasets! {
         trigger_script_program: col(OPT),
         trigger_script_args: col(REQ),
         trigger_script_timeout_minutes: col(INT_OPT),
-        // What the task says: `fixed` is the title and notes written here.
-        trigger_task_kind: enum_opt("fixed"),
+        // What the task says: `fixed` is the title and notes written here; `file` is what the file at
+        // `trigger_task_path` says when the task is filed; `script` is what the program in
+        // `trigger_task_script_*` writes then, as a script step's is written. Each leaves the others'
+        // columns NULL (the program's arguments '').
+        trigger_task_kind: enum_opt("fixed", "file", "script"),
         trigger_task_title: col(OPT),
         trigger_task_notes: col(OPT),
+        trigger_task_path: col(OPT),
+        trigger_task_script_program: col(OPT),
+        trigger_task_script_args: col(REQ),
+        trigger_task_script_timeout_minutes: col(INT_OPT),
         // When the trigger is next asked whether to file one. Moved on only when it does, so a time it
         // says no leaves nothing behind.
         trigger_next_at: ts_opt,

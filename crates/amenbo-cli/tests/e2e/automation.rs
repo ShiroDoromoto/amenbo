@@ -616,7 +616,9 @@ fn an_automation_is_stopped_and_started_again() {
 /// under a minute, a trigger with no title or no when, `--every` beside `--when-idle`, a filter with no
 /// count or a count of 0, a filter that does not read or names a project, a program not named by its
 /// full path, a script's argument or timeout with no program, a timeout out of range, and `--off`
-/// beside a part of one are refused.
+/// beside a part of one are refused. The task may be read from a file or written by a program instead
+/// of `--title`; either beside `--title` or the other, a path that is not a full one, and a task
+/// script's argument or timeout with no program are refused.
 #[test]
 fn a_trigger_is_written_shown_and_taken_away() {
     let cli = Cli::new();
@@ -680,6 +682,24 @@ fn a_trigger_is_written_shown_and_taken_away() {
         "{text}"
     );
 
+    let file = if cfg!(windows) { r"C:\amenbo\task.md" } else { "/tmp/amenbo/task.md" };
+    let read = cli.json(&["automation", "trigger", &a, "--every", "60", "--task-from-file", file, "--json"]);
+    assert_eq!(read["automation"]["trigger"]["task"], serde_json::json!({ "kind": "file", "path": file }), "{read}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains(&format!("every 60 minute(s), filing the task \"{file}\" says")), "{text}");
+
+    let written = cli.json(&[
+        "automation", "trigger", &a, "--when-idle", "--task-from-script", program, "--task-script-arg", "--quiet",
+        "--task-script-timeout-minutes", "5", "--json",
+    ]);
+    assert_eq!(
+        written["automation"]["trigger"]["task"],
+        serde_json::json!({ "kind": "script", "script": { "program": program, "args": ["--quiet"], "timeout_minutes": 5 } }),
+        "{written}"
+    );
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains(&format!("filing the task \"{program}\" writes")), "{text}");
+
     for wrong in [
         vec!["automation", "trigger", a.as_str(), "--every", "0", "--title", "x"],
         vec!["automation", "trigger", a.as_str(), "--every", "5"],
@@ -699,6 +719,15 @@ fn a_trigger_is_written_shown_and_taken_away() {
         vec!["automation", "trigger", a.as_str(), "--if-script", program, "--script-timeout-minutes", "0", "--title", "x"],
         vec!["automation", "trigger", a.as_str(), "--if-script", program, "--script-timeout-minutes", "361", "--title", "x"],
         vec!["automation", "trigger", a.as_str(), "--off", "--if-script", program],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--title", "x", "--task-from-file", file],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--notes", "y", "--task-from-script", program],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--task-from-file", file, "--task-from-script", program],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--task-from-file", "task.md"],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--task-from-script", "write-task"],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--task-script-arg", "a", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--task-script-timeout-minutes", "5", "--title", "x"],
+        vec!["automation", "trigger", a.as_str(), "--every", "5", "--task-from-script", program, "--task-script-timeout-minutes", "0"],
+        vec!["automation", "trigger", a.as_str(), "--off", "--task-from-file", file],
     ] {
         let (_, code) = cli.run_err(&wrong);
         assert_ne!(code, 0, "{wrong:?} is refused");

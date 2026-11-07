@@ -1261,7 +1261,19 @@ pub struct NewTrigger {
     pub when: TriggerWhen,
     pub condition: Option<TriggerCondition>,
     pub script: Option<NewScript>,
-    pub task: TriggerTask,
+    pub task: NewTriggerTask,
+}
+
+/// **What the task a trigger files is written to say** ([`NewTrigger::task`]) — a [`TriggerTask`] as
+/// it is written, the program's timeout left out where it is [`DEFAULT_SCRIPT_TIMEOUT_MINUTES`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NewTriggerTask {
+    /// [`TriggerTask::Fixed`].
+    Fixed { title: String, notes: String },
+    /// [`TriggerTask::File`].
+    File { path: String },
+    /// [`TriggerTask::Script`].
+    Script(NewScript),
 }
 
 /// **Write an automation's trigger** (`Some`), or take it away (`None`) — what files a task on its own
@@ -1276,8 +1288,10 @@ pub struct NewTrigger {
 /// refused where its filter names a `project:` — it counts inside the automation's project — or does
 /// not read, which counting it once here finds out, and where it asks for fewer than none; a `tasks`
 /// with no condition is refused. A script is refused as a script step's is ([`checked_script`]), and a
-/// `script` with none is refused; it is not run here. Taking a trigger away that is not there writes
-/// nothing.
+/// `script` with none is refused; it is not run here. What the task says is refused the same way: a
+/// file not named by its full path, and a program that writes it as a script is; neither is read or
+/// run here, so one missing now is only found out when the task is filed. Taking a trigger away that
+/// is not there writes nothing.
 pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Result<Automation> {
     let before = live_automation(tx, id)?;
     if before.trigger.is_none() && trigger.is_none() {
@@ -1328,13 +1342,22 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
                 }
             };
             let task = match task {
-                TriggerTask::Fixed { title, notes } => {
+                NewTriggerTask::Fixed { title, notes } => {
                     let title = title.trim();
                     if title.is_empty() {
                         return Err(Error::invalid("the task a trigger files needs a title"));
                     }
                     TriggerTask::Fixed { title: title.to_string(), notes }
                 }
+                NewTriggerTask::File { path } => {
+                    if !std::path::Path::new(&path).is_absolute() {
+                        return Err(Error::invalid(format!(
+                            "the file a trigger's task is read from is named by its full path, and '{path}' is not one"
+                        )));
+                    }
+                    TriggerTask::File { path }
+                }
+                NewTriggerTask::Script(script) => TriggerTask::Script { script: checked_script(script)? },
             };
             Some(AutomationTrigger { when, condition, script, task, next_at: when.after(now) })
         }
@@ -4138,14 +4161,15 @@ mod tests {
     /// no title, a condition whose filter does not read or names a project, one below 0, a `tasks` with
     /// no condition, a `script` with no script, a program not named by its full path, a timeout out of
     /// range and an automation kept for export only are refused; taking away one that is not there
-    /// writes nothing.
+    /// writes nothing. What the task says may be read from a file or written by a program, each named
+    /// by its full path, which neither is read nor run here.
     #[test]
     fn a_trigger_is_written_and_taken_away() {
         let hourly = |title: &str| NewTrigger {
             when: TriggerWhen::Every { minutes: 60 },
             condition: None,
             script: None,
-            task: TriggerTask::Fixed { title: title.into(), notes: "メモ".into() },
+            task: NewTriggerTask::Fixed { title: title.into(), notes: "メモ".into() },
         };
         with_tx(|tx| {
             let automation = mk_automation(tx);
@@ -4223,6 +4247,36 @@ mod tests {
                 NewTrigger { script: program(&judge, Some(0)), ..hourly("見る") },
                 NewTrigger { script: program(&judge, Some(MAX_SCRIPT_TIMEOUT_MINUTES + 1)), ..hourly("見る") },
             ] {
+                let refused = trigger_set(tx, automation.id, Some(wrong.clone()));
+                assert!(matches!(refused, Err(Error::Invalid(_))), "{wrong:?} is refused");
+            }
+
+            // Not there yet, and never read here.
+            let path = std::env::temp_dir().join("trigger-task.md").to_string_lossy().into_owned();
+            let from_file = NewTrigger { task: NewTriggerTask::File { path: path.clone() }, ..hourly("") };
+            let set = trigger_set(tx, automation.id, Some(from_file)).expect("a task read from a file");
+            let read_back = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
+            assert_eq!(read_back.task, TriggerTask::File { path });
+            assert_eq!(set.trigger, Some(read_back));
+            let written = NewTriggerTask::Script(NewScript { program: judge.clone(), args: Vec::new(), timeout_minutes: None });
+            let set = trigger_set(tx, automation.id, Some(NewTrigger { task: written, ..hourly("") }))
+                .expect("a task a program writes");
+            let read_back = live_automation(tx, automation.id).expect("read").trigger.expect("kept");
+            assert_eq!(
+                read_back.task,
+                TriggerTask::Script {
+                    script: StepScript { program: judge.clone(), args: Vec::new(), timeout_minutes: DEFAULT_SCRIPT_TIMEOUT_MINUTES },
+                },
+                "kept with the timeout it is given unless written"
+            );
+            assert_eq!(set.trigger, Some(read_back));
+
+            for task in [
+                NewTriggerTask::File { path: "trigger-task.md".into() },
+                NewTriggerTask::Script(NewScript { program: "write-task".into(), args: Vec::new(), timeout_minutes: None }),
+                NewTriggerTask::Script(NewScript { program: judge.clone(), args: Vec::new(), timeout_minutes: Some(0) }),
+            ] {
+                let wrong = NewTrigger { task, ..hourly("") };
                 let refused = trigger_set(tx, automation.id, Some(wrong.clone()));
                 assert!(matches!(refused, Err(Error::Invalid(_))), "{wrong:?} is refused");
             }

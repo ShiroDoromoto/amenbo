@@ -1358,7 +1358,51 @@ pub const STEPS: &[Step] = &[
         // keeps its kind.
         apply: Apply::Custom(let_a_trigger_ask_a_script),
     },
+    Step {
+        to: 115,
+        name: "add automation.trigger_task_path and trigger_task_script_program, _args and _timeout_minutes, where a trigger's task is read from or written by, and admit file and script in trigger_task_kind",
+        // **Unseeded.** Every trigger before this filed the title and notes written on it, so each keeps
+        // `fixed` and has neither a file nor a program.
+        apply: Apply::Custom(let_a_trigger_read_or_write_its_task),
+    },
 ];
+
+/// v115: `automation.trigger_task_path`, `trigger_task_script_program`, `trigger_task_script_args` and
+/// `trigger_task_script_timeout_minutes`, and `automation.trigger_task_kind` admits `file` and `script`
+/// beside `fixed`.
+///
+/// **Each part only where it is not there yet.** A store whose automation table was created in the live
+/// shape already has them. The kind is widened as v108 widened `trigger_when_kind`: kept in a column of
+/// its own while the column is dropped and added again.
+fn let_a_trigger_read_or_write_its_task(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let cols = column_names(tx, "automation")?;
+    for (name, decl) in [
+        ("trigger_task_path", "TEXT"),
+        ("trigger_task_script_program", "TEXT"),
+        ("trigger_task_script_args", "TEXT NOT NULL DEFAULT ''"),
+        ("trigger_task_script_timeout_minutes", "BIGINT"),
+    ] {
+        if !cols.iter().any(|c| c == name) {
+            tx.execute_batch(&format!("ALTER TABLE automation ADD COLUMN {name} {decl};"))?;
+        }
+    }
+    let table: String =
+        tx.query_row("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'automation'", [], |r| r.get(0))?;
+    if table.contains("trigger_task_kind IN ('fixed', 'file', 'script')") {
+        return Ok(());
+    }
+    tx.execute_batch(
+        "ALTER TABLE automation ADD COLUMN trigger_task_kind_kept TEXT;
+         UPDATE automation SET trigger_task_kind_kept = trigger_task_kind;
+         ALTER TABLE automation DROP COLUMN trigger_task_kind;
+         ALTER TABLE automation ADD COLUMN trigger_task_kind TEXT \
+             CHECK(trigger_task_kind IN ('fixed', 'file', 'script'));
+         UPDATE automation SET trigger_task_kind = trigger_task_kind_kept;
+         ALTER TABLE automation DROP COLUMN trigger_task_kind_kept;",
+    )?;
+    Ok(())
+}
 
 /// v114: `automation.trigger_script_program`, `trigger_script_args` and
 /// `trigger_script_timeout_minutes`, and `automation.trigger_when_kind` admits `script` beside `every`,
@@ -11518,7 +11562,7 @@ mod tests {
         assert_eq!((when, next), (None, None), "no automation had a trigger before");
         for wrong in [
             "trigger_when_kind = 'hourly'",
-            "trigger_task_kind = 'file'",
+            "trigger_task_kind = 'weekly'",
             "trigger_next_at = 'tomorrow'",
         ] {
             let refused = engine.conn().execute(&format!("UPDATE automation SET {wrong} WHERE id = 1"), []);
@@ -11772,6 +11816,64 @@ mod tests {
             .execute(
                 "UPDATE automation SET trigger_when_kind = 'script', trigger_script_program = '/usr/local/bin/judge', \
                      trigger_script_args = '[]', trigger_script_timeout_minutes = 30 WHERE id = 1",
+                [],
+            )
+            .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v115: a trigger written before the step keeps `fixed` with its title and notes and has neither a
+    /// file nor a program, the column admits `file` and `script` beside `fixed`, and each is written in
+    /// its new columns.
+    #[test]
+    fn a_trigger_written_before_v115_keeps_its_task_and_file_and_script_are_admitted() {
+        let dir = scratch("automation-trigger-task");
+        let engine = store_at(&dir, 114);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, trigger_when_kind, trigger_every_minutes, \
+                     trigger_task_kind, trigger_task_title, trigger_task_notes, trigger_next_at) \
+                     VALUES (1, 1, 'work', 'every', 60, 'fixed', 'look', 'notes', '2026-11-07T00:00:00Z');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        type Kept = (Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, String, Option<i64>);
+        let kept: Kept = engine
+            .conn()
+            .query_row(
+                "SELECT trigger_task_kind, trigger_task_title, trigger_task_notes, trigger_task_path, \
+                     trigger_task_script_program, trigger_task_script_args, trigger_task_script_timeout_minutes \
+                     FROM automation WHERE id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            kept,
+            (Some("fixed".into()), Some("look".into()), Some("notes".into()), None, None, String::new(), None),
+            "kept its task, with neither a file nor a program"
+        );
+        let refused = engine.conn().execute("UPDATE automation SET trigger_task_kind = 'weekly' WHERE id = 1", []);
+        assert!(refused.is_err(), "a kind not declared is refused");
+        engine
+            .conn()
+            .execute(
+                "UPDATE automation SET trigger_task_kind = 'file', trigger_task_title = NULL, trigger_task_notes = NULL, \
+                     trigger_task_path = '/tmp/task.md' WHERE id = 1",
+                [],
+            )
+            .unwrap();
+        engine
+            .conn()
+            .execute(
+                "UPDATE automation SET trigger_task_kind = 'script', trigger_task_path = NULL, \
+                     trigger_task_script_program = '/usr/local/bin/write-task', trigger_task_script_args = '[]', \
+                     trigger_task_script_timeout_minutes = 30 WHERE id = 1",
                 [],
             )
             .unwrap();

@@ -1574,7 +1574,7 @@ mod tests {
     /// the time it is next asked where it was.
     #[test]
     fn a_trigger_files_its_task_and_starts_a_run_once_due() {
-        use crate::model::{TriggerTask, TriggerWhen};
+        use crate::model::TriggerWhen;
         use crate::ops::automation_run::{fire, triggers_due, TriggersDue};
         use crate::time::Timestamp;
         with_tx(|tx| {
@@ -1584,7 +1584,7 @@ mod tests {
                 when: every,
                 condition: None,
                 script: None,
-                task: TriggerTask::Fixed { title: "受信箱を見る".into(), notes: "what to do".into() },
+                task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: "what to do".into() },
             };
             automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger");
             let next_at = |tx: &WriteTx<'_>| {
@@ -1623,7 +1623,7 @@ mod tests {
     /// leaves `next_at` where it was.
     #[test]
     fn an_idle_trigger_files_once_no_run_is_under_way() {
-        use crate::model::{TriggerTask, TriggerWhen};
+        use crate::model::TriggerWhen;
         use crate::ops::automation_run::{fire, triggers_due};
         use crate::ops::automation_stop::{stop, Ending};
         use crate::time::Timestamp;
@@ -1634,7 +1634,7 @@ mod tests {
                 when: TriggerWhen::Idle,
                 condition: None,
                 script: None,
-                task: TriggerTask::Fixed { title: "手が空いたら見る".into(), notes: String::new() },
+                task: automation::NewTriggerTask::Fixed { title: "手が空いたら見る".into(), notes: String::new() },
             };
             let written = Timestamp::now();
             automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger");
@@ -1677,7 +1677,7 @@ mod tests {
     /// the tasks go below it again it files the next one.
     #[test]
     fn a_trigger_with_a_condition_files_only_while_few_enough_tasks_match() {
-        use crate::model::{TriggerCondition, TriggerTask, TriggerWhen};
+        use crate::model::{TriggerCondition, TriggerWhen};
         use crate::ops::automation_run::{fire, triggers_due};
         use crate::ops::test_support::mk_task_in;
         with_tx(|tx| {
@@ -1687,7 +1687,7 @@ mod tests {
                 when: TriggerWhen::Tasks,
                 condition: Some(TriggerCondition { filter: "status:todo".into(), below: 2 }),
                 script: None,
-                task: TriggerTask::Fixed { title: "足りなければ起こす".into(), notes: String::new() },
+                task: automation::NewTriggerTask::Fixed { title: "足りなければ起こす".into(), notes: String::new() },
             };
             automation::trigger_set(tx, automation.id, Some(trigger.clone())).expect("trigger");
             let next_at = |tx: &WriteTx<'_>| {
@@ -1733,8 +1733,8 @@ mod tests {
     /// none at all, or one rewritten since it was asked, files nothing and leaves `next_at` where it was.
     #[test]
     fn a_trigger_with_a_script_files_only_once_its_script_said_yes() {
-        use crate::model::{StepScript, TriggerTask, TriggerWhen};
-        use crate::ops::automation_run::{fire, triggers_due};
+        use crate::model::{StepScript, TriggerWhen};
+        use crate::ops::automation_run::{fire, triggers_due, ScriptsSaid, TriggerScripts};
         with_tx(|tx| {
             let (automation, _, _) = entry(tx);
             // Named by its full path, as a program is written; it is never run here.
@@ -1747,7 +1747,7 @@ mod tests {
                     args: Vec::new(),
                     timeout_minutes: Some(5),
                 }),
-                task: TriggerTask::Fixed { title: "判定で起こす".into(), notes: String::new() },
+                task: automation::NewTriggerTask::Fixed { title: "判定で起こす".into(), notes: String::new() },
             };
             automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger");
             let next_at = |tx: &WriteTx<'_>| {
@@ -1758,17 +1758,114 @@ mod tests {
             let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
 
             let script = StepScript { program: judge, args: Vec::new(), timeout_minutes: 5 };
+            let scripts = TriggerScripts { ask: Some(script.clone()), write: None };
             let found = triggers_due(tx.conn(), due).expect("ask");
             assert!(found.due.is_empty(), "not fired before its script is asked");
-            assert_eq!(found.ask, vec![(automation.id, script.clone())]);
+            assert_eq!(found.ask, vec![(automation.id, scripts.clone())]);
 
-            let other = StepScript { timeout_minutes: 6, ..script.clone() };
+            let other = TriggerScripts { ask: Some(StepScript { timeout_minutes: 6, ..script }), write: None };
+            let said = |scripts: &TriggerScripts| ScriptsSaid { scripts: scripts.clone(), wrote: None };
             assert!(fire(tx, automation.id, &by, due, None).expect("fire").is_none(), "no answer, no task");
-            assert!(fire(tx, automation.id, &by, due, Some(&other)).expect("fire").is_none(), "another script's yes");
+            assert!(fire(tx, automation.id, &by, due, Some(&said(&other))).expect("fire").is_none(), "another script's yes");
             assert_eq!(next_at(tx), due, "a time it decides no leaves nothing");
 
-            assert!(fire(tx, automation.id, &by, due, Some(&script)).expect("fire").is_some(), "its own script's yes");
+            assert!(fire(tx, automation.id, &by, due, Some(&said(&scripts))).expect("fire").is_some(), "its own script's yes");
             assert_eq!(next_at(tx), TriggerWhen::Script.after(due), "a minute on from when it filed");
+        });
+    }
+
+    /// **A trigger's task may be read from a file**, as the file stands when it fires: its first line is
+    /// the title of the task filed and the rest its notes. A file it cannot read files nothing — an
+    /// error, as a launch refused is — and leaves `next_at` where it was.
+    #[test]
+    fn a_trigger_files_the_task_its_file_says() {
+        use crate::model::TriggerWhen;
+        use crate::ops::automation_run::{fire, triggers_due};
+        with_tx(|tx| {
+            let (automation, make, _) = entry(tx);
+            let dir = std::env::temp_dir().join(format!("amenbo-trigger-file-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).expect("dir");
+            let path = dir.join("task.md");
+            let trigger = automation::NewTrigger {
+                when: TriggerWhen::Every { minutes: 5 },
+                condition: None,
+                script: None,
+                task: automation::NewTriggerTask::File { path: path.to_string_lossy().into_owned() },
+            };
+            automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger");
+            let next_at = |tx: &WriteTx<'_>| {
+                read::automation(tx.conn(), automation.id).expect("read").expect("there").trigger.expect("kept").next_at
+            };
+            let due = next_at(tx);
+            let claude = ["claude".to_string()];
+            let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+
+            assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![automation.id], "nothing to run first");
+            assert!(fire(tx, automation.id, &by, due, None).is_err(), "no file there to read");
+            assert_eq!(next_at(tx), due, "and nothing moves on");
+            assert!(read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read").is_empty());
+
+            std::fs::write(&path, "ファイルで起こす\n\n本文").expect("write");
+            let run = fire(tx, automation.id, &by, due, None).expect("fire").expect("a run");
+            let filed = filed_first(tx, &run, &make);
+            assert_eq!(filed.title, "ファイルで起こす");
+            assert_eq!(filed.notes, "本文");
+            std::fs::remove_dir_all(&dir).ok();
+        });
+    }
+
+    /// **A trigger's task may be written by a program** — run outside the write with the trigger's
+    /// other scripts, so the look puts it in `ask`, and `fire` files the title and notes it wrote only
+    /// where they came from that very program: none at all, or one rewritten since, files nothing.
+    #[test]
+    fn a_trigger_files_the_task_its_program_wrote() {
+        use crate::model::{StepScript, TriggerWhen};
+        use crate::ops::automation_run::{fire, triggers_due, ScriptsSaid, TriggerScripts};
+        with_tx(|tx| {
+            let (automation, make, _) = entry(tx);
+            // Named by its full path, as a program is written; it is never run here.
+            let writer = std::env::temp_dir().join("write-task").to_string_lossy().into_owned();
+            let trigger = automation::NewTrigger {
+                when: TriggerWhen::Idle,
+                condition: None,
+                script: None,
+                task: automation::NewTriggerTask::Script(automation::NewScript {
+                    program: writer.clone(),
+                    args: Vec::new(),
+                    timeout_minutes: None,
+                }),
+            };
+            automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger");
+            let next_at = |tx: &WriteTx<'_>| {
+                read::automation(tx.conn(), automation.id).expect("read").expect("there").trigger.expect("kept").next_at
+            };
+            let due = next_at(tx);
+            let claude = ["claude".to_string()];
+            let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+
+            let script = StepScript {
+                program: writer,
+                args: Vec::new(),
+                timeout_minutes: crate::model::DEFAULT_SCRIPT_TIMEOUT_MINUTES,
+            };
+            let scripts = TriggerScripts { ask: None, write: Some(script.clone()) };
+            let found = triggers_due(tx.conn(), due).expect("ask");
+            assert!(found.due.is_empty(), "not fired before its program has written the task");
+            assert_eq!(found.ask, vec![(automation.id, scripts.clone())]);
+
+            let wrote = Some(("書いてもらう".to_string(), "本文".to_string()));
+            let other = TriggerScripts { ask: None, write: Some(StepScript { timeout_minutes: 6, ..script }) };
+            assert!(fire(tx, automation.id, &by, due, None).expect("fire").is_none(), "nothing written, no task");
+            let rewritten = ScriptsSaid { scripts: other, wrote: wrote.clone() };
+            assert!(fire(tx, automation.id, &by, due, Some(&rewritten)).expect("fire").is_none(), "another program's");
+            assert_eq!(next_at(tx), due, "a time it decides no leaves nothing");
+
+            let said = ScriptsSaid { scripts, wrote };
+            let run = fire(tx, automation.id, &by, due, Some(&said)).expect("fire").expect("a run");
+            let filed = filed_first(tx, &run, &make);
+            assert_eq!(filed.title, "書いてもらう");
+            assert_eq!(filed.notes, "本文");
+            assert_eq!(next_at(tx), TriggerWhen::Idle.after(due));
         });
     }
 
@@ -1776,7 +1873,7 @@ mod tests {
     /// is next asked stays where it was. Started again, it files its task.
     #[test]
     fn a_stopped_automations_trigger_files_nothing() {
-        use crate::model::{TriggerTask, TriggerWhen};
+        use crate::model::TriggerWhen;
         use crate::ops::automation_run::{fire, triggers_due, TriggersDue};
         with_tx(|tx| {
             let (automation, _, _) = entry(tx);
@@ -1784,7 +1881,7 @@ mod tests {
                 when: TriggerWhen::Every { minutes: 5 },
                 condition: None,
                 script: None,
-                task: TriggerTask::Fixed { title: "見る".into(), notes: String::new() },
+                task: automation::NewTriggerTask::Fixed { title: "見る".into(), notes: String::new() },
             };
             automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger");
             automation::stop(tx, automation.id, true).expect("stop");
@@ -1815,7 +1912,7 @@ mod tests {
     /// is next asked stays where it was.
     #[test]
     fn a_trigger_refused_at_launch_files_nothing() {
-        use crate::model::{TriggerTask, TriggerWhen};
+        use crate::model::TriggerWhen;
         use crate::ops::automation_run::fire;
         with_tx(|tx| {
             let (automation, make, _) = entry(tx);
@@ -1825,7 +1922,7 @@ mod tests {
                 when: TriggerWhen::Every { minutes: 5 },
                 condition: None,
                 script: None,
-                task: TriggerTask::Fixed { title: "見る".into(), notes: String::new() },
+                task: automation::NewTriggerTask::Fixed { title: "見る".into(), notes: String::new() },
             };
             automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger");
             let before = read::automation(tx.conn(), automation.id).expect("read").expect("there");

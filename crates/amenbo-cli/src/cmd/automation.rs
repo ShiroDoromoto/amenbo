@@ -507,9 +507,14 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             script_timeout_minutes,
             title,
             notes,
+            task_from_file,
+            task_from_script,
+            task_script_args,
+            task_script_timeout_minutes,
             off,
         } => {
-            use amenbo_core::model::{TriggerCondition, TriggerTask, TriggerWhen};
+            use amenbo_core::model::{TriggerCondition, TriggerWhen};
+            use amenbo_core::ops::automation::NewTriggerTask;
             let condition = match (if_tasks, fewer_than) {
                 (Some(filter), Some(below)) => Some(TriggerCondition { filter, below }),
                 // clap asks for both or neither.
@@ -527,14 +532,22 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 (None, false, None, Some(_)) => Some(TriggerWhen::Script),
                 (None, false, None, None) => None,
             };
-            let trigger = match (off, when, title) {
-                (false, Some(when), Some(title)) => Some(amenbo_core::ops::automation::NewTrigger {
-                    when,
-                    condition,
-                    script,
-                    task: TriggerTask::Fixed { title, notes: body_arg_opt(notes)?.unwrap_or_default() },
-                }),
-                // clap asks for a when and a title unless --off is given, and refuses them beside it.
+            let task = match (title, task_from_file, task_from_script) {
+                (Some(title), _, _) => Some(NewTriggerTask::Fixed { title, notes: body_arg_opt(notes)?.unwrap_or_default() }),
+                (None, Some(path), _) => Some(NewTriggerTask::File { path }),
+                (None, None, Some(program)) => Some(NewTriggerTask::Script(NewScript {
+                    program,
+                    args: task_script_args,
+                    timeout_minutes: task_script_timeout_minutes,
+                })),
+                (None, None, None) => None,
+            };
+            let trigger = match (off, when, task) {
+                (false, Some(when), Some(task)) => {
+                    Some(amenbo_core::ops::automation::NewTrigger { when, condition, script, task })
+                }
+                // clap asks for a when and one of --title, --task-from-file and --task-from-script unless
+                // --off is given, and refuses them beside it.
                 _ => None,
             };
             let a = store.automation_trigger_set(id, trigger).map_err(CliError::from)?;
@@ -1574,8 +1587,9 @@ fn render_automation(
     }
 }
 
-/// What an automation's trigger does, the tasks it looks at and the program it asks first, and when it
-/// is next asked (for an `idle`, a `tasks` or a `script`, the soonest it may be).
+/// What an automation's trigger does, the tasks it looks at and the program it asks first, the task it
+/// files (or the file or program that says it), and when it is next asked (for an `idle`, a `tasks` or
+/// a `script`, the soonest it may be).
 fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
     use amenbo_core::model::{TriggerTask, TriggerWhen};
     let fewer = trigger.condition.as_ref().map(|c| match c.filter.as_str() {
@@ -1596,6 +1610,8 @@ fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
     };
     let task = match &trigger.task {
         TriggerTask::Fixed { title, .. } => format!("\"{title}\""),
+        TriggerTask::File { path } => format!("the task \"{path}\" says"),
+        TriggerTask::Script { script } => format!("the task \"{}\" writes", script.program),
     };
     format!("starts a run on its own {when}, filing {task} — {next} {}", trigger.next_at.to_rfc3339_z())
 }

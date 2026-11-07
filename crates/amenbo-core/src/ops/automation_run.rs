@@ -528,7 +528,7 @@ pub struct Launcher<'a> {
 /// what its entry does not read is refused rather than left lying on the run where nothing reads it
 /// ([`entry_reads`]).
 ///
-/// A trigger hands its task over the same way, as the title and notes written on it ([`fire`]).
+/// A trigger hands its task over the same way, as the title and notes it says ([`fire`]).
 ///
 /// Nothing handed is the default, and a launch that hands nothing starts as it always has.
 #[derive(Clone, Debug, Default)]
@@ -1819,15 +1819,15 @@ pub fn launch_handing_past_the_limit(
 }
 
 /// **What the triggers say on one look** ([`triggers_due`]): the automations whose trigger is due now,
-/// the ones due but for what their script says, and when the soonest of the rest is.
+/// the ones due but for what their scripts say, and when the soonest of the rest is.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TriggersDue {
     /// The automations to [`fire`], oldest first.
     pub due: Vec<i64>,
-    /// The automations whose trigger is due but for its script, oldest first, each with that script:
-    /// run it outside any write ([`ask_script`]), and [`fire`] the automation only where it said yes,
-    /// handing it the script that did.
-    pub ask: Vec<(i64, StepScript)>,
+    /// The automations whose trigger is due but for its scripts, oldest first, each with them: run them
+    /// outside any write ([`ask_trigger`]), and [`fire`] the automation only where they said to file a
+    /// task, handing it what they said.
+    pub ask: Vec<(i64, TriggerScripts)>,
     /// When the next trigger not yet due is, or `None` where there is none — so a look can sleep no
     /// longer than that.
     pub next_at: Option<Timestamp>,
@@ -1837,8 +1837,9 @@ pub struct TriggersDue {
 /// started by one ([`read::automations_triggered`]), which leaves out a stopped one. One whose runs
 /// under way say no ([`has_room`]), or whose condition does not hold ([`condition_holds`]), is not
 /// due: it would decide not to file a task, so a look need not open a write to hear it say so. One
-/// with a script is put in `ask` rather than `due`: its program may run for hours, so it is not run
-/// here. It writes nothing: [`fire`] asks all of it again, in the transaction it writes in.
+/// with a script — one that asks whether to file a task, or one that writes what it says — is put in
+/// `ask` rather than `due`: its program may run for hours, so it is not run here. It writes nothing:
+/// [`fire`] asks all of it again, in the transaction it writes in.
 pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
     let mut found = TriggersDue::default();
     for automation in read::automations_triggered(conn)? {
@@ -1850,8 +1851,8 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
             if has_room(&trigger.when, under_way.len(), automation.max_concurrent_runs)
                 && condition_holds(conn, automation.project_id, trigger).unwrap_or(true)
             {
-                match &trigger.script {
-                    Some(script) => found.ask.push((automation.id, script.clone())),
+                match TriggerScripts::of(trigger) {
+                    Some(scripts) => found.ask.push((automation.id, scripts)),
                     None => found.due.push(automation.id),
                 }
             }
@@ -1869,11 +1870,12 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 ///    no ([`has_room`]): an `every` or a `tasks` waits while the automation has its most runs under way
 ///    (`max_concurrent_runs`), where a task filed would have no run to go to, and an `idle` waits until
 ///    it has none at all. Nor while its condition does not hold ([`condition_holds`]). One with a
-///    script files one only where `script_said_yes` is that very script — the one [`ask_script`] ran
-///    and heard yes from, outside this write — so a script rewritten since it was asked files nothing.
-///    An archived automation, a stopped one, one kept for export only and one with no trigger file none
-///    either.
-/// 2. **What it says.** The title and notes written on the trigger.
+///    script files one only where `said` was heard from those very scripts — the ones [`ask_trigger`]
+///    ran outside this write — so one rewritten since they were asked files nothing. An archived
+///    automation, a stopped one, one kept for export only and one with no trigger file none either.
+/// 2. **What it says** ([`crate::model::TriggerTask`]): the title and notes written on the trigger, the
+///    ones read from its file now ([`task_from_file`]), or the ones its program wrote in `said`. A file
+///    that says nothing it can file is an error, as a launch refused is.
 /// 3. **The run.** A launch like any other ([`launch_handing`]), of the newest saved version, the task
 ///    handed to its entry as a person's would be — so it is the entry, the built-in that files a task,
 ///    that files it. What `by` says is passed on as it stands.
@@ -1888,7 +1890,7 @@ pub fn fire(
     automation_id: i64,
     by: &Launcher<'_>,
     now: Timestamp,
-    script_said_yes: Option<&StepScript>,
+    said: Option<&ScriptsSaid>,
 ) -> Result<Option<AutomationRun>> {
     let before = read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
     let Some(trigger) = before.trigger.clone() else { return Ok(None) };
@@ -1898,17 +1900,19 @@ pub fn fire(
     let under_way = read::automation_run_ids_under_way(tx.conn(), automation_id)?;
     if !has_room(&trigger.when, under_way.len(), before.max_concurrent_runs)
         || !condition_holds(tx.conn(), before.project_id, &trigger)?
-        || trigger.script.as_ref().is_some_and(|script| script_said_yes != Some(script))
+        || TriggerScripts::of(&trigger).is_some_and(|scripts| said.map(|said| &said.scripts) != Some(&scripts))
     {
         return Ok(None);
     }
-    let handed = match &trigger.task {
-        crate::model::TriggerTask::Fixed { title, notes } => HandedAtLaunch {
-            title: Some(title.clone()),
-            notes: Some(notes.clone()),
-            ..Default::default()
+    let (title, notes) = match &trigger.task {
+        crate::model::TriggerTask::Fixed { title, notes } => (title.clone(), notes.clone()),
+        crate::model::TriggerTask::File { path } => task_from_file(path).map_err(Error::invalid)?,
+        crate::model::TriggerTask::Script { .. } => match said.and_then(|said| said.wrote.clone()) {
+            Some(wrote) => wrote,
+            None => return Ok(None),
         },
     };
+    let handed = HandedAtLaunch { title: Some(title), notes: Some(notes), ..Default::default() };
     let run = launch_handing(tx, automation_id, by, &handed, ReadsFrom::Saved)?;
     let mut after = before.clone();
     after.trigger = Some(crate::model::AutomationTrigger { next_at: trigger.when.after(now), ..trigger });
@@ -2122,6 +2126,52 @@ fn condition_holds(conn: &Connection, project_id: i64, trigger: &crate::model::A
 /// The version of the `output.json` a trigger's script writes.
 pub const TRIGGER_OUTPUT_VERSION: u64 = 1;
 
+/// **The programs a trigger runs outside any write** ([`TriggersDue::ask`]): the one it asks whether
+/// to file a task ([`crate::model::AutomationTrigger::script`]), and the one that writes what the task
+/// says ([`crate::model::TriggerTask::Script`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TriggerScripts {
+    pub ask: Option<StepScript>,
+    pub write: Option<StepScript>,
+}
+
+impl TriggerScripts {
+    /// The programs `trigger` runs — `None` where it runs none.
+    pub fn of(trigger: &crate::model::AutomationTrigger) -> Option<Self> {
+        let scripts = TriggerScripts { ask: trigger.script.clone(), write: trigger.task.script().cloned() };
+        (scripts.ask.is_some() || scripts.write.is_some()).then_some(scripts)
+    }
+}
+
+/// **What a trigger's programs said** ([`ask_trigger`]) — that it is to file a task, and handed to
+/// [`fire`] with the programs that said so.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ScriptsSaid {
+    /// The programs that were run, as they stood when they were.
+    pub scripts: TriggerScripts,
+    /// The title and notes the program that writes the task wrote — `None` where there is none.
+    pub wrote: Option<(String, String)>,
+}
+
+/// **Run a trigger's programs** — first the one that asks whether to file a task ([`ask_script`]),
+/// then the one that writes what it says ([`write_script`]), each stopped at its timeout or once
+/// `stop` answers `true`. `Ok(None)` is the first saying no, which leaves the second unrun. Like
+/// [`ask_script`], it writes nothing to the store and may run for hours, so it is run outside any
+/// write, and what it said is handed to [`fire`]. `Err` is why one of them said nothing, in a
+/// sentence; the trigger files nothing then.
+pub fn ask_trigger(
+    scripts: &TriggerScripts,
+    mut stop: impl FnMut() -> bool,
+) -> std::result::Result<Option<ScriptsSaid>, String> {
+    if let Some(script) = &scripts.ask {
+        if !ask_script(script, &mut stop)? {
+            return Ok(None);
+        }
+    }
+    let wrote = scripts.write.as_ref().map(|script| write_script(script, &mut stop)).transpose()?;
+    Ok(Some(ScriptsSaid { scripts: scripts.clone(), wrote }))
+}
+
 /// **Ask a trigger's script whether to file a task** — run it once ([`automation_script::run`]), with
 /// no inputs, stopping it at its timeout or once `stop` answers `true`, and read its answer. It writes
 /// nothing to the store and may run for hours, so it is run outside any write, and what it said is
@@ -2136,33 +2186,87 @@ pub fn ask_script(script: &StepScript, stop: impl FnMut() -> bool) -> std::resul
     script_said(script, &automation_script::run(script, &[], stop).ended)
 }
 
+/// **Have the program of a [`crate::model::TriggerTask::Script`] write what the task says** — run as
+/// [`ask_script`] runs a trigger's own script, with no inputs, and answered the same way, in
+/// `output.json` alone: `{"version":1,"title":"…","notes":"…"}`, the notes left out where there are
+/// none. The title and the notes are handed back in that order. `Err` is why it wrote nothing that
+/// can be filed — a blank title included.
+pub fn write_script(script: &StepScript, stop: impl FnMut() -> bool) -> std::result::Result<(String, String), String> {
+    script_wrote(script, &automation_script::run(script, &[], stop).ended)
+}
+
 /// What a trigger's script said, from how its run `ended` ([`ask_script`]).
 fn script_said(script: &StepScript, ended: &automation_script::Ended) -> std::result::Result<bool, String> {
-    use automation_script::Ended;
-    let output = match ended {
-        Ended::NotStarted(why) => return Err(format!("the program could not be started: {why}")),
-        Ended::TimedOut => {
-            return Err(format!(
-                "the program was still running after {} minutes, and was stopped",
-                script.timeout_minutes
-            ))
-        }
-        Ended::Stopped => return Err("the program was stopped before it ended".to_string()),
-        Ended::Failed(status) => {
-            return Err(match status.code() {
-                Some(code) => format!("the program ended with exit code {code}"),
-                None => format!("the program ended without an exit code ({status})"),
-            })
-        }
-        Ended::NoOutput => return Err("the program ended with exit code 0 and wrote no output.json".to_string()),
-        Ended::NotJson(why) => return Err(format!("output.json is not JSON: {why}")),
-        Ended::Wrote { output, .. } => output,
-    };
+    let output = script_output(script, ended)?;
     let unshaped = |what: &str| format!("output.json is not in the shape {{\"version\":1,\"file\":true|false}}: {what}");
     if output.get("version").and_then(|v| v.as_u64()) != Some(TRIGGER_OUTPUT_VERSION) {
         return Err(unshaped("\"version\" is not 1"));
     }
     output.get("file").and_then(|v| v.as_bool()).ok_or_else(|| unshaped("\"file\" is not true or false"))
+}
+
+/// What the program of a trigger's task wrote, from how its run `ended` ([`write_script`]).
+fn script_wrote(script: &StepScript, ended: &automation_script::Ended) -> std::result::Result<(String, String), String> {
+    let output = script_output(script, ended)?;
+    let unshaped =
+        |what: &str| format!("output.json is not in the shape {{\"version\":1,\"title\":\"…\",\"notes\":\"…\"}}: {what}");
+    if output.get("version").and_then(|v| v.as_u64()) != Some(TRIGGER_OUTPUT_VERSION) {
+        return Err(unshaped("\"version\" is not 1"));
+    }
+    let title = match output.get("title").and_then(|v| v.as_str()).map(str::trim) {
+        Some(title) if !title.is_empty() => title.to_string(),
+        Some(_) => return Err(unshaped("\"title\" is blank")),
+        None => return Err(unshaped("\"title\" is not a string")),
+    };
+    let notes = match output.get("notes") {
+        None | Some(serde_json::Value::Null) => String::new(),
+        Some(notes) => notes.as_str().ok_or_else(|| unshaped("\"notes\" is not a string"))?.to_string(),
+    };
+    Ok((title, notes))
+}
+
+/// The `output.json` a trigger's program wrote, from how its run `ended` — or why there is none.
+fn script_output<'a>(
+    script: &StepScript,
+    ended: &'a automation_script::Ended,
+) -> std::result::Result<&'a serde_json::Value, String> {
+    use automation_script::Ended;
+    match ended {
+        Ended::NotStarted(why) => Err(format!("the program could not be started: {why}")),
+        Ended::TimedOut => Err(format!(
+            "the program was still running after {} minutes, and was stopped",
+            script.timeout_minutes
+        )),
+        Ended::Stopped => Err("the program was stopped before it ended".to_string()),
+        Ended::Failed(status) => Err(match status.code() {
+            Some(code) => format!("the program ended with exit code {code}"),
+            None => format!("the program ended without an exit code ({status})"),
+        }),
+        Ended::NoOutput => Err("the program ended with exit code 0 and wrote no output.json".to_string()),
+        Ended::NotJson(why) => Err(format!("output.json is not JSON: {why}")),
+        Ended::Wrote { output, .. } => Ok(output),
+    }
+}
+
+/// **Read what a [`crate::model::TriggerTask::File`] says** — the file at `path`, as it stands now: its
+/// first line that is not blank is the title, and what follows it the notes, blank lines around them
+/// left out. `Err` is why it says nothing that can be filed: it cannot be read as UTF-8 text, or has
+/// no line that is not blank.
+pub fn task_from_file(path: &str) -> std::result::Result<(String, String), String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("the file '{path}' could not be read: {e}"))?;
+    let text = text.trim_start();
+    if text.is_empty() {
+        return Err(format!("the file '{path}' is blank, so it has no title"));
+    }
+    let (title, mut notes) = text.split_once('\n').unwrap_or((text, ""));
+    // Blank lines before the notes are left out whole, so notes that open indented keep their indent.
+    while let Some((line, rest)) = notes.split_once('\n') {
+        if !line.trim().is_empty() {
+            break;
+        }
+        notes = rest;
+    }
+    Ok((title.trim().to_string(), notes.trim_end().to_string()))
 }
 
 /// [`launch_handing`], counting the runs under way only where `limited`, and making no run where the
@@ -5619,5 +5723,100 @@ mod tests {
         assert_eq!(ask_script(&no, || false), Ok(false));
         let fell = sh(r#"echo '{"version":1,"file":true}' > "$AMENBO_OUTPUT"; exit 3"#);
         assert_eq!(ask_script(&fell, || false), Err("the program ended with exit code 3".to_string()));
+    }
+
+    /// **What the program of a trigger's task wrote is read from its `output.json` alone** — a title
+    /// that is not blank, and notes that may be left out, under version 1. Any other shape, and any
+    /// other way it ended, is nothing to file.
+    #[test]
+    fn a_trigger_task_script_writes_its_title_and_notes_in_its_output() {
+        use automation_script::Ended;
+        let script = StepScript { program: "/usr/local/bin/write-task".into(), args: Vec::new(), timeout_minutes: 5 };
+        let wrote = |output: serde_json::Value| Ended::Wrote { output, files: Vec::new() };
+        assert_eq!(
+            script_wrote(&script, &wrote(serde_json::json!({ "version": 1, "title": " 受信箱を見る ", "notes": "三通" }))),
+            Ok(("受信箱を見る".to_string(), "三通".to_string()))
+        );
+        assert_eq!(
+            script_wrote(&script, &wrote(serde_json::json!({ "version": 1, "title": "見る" }))),
+            Ok(("見る".to_string(), String::new())),
+            "no notes"
+        );
+        for unshaped in [
+            serde_json::json!({ "title": "見る" }),
+            serde_json::json!({ "version": 2, "title": "見る" }),
+            serde_json::json!({ "version": 1 }),
+            serde_json::json!({ "version": 1, "title": "  " }),
+            serde_json::json!({ "version": 1, "title": 3 }),
+            serde_json::json!({ "version": 1, "title": "見る", "notes": ["a"] }),
+        ] {
+            let said = script_wrote(&script, &wrote(unshaped.clone()));
+            assert!(said.as_ref().is_err_and(|why| why.contains("not in the shape")), "{unshaped}: {said:?}");
+        }
+        for ended in [Ended::NotStarted("no such file".into()), Ended::TimedOut, Ended::Stopped, Ended::NoOutput] {
+            assert!(script_wrote(&script, &ended).is_err(), "{ended:?} is nothing to file");
+        }
+    }
+
+    /// **A trigger's programs are run in turn**: the one that asks first, and the one that writes the
+    /// task only once it said yes. One saying no leaves the other unrun, and either falling over is no
+    /// answer at all.
+    #[cfg(unix)]
+    #[test]
+    fn a_trigger_asks_first_and_then_has_its_task_written() {
+        let sh = |body: &str| StepScript {
+            program: "/bin/sh".into(),
+            args: vec!["-c".into(), body.into()],
+            timeout_minutes: crate::model::DEFAULT_SCRIPT_TIMEOUT_MINUTES,
+        };
+        let yes = sh(r#"echo '{"version":1,"file":true}' > "$AMENBO_OUTPUT""#);
+        let no = sh(r#"echo '{"version":1,"file":false}' > "$AMENBO_OUTPUT""#);
+        let write = sh(r#"echo '{"version":1,"title":"見る","notes":"三通"}' > "$AMENBO_OUTPUT""#);
+        let fell = sh("exit 3");
+
+        let both = TriggerScripts { ask: Some(yes.clone()), write: Some(write.clone()) };
+        assert_eq!(
+            ask_trigger(&both, || false),
+            Ok(Some(ScriptsSaid { scripts: both.clone(), wrote: Some(("見る".into(), "三通".into())) }))
+        );
+        let asked = TriggerScripts { ask: Some(yes), write: None };
+        assert_eq!(ask_trigger(&asked, || false), Ok(Some(ScriptsSaid { scripts: asked.clone(), wrote: None })));
+        let written = TriggerScripts { ask: None, write: Some(write.clone()) };
+        assert!(ask_trigger(&written, || false).is_ok_and(|said| said.is_some_and(|said| said.wrote.is_some())));
+
+        // Saying no, the writer is never run: one that would fall over is not heard from.
+        assert_eq!(ask_trigger(&TriggerScripts { ask: Some(no), write: Some(fell.clone()) }, || false), Ok(None));
+        assert_eq!(
+            ask_trigger(&TriggerScripts { ask: Some(fell.clone()), write: Some(write) }, || false),
+            Err("the program ended with exit code 3".to_string())
+        );
+        assert!(ask_trigger(&TriggerScripts { ask: None, write: Some(fell) }, || false).is_err());
+    }
+
+    /// **A trigger's task is read from its file as it stands** — the first line that is not blank is
+    /// the title, the rest the notes. A file not there or blank says nothing to file.
+    #[test]
+    fn a_trigger_task_is_read_from_its_file() {
+        let dir = std::env::temp_dir().join(format!("amenbo-trigger-task-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let at = |name: &str, text: &str| {
+            let path = dir.join(name);
+            std::fs::write(&path, text).expect("write");
+            path.to_string_lossy().into_owned()
+        };
+        assert_eq!(
+            task_from_file(&at("full.md", "\n  受信箱を見る  \r\n\n- 三通\n- 急ぎ\n\n")),
+            Ok(("受信箱を見る".to_string(), "- 三通\n- 急ぎ".to_string()))
+        );
+        assert_eq!(
+            task_from_file(&at("indented.md", "見る\n  \n\n    code\n")),
+            Ok(("見る".to_string(), "    code".to_string())),
+            "a line of spaces is a blank line, and the indent of the notes is kept"
+        );
+        assert_eq!(task_from_file(&at("title.md", "見る")), Ok(("見る".to_string(), String::new())));
+        assert!(task_from_file(&at("blank.md", " \n\n")).is_err_and(|why| why.contains("blank")));
+        let gone = dir.join("gone.md").to_string_lossy().into_owned();
+        assert!(task_from_file(&gone).is_err_and(|why| why.contains("could not be read")));
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

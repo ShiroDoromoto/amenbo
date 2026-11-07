@@ -555,6 +555,7 @@ pub fn run() {
       automation::automation_steps_standing,
       automation::automation_running_page,
       automation::automation_run_cards,
+      automation::automation_launch_incidents,
       automation::automation_run_held_back,
       automation::automation_history_page,
       automation::automation_run_acknowledge,

@@ -757,6 +757,47 @@ fields: { [key in string]: string }, };
 export type AutomationLaunchCheckDto = { ready: boolean, blocks: Array<AutomationLaunchBlockDto>, };
 
 /**
+ * **One failed round's task waiting in a launch for the role it was filed to**
+ * ([`amenbo_core::ops::automation_run::LaunchIncident`]) — what makes that role's card in the run's
+ * pane read "an incident has reached it", with or without a round of the role under way. A role's
+ * incidents counted are the number on its card.
+ */
+export type AutomationLaunchIncidentDto = { 
+/**
+ * The task the round was filed as, by its id.
+ */
+task: number, 
+/**
+ * The task's reference.
+ */
+taskRef: string, 
+/**
+ * The task's title.
+ */
+title: string, 
+/**
+ * The role it was filed to, by its id.
+ */
+role: number, 
+/**
+ * The role of the round that failed, by its id — where the line to `role` is drawn from. Absent
+ * where the round had none, and where it has since been taken out.
+ */
+fromRole?: number, 
+/**
+ * The run whose round failed, by its id.
+ */
+run: number, 
+/**
+ * The round that failed, by its id (`automation_run_task`).
+ */
+runTask: number, 
+/**
+ * When the round failed and was filed, as RFC 3339.
+ */
+filedAt?: string, };
+
+/**
  * **One automation an action is placed on**, with the project it is in — a global action stands on
  * automations in more than one, and going to one is going to its project.
  */
@@ -1113,6 +1154,10 @@ byEnding: AutomationRunEndingsDto, };
  * (`amenbo_core::ops::automation_stop`): a role, which works it by the AI, or a person.
  */
 export type AutomationRunIncidentDto = { id: number, ref: string, 
+/**
+ * The task's title.
+ */
+title: string, 
 /**
  * The role it was filed to, by its id. Absent where it went to a person, and where the role has
  * since been taken off the task.

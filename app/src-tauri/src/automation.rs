@@ -68,7 +68,7 @@ use crate::dto::{
     AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationFailuresToDto, AutomationHeldBackDto,
     AutomationHeldByRecordDto, AutomationHeldByValueDto, AutomationLaunchAsksDto,
     AutomationCarrierDto, AutomationLaunchAxisDto, AutomationLaunchBlockDto,
-    AutomationLaunchCheckDto, AutomationPlacedOnDto, AutomationPlacementDto,
+    AutomationLaunchCheckDto, AutomationLaunchIncidentDto, AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRoleDto, AutomationRolePassDto, AutomationRunCardDto,
     AutomationRunEndingsDto,
     AutomationRunHistoryDto, AutomationRunIncidentDto, AutomationRunPassDto, AutomationRunStartedDto,
@@ -2073,6 +2073,32 @@ pub fn automation_run_cards(run_ids: Vec<i64>) -> Result<Vec<AutomationRunCardDt
     Ok(cards)
 }
 
+/// **The failed rounds' tasks waiting in one launch for the role each was filed to**, in the order they
+/// were filed ([`automation_run::incidents_waiting_in_launch`]) — what the run's pane draws a role
+/// that an incident has reached by, whether or not a round of that role is under way. A task deleted
+/// on the way is left out.
+#[tauri::command]
+pub fn automation_launch_incidents(launch_id: i64) -> Result<Vec<AutomationLaunchIncidentDto>, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_launch_incidents");
+    let store = open_store_read()?;
+    let conn = store.read_model().conn();
+    let mut out = Vec::new();
+    for incident in automation_run::incidents_waiting_in_launch(conn, launch_id)? {
+        let Some(title) = read::task_title(conn, incident.task_id)? else { continue };
+        out.push(AutomationLaunchIncidentDto {
+            task: incident.task_id,
+            task_ref: amenbo_core::idref::task(incident.task_id),
+            title,
+            role: incident.role_id,
+            from_role: incident.from_role_id,
+            run: incident.run_id,
+            run_task: incident.run_task_id,
+            filed_at: incident.filed_at.map(|at| at.to_rfc3339_z()),
+        });
+    }
+    Ok(out)
+}
+
 /// **What a run's last step wrote, where that step was a script that has ended** (`AMB-D-1016`). Only
 /// a script's step keeps a tail, and only once its program has ended, so an empty one is every other
 /// step — and a script still running, or failed as a crash on the way back up (`AMB-D-961`).
@@ -2895,6 +2921,7 @@ fn incident_of(
     Ok(read::task(store.read_model().conn(), id)?.map(|task| AutomationRunIncidentDto {
         id,
         r#ref: amenbo_core::idref::task(id),
+        title: task.title,
         role: task.role_id,
         person: task.role_id.is_none()
             && task.assignee_kind == Some(ActorKind::Human),

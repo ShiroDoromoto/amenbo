@@ -2381,9 +2381,10 @@ button.feed__target:hover { color: var(--c-accent); }
 /* **A run's pane, shown by its roles** (`../shell/RunPicture`). It is drawn over the pane's body on the
    frame's ground, whole: the cards in a room that scrolls up and down inside it, and the bar of the
    roles with no round under them. A card is never narrower than 150px nor shorter than 118px, and the
-   cards stand in as many columns as fit. */
+   cards stand in as many columns as fit; where they do not all fit, each round is a row of a list. */
 .runroles {
   position: absolute; inset: 0; z-index: 1;
+  container: runroles / inline-size;
   display: flex; flex-direction: column;
   background: var(--c-pane-frame);
 }
@@ -2435,6 +2436,34 @@ button.feed__target:hover { color: var(--c-accent); }
 .runroles__chip[data-state="failed"] { border-color: var(--c-stop); color: var(--c-stop); }
 /* "→ role": the other end of a line whose role has no card. Cut where a narrow card runs out. */
 .runroles__hand { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* A round as a row of the list: the role, what it is on, and what its card says at its foot, on one
+   line. A row that waits for a person or failed is marked at its left edge in the colour its card's
+   border is drawn in. */
+.runroles__rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.runroles__row {
+  min-width: 0; min-height: 40px; box-sizing: border-box;
+  display: grid; grid-template-columns: auto minmax(0, 7rem) minmax(0, 1fr) auto; align-items: center; gap: var(--s-2);
+  padding: var(--s-1) var(--s-2);
+  border-bottom: var(--border-w) var(--border-style) var(--c-rule);
+}
+.runroles__row[data-state="asks"] { box-shadow: 3px 0 0 var(--c-human) inset; }
+.runroles__row[data-state="failed"] { box-shadow: 3px 0 0 var(--c-stop) inset; }
+.runroles__rowname { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.runroles__rowbody { min-width: 0; display: flex; flex-direction: column; }
+.runroles__rowbody > .runroles__task { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.runroles__rowend { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
+/* "→ role" under the role's name, where the row is too narrow to say it at its end. */
+.runroles__to { display: none; margin-inline-start: var(--s-1); font-size: var(--fs-xs); color: var(--c-text-muted); }
+/* A narrow list puts a row on two lines: the role over what it is on, and the end beside both. */
+@container runroles (max-width: 380px) {
+  .runroles__row { grid-template-columns: auto minmax(0, 1fr) auto; row-gap: 0; }
+  .runroles__row > .icon { grid-row: 1 / span 2; }
+  .runroles__rowname { grid-column: 2; grid-row: 1; }
+  .runroles__rowbody { grid-column: 2; grid-row: 2; }
+  .runroles__rowend { grid-column: 3; grid-row: 1 / span 2; flex-direction: column; align-items: flex-end; gap: 2px; }
+  .runroles__rowend > .runroles__hand { display: none; }
+  .runroles__to { display: inline; }
+}
 .runroles__none { margin: 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* The roles with no round: their icons alone, in one line that scrolls sideways inside the bar. */
 .runroles__idle {

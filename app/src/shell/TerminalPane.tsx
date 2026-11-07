@@ -39,7 +39,7 @@ import { PaneModel } from "./PaneModel";
 import { PaneSize } from "./PaneSize";
 import { RunActs } from "./RunActs";
 import { BuiltinCard } from "./BuiltinCard";
-import { RunRoles } from "./RunPicture";
+import { RunRoles, type ViewPin } from "./RunPicture";
 import { RunOverCard, RunPausedCard } from "./RunBody";
 import { useBoxNumber } from "../screens/boxNumber";
 import type { BuiltinRun } from "../talk/automationStep";
@@ -97,6 +97,12 @@ type Face = "roles" | "terminal";
  * says nothing about the next run.
  */
 const faces = new Map<number, Face>();
+
+/**
+ * **What each run's roles are held to** — cards, the list, or `auto` for the room's size to decide
+ * (`./RunPicture`) — by run, kept the way the face is. A run not in here is on `auto`.
+ */
+const pins = new Map<number, ViewPin>();
 
 /**
  * One slot of the workspace: a frame, and the terminal in it when there is one.
@@ -220,6 +226,14 @@ function Pane({
     setFace(to);
   };
   const onRoles = run !== null && face === "roles";
+  const [pin, setPin] = useState<ViewPin>(() => (run === null ? "auto" : pins.get(run.run) ?? "auto"));
+  useEffect(() => {
+    if (runId !== null) setPin(pins.get(runId) ?? "auto");
+  }, [runId]);
+  const hold = (to: ViewPin) => {
+    if (runId !== null) pins.set(runId, to);
+    setPin(to);
+  };
   const press = async (act: () => Promise<unknown>) => {
     setPressing(true);
     try {
@@ -841,6 +855,22 @@ function Pane({
               row says how it ended. **They are marks and not words** (`AMB-T-5529`), standing straight
               after the state they act on, so the row's words are left to the automation's name; each
               is named for a reader who cannot see it. Cancelling keeps the pane. */}
+          {/* **Cards, the list, or the room's size to decide** (`./RunPicture`), while the roles are up. */}
+          {onRoles && (
+            <span className="slot__views" role="group" aria-label={t("auto.run.views")}>
+              {(["auto", "cards", "list"] as const).map((one) => (
+                <button
+                  key={one}
+                  type="button"
+                  className={`slot__view${pin === one ? " slot__view--on" : ""}`}
+                  aria-pressed={pin === one}
+                  onClick={() => hold(one)}
+                >
+                  {t(one === "auto" ? "auto.run.viewAuto" : one === "cards" ? "auto.run.viewCards" : "auto.run.viewList")}
+                </button>
+              ))}
+            </span>
+          )}
           {/* **The roles or the terminal** (`./RunPicture`), on a run's pane only. Two presses, one
               pressed, rather than one that flips: what the reader needs to see is which face is up. */}
           {run !== null && (
@@ -1035,7 +1065,7 @@ function Pane({
             away would be ending what draws it. The roles are drawn over it, so it keeps its size when
             the face is turned (`../talk/terminal`). */}
         <div className="slot__body">
-        {run !== null && face === "roles" && <RunRoles run={run} project={project} />}
+        {run !== null && face === "roles" && <RunRoles run={run} project={project} pin={pin} />}
         {/* **A run over, with no terminal up, says how it ended** (`./RunBody`) — in place of the card
             of a built-in it was stopped on too, which would otherwise go on saying it was at work. */}
         {/* **A script's tail, kept on the run** (`tail`), in place of either card below: it is what the

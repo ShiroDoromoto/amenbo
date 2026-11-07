@@ -57,7 +57,7 @@
 //! run marked `running` cannot be running in a process that no longer exists. So that check is made
 //! once, at startup ([`sweep`]), by whoever opens the store.
 
-use crate::error::{Error, ErrorCode, Result};
+use crate::error::{Error, Result};
 use rusqlite::Connection;
 use crate::model::{
     ActorKind, AutomationLaunch, AutomationLaunchStatus, AutomationPauseKind, AutomationRun, AutomationRunDef,
@@ -338,9 +338,11 @@ fn hand_the_task_back(
 ///   any more files to the human, since a failure filed to nobody is one nobody reads.
 /// - **It is filed in the round's task's project**, so the edge stays inside one project. A role is
 ///   named only there, since a task takes a role from its own project's automations.
-/// - **A classification the project requires** is filled from the time axis where that is the one; any
-///   other leaves the task still being written, where a person sees it and fills it in. A failure is
-///   filed either way: refusing it would leave the run unable to end.
+/// - **It carries every classification the round's task has**, a closed value included
+///   ([`crate::ops::dimension::carry_over`]), and the time axis's default only where that task has
+///   none on it. The round's task finished being created, so it answers every axis its project
+///   requires, and so does this one: its creation is finished like any other's (`AMB-D-554`), and
+///   finishing it failing is an error, not a task left being written.
 fn file_the_failure(tx: &WriteTx<'_>, run: &AutomationRun, task_id: i64, line: &str) -> Result<i64> {
     let conn = tx.conn();
     let project_id = read::task(conn, task_id)?.and_then(|t| t.project_id);
@@ -366,9 +368,14 @@ fn file_the_failure(tx: &WriteTx<'_>, run: &AutomationRun, task_id: i64, line: &
             made_in_run_step_id: None,
         },
     )?;
+    let carried = read::task_dimension_assignments(conn, task_id)?;
+    for &(_, value) in &carried {
+        crate::ops::dimension::carry_over(tx, filed.id, value)?;
+    }
     if let Some(project_id) = project_id {
         let today = crate::time::today();
-        if let Some((_, value)) = crate::ops::task::time_axis_default(conn, project_id, today, &[])? {
+        let named: Vec<i64> = carried.iter().map(|&(axis, _)| axis).collect();
+        if let Some((_, value)) = crate::ops::task::time_axis_default(conn, project_id, today, &named)? {
             crate::ops::dimension::set(tx, filed.id, value)?;
         }
     }
@@ -378,12 +385,7 @@ fn file_the_failure(tx: &WriteTx<'_>, run: &AutomationRun, task_id: i64, line: &
     };
     crate::ops::task::set_assignee(tx, filed.id, Some(assignee), ActorKind::Ai)?;
     crate::ops::dependency::add(tx, task_id, filed.id, Some(ActorKind::Ai))?;
-    match crate::ops::task::finish_creating(tx, filed.id, ActorKind::Ai) {
-        Err(e) if e.error_code() == ErrorCode::InvalidTaskRequiredDimension => {}
-        other => {
-            other?;
-        }
-    }
+    crate::ops::task::finish_creating(tx, filed.id, ActorKind::Ai)?;
     Ok(filed.id)
 }
 
@@ -1547,6 +1549,64 @@ mod tests {
             let after = read::task(tx.conn(), task).expect("read").expect("the task");
             assert_eq!(after.role_id, before.role_id, "the task's role is left alone");
             assert_eq!(after.assignee_kind, before.assignee_kind, "and so is its assignee");
+        });
+    }
+
+    /// **A filed round carries every classification its task has** — a value since closed included,
+    /// and both values on a multi-select axis — so it finishes being created even where its project
+    /// requires axes, and a role's seat can take it.
+    #[test]
+    fn a_round_filed_carries_its_tasks_classification_and_finishes_being_created() {
+        use crate::model::{DimensionCardinality, DimensionRole};
+        use crate::ops::dimension::{self, NewDimension};
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let role = automation::role_add(
+                tx,
+                p.automation.id,
+                automation::NewRole { name: "直す人".into(), ..Default::default() },
+            )
+            .expect("a role");
+            let to = Some(Some(crate::model::FailuresTo::Role { role_id: role.id }));
+            automation::update(tx, p.automation.id, None, None, None, to).expect("to the role");
+            let product = dimension::add(
+                tx,
+                p.project,
+                NewDimension { name: "プロダクト".into(), role: DimensionRole::Closable, ..Default::default() },
+            )
+            .expect("an axis");
+            let old = dimension::value_add(tx, product.id, "旧版", None).expect("a value");
+            dimension::value_add(tx, product.id, "本体", None).expect("a value");
+            let kind = dimension::add(
+                tx,
+                p.project,
+                NewDimension { name: "作業種別".into(), cardinality: DimensionCardinality::Multi, ..Default::default() },
+            )
+            .expect("an axis");
+            let build = dimension::value_add(tx, kind.id, "実装", None).expect("a value");
+            let test = dimension::value_add(tx, kind.id, "テスト", None).expect("a value");
+            let run = a_run(tx, &p.automation);
+            let first = opened(tx, &run, &p.first);
+            let task = a_task_in_hand(tx, p.project, first.run_step.id);
+            for value in [old.id, build.id, test.id] {
+                dimension::set(tx, task, value).expect("classify the task");
+            }
+            for axis in [product.id, kind.id] {
+                dimension::update(tx, axis, None, None, None, None, None, None, Some(true), None, None, None)
+                    .expect("required");
+            }
+            dimension::value_set_closed(tx, old.id, true).expect("close a value the task holds");
+
+            step_ended(tx, first.run_step.id).expect("step ended").expect("a run to end");
+
+            let filed = filed_for(tx, run.id, task);
+            assert!(!filed.draft, "filed and finished");
+            assert_eq!(filed.role_id, Some(role.id), "filed to the role");
+            let mut carried = read::task_dimension_assignments(tx.conn(), filed.id).expect("read");
+            let mut held = read::task_dimension_assignments(tx.conn(), task).expect("read");
+            carried.sort();
+            held.sort();
+            assert_eq!(carried, held, "every classification the task has, carried over");
         });
     }
 

@@ -5,9 +5,8 @@
 // nothing here knows which of the two it is drawing — the screen above it does.
 //
 // **A box is one placement, and the name on it is the action standing there** (`AMB-D-949`). On the
-// build screen nothing on the automation's picture is a step: a step is inside the action, and which of
-// them a run opens is read on the action's own screen. In a run's pane the box the run is under way in
-// is the one exception (below).
+// build screen nothing on the automation's picture is a box of its own for a step: a step is inside the
+// action, and its name is written inside the action's box, in order, on a role's picture (below).
 //
 // **Boxes are elements and lines are one drawing under them.** The boxes carry a name that has to
 // wrap and shorten, a press, and a focus ring, which is all a button already does; the lines are
@@ -39,7 +38,14 @@
 // does both, and says where each goes. What stays on a box is its "⚠" for an input nothing reaches.
 // A step's card on an action's picture says it in words instead (`AMB-T-5798`): its inputs, each with
 // the number of the step it comes from, and its outputs — so what flows through a step is read without
-// opening its panel, and still no line crosses the picture.
+// opening its panel, and still no line crosses the picture. An action's box on a role's picture says
+// the same of the action, each input with the number of the box it comes from.
+//
+// **On the build screen it draws one role's round** (`automationGraph` with a role): "receives" over
+// the picture — the automation's start, or the roles that hand this one its task — then the actions
+// the round passes through, each with its steps inside it, and "hands on" under it — the roles it hands
+// on to, or none where it ends at done. A line going back is no line there but a loop under the box it
+// goes back to, saying which box and which way out it comes back from.
 //
 // **It scrolls, and it does nothing else.** No zoom, and no folding a stretch away by hand: an
 // automation is tens of steps, and a picture with a state of its own is one more thing to put back
@@ -51,14 +57,18 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   edgeWord,
+  exitWord,
   layOut,
   openWord,
+  pictureOrder,
   ACTION_BOUNDARY,
   ERROR_EXIT,
   TAKES_INSET,
   type PicGraph,
   type PicLine,
   type PicMark,
+  type PicNode,
+  type PicRound,
 } from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
 import { kindLabel } from "./automationPortKinds";
@@ -79,6 +89,32 @@ function CardIo({ words }: { words: { takes?: string; hands?: string } }) {
       ))}
     </span>
   );
+}
+
+/** Over or under a role's round: what it receives, or what it hands on to — the heading, and the words. */
+function RoundEnd({ head, words }: { head: string; words: string }) {
+  return (
+    <div className="autopic__end">
+      <span>{head}</span>
+      <span className="autopic__endwords">{words}</span>
+    </div>
+  );
+}
+
+/** Where a role's round receives its task from, in words: the automation's start, then the roles. */
+function receivesWords(round: PicRound): string {
+  const all = [
+    ...(round.receives.start ? [t("auto.pic.entry")] : []),
+    ...round.receives.roles.map((role) => tf("auto.pic.fromRole", { role })),
+  ];
+  return all.length === 0 ? t("auto.pic.receivesNone") : listLabel(all);
+}
+
+/** Under the box on a role's picture: the lines that come back into it, each from the box it leaves. */
+function returnsWords(node: PicNode): string {
+  return (node.returns ?? [])
+    .map((one) => tf("auto.pic.loopBack", { no: one.no, exit: exitWord(one) }))
+    .join("　");
 }
 
 /** One way out of the action, in words: by its name, the error one in the screen's words. Only an
@@ -112,10 +148,11 @@ function headOf(line: PicLine): Head {
  * kind of line, in the colour the line itself is — so the legend is the stylesheet read aloud, and
  * never a second list of colours to keep in step with it — then the marks a box or a stretch wears,
  * drawn with the same classes as on the picture. A line leaving by one of the action's ways out is
- * only ever drawn on an action's picture, so it is listed there alone. The error line's word also says
+ * only ever drawn on an action's picture, so it is listed there alone; a role's picture draws a line
+ * going back as a loop under a box, so it lists the loop in its place. The error line's word also says
  * where a box with no such line goes, since the picture does not draw that on every box.
  */
-function Legend({ inAction }: { inAction: boolean }) {
+function Legend({ inAction, inRound }: { inAction: boolean; inRound: boolean }) {
   const one = (kind: string, word: string) => (
     <span className="autopic__legenditem">
       <i className={`autopic__swatch autopic__swatch--${kind}`} aria-hidden="true" />
@@ -125,7 +162,14 @@ function Legend({ inAction }: { inAction: boolean }) {
   return (
     <div className="autopic__legend">
       {one("next", t("auto.pic.legendNext"))}
-      {one("back", t("auto.pic.legendBack"))}
+      {inRound ? (
+        <span className="autopic__legenditem">
+          <span className="autopic__loopmark">↺</span>
+          {t("auto.pic.legendLoop")}
+        </span>
+      ) : (
+        one("back", t("auto.pic.legendBack"))
+      )}
       {one("branch", t("auto.pic.legendBranch"))}
       {one("error", t("auto.pic.legendError"))}
       {inAction && one("leaves", t("auto.pic.legendLeaves"))}
@@ -187,15 +231,19 @@ export function AutomationPicture({
   const head = (kind: Head) => `url(#${ids}-${kind})`;
   // Laid out again only when the graph changes: a draw that leaves it as it was keeps the layout it had.
   const picture = useMemo(() => layOut(graph), [graph]);
-  // What a step's card says it takes in and hands on, on an action's picture — each input with the
-  // number of the step that hands it its value, or the action's own input.
+  const round = graph?.round;
+  // What a card says it takes in and hands on — a step's on an action's picture, an action's on a
+  // role's — each input with the number of the box that hands it its value, or the action's own input.
+  // On a role's picture that box may be on another role's round, and is numbered as the whole
+  // automation numbers it.
+  const numberOf = useMemo(() => (round === undefined ? undefined : pictureOrder(round.whole).numberOf), [round]);
   const ioWords = (boxId: number): { takes?: string; hands?: string } => {
     if (graph === null) return {};
     const io = cardIo(graph, boxId);
     const from = (one: { name: string; from?: number }) => {
       if (one.from === undefined) return one.name;
       if (one.from === ACTION_BOUNDARY) return tf("auto.pic.ioFromAction", { name: one.name });
-      const no = picture.nodes.find((node) => node.boxId === one.from)?.no;
+      const no = numberOf?.get(one.from) ?? picture.nodes.find((node) => node.boxId === one.from)?.no;
       return no === undefined ? one.name : tf("auto.pic.ioFrom", { name: one.name, no });
     };
     return {
@@ -283,10 +331,19 @@ export function AutomationPicture({
     for (const kind of reader) window.addEventListener(kind, stop, true);
     return stop;
   }, [selectedBoxId, drawn]);
-  if (picture.nodes.length === 0) return null;
+  if (picture.nodes.length === 0) {
+    // A role whose round reaches nothing, on an automation that has something on it: said in words, so
+    // the middle is not left blank. With nothing on the automation, the screen's "+ first …" says it.
+    return round !== undefined && round.whole.boxes.length > 0 ? (
+      <p className="autopic__roundempty">{t("auto.pic.roundEmpty")}</p>
+    ) : null;
+  }
+  // Where a run opens: the automation's start, which on a role's picture need not be where the round starts.
+  const startId = round?.whole.entryId ?? graph?.entryId;
 
   return (
     <>
+      {round !== undefined && <RoundEnd head={t("auto.pic.receives")} words={receivesWords(round)} />}
       <div className="autopic">
         <div
           className="autopic__sheet"
@@ -482,7 +539,7 @@ export function AutomationPicture({
                 {/* Where a run opens. It is drawn on the box rather than worked out from the picture:
                     the walk starts here, so a reader looking at two disconnected stretches has no
                     other way to tell which of them a launch enters by. */}
-                {node.boxId === graph?.entryId && (
+                {node.boxId === startId && (
                   <span className="autopic__entry">{t("auto.pic.entry")}</span>
                 )}
                 <span className="autopic__nodename">{node.name}</span>
@@ -511,9 +568,14 @@ export function AutomationPicture({
                 )}
               </span>
               {graph?.boundary !== undefined && <CardIo words={ioWords(node.boxId)} />}
-              {/* Which library the action standing here comes from, on an automation's picture — a
+              {/* The steps inside the action, on a role's picture, in place of its library. Else which
+                  library the action standing here comes from, on an automation's picture — a
                   built-in's is Amenbo's own, though it is kept on the device's shelf. */}
-              {node.global !== undefined && placedForYou?.has(node.boxId) === true ? (
+              {node.steps !== undefined && node.steps.length > 0 ? (
+                <span className="autopic__nodesub" title={node.steps.join("\n")}>
+                  <span className="autopic__steps">{node.steps.join(" → ")}</span>
+                </span>
+              ) : node.global !== undefined && placedForYou?.has(node.boxId) === true ? (
                 <span className="autopic__nodesub" title={t("auto.pic.placedForYouWhy")}>
                   <span className="autopic__lib">{t("auto.pic.placedForYouWhy")}</span>
                 </span>
@@ -524,6 +586,12 @@ export function AutomationPicture({
                       ? t("auto.actions.reachBuiltin")
                       : t(node.global ? "auto.actions.reachGlobal" : "auto.actions.reachProject")}
                   </span>
+                </span>
+              )}
+              {round !== undefined && <CardIo words={ioWords(node.boxId)} />}
+              {node.returns !== undefined && (
+                <span className="autopic__nodesub autopic__loop" title={returnsWords(node)}>
+                  <span className="autopic__iopart">{returnsWords(node)}</span>
                 </span>
               )}
             </button>
@@ -556,8 +624,14 @@ export function AutomationPicture({
           ))}
         </div>
       </div>
+      {round !== undefined && (
+        <RoundEnd
+          head={t("auto.pic.handsOn")}
+          words={round.handsTo.length === 0 ? t("auto.pic.handsNone") : listLabel([...round.handsTo])}
+        />
+      )}
       {/* Under the picture rather than on its sheet, so it stays in view however far it is scrolled. */}
-      <Legend inAction={graph?.boundary !== undefined} />
+      <Legend inAction={graph?.boundary !== undefined} inRound={round !== undefined} />
     </>
   );
 }

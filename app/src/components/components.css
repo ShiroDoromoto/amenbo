@@ -1428,6 +1428,24 @@ button.feed__target:hover { color: var(--c-accent); }
 /* What a step takes in and hands on, on an action's picture — a line each, cut short where it runs out. */
 .autopic__io { display: flex; flex-direction: column; align-items: stretch; gap: 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
 .autopic__iopart { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* On a role's picture: the steps inside an action, in order on one line, cut short where it runs out. */
+.autopic__steps {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-xs); color: var(--c-text);
+}
+/* A line going back, drawn as a loop under the box it goes back to — in the colour a line going back is. */
+.autopic__loop { font-size: var(--fs-xs); color: var(--c-stop); }
+.autopic__loop .autopic__iopart { min-width: 0; }
+.autopic__loopmark { color: var(--c-stop); }
+/* Over and under a role's round: where it receives its task from, and whom it hands on to. Dashed,
+   as the mock draws them: they stand for something outside the round, not a box on it. */
+.autopic__end {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: var(--s-1) var(--s-2); border: 1px dashed var(--c-edge); border-radius: var(--r-md);
+  font-size: var(--fs-xs); color: var(--c-text-muted);
+}
+.autopic__endwords { color: var(--c-text); font-weight: 600; }
+.autopic__roundempty { font-size: var(--fs-md); color: var(--c-text-muted); }
 /* A box that takes the next task, said over its top-right — where a stretch begins. */
 .autopic__takes {
   position: absolute; transform: translate(-100%, calc(-100% - 2px));

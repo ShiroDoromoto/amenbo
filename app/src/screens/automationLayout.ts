@@ -30,6 +30,12 @@
 // leaves the action is a line into one of those — the boundary the core names `ACTION_BOUNDARY`. An
 // automation's picture has no such boundary, and draws neither.
 //
+// **On the build screen an automation is drawn one role at a time** (`automationGraph` with a role):
+// the boxes that role's round reaches, from where it receives its task down to the roles it hands on
+// to. A line out of the round hangs as one that goes nowhere, naming the role it hands on to, and a
+// line going back is no line but a loop under the box it goes back to — a round that checks and goes
+// round again reads as one action doing its work twice, not as a line up the margin.
+//
 // **What a box hands on is not drawn** (`AMB-D-1001`). The wires are only read here for the inputs
 // nothing reaches, which a box wears as its "⚠". Drawn as lines they took the whole right margin and
 // ran across the tops of the boxes, and nothing about them is done on the picture: a wire is made,
@@ -51,7 +57,7 @@
 // the picture it was meant to explain, so the legend says it once instead, and the panel beside the
 // picture names it for the box picked.
 import { builtinWord } from "../core/builtinWords";
-import { t } from "../core/i18n";
+import { t, tf } from "../core/i18n";
 import type {
   AutomationActionDetailDto,
   AutomationDetailDto,
@@ -85,6 +91,28 @@ export type PicBox = {
   version?: number;
   /** The newest version of that action there is. Absent on an action's picture. */
   latestVersion?: number;
+  /** The names of the steps inside the action standing here, in order — drawn inside its box on a
+   *  role's picture. Absent everywhere else. */
+  stepNames?: readonly string[];
+};
+
+/**
+ * **One role's round, as the picture of it reads it** (`automationGraph` with a role): what the round
+ * receives, what it hands on, and the whole automation it is cut out of.
+ */
+export type PicRound = {
+  /** The whole automation's picture — what an input is fed by and a box is numbered by, which a round
+   *  cut out of it cannot answer alone. */
+  whole: PicGraph;
+  /** Where the round starts from: the automation's own start — directly, or through the boxes on no
+   *  role it reaches first — and the roles whose boxes hand on into it, then the actions, where the
+   *  box it comes from is on no round. */
+  receives: { start: boolean; roles: readonly string[] };
+  /** The roles the round hands on to, each once, in the order the lines out of it are. */
+  handsTo: readonly string[];
+  /** Each line out of the round, by its edge, with the role it hands on to — or the action, where the
+   *  box it goes to is on no round. */
+  handOff: ReadonlyMap<number, string>;
 };
 
 /** One picture, whichever of the two it is: the boxes, the lines, and the box a run opens first. */
@@ -99,16 +127,98 @@ export type PicGraph = {
    * Absent on an automation's, which has no boundary to cross.
    */
   boundary?: { inputs: readonly AutomationPortDto[]; exits: readonly AutomationExitDto[] };
+  /**
+   * The role this picture is the round of, on the build screen (`automationGraph` with a role). Its
+   * boxes are the ones that round reaches, its entry where the round starts, and a line going back is
+   * drawn as a loop under the box it goes back to rather than as a line. Absent on any other picture.
+   */
+  round?: PicRound;
 };
 
-/** One automation as a picture — its boxes are the actions placed on it. */
-export function automationGraph(detail: AutomationDetailDto | null): PicGraph | null {
+/**
+ * **One automation as a picture** — its boxes are the actions placed on it.
+ *
+ * Given a role, **only that role's round** (`AutomationPlacementDto::roleId`): received from the
+ * automation's start or from another role, the actions it passes through with their steps inside, and
+ * handed on to the roles its lines leave for. A role that is gone draws the whole automation.
+ */
+export function automationGraph(detail: AutomationDetailDto | null, roleId?: number): PicGraph | null {
   if (detail === null) return null;
-  return {
+  const whole: PicGraph = {
     entryId: detail.entryPlacementId,
     boxes: detail.placements,
     edges: detail.edges,
     wires: detail.wires,
+  };
+  if (roleId === undefined) return whole;
+  const role = detail.roles.find((one) => one.id === roleId);
+  if (role === undefined) return whole;
+  const inRound = new Set(detail.placements.filter((one) => one.roleId === role.id).map((one) => one.id));
+  const roleName = (placementId: number): string | undefined => {
+    const at = detail.placements.find((one) => one.id === placementId);
+    return detail.roles.find((one) => one.id === at?.roleId)?.name;
+  };
+  // The boxes on no role the automation's start reaches before any role takes the task — the
+  // built-in it starts with, and whatever stands after it on no round.
+  const onNoRole = (placementId: number) =>
+    detail.placements.find((one) => one.id === placementId)?.roleId === undefined;
+  const beforeAnyRole = new Set<number>();
+  const queue = detail.entryPlacementId !== undefined && onNoRole(detail.entryPlacementId) ? [detail.entryPlacementId] : [];
+  while (queue.length > 0) {
+    const at = queue.shift()!;
+    if (beforeAnyRole.has(at)) continue;
+    beforeAnyRole.add(at);
+    for (const edge of detail.edges) {
+      if (edge.ends === "go" && edge.fromId === at && edge.toId !== undefined && onNoRole(edge.toId)) queue.push(edge.toId);
+    }
+  }
+  // Into the round from a box on no part of it: from the automation's start, from the role that box
+  // is on, or — where it is on no round and not reached from the start — from the action standing there.
+  // The roles come first and the actions on no round after them, whatever order the edges stand in.
+  let fromStart = role.entryPlacementId !== undefined && role.entryPlacementId === detail.entryPlacementId;
+  const fromRoles: string[] = [];
+  const fromActions: string[] = [];
+  for (const edge of detail.edges) {
+    if (edge.ends !== "go" || edge.toId === undefined || !inRound.has(edge.toId) || inRound.has(edge.fromId)) continue;
+    if (beforeAnyRole.has(edge.fromId)) {
+      fromStart = true;
+      continue;
+    }
+    const byRole = roleName(edge.fromId);
+    if (byRole !== undefined) fromRoles.push(byRole);
+    else {
+      const name = detail.placements.find((one) => one.id === edge.fromId)?.name;
+      if (name !== undefined) fromActions.push(name);
+    }
+  }
+  // Out of the round to a box on no part of it: to the role that box is on, or — where it is on no
+  // round — to the action standing there.
+  const handOff = new Map<number, string>();
+  for (const edge of detail.edges) {
+    if (edge.ends !== "go" || edge.toId === undefined || !inRound.has(edge.fromId) || inRound.has(edge.toId)) continue;
+    const to = roleName(edge.toId) ?? detail.placements.find((one) => one.id === edge.toId)?.name;
+    if (to !== undefined) handOff.set(edge.id, to);
+  }
+  const handsTo = detail.edges.flatMap((edge) => {
+    const name = handOff.has(edge.id) && edge.toId !== undefined ? roleName(edge.toId) : undefined;
+    return name === undefined ? [] : [name];
+  });
+  return {
+    entryId: role.entryPlacementId,
+    boxes: detail.placements
+      .filter((one) => inRound.has(one.id))
+      .map((one) => ({ ...one, stepNames: one.steps.map((step) => step.name) })),
+    edges: detail.edges.filter((edge) => inRound.has(edge.fromId)),
+    wires: detail.wires,
+    round: {
+      whole,
+      receives: {
+        start: fromStart,
+        roles: [...new Set([...fromRoles, ...fromActions])],
+      },
+      handsTo: [...new Set(handsTo)],
+      handOff,
+    },
   };
 }
 
@@ -149,6 +259,9 @@ const NODE_H = 46;
 /** A step's box on an action's picture, one line taller: what it takes in and what it hands on have a
  *  line each under its name (`AMB-T-5798`), so neither cuts the other short. */
 const STEP_H = 62;
+/** An action's box on a role's picture: under its name the steps inside it, what it takes in, what it
+ *  hands on, and the loop back into it — a line each. */
+const ROUND_H = 100;
 /** Between two boxes standing side by side at the same depth. */
 const COL_GAP = 24;
 /** Between one depth and the next — the room a line and its `+` are drawn in. */
@@ -240,6 +353,14 @@ export type PicNode = {
   /** The box stands on an older version of its action than the newest — the two numbers
    *  (`behindOf`). Absent where it stands on the newest, and on a built-in. */
   behind?: { version: number; latest: number };
+  /** The steps inside the action standing here, by name, on a role's picture (`PicBox`). */
+  steps?: readonly string[];
+  /**
+   * **The lines that come back into this box from further on**, on a role's picture — each by the
+   * number of the box it leaves and the way out it leaves by. Drawn as a loop under the box, not as a
+   * line. Absent where none comes back, and on every other picture.
+   */
+  returns?: readonly { no: number; exitName: string; builtin?: string }[];
 };
 
 /** The dashed outline around the boxes one task is worked by. */
@@ -252,6 +373,8 @@ export type PicLine = {
   points: readonly PicPoint[];
   /** Dashed: it goes back to a box on the way down to the one it leaves. */
   back: boolean;
+  /** On a role's picture, the role it hands on to, where it leaves the round (`PicRound.handOff`). */
+  handsTo?: string;
   /**
    * What colour an edge is drawn in, as the legend under the picture reads it: on to the next box,
    * one of several ways out of a box that branches, or the error way out and a stop. Absent on the
@@ -708,15 +831,17 @@ export function exitWord(line: Pick<PicLine, "exitName" | "builtin">): string {
   return lineWord(line) ?? "";
 }
 
-/** Where the run goes where a line names no step, in a word. */
-function endWord(line: Pick<PicLine, "ends">): string {
+/** Where the run goes where a line names no step, in a word — on a role's picture, the role it hands
+ *  on to where it leaves the round. */
+function endWord(line: Pick<PicLine, "ends" | "handsTo">): string {
   if (line.ends === "done") return t("auto.pic.endsDone");
   if (line.ends === "halt") return t("auto.pic.endsHalt");
+  if (line.handsTo !== undefined) return tf("auto.pic.endsHandsTo", { to: line.handsTo });
   return "";
 }
 
 /** The words written beside an edge: its way out, then where the run goes where it names no step. */
-export function edgeWord(line: Pick<PicLine, "exitName" | "builtin" | "ends">): string {
+export function edgeWord(line: Pick<PicLine, "exitName" | "builtin" | "ends" | "handsTo">): string {
   return [exitWord(line), endWord(line)].filter((one) => one !== "").join(" — ");
 }
 
@@ -790,8 +915,17 @@ function layOutWith(
   if (graph === null || graph.boxes.length === 0) return { picture: empty, legsOf, turnsOf, gapsOf };
 
   const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
-  const nodeH = graph.boundary !== undefined ? STEP_H : NODE_H;
+  const round = graph.round;
+  const nodeH = graph.boundary !== undefined ? STEP_H : round !== undefined ? ROUND_H : NODE_H;
   const { laps, live, back: goesBack } = walk(graph);
+  // On a role's picture an input is fed, and a box numbered, as the whole automation has it: the round
+  // is cut out of it, and a wire into it may come from another role's box.
+  const feeds = round?.whole ?? graph;
+  const reached = round === undefined ? live : walk(round.whole).live;
+  const numberOf = round === undefined ? undefined : pictureOrder(round.whole).numberOf;
+  // The lines that are drawn. On a role's picture one going back is a loop under the box it goes back
+  // to instead (`PicNode.returns`), and keeps the way out it leaves by decided.
+  const edges = round === undefined ? graph.edges : graph.edges.filter((edge) => !goesBack.has(edge.id));
   // The action's ways out, the error one last — the order the declaration lists them in.
   const outs = [...(graph.boundary?.exits ?? [])].sort(
     (a, b) => Number(a.name === ERROR_EXIT) - Number(b.name === ERROR_EXIT),
@@ -846,6 +980,7 @@ function layOutWith(
         edge.fromId === box.id &&
         (edge.ends === "done" ||
           edge.ends === "halt" ||
+          (edge.ends === "go" && (edge.toId === undefined || !boxes.has(edge.toId))) ||
           (edge.ends === "exit" && !outs.some((out) => out.name === edge.exitTo))),
     ).length;
     const drop = openDrop(box);
@@ -863,7 +998,7 @@ function layOutWith(
   // where a name of a line down past it or the next box ran over a leg of the other (`AMB-T-5880`).
   const pressW = wordW(openWord(graph.boundary !== undefined)) + 28;
   const gapAfter = (box: PicBox): number => {
-    const lines = graph.edges.filter((edge) => edge.fromId === box.id).length;
+    const lines = edges.filter((edge) => edge.fromId === box.id).length;
     const reach = Math.max(
       0,
       ...undecidedOf(box).map(
@@ -893,6 +1028,19 @@ function layOutWith(
     outs.length * OUT_W + Math.max(0, outs.length - 1) * OUT_GAP + FRAME_PAD * 2,
     ...laps.flatMap((lap) => lap.rows.map((row) => columnsOf(row).w)),
   );
+
+  // What a box on a role's picture holds besides: the steps inside it, and the lines that come back
+  // into it from further on, each from the box it leaves.
+  const roundOf = (box: PicBox): Pick<PicNode, "steps" | "returns"> => {
+    const returns = graph.edges
+      .filter((edge) => goesBack.has(edge.id) && edge.toId === box.id)
+      .map((edge) => ({
+        no: numberOf?.get(edge.fromId) ?? 0,
+        exitName: edge.exitName,
+        builtin: boxes.get(edge.fromId)?.builtin,
+      }));
+    return { steps: box.stepNames ?? [], ...(returns.length === 0 ? {} : { returns }) };
+  };
 
   // Which row of which stretch each box landed in — what says whether two boxes are neighbours.
   const at = new Map<number, { lap: number; row: number }>();
@@ -946,18 +1094,19 @@ function layOutWith(
           y: rowY,
           w: NODE_W,
           h: nodeH,
-          no: nodes.length + 1,
+          no: numberOf?.get(boxId) ?? nodes.length + 1,
           takes: takesTask(box),
           global: box.global,
           builtin: box.builtin,
           empty: box.draft !== true && box.builtin === undefined && box.steps !== undefined && box.steps.length === 0,
           draft: box.draft === true,
           behind: behindOf(box),
-          unfed: !live.has(boxId)
+          unfed: !reached.has(boxId)
             ? []
             : box.inputs
-                .filter((port) => port.required && !fed(graph, boxId, port.name))
+                .filter((port) => port.required && !fed(feeds, boxId, port.name))
                 .map((port) => builtinWord(box.builtin, port.name)),
+          ...(round === undefined ? {} : roundOf(box)),
         });
       });
     });
@@ -1073,8 +1222,6 @@ function layOutWith(
   const lines: PicLine[] = [];
   const inserts: PicInsert[] = [];
   const asides: Aside[] = [];
-  const edges = graph.edges;
-
   const toOf = (edge: AutomationEdgeDto): number | undefined => {
     const toId = edge.ends === "go" ? edge.toId : returnsTo(edge);
     return toId !== undefined && node.has(toId) ? toId : undefined;
@@ -1343,6 +1490,7 @@ function layOutWith(
         exitName: edge.exitName,
         builtin: from.builtin,
         ends: edge.ends === "done" || edge.ends === "halt" ? edge.ends : undefined,
+        handsTo: round?.handOff.get(edge.id),
         at: { x: sx - 6, y: foot + OVER },
         align: "start",
       });

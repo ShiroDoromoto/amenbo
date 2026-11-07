@@ -39,7 +39,7 @@
 //! of one.
 //!
 //! **One launch runs side by side** ([`AutomationLaunch`]). A person launches an automation once, and
-//! the launch keeps up to its `max_concurrent_runs` runs going while there are tasks to take: the app's
+//! the launch keeps up to its [`headcount`] runs going while there are tasks to take: the app's
 //! look starts one more where there is room ([`top_up`]), so one that ends makes room for the next. A
 //! run a trigger starts ([`fire`]), or one started once a task turns up ([`start_waiting`]), joins the
 //! launch standing, and opens one where none is. A test run belongs to none.
@@ -1940,8 +1940,9 @@ fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> V
 /// - **The workspace being closed**, last on purpose. What the check found is wrong with the automation
 ///   and stays wrong after a window is opened, so saying "open a window" first would send somebody to do
 ///   that and then tell them the automation was never going to run.
-/// - **Its most runs under way.** A launch is refused once `max_concurrent_runs` of the automation's
-///   runs are `running` or `paused` — one, unless somebody raised it. A paused one can be picked up
+/// - **Its most runs under way.** A launch is refused once as many of the automation's runs as the
+///   headcount of the roles in the picture launched ([`headcount`]) are `running` or `paused` — one,
+///   where it has no role. A paused one can be picked up
 ///   again, so it holds a place as much as a running one. It is counted in the same transaction the run
 ///   is written in. Last, since it is the only one that goes away by waiting.
 ///
@@ -2004,6 +2005,23 @@ pub enum ReadsFrom {
     /// The draft — its picture as it is written now, saved or not. A test run reads this, to try what is
     /// being written before it is saved.
     Draft,
+}
+
+/// **How many runs of an automation may be under way at once** — the headcount of the roles its newest
+/// saved version holds, added up, and the draft's where nothing is saved yet. One where it holds no
+/// role. Read as it stands each time it is asked, so a headcount saved while a launch runs takes hold
+/// at once.
+pub fn headcount(conn: &Connection, automation: &Automation) -> Result<u32> {
+    let (pic, _) = definition(conn, automation, ReadsFrom::Saved)?;
+    Ok(headcount_of(&pic))
+}
+
+/// [`headcount`] of a picture already read: its roles' headcount added up, or one where it has none.
+fn headcount_of(pic: &Picture) -> u32 {
+    match pic.roles() {
+        [] => 1,
+        roles => roles.iter().map(|r| r.headcount).sum(),
+    }
 }
 
 /// **The picture `reads` names, and the saved version it is** — `None` for the draft.
@@ -2073,10 +2091,14 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
     let mut found = TriggersDue::default();
     for automation in read::automations_triggered(conn)? {
         let enabled = || automation.triggers.iter().filter(|t| t.enabled);
-        let (under_way, paused) = if enabled().any(|t| t.next_at <= now) {
-            (read::automation_run_ids_under_way(conn, automation.id)?.len(), launch_paused(conn, automation.id)?)
+        let (under_way, max, paused) = if enabled().any(|t| t.next_at <= now) {
+            (
+                read::automation_run_ids_under_way(conn, automation.id)?.len(),
+                headcount(conn, &automation)?,
+                launch_paused(conn, automation.id)?,
+            )
         } else {
-            (0, false)
+            (0, 1, false)
         };
         for trigger in enabled() {
             if trigger.next_at <= now {
@@ -2084,7 +2106,7 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
                 // reads (an axis it names gone since) is left for `fire` to refuse, as a launch refused
                 // is, rather than stopping every other trigger on this look.
                 let held_by = |condition: Option<&ConditionCount>| {
-                    held(&automation, trigger, under_way, paused, condition, now)
+                    held(&automation, trigger, under_way, max, paused, condition, now)
                 };
                 if held_by(None).is_none()
                     && condition_count(conn, automation.project_id, trigger)
@@ -2109,7 +2131,7 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 /// 1. **Whether to file one.** Not while anything holds it back ([`TriggerHeld`]): not before the
 ///    trigger's `next_at`, not while the launch standing is paused, and not while the automation's runs
 ///    under way say no: an `every` or a `tasks` waits while the automation has its most runs under way
-///    (`max_concurrent_runs`), where a task filed would have no run to go to, and an `idle` waits until
+///    ([`headcount`]), where a task filed would have no run to go to, and an `idle` waits until
 ///    it has none at all. Nor while its condition does not hold. One with a script files one only where
 ///    `said` was heard from those very scripts — the ones [`ask_trigger`] ran outside this write — so one
 ///    rewritten since they were asked files nothing. A trigger not enabled files none, nor does one of an
@@ -2142,12 +2164,13 @@ pub fn fire(
     let automation =
         read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
     let under_way = read::automation_run_ids_under_way(tx.conn(), automation_id)?.len();
+    let max = headcount(tx.conn(), &automation)?;
     let paused = launch_paused(tx.conn(), automation_id)?;
-    if held(&automation, &trigger, under_way, paused, None, now).is_some() {
+    if held(&automation, &trigger, under_way, max, paused, None, now).is_some() {
         return Ok(None);
     }
     let condition = condition_count(tx.conn(), automation.project_id, &trigger)?;
-    if held(&automation, &trigger, under_way, paused, condition.as_ref(), now).is_some()
+    if held(&automation, &trigger, under_way, max, paused, condition.as_ref(), now).is_some()
         || TriggerScripts::of(&trigger).is_some_and(|scripts| said.map(|said| &said.scripts) != Some(&scripts))
     {
         return Ok(None);
@@ -2236,7 +2259,7 @@ pub(crate) fn wait_for_a_task(tx: &WriteTx<'_>, run: AutomationRun) -> Result<Au
 }
 
 /// **Which of these waiting automations a run may be started of now** ([`start_waiting`]) — those a
-/// task has turned up for, with room under `max_concurrent_runs`, and those whose newest saved entry no
+/// task has turned up for, with room under its [`headcount`], and those whose newest saved entry no
 /// longer waits for one, whose wait [`start_waiting`] ends.
 ///
 /// Only whether a task has turned up is asked, one row of the tasks each, never a count
@@ -2250,7 +2273,7 @@ pub fn tasks_turned_up(conn: &Connection, automations: &[i64]) -> Result<Vec<i64
         if automation.waits_for_task_since.is_none() || automation.archived || automation.stopped || automation.export_only {
             continue;
         }
-        if read::automation_run_ids_under_way(conn, automation_id)?.len() >= automation.max_concurrent_runs as usize
+        if read::automation_run_ids_under_way(conn, automation_id)?.len() >= headcount(conn, &automation)? as usize
             || launch_paused(conn, automation_id)?
         {
             continue;
@@ -2291,7 +2314,7 @@ pub fn start_waiting(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) ->
     if before.waits_for_task_since.is_none() || before.archived || before.stopped || before.export_only {
         return Ok(None);
     }
-    if read::automation_run_ids_under_way(tx.conn(), automation_id)?.len() >= before.max_concurrent_runs as usize
+    if read::automation_run_ids_under_way(tx.conn(), automation_id)?.len() >= headcount(tx.conn(), &before)? as usize
         || launch_paused(tx.conn(), automation_id)?
     {
         return Ok(None);
@@ -2420,10 +2443,11 @@ pub fn launches_to_top_up(conn: &Connection, launches: &[i64]) -> Result<Vec<i64
 
 /// **Whether a launch may be given one more run now.** It is running, and its automation is neither
 /// archived, stopped, kept for export only nor waiting for a task (a run then is [`start_waiting`]'s
-/// to start). The automation has room under `max_concurrent_runs`, read as it stands now, so a most
-/// raised while the launch runs takes hold at once. No run of the launch stands about to take a task:
-/// that run would take the one found here. And the newest saved entry finds a task to take — an entry
-/// that is not the built-in that takes one is never topped up, its run walking the picture once.
+/// to start). The automation has room under its [`headcount`], read from its newest saved version as
+/// it stands now, so a headcount raised and saved while the launch runs takes hold at once. No run of
+/// the launch stands about to take a task: that run would take the one found here. And the newest
+/// saved entry finds a task to take — an entry that is not the built-in that takes one is never topped
+/// up, its run walking the picture once.
 pub(crate) fn tops_up(conn: &Connection, launch_id: i64) -> Result<bool> {
     let Some(launch) = read::automation_launch(conn, launch_id)? else { return Ok(false) };
     if launch.status != AutomationLaunchStatus::Running {
@@ -2434,7 +2458,7 @@ pub(crate) fn tops_up(conn: &Connection, launch_id: i64) -> Result<bool> {
     {
         return Ok(false);
     }
-    if read::automation_run_ids_under_way(conn, automation.id)?.len() >= automation.max_concurrent_runs as usize {
+    if read::automation_run_ids_under_way(conn, automation.id)?.len() >= headcount(conn, &automation)? as usize {
         return Ok(false);
     }
     for run_id in read::automation_launch_run_ids_under_way(conn, launch_id)? {
@@ -2480,7 +2504,7 @@ pub fn top_up(tx: &WriteTx<'_>, launch_id: i64, by: &Launcher<'_>) -> Result<Opt
 }
 
 /// **Whether the runs under way leave a trigger room to file a task** — `under_way` being the
-/// automation's runs `running` or `paused`, and `max` its `max_concurrent_runs`. An `every`, a `tasks`
+/// automation's runs `running` or `paused`, and `max` its [`headcount`]. An `every`, a `tasks`
 /// or a `script` files one while there is room for one more run; an `idle` only once there is none
 /// under way.
 fn has_room(when: &crate::model::TriggerWhen, under_way: usize, max: u32) -> bool {
@@ -2533,13 +2557,14 @@ pub enum TriggerHeld {
 }
 
 /// **The first thing that holds `trigger` back at `now`** ([`TriggerHeld`]), or `None` where nothing
-/// does — `under_way` being its automation's runs under way and `paused` whether its launch standing is
-/// paused. Its condition is weighed only where it is handed counted: `None` leaves it out, for a reader
-/// that counts the tasks only once nothing cheaper has said no.
+/// does — `under_way` being its automation's runs under way, `max` its [`headcount`], and `paused`
+/// whether its launch standing is paused. Its condition is weighed only where it is handed counted:
+/// `None` leaves it out, for a reader that counts the tasks only once nothing cheaper has said no.
 fn held(
     automation: &Automation,
     trigger: &crate::model::AutomationTrigger,
     under_way: usize,
+    max: u32,
     paused: bool,
     condition: Option<&ConditionCount>,
     now: Timestamp,
@@ -2554,8 +2579,8 @@ fn held(
         Some(TriggerHeld::Condition)
     } else if now < trigger.next_at {
         Some(TriggerHeld::NotYet { next_at: trigger.next_at })
-    } else if !has_room(&trigger.when, under_way, automation.max_concurrent_runs) {
-        Some(TriggerHeld::NoRoom { under_way, max: automation.max_concurrent_runs })
+    } else if !has_room(&trigger.when, under_way, max) {
+        Some(TriggerHeld::NoRoom { under_way, max })
     } else {
         None
     }
@@ -2597,11 +2622,12 @@ pub fn trigger_check(conn: &Connection, trigger_id: i64, now: Timestamp) -> Resu
     let automation =
         read::automation(conn, trigger.automation_id)?.ok_or_else(|| not_found("automation", trigger.automation_id))?;
     let under_way = read::automation_run_ids_under_way(conn, automation.id)?.len();
+    let max = headcount(conn, &automation)?;
     let paused = launch_paused(conn, automation.id)?;
     let condition = condition_count(conn, automation.project_id, &trigger)?;
     Ok(TriggerCheck {
         trigger_id,
-        held: held(&automation, &trigger, under_way, paused, condition.as_ref(), now),
+        held: held(&automation, &trigger, under_way, max, paused, condition.as_ref(), now),
         condition,
         runs_programs: TriggerScripts::of(&trigger).is_some(),
     })
@@ -2952,15 +2978,15 @@ fn launch_asking(
         .map(|task| serde_json::to_string(&task).map_err(Error::from))
         .transpose()?;
     if limited {
-        let max = automation.max_concurrent_runs;
+        let max = headcount_of(&pic);
         let mut runs = read::automation_run_ids_under_way(tx.conn(), automation_id)?;
         if runs.len() >= max as usize {
             runs.sort_unstable();
             let runs = runs.iter().map(i64::to_string).collect::<Vec<_>>().join(", ");
             return Err(Error::Invalid(
                 Msg::new(format!(
-                    "automation '{}' already has {max} run(s) under way, the most it may have at once \
-                     ({runs}) — wait for one to end before launching it again",
+                    "automation '{}' already has {max} run(s) under way, as many as its roles' headcount \
+                     adds up to ({runs}) — wait for one to end before launching it again",
                     automation.name
                 ))
                 .coded(ErrorCode::InvalidAutomationRunLimit)
@@ -4235,7 +4261,7 @@ mod tests {
             );
 
             let (automation, _, _) = launchable(tx);
-            automation::update(tx, automation.id, None, None, None, None, Some(None)).expect("leave it unsaid");
+            automation::update(tx, automation.id, None, None, None, Some(None)).expect("leave it unsaid");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::NoFailuresTo],
@@ -4255,7 +4281,7 @@ mod tests {
             )
             .expect("a role");
             let to_role = Some(Some(FailuresTo::Role { role_id: role.id }));
-            automation::update(tx, automation.id, None, None, None, None, to_role).expect("to the role");
+            automation::update(tx, automation.id, None, None, None, to_role).expect("to the role");
             assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), vec![]);
             launch(tx, automation.id, &here(&claude())).expect("launch");
         });
@@ -5262,7 +5288,7 @@ mod tests {
             let startable = claude();
             let closed = Launcher { workspace_open: Some(false), ..here(&startable) };
             assert!(launch(tx, automation.id, &closed).is_err());
-            automation::update(tx, automation.id, None, None, Some(true), None, None).expect("archive");
+            automation::update(tx, automation.id, None, None, Some(true), None).expect("archive");
             assert!(launch(tx, automation.id, &here(&claude())).is_err());
         });
     }
@@ -5332,7 +5358,7 @@ mod tests {
             let again = automation::save(tx, automation.id, None).expect("save with nothing written");
             assert_eq!(again.id, first.id, "nothing written since, so no new version");
 
-            automation::update(tx, automation.id, Some("2件やりきる"), None, None, None, None).expect("rename");
+            automation::update(tx, automation.id, Some("2件やりきる"), None, None, None).expect("rename");
             assert!(
                 !automation::unsaved(tx.conn(), automation.id).expect("unsaved"),
                 "the name is not part of a version",
@@ -5351,7 +5377,7 @@ mod tests {
         with_tx(|tx| {
             let startable = claude();
             let (automation, _, _) = launchable(tx);
-            automation::update(tx, automation.id, None, None, Some(true), None, None).expect("archive");
+            automation::update(tx, automation.id, None, None, Some(true), None).expect("archive");
             let err = launch(tx, automation.id, &here(&startable)).expect_err("archived");
             let Error::Invalid(msg) = err else { panic!("an archived automation is invalid") };
             assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationArchived));
@@ -5360,7 +5386,7 @@ mod tests {
                 vec!["automation"],
             );
 
-            automation::update(tx, automation.id, None, None, Some(false), None, None).expect("bring back");
+            automation::update(tx, automation.id, None, None, Some(false), None).expect("bring back");
             let closed = Launcher { workspace_open: Some(false), ..here(&startable) };
             let err = launch(tx, automation.id, &closed).expect_err("closed");
             let Error::Invalid(msg) = err else { panic!("a closed workspace is invalid") };
@@ -5612,7 +5638,7 @@ mod tests {
             let Error::Invalid(msg) = err else { panic!("an automation with runs is invalid to delete") };
             assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationHasRuns));
             assert_eq!(msg.fields().iter().collect::<Vec<_>>(), vec![("count", "1")]);
-            automation::update(tx, automation.id, None, None, Some(true), None, None).expect("archiving is the way instead");
+            automation::update(tx, automation.id, None, None, Some(true), None).expect("archiving is the way instead");
         });
     }
 
@@ -5998,7 +6024,7 @@ mod tests {
     fn a_second_launch_starts_beside_the_first_rather_than_behind_it() {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
-            automation::update(tx, automation.id, None, None, None, Some(2), None).expect("room for two");
+            crate::ops::test_support::room_for(tx, automation.id, 2);
             let startable = claude();
             let first = launch(tx, automation.id, &here(&startable)).expect("launch");
             let second = launch(tx, automation.id, &here(&startable)).expect("launch");
@@ -6021,8 +6047,7 @@ mod tests {
     fn a_launch_past_the_most_runs_under_way_is_refused_and_a_paused_one_counts() {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
-            let automation =
-                automation::update(tx, automation.id, None, None, None, Some(2), None).expect("set a most");
+            crate::ops::test_support::room_for(tx, automation.id, 2);
             let startable = claude();
             let first = launch(tx, automation.id, &here(&startable)).expect("the first is under the most");
             let second = launch(tx, automation.id, &here(&startable)).expect("the second reaches it");
@@ -6057,8 +6082,7 @@ mod tests {
     fn what_was_handed_is_refused_before_the_most_runs_under_way() {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
-            let automation =
-                automation::update(tx, automation.id, None, None, None, Some(1), None).expect("set a most");
+            crate::ops::test_support::room_for(tx, automation.id, 1);
             let startable = claude();
             launch(tx, automation.id, &here(&startable)).expect("the first reaches the most");
             let titled = HandedAtLaunch { title: Some("an issue".into()), ..Default::default() };

@@ -481,7 +481,6 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             name,
             notes,
             archived,
-            max_concurrent_runs,
             failures_to,
             no_failures_to,
         } => {
@@ -492,7 +491,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 (false, None) => None,
             };
             let a = store
-                .automation_update(id, name.as_deref(), notes.as_deref(), archived, max_concurrent_runs, failures_to)
+                .automation_update(id, name.as_deref(), notes.as_deref(), archived, failures_to)
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.update", "automation", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated automation: {} ({})", a.name, a.id));
         }
@@ -1003,8 +1002,8 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 }
             }
         }
-        AutomationCmd::RoleAdd { automation, name, icon, entry, agent, model } => {
-            let new = NewRole { name, icon, entry_placement_id: entry, agent, model };
+        AutomationCmd::RoleAdd { automation, name, headcount, icon, entry, agent, model } => {
+            let new = NewRole { name, headcount, icon, entry_placement_id: entry, agent, model };
             let r = store.automation_role_add(automation, new).map_err(CliError::from)?;
             let line = format!("✓ Defined role {} in automation {automation} ({})", r.name, r.id);
             write_draft(flags, "automation.role-add", "automation_role", serde_json::to_value(&r).unwrap(), None, line, Some(Draft::Automation(r.automation_id)));
@@ -1026,10 +1025,23 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 }
             }
         }
-        AutomationCmd::RoleUpdate { id, name, icon, clear_icon, entry, clear_entry, agent, clear_agent, model, clear_model } => {
+        AutomationCmd::RoleUpdate {
+            id,
+            name,
+            headcount,
+            icon,
+            clear_icon,
+            entry,
+            clear_entry,
+            agent,
+            clear_agent,
+            model,
+            clear_model,
+        } => {
             // clap holds each value and its `--clear-…` apart, so at most one of the two is there.
             let change = RoleChange {
                 name,
+                headcount,
                 icon: if clear_icon { Some(None) } else { icon.map(Some) },
                 entry_placement_id: if clear_entry { Some(None) } else { entry.map(Some) },
                 agent: if clear_agent { Some(None) } else { agent.map(Some) },
@@ -1589,11 +1601,10 @@ fn render_automation(
     };
     let archived = if a.archived { "  archived" } else { "" };
     let stopped = if a.stopped { "  stopped" } else { "" };
-    let at_most = format!("  at most {} run(s) at once", a.max_concurrent_runs);
     human(
         flags,
         format!(
-            "project {}  {}  {} placement(s){at_most}{stopped}{archived}",
+            "project {}  {}  {} placement(s){stopped}{archived}",
             a.project_id,
             entry,
             view.placements.len()
@@ -1719,10 +1730,10 @@ fn failures_to_arg(to: &str) -> Result<FailuresTo, CliError> {
     })
 }
 
-/// One role on one line: its id and name, its icon, where its round starts, and the agent and model its
-/// steps fall back to.
+/// One role on one line: its id and name, how many are in it, its icon, where its round starts, and the
+/// agent and model its steps fall back to.
 fn one_role(role: &AutomationRole) -> String {
-    let mut line = format!("{}  {}", role.id, role.name);
+    let mut line = format!("{}  {}  {} in it", role.id, role.name, role.headcount);
     if let Some(icon) = &role.icon {
         line.push_str(&format!("  icon {icon}"));
     }

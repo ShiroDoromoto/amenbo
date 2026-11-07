@@ -1474,7 +1474,7 @@ mod tests {
             )
             .expect("a role");
             let to = Some(Some(crate::model::FailuresTo::Role { role_id: role.id }));
-            automation::update(tx, p.automation.id, None, None, None, None, to).expect("to the role");
+            automation::update(tx, p.automation.id, None, None, None, to).expect("to the role");
             let run = a_run(tx, &p.automation);
             let first = opened(tx, &run, &p.first);
             let task = a_task_in_hand(tx, p.project, first.run_step.id);

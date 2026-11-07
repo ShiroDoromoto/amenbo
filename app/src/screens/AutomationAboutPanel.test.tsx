@@ -36,7 +36,6 @@ const automation: AutomationDetailDto = {
   name: "one at a time",
   notes: "",
   archived: false,
-  maxConcurrentRuns: 1,
   triggers: [],
   roles: [],
   placements: [],

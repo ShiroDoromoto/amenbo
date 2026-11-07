@@ -44,11 +44,10 @@ const automation: AutomationDetailDto = {
   name: "Morning round",
   notes: "",
   archived: false,
-  maxConcurrentRuns: 1,
   triggers: [],
   roles: [
-    { id: 1, name: "Alice", passes: [] },
-    { id: 2, name: "Bob", passes: [] },
+    { id: 1, name: "Alice", headcount: 1, passes: [] },
+    { id: 2, name: "Bob", headcount: 1, passes: [] },
   ],
   placements: [],
   edges: [],

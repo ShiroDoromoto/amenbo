@@ -169,11 +169,9 @@ pub fn automation_import(project_id: i64, src: String) -> Result<WriteAck, CmdEr
     Ok(WriteAck::new(&["automations", "automationActions"]).automation(made.id))
 }
 
-/// **Rename an automation, rewrite its notes, put it out of the way, set how many of its runs may
-/// be going at once, or choose who a failed round is filed to.** Only what is `Some` is written.
-///
-/// `max_concurrent_runs` sets the most runs at once at that number, from 1 up to
-/// [`amenbo_core::model::MAX_CONCURRENT_RUNS_LIMIT`]. There is no lifting it.
+/// **Rename an automation, rewrite its notes, put it out of the way, or choose who a failed round is
+/// filed to.** Only what is `Some` is written. How many of its runs may be going at once is its roles'
+/// headcount ([`automation_role_edit`]), not one of these.
 ///
 /// `failures_to` chooses a person or a role of this automation; core refuses a role of another one.
 /// There is no taking it back to nobody from here: a launch is refused without one, so the screen only
@@ -193,19 +191,13 @@ pub fn automation_edit(
     name: Option<String>,
     notes: Option<String>,
     archived: Option<bool>,
-    max_concurrent_runs: Option<u32>,
     failures_to: Option<AutomationFailuresToDto>,
 ) -> Result<WriteAck, CmdError> {
     let failures_to = failures_to.map(|to| Some(to.into()));
     with_store_mut(|store| {
-        store.automation_update(id, name.as_deref(), notes.as_deref(), archived, max_concurrent_runs, failures_to)?;
+        store.automation_update(id, name.as_deref(), notes.as_deref(), archived, failures_to)?;
         Ok(())
     })?;
-    // A most raised takes hold in the launch standing at once: the look that tops it up reads the most
-    // as it stands (`amenbo_core::ops::automation_run::top_up`), and this has it look now.
-    if max_concurrent_runs.is_some() {
-        crate::automation_watch::wake();
-    }
     Ok(WriteAck::new(&["automations"]))
 }
 
@@ -1313,12 +1305,14 @@ pub fn automation_placement_version_set(placement_id: i64, version: i64) -> Resu
 }
 
 /// **Define a role in an automation**, after the roles already there
-/// ([`amenbo_core::ops::automation::role_add`]). Only the name is required. `model` is named beside
-/// `agent` and with no agent is refused by core: the model is the agent's model.
+/// ([`amenbo_core::ops::automation::role_add`]). Only the name is required. `headcount` is how many are
+/// in it, 1 unless given; core refuses one outside 1 to [`amenbo_core::model::MAX_ROLE_HEADCOUNT`].
+/// `model` is named beside `agent` and with no agent is refused by core: the model is the agent's model.
 #[tauri::command]
 pub fn automation_role_add(
     automation_id: i64,
     name: String,
+    headcount: Option<u32>,
     icon: Option<String>,
     entry_placement_id: Option<i64>,
     agent: Option<String>,
@@ -1327,15 +1321,16 @@ pub fn automation_role_add(
     with_store_mut(|store| {
         store.automation_role_add(
             automation_id,
-            NewRole { name, icon, entry_placement_id, agent, model },
+            NewRole { name, headcount, icon, entry_placement_id, agent, model },
         )?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations"]))
 }
 
-/// **Change a role's name, icon, the placement its round starts at, or its default agent and model**
-/// ([`amenbo_core::ops::automation::role_update`]). Only the fields named are written.
+/// **Change a role's name, how many are in it, icon, the placement its round starts at, or its default
+/// agent and model** ([`amenbo_core::ops::automation::role_update`]). Only the fields named are written.
+/// A headcount outside 1 to [`amenbo_core::model::MAX_ROLE_HEADCOUNT`] is refused by core.
 ///
 /// Each of the four taken-away fields has a third answer — written, cleared, or left alone — and is
 /// carried as the pair `x` / `clear_x` for the reason [`automation_step_edit`]'s `work_dir` is: the
@@ -1345,6 +1340,7 @@ pub fn automation_role_add(
 pub fn automation_role_edit(
     id: i64,
     name: Option<String>,
+    headcount: Option<u32>,
     icon: Option<String>,
     clear_icon: Option<bool>,
     entry_placement_id: Option<i64>,
@@ -1356,6 +1352,7 @@ pub fn automation_role_edit(
 ) -> Result<WriteAck, CmdError> {
     let change = RoleChange {
         name,
+        headcount,
         icon: write_or_clear(icon, clear_icon),
         entry_placement_id: write_or_clear(entry_placement_id, clear_entry),
         agent: write_or_clear(agent, clear_agent),
@@ -1757,9 +1754,9 @@ pub fn automation_launch_asks(id: i64) -> Result<AutomationLaunchAsksDto, CmdErr
 /// stood at once rather than at the end of its wait.
 ///
 /// **One press runs side by side.** The run is started in a launch — the one standing for the
-/// automation, or a new one — and the watch starts more in it up to the automation's
-/// `max_concurrent_runs` while there are tasks to take (`amenbo_core::ops::automation_run::top_up`).
-/// The answer names that launch.
+/// automation, or a new one — and the watch starts more in it up to the automation's roles' headcount
+/// (`amenbo_core::ops::automation_run::headcount`) while there are tasks to take
+/// (`amenbo_core::ops::automation_run::top_up`). The answer names that launch.
 ///
 /// **What the person hands over with the press** (`AMB-D-981`): `title`, `notes`, `classification`
 /// (axis and value, by name) and `files` by their paths on this machine, all for the built-in that
@@ -3152,7 +3149,6 @@ fn detail_dto(
         notes: a.notes,
         entry_placement_id: a.entry_placement_id,
         archived: a.archived,
-        max_concurrent_runs: a.max_concurrent_runs,
         triggers: a.triggers.into_iter().map(Into::into).collect(),
         failures_to: a.failures_to.map(Into::into),
         edges: view.edges.into_iter().map(|e| edge_dto(e, &names)).collect(),
@@ -3349,6 +3345,7 @@ fn role_dto(
     AutomationRoleDto {
         id: role.id,
         name: role.name,
+        headcount: role.headcount,
         icon: role.icon,
         entry_placement_id: role.entry_placement_id,
         agent: role.agent,
@@ -3521,9 +3518,9 @@ mod tests {
     }
 
     /// **The four role doors write through core and read back on the detail.** A role is added with
-    /// its agent and model, renamed, reordered against another, has its agent cleared — the model
-    /// going with it — and is taken away. A model with no agent and a role that is not there are
-    /// core's refusals, passed on rather than reworded.
+    /// its agent and model or with a headcount, renamed and given another headcount, reordered against
+    /// another, has its agent cleared — the model going with it — and is taken away. A model with no
+    /// agent and a role that is not there are core's refusals, passed on rather than reworded.
     #[test]
     fn roles_are_added_edited_reordered_and_removed() {
         let _env = env_guard();
@@ -3543,11 +3540,11 @@ mod tests {
         };
         let roles = || automation_detail(automation_id).unwrap().expect("the automation").roles;
 
-        automation_role_add(automation_id, "Alice".into(), None, None, Some("claude".into()), Some("opus".into()))
+        automation_role_add(automation_id, "Alice".into(), None, None, None, Some("claude".into()), Some("opus".into()))
             .unwrap();
-        automation_role_add(automation_id, "Bob".into(), Some("eye".into()), None, None, None).unwrap();
+        automation_role_add(automation_id, "Bob".into(), Some(2), Some("eye".into()), None, None, None).unwrap();
         assert!(
-            automation_role_add(automation_id, "Alice".into(), None, None, None, Some("opus".into())).is_err(),
+            automation_role_add(automation_id, "Alice".into(), None, None, None, None, Some("opus".into())).is_err(),
             "a model with no agent names nothing"
         );
         let names = |roles: &[AutomationRoleDto]| roles.iter().map(|r| r.name.clone()).collect::<Vec<_>>();
@@ -3555,20 +3552,22 @@ mod tests {
         assert_eq!(names(&listed), ["Alice", "Bob"]);
         let (alice, bob) = (listed[0].id, listed[1].id);
         assert_eq!((listed[0].agent.as_deref(), listed[0].model.as_deref()), (Some("claude"), Some("opus")));
+        assert_eq!((listed[0].headcount, listed[1].headcount), (1, 2), "one in a role unless given");
 
         automation_role_move(bob, "before".into(), Some(alice)).unwrap();
         assert_eq!(names(&roles()), ["Bob", "Alice"]);
         assert!(automation_role_move(bob, "before".into(), None).is_err(), "before needs an anchor");
         assert!(automation_role_move(bob, "middle".into(), None).is_err());
 
-        automation_role_edit(bob, Some("Carol".into()), None, Some(true), None, None, None, None, None, None).unwrap();
-        automation_role_edit(alice, None, None, None, None, None, None, Some(true), None, None).unwrap();
+        automation_role_edit(bob, Some("Carol".into()), Some(3), None, Some(true), None, None, None, None, None, None).unwrap();
+        automation_role_edit(alice, None, None, None, None, None, None, None, Some(true), None, None).unwrap();
         let listed = roles();
         assert_eq!(names(&listed), ["Carol", "Alice"]);
         assert_eq!(listed[0].icon, None, "the clear takes the icon away");
+        assert_eq!(listed[0].headcount, 3);
         assert_eq!((listed[1].agent.as_deref(), listed[1].model.as_deref()), (None, None), "the model goes with the agent");
         assert!(
-            automation_role_edit(alice, None, None, None, None, None, None, None, Some("opus".into()), None).is_err(),
+            automation_role_edit(alice, None, None, None, None, None, None, None, None, Some("opus".into()), None).is_err(),
             "a model with no agent is refused on an edit too"
         );
 

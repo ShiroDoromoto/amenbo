@@ -4440,6 +4440,13 @@ pub struct AutomationBuiltinRunDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) args: Option<Vec<String>>,
+    /// **How long a script step is expected to take, in minutes** (`automation_run_def.expected_minutes`,
+    /// or the default where the run's copy predates it). Absent on a built-in, beside `program`: a
+    /// script runs in a terminal whose silence is marked on its card (`app/src/talk/moving.ts`), and a
+    /// built-in has no terminal.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) expected_minutes: Option<i64>,
     /// **When the step was opened**, as an RFC3339 instant. Absent while it is about to be carried out
     /// and nothing is written for it yet.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -4503,6 +4510,11 @@ pub struct AutomationStepRunDto {
     pub(crate) folder: Option<String>,
     /// Whether this step may stop and wait for a person (`automation_action_step.interactive`).
     pub(crate) interactive: bool,
+    /// **How long the step is expected to take, in minutes** (`automation_run_def.expected_minutes`, or
+    /// the default where the run's copy predates it). A silence in the step's terminal twice this long is
+    /// marked on its card (`app/src/talk/moving.ts`).
+    #[ts(type = "number")]
+    pub(crate) expected_minutes: i64,
     /// **When the step was opened**, as an RFC3339 instant (`automation_run_step.started_at`).
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

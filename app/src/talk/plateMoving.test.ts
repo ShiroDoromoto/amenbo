@@ -65,3 +65,32 @@ describe("the lamp follows the stream and reads nothing else into it", () => {
   });
 
 });
+
+describe("output the host heard before the pane was drawn", () => {
+  it("counts from the host's time, so a step that printed once and went quiet has a silence", () => {
+    const heard = Date.now() - 6 * 60_000;
+    plate.opened(null, heard);
+    expect(plate.lastOutput()).toBe(heard);
+    // Long past the window: what is drawn as the tail is not something arriving now.
+    expect(dot()).toBe("out");
+  });
+
+  it("lights for output heard moments ago and settles when its window runs out", () => {
+    plate.opened(null, Date.now() - (STILL_AFTER_MS - 100));
+    expect(dot()).toBe("lit");
+    vi.advanceTimersByTime(100);
+    expect(dot()).toBe("out");
+  });
+
+  it("never moves the time back behind output this pane took itself", () => {
+    plate.output();
+    const took = plate.lastOutput();
+    plate.opened(null, Date.now() - 60_000);
+    expect(plate.lastOutput()).toBe(took);
+  });
+
+  it("measures nothing for a terminal that has written nothing", () => {
+    plate.opened(null, null);
+    expect(plate.lastOutput()).toBeNull();
+  });
+});

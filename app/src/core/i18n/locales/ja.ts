@@ -1429,6 +1429,7 @@ export const ja: Translation = {
     "auto.run.roles.idleOne": "{name}（手が空いています）",
     "auto.run.roles.asks": "入力待ち",
     "auto.run.roles.working": "作業中",
+    "auto.run.roles.quiet": "出力なし {time}",
     "auto.run.roles.failed": "落ちました",
     "auto.run.roles.none": "いま周が走っている役割はありません",
     "auto.run.roles.filedRole": "{role}の周が落ちました。{to}に障害を起票しました（{ref}）",

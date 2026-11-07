@@ -71,8 +71,12 @@ export type PaneEvents = {
    *
    *  `agent` is the id the program was started as, and null for a plain prompt. It comes off the
    *  session rather than off what this pane asked for, which is the only reading that holds for a
-   *  pane that adopted one (`crate::pty`). */
-  opened(session: string, folder: string | null, agent: string | null): void;
+   *  pane that adopted one (`crate::pty`).
+   *
+   *  `lastOutput` is when the terminal last wrote something, as the host measured it, or null where it
+   *  has written nothing yet. A terminal runs before any pane is drawn for it, and what it wrote then
+   *  comes back as the tail rather than as `output` — this is how a pane learns when that was. */
+  opened(session: string, folder: string | null, agent: string | null, lastOutput?: number | null): void;
   /** A chunk has crossed and been drawn. Said per chunk and carrying nothing: what is read off it is
    *  the time it happened, which is the one thing about a stream that means the same for every program
    *  in a pane (`./moving`). The tail a pane is handed on picking a terminal up is not one of these —
@@ -1261,7 +1265,7 @@ export async function mountTerminal(
   // The folder comes off the session rather than off `start`, because those are the same answer only
   // for a terminal this pane started. One it took up runs where it was started, which is what the page
   // holding it has to be told (`./layout`).
-  on.opened(running.session, running.folder ?? null, running.agent ?? null);
+  on.opened(running.session, running.folder ?? null, running.agent ?? null, running.lastOutput ?? null);
   // What the session said while nobody was drawing it, ahead of anything said since: `opened` has
   // just emptied the band, and what is held below arrived during this mount.
   if (named !== null || made.length > 0) on.carried?.(named, made);

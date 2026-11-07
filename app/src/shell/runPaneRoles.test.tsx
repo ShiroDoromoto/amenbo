@@ -23,7 +23,7 @@ import type { AutomationRunCardDto, TaskRoleDto } from "../bindings/bindings";
 import type { BuiltinRun } from "../talk/automationStep";
 import { TerminalPane } from "./TerminalPane";
 import { t, tf } from "../core/i18n";
-import { cardsFit, filedLine, fitOf, handsAway, handsOf, roleCards, roundsOf } from "./RunPicture";
+import { cardsFit, filedLine, fitOf, handsAway, handsOf, roleCards, roundsOf, silenceOf, type RoleCard } from "./RunPicture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -38,7 +38,7 @@ vi.mock("../talk/terminal", async (actual) => ({
 vi.mock("../talk/plate", () => ({
   mountPlate: () => ({
     opened: () => {}, closed: () => {}, named: () => {}, took: () => {}, stated: () => {}, numbered: () => {}, timed: () => {},
-    focused: () => {}, stop: () => {},
+    focused: () => {}, stop: () => {}, lastOutput: () => null,
   }),
 }));
 
@@ -319,6 +319,26 @@ describe("roleCards", () => {
 
   it("draws the icon a role was given only where it is one drawn here", () => {
     expect(roleCards(RUNNING, [role(2, "B", 3, "nothing-like-it")]).cards[0]!.icon).toBe("person");
+  });
+});
+
+describe("silenceOf", () => {
+  const at = 100_000_000;
+  const min = 60_000;
+  const card = (state: RoleCard["state"]): RoleCard => ({ role: 2, name: "B", icon: "person", state });
+
+  it("measures a round under way, the one that may wait for a person included", () => {
+    expect(silenceOf(card("running"), at - 6 * min, at, 10)).toEqual({ stage: 1, for: 6 * min });
+    expect(silenceOf(card("asks"), at - 21 * min, at, 10)).toEqual({ stage: 2, for: 21 * min });
+  });
+
+  it("says no time while the silence is short of the first stage", () => {
+    expect(silenceOf(card("running"), at - min, at, 10)).toEqual({ stage: 0, for: null });
+  });
+
+  it("does not measure a round that is paused or failed", () => {
+    expect(silenceOf(card("paused"), at - 60 * min, at, 10)).toEqual({ stage: 0, for: null });
+    expect(silenceOf(card("failed"), at - 60 * min, at, 10)).toEqual({ stage: 0, for: null });
   });
 });
 

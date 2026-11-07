@@ -50,3 +50,28 @@ export function hueOf(at: number): number {
 export function movingAt(lastOutput: number | null, at: number): boolean {
   return lastOutput !== null && at - lastOutput < STILL_AFTER_MS;
 }
+
+/** **How long a pane goes without output before its card is marked** — the first of the two stages a
+ *  silence is drawn in. A placeholder value, the same for every agent: what is measured is the
+ *  terminal's stream, and nothing an agent says about itself (`AMB-D-748`). */
+export const QUIET_AFTER_MS = 5 * 60_000;
+
+/** **How far a silence has gone**, as a run's card draws it: 0 where it is not marked, 1 past
+ *  {@link QUIET_AFTER_MS}, and 2 past twice the time the step is expected to take. */
+export type Quiet = 0 | 1 | 2;
+
+/**
+ * **The stage a silence is at**, for a pane whose last output was at `lastOutput`, seen at `at`, on a
+ * step expected to take `expectedMinutes`.
+ *
+ * It is a reading and nothing more: no stage stops, restarts or turns anything (`AMB-D-748`). A
+ * terminal that has written nothing yet (`lastOutput` null) has no silence to measure, and a step
+ * with no expected time is never past twice it. Nothing is marked before {@link QUIET_AFTER_MS},
+ * however short the step is expected to be: a step expected to take a minute is not marked at two.
+ */
+export function quietAt(lastOutput: number | null, at: number, expectedMinutes: number | null): Quiet {
+  if (lastOutput === null) return 0;
+  const quiet = at - lastOutput;
+  if (quiet < QUIET_AFTER_MS) return 0;
+  return expectedMinutes !== null && quiet >= expectedMinutes * 2 * 60_000 ? 2 : 1;
+}

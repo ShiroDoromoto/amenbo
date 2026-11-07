@@ -1435,6 +1435,7 @@ export const fr: Translation = {
     "auto.run.roles.idleOne": "{name} (libre)",
     "auto.run.roles.asks": "En attente de saisie",
     "auto.run.roles.working": "En cours",
+    "auto.run.roles.quiet": "Aucune sortie {time}",
     "auto.run.roles.failed": "Échoué",
     "auto.run.roles.none": "Aucun rôle n’a de tour en cours.",
     "auto.run.roles.filedRole": "Le tour de {role} a échoué. Signalé à {to} sous {ref}.",

@@ -168,6 +168,7 @@ function step(over: Partial<StepRun> = {}): StepRun {
     agent: "claude",
     folder: "/work/a",
     interactive: false,
+    expectedMinutes: 10,
     ...over,
   };
 }

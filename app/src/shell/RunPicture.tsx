@@ -32,10 +32,20 @@
 // The roles' own definitions say nothing of which role hands on to which — the next role is the one
 // the handed task names when it is handed — so what the run carries today is the filing alone.
 //
+// **A round whose terminal has gone quiet is marked, in two stages**, and only by what was measured:
+// how long it has been since anything came out of its terminal (`../talk/moving`). Past five minutes
+// the card says so with a clock and its border takes the heed colour; past twice the time its step is
+// expected to take, its border and its ground take the stop colour. The time on the clock counts every
+// second, and the card's look changes only where the stage does. Nothing is done about it — no round is
+// stopped or turned for a silence (`AMB-D-748`) — and it is the same for every agent, because what is
+// read is the stream and not anything the agent says. A paused or failed round is not measured.
+//
 // **The only thing that moves is a small dot on a card whose round is under way**: it fades in and
 // out, slowly, so the eye finds which role is at work without the pane moving at the edge of sight all
 // day. A card that waits for a person, is paused or failed says so in words and stays still, and so
-// does a row of the list. Where the reader asks for less motion the dot stays lit and does not fade.
+// does a row of the list. A card whose terminal has gone quiet loses its dot too: the clock says what
+// the stream shows, and a dot would say something is happening that the stream does not. Where the
+// reader asks for less motion the dot stays lit and does not fade.
 // Nothing else is animated: a pane that changes size moves its cards only by where they stand.
 //
 // **One run is one pane** (`AMB-D-939`), and a run walks one round at a time, so the cards are its
@@ -56,6 +66,7 @@ import { useLiveRuns } from "../core/automations";
 import { t, tf } from "../core/i18n";
 import { Icon, isIconName, type IconName } from "../components/Icon";
 import { clockOf, type Say } from "../talk/nameplate";
+import { quietAt, type Quiet } from "../talk/moving";
 import type { AutomationRunCardDto, TaskRoleDto } from "../bindings/bindings";
 
 /** What a role's round is doing, as its card says it. */
@@ -183,6 +194,45 @@ function useNow(ticking: boolean): number {
   return now;
 }
 
+/** Whether the round of `card` is under way, and so has a time counted and a silence measured. */
+function underWay(card: RoleCard): boolean {
+  return card.state === "running" || card.state === "asks";
+}
+
+/** How a round's silence stands, as its card and its row draw it. */
+export type Silence = {
+  readonly stage: Quiet;
+  /** How long the terminal has been quiet, in milliseconds, where `stage` is past 0. */
+  readonly for: number | null;
+};
+
+/**
+ * **How the silence of `card`'s round stands at `now`**, for a terminal whose last output was at
+ * `lastOutput` on a step expected to take `expectedMinutes`. A round not under way is not measured: a
+ * pause or a failure is what it is, and a quiet terminal says nothing more about it.
+ */
+export function silenceOf(
+  card: RoleCard,
+  lastOutput: number | null,
+  now: number,
+  expectedMinutes: number | null,
+): Silence {
+  if (!underWay(card)) return { stage: 0, for: null };
+  const stage = quietAt(lastOutput, now, expectedMinutes);
+  return { stage, for: stage === 0 || lastOutput === null ? null : now - lastOutput };
+}
+
+/** The clock a quiet round is marked with: how long its terminal has printed nothing. */
+function QuietChip({ silence }: { silence: Silence }) {
+  if (silence.stage === 0 || silence.for === null) return null;
+  return (
+    <span className="runroles__chip runroles__quiet" data-quiet={silence.stage}>
+      <Icon name="clock" />
+      {tf("auto.run.roles.quiet", { time: clockOf(silence.for) })}
+    </span>
+  );
+}
+
 /** What a card says under the time, where its round is doing more than working. */
 function chipOf(card: RoleCard, run: Say): string | null {
   if (card.state === "asks") return t("auto.run.roles.asks");
@@ -294,16 +344,22 @@ function useStrokes(room: RefObject<HTMLDivElement | null>, hands: readonly Hand
 }
 
 /** One role's card, pressed to read its round's terminal where `onOpen` is given. */
-function Card({ card, run, now, away, onOpen }: {
-  card: RoleCard; run: Say; now: number; away: readonly Hand[]; onOpen?: () => void;
+function Card({ card, run, now, silence, away, onOpen }: {
+  card: RoleCard; run: Say; now: number; silence: Silence; away: readonly Hand[]; onOpen?: () => void;
 }) {
   // The time is the round's, counted while it is under way: a paused or failed round has stopped at
   // a moment the pane does not know.
   const since = run.round?.startedAt ?? null;
-  const ran = since !== null && (card.state === "running" || card.state === "asks") ? clockOf(now - since) : null;
+  const ran = since !== null && underWay(card) ? clockOf(now - since) : null;
   const chip = chipOf(card, run);
+  const quiet = silence.stage > 0;
   return (
-    <li className="runroles__card" data-role={card.role ?? undefined} data-state={card.state}>
+    <li
+      className="runroles__card"
+      data-role={card.role ?? undefined}
+      data-state={card.state}
+      data-quiet={quiet ? silence.stage : undefined}
+    >
       {/* The whole card is the press, laid over it so that what the card says stays read as text. */}
       {onOpen !== undefined && (
         <button
@@ -316,7 +372,11 @@ function Card({ card, run, now, away, onOpen }: {
       <span className="runroles__top">
         <Icon name={card.icon} />
         <span className="runroles__name">{card.name}</span>
-        {card.state === "running" && <span className="runroles__pulse" role="img" aria-label={t("auto.run.roles.working")} />}
+        {/* A quiet terminal is not drawn as one at work: the dot would say something is happening
+            that the stream does not show. */}
+        {card.state === "running" && !quiet && (
+          <span className="runroles__pulse" role="img" aria-label={t("auto.run.roles.working")} />
+        )}
       </span>
       {run.task !== null && (
         <span className="runroles__task" title={`${run.task.ref} ${run.task.title}`}>
@@ -324,10 +384,11 @@ function Card({ card, run, now, away, onOpen }: {
         </span>
       )}
       {run.step !== "" && <span className="runroles__step">{run.step}</span>}
-      {(ran !== null || chip !== null || away.length > 0) && (
+      {(ran !== null || chip !== null || quiet || away.length > 0) && (
         <span className="runroles__foot">
           {ran !== null && <span className="runroles__time">{tf("face.elapsed", { time: ran })}</span>}
           {chip !== null && <span className="runroles__chip" data-state={card.state}>{chip}</span>}
+          <QuietChip silence={silence} />
           {away.map((hand) => (
             <span key={`${hand.to}-${hand.filed}`} className="runroles__hand" data-to={hand.to}>
               → {hand.name}
@@ -341,14 +402,19 @@ function Card({ card, run, now, away, onOpen }: {
 
 /** One round as a row of the list: what its card says, on one line, with no dot and no line drawn —
  *  pressed, like the card, to read its round's terminal where `onOpen` is given. */
-function Row({ card, run, now, away, onOpen }: {
-  card: RoleCard; run: Say; now: number; away: readonly Hand[]; onOpen?: () => void;
+function Row({ card, run, now, silence, away, onOpen }: {
+  card: RoleCard; run: Say; now: number; silence: Silence; away: readonly Hand[]; onOpen?: () => void;
 }) {
   const since = run.round?.startedAt ?? null;
-  const ran = since !== null && (card.state === "running" || card.state === "asks") ? clockOf(now - since) : null;
+  const ran = since !== null && underWay(card) ? clockOf(now - since) : null;
   const chip = chipOf(card, run);
   return (
-    <li className="runroles__row" data-role={card.role ?? undefined} data-state={card.state}>
+    <li
+      className="runroles__row"
+      data-role={card.role ?? undefined}
+      data-state={card.state}
+      data-quiet={silence.stage > 0 ? silence.stage : undefined}
+    >
       {onOpen !== undefined && (
         <button
           type="button"
@@ -376,6 +442,7 @@ function Row({ card, run, now, away, onOpen }: {
       </span>
       <span className="runroles__rowend">
         {chip !== null && <span className="runroles__chip" data-state={card.state}>{chip}</span>}
+        <QuietChip silence={silence} />
         {away.map((hand) => (
           <span key={`${hand.to}-${hand.filed}`} className="runroles__hand" data-to={hand.to}>
             → {hand.name}
@@ -391,10 +458,14 @@ function Row({ card, run, now, away, onOpen }: {
  * Drawn again only when what it reads of the run changes: the run's words are built afresh on each
  * draw of the workspace, and drawing every pane's cards again on each of those would slow the typing
  * in the panes around it.
+ *
+ * `lastOutput` reads when the run's terminal last printed (`../talk/plate`). It is read at each tick
+ * rather than handed in as a value, because the terminal prints far more often than the cards are
+ * drawn.
  */
 export const RunRoles = memo(
-  function RunRoles({ run, project, pin = "auto", onOpen }: {
-    run: Say; project: number; pin?: ViewPin; onOpen?: () => void;
+  function RunRoles({ run, project, pin = "auto", onOpen, lastOutput }: {
+    run: Say; project: number; pin?: ViewPin; onOpen?: () => void; lastOutput?: () => number | null;
   }) {
     const roles = useProjectRoles(project);
     const { cards, idle } = useMemo(() => roleCards(run, roles), [run, roles]);
@@ -405,8 +476,11 @@ export const RunRoles = memo(
     const view = pin === "auto" ? fit : pin;
     const desk = useRef<HTMLDivElement>(null);
     const strokes = useStrokes(desk, hands, view);
-    const counting = (run.round?.startedAt ?? null) !== null;
-    const now = useNow(counting && cards.some((card) => card.state === "running" || card.state === "asks"));
+    // The clock ticks while a round is under way: for its time, and for how long its terminal has
+    // been quiet, which is measured whether or not the round's start was read.
+    const now = useNow(cards.some(underWay));
+    const last = lastOutput?.() ?? null;
+    const expected = run.expectedMinutes ?? null;
     return (
       <div className="runroles" data-view={view} aria-label={t("auto.run.faceRoles")} role="region">
         <div className="runroles__room" ref={room}>
@@ -415,7 +489,15 @@ export const RunRoles = memo(
           ) : view === "list" ? (
             <ul className="runroles__rows">
               {cards.map((card) => (
-                <Row key={card.role ?? "run"} card={card} run={run} now={now} away={handsAway(card.role, hands, [])} onOpen={onOpen} />
+                <Row
+                  key={card.role ?? "run"}
+                  card={card}
+                  run={run}
+                  now={now}
+                  silence={silenceOf(card, last, now, expected)}
+                  away={handsAway(card.role, hands, [])}
+                  onOpen={onOpen}
+                />
               ))}
             </ul>
           ) : (
@@ -427,6 +509,7 @@ export const RunRoles = memo(
                     card={card}
                     run={run}
                     now={now}
+                    silence={silenceOf(card, last, now, expected)}
                     away={handsAway(card.role, hands, cards)}
                     onOpen={onOpen}
                   />
@@ -465,17 +548,19 @@ export const RunRoles = memo(
       </div>
     );
   },
-  // `onOpen` is made afresh on each draw and does the same thing on each, so it is not compared — only
-  // whether there is one.
+  // `onOpen` and `lastOutput` are made afresh on each draw and do the same thing on each, so they are
+  // not compared — only whether there is one.
   (before, after) =>
     before.project === after.project &&
     before.pin === after.pin &&
     (before.onOpen === undefined) === (after.onOpen === undefined) &&
+    (before.lastOutput === undefined) === (after.lastOutput === undefined) &&
     before.run.run === after.run.run &&
     before.run.automation === after.run.automation &&
     before.run.automationId === after.run.automationId &&
     before.run.step === after.run.step &&
     before.run.interactive === after.run.interactive &&
+    before.run.expectedMinutes === after.run.expectedMinutes &&
     before.run.task?.ref === after.run.task?.ref &&
     before.run.task?.title === after.run.task?.title &&
     before.run.round?.role === after.run.round?.role &&

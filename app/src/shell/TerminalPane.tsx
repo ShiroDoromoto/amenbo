@@ -492,11 +492,11 @@ function Pane({
     // one this pane took rather than what is true now.
     on.current.onRow?.(frame, plate.read);
     void mountAgentFrame(host, currentLang(), {
-      opened: (session, where, running) => {
+      opened: (session, where, running, lastOutput) => {
         // The folder is what the row above the pane calls it until something names the frame
         // (`../talk/frames`), and it is the one the terminal actually runs in — which is not always
         // the one this slot was handed.
-        plate.opened(where ?? start.cwd ?? null);
+        plate.opened(where ?? start.cwd ?? null, lastOutput ?? null);
         setLive(session);
         // What the band counts belongs to the session and not to the place: a pane opened again is a
         // new session, and the records the last one filed are not this one's (`./PaneMade`).
@@ -1093,7 +1093,13 @@ function Pane({
           />
         )}
         {run !== null && face === "roles" && (
-          <RunRoles run={run} project={project} pin={pin} onOpen={() => turn("terminal")} />
+          <RunRoles
+            run={run}
+            project={project}
+            pin={pin}
+            onOpen={() => turn("terminal")}
+            lastOutput={() => plateRef.current?.lastOutput() ?? null}
+          />
         )}
         {/* **A run over, with no terminal up, says how it ended** (`./RunBody`) — in place of the card
             of a built-in it was stopped on too, which would otherwise go on saying it was at work. */}

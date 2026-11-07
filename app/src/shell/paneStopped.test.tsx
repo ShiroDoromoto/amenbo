@@ -39,7 +39,7 @@ vi.mock("../talk/terminal", async (actual) => ({
 vi.mock("../talk/plate", () => ({
   mountPlate: () => ({
     opened: () => {}, closed: () => {}, named: () => {}, took: () => {}, stated: () => {}, numbered: () => {}, timed: () => {},
-    focused: () => {}, stop: () => {},
+    focused: () => {}, stop: () => {}, lastOutput: () => null,
   }),
 }));
 

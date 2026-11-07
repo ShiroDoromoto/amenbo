@@ -1420,6 +1420,7 @@ export const ko: Translation = {
     "auto.run.roles.idleOne": "{name} (쉬는 중)",
     "auto.run.roles.asks": "입력 대기",
     "auto.run.roles.working": "작업 중",
+    "auto.run.roles.quiet": "출력 없음 {time}",
     "auto.run.roles.failed": "실패",
     "auto.run.roles.none": "지금 회차가 진행 중인 역할이 없습니다.",
     "auto.run.roles.filedRole": "{role}의 라운드가 실패했습니다. {to}에게 장애를 등록했습니다({ref})",

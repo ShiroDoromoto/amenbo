@@ -16,8 +16,10 @@ import { movingAt, STILL_AFTER_MS } from "./moving";
 /** A pane's label, and the pane's way of telling it what happened. */
 export type Plate = {
   /** A terminal has started in the pane, in `folder`. The folder is what the row calls the pane
-   *  until something names it (`./frames`). */
-  opened(folder: string | null): void;
+   *  until something names it (`./frames`). `heard` is when the terminal last wrote something before
+   *  the pane was drawn, as the host measured it: what it wrote then is drawn as the tail and never
+   *  said as `output`, so a step that printed once and went quiet would otherwise have no silence. */
+  opened(folder: string | null, heard?: number | null): void;
   /** Something came out of the terminal. Said per chunk and read as a time, never as a quantity: what
    *  it turns into is a fixed rhythm rather than a meter (`./moving`). */
   output(): void;
@@ -51,6 +53,10 @@ export type Plate = {
    * What comes back is a reading and not a subscription. A caller that wants it later asks again.
    */
   read(): Row | null;
+  /** **When something last came out of the terminal**, in milliseconds since the epoch — what a run's
+   *  card measures its silence from (`./moving`). Null before the terminal has written anything, after
+   *  the program has exited, and once the label is taken away. A reading, like `read`. */
+  lastOutput(): number | null;
 };
 
 /**
@@ -115,11 +121,19 @@ export function mountPlate(
   let ticking: ReturnType<typeof setInterval> | undefined;
   let stoppedAt: number | null = null;
 
-  /** Take in a chunk having crossed, and draw the change where there is one. */
-  function tookOutput(): void {
+  /** Take in a chunk having crossed at `at`, and draw the change where there is one. */
+  function tookOutput(at: number = Date.now()): void {
     if (!live) return;
-    lastOutput = Date.now();
+    lastOutput = at;
     clearTimeout(settling);
+    const now = Date.now();
+    // A chunk the host heard before the pane was drawn may already be past the window.
+    if (!movingAt(at, now)) {
+      if (!moving) return;
+      moving = false;
+      redraw();
+      return;
+    }
     // Coming back for the answer once the window has passed. Nothing else says a pane has stopped —
     // stopping is the absence of an event, so the clock is the only thing that can notice it.
     settling = setTimeout(() => {
@@ -127,7 +141,7 @@ export function mountPlate(
         moving = false;
         redraw();
       }
-    }, STILL_AFTER_MS);
+    }, STILL_AFTER_MS - (now - at));
     if (moving) return;
     moving = true;
     redraw();
@@ -181,9 +195,10 @@ export function mountPlate(
   redraw();
 
   return {
-    opened: (where) => {
+    opened: (where, heard) => {
       folder = where;
       ran = true;
+      if (heard != null && (lastOutput === null || heard > lastOutput)) tookOutput(heard);
       redraw();
     },
     output: tookOutput,
@@ -224,6 +239,7 @@ export function mountPlate(
     // A pane that has been taken down has no row to read: what it said was about a session that is
     // gone, and handing the last of it back would be this saying something it can no longer see.
     read: () => (live ? row() : null),
+    lastOutput: () => (live ? lastOutput : null),
     stop: () => {
       live = false;
       clearTimeout(settling);

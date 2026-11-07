@@ -531,7 +531,6 @@ CREATE TABLE IF NOT EXISTS automation_run_step (
     status TEXT NOT NULL DEFAULT '' CHECK(status IN ('', 'running', 'done', 'failed', 'stopped')),
     started_at TEXT CHECK(started_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     ended_at TEXT CHECK(ended_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
-    exit_code BIGINT,
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
 );
@@ -726,6 +725,14 @@ CREATE INDEX IF NOT EXISTS attachment_by_target ON attachment(target_type, targe
 -- question a task's screen puts is the other way round — "what has been run on this one" — and
 -- without this index that lookup scans every row of the table once per task asked about.
 CREATE INDEX IF NOT EXISTS automation_run_task_by_task ON automation_run_task(task_id);
+-- A run's own steps and its own copy of the automation, sought by `run_id`. Every read of a run —
+-- the list of runs under way, a run's card, the step a run is on — asks for these rows, and without
+-- the indexes each ask scans the whole table, which grows by a row for every step every run has
+-- taken. `seq` follows `run_id` so a run's steps come back in order off the index rather than through
+-- a sort. Both columns are there from the tables' first shape, so this belongs here rather than in a
+-- step.
+CREATE INDEX IF NOT EXISTS automation_run_step_by_run ON automation_run_step(run_id, seq);
+CREATE INDEX IF NOT EXISTS automation_run_def_by_run ON automation_run_def(run_id);
 -- The trigram index over that copy, and the three triggers that keep it in step. External-content
 -- (`content='search_doc'`), so the text is stored once: the index holds only the trigrams, and the row
 -- it points at is the copy itself. The triggers are the seam — a doc row cannot be written without its

@@ -1433,6 +1433,20 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 125,
+        name: "index a run's steps and its copy of the automation by run",
+        // Every read of a run seeks `automation_run_step` and `automation_run_def` by `run_id`, and
+        // unindexed each one scans the whole table.
+        //
+        // **The version is what this step is for**, as at v28: both columns are there from the tables'
+        // first shape, so the indexes are declared in `schema::EXTRA_SQL` and every open creates them.
+        // The statements are repeated in frozen text rather than referenced, as every step's are.
+        apply: Apply::Sql(
+            "CREATE INDEX IF NOT EXISTS automation_run_step_by_run ON automation_run_step(run_id, seq); \
+             CREATE INDEX IF NOT EXISTS automation_run_def_by_run ON automation_run_def(run_id);",
+        ),
+    },
+    Step {
+        to: 126,
         name: "add automation_run_step.exit_code, what the program of an agent's step that failed its run exited with",
         // **Left NULL on every row already there.** No code a program exited with was kept before this.
         apply: Apply::Custom(let_a_step_keep_its_exit_code),
@@ -1645,7 +1659,7 @@ fn let_a_launch_hold_its_runs(ctx: &Ctx<'_>) -> Result<()> {
     Ok(())
 }
 
-/// v125: `automation_run_step.exit_code`, what the program of an agent's step that failed its run
+/// v126: `automation_run_step.exit_code`, what the program of an agent's step that failed its run
 /// exited with.
 ///
 /// **Only where it is not there yet.** A store whose table was created in the live shape already has it.
@@ -12223,11 +12237,11 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v125: a step written before the step kept no exit code, and a step can keep one.
+    /// v126: a step written before the step kept no exit code, and a step can keep one.
     #[test]
-    fn a_step_written_before_v125_kept_no_exit_code() {
+    fn a_step_written_before_v126_kept_no_exit_code() {
         let dir = scratch("run-step-exit-code");
-        let engine = store_at(&dir, 124);
+        let engine = store_at(&dir, 125);
         engine
             .conn()
             .execute_batch(
@@ -12438,6 +12452,40 @@ mod tests {
             .conn()
             .execute("INSERT INTO automation_role (automation_id, name, headcount) VALUES (1, 'さくら', 10)", [])
             .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v125: a store from before it seeks a run's steps and its copy of the automation by `run_id`,
+    /// rather than scanning both tables for every run it reads. (The open already lays the indexes down
+    /// from `schema::EXTRA_SQL`; the step is what moves the version, as at v28.)
+    #[test]
+    fn a_runs_steps_and_def_are_indexed_by_run_from_v125() {
+        let dir = scratch("automation-run-indexes");
+        let engine = store_at(&dir, 124);
+        let indexed = |name: &str| -> i64 {
+            engine
+                .conn()
+                .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?1", [name], |r| {
+                    r.get(0)
+                })
+                .unwrap()
+        };
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(indexed("automation_run_step_by_run"), 1);
+        assert_eq!(indexed("automation_run_def_by_run"), 1);
+        let plan = |sql: &str| -> String {
+            let mut stmt = engine.conn().prepare(&format!("EXPLAIN QUERY PLAN {sql}")).unwrap();
+            let rows = stmt.query_map([], |r| r.get::<_, String>(3)).unwrap();
+            rows.map(|r| r.unwrap()).collect::<Vec<_>>().join("\n")
+        };
+        let steps = plan("SELECT id FROM automation_run_step WHERE run_id = 1 ORDER BY seq, id");
+        assert!(steps.contains("automation_run_step_by_run"), "a run's steps are sought by run: {steps}");
+        assert!(!steps.contains("TEMP B-TREE"), "and come back in order without a sort: {steps}");
+        let def = plan("SELECT id FROM automation_run_def WHERE run_id = 1");
+        assert!(def.contains("automation_run_def_by_run"), "a run's copy is sought by run: {def}");
         std::fs::remove_dir_all(&dir).ok();
     }
 

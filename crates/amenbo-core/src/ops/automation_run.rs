@@ -778,12 +778,19 @@ pub struct RolePass {
     /// Whether the task it files is set to depend on another
     /// ([`crate::ops::automation_builtin_make::answered_depends`]).
     pub depends: bool,
+    /// **The task this placement last passed to `to_role_id`**, by any run of the automation
+    /// ([`crate::model::AutomationRunPass::placement_id`]) — what the build screen names the task it
+    /// passes on by, the title being written only when a run files it. `None` where no run has passed one
+    /// from here yet, or the ones it did have since been deleted.
+    pub last_task_id: Option<i64>,
 }
 
 /// **What each role's round passes to another role**, for the definition `reads` names, in the order
 /// the placements are — every placement of the built-in that files a task whose round is one role's
 /// ([`rounds_by_placement`]) and whose role setting names exactly one other role. A placement filing
-/// under its own round's role, or under a role its name does not settle, passes nothing.
+/// under its own round's role, or under a role its name does not settle, passes nothing. Neither does
+/// one that takes the task it files ([`crate::ops::automation_builtin_make::answered_takes`]): the run
+/// records no pass there, and the build screen says only what a run's pane can draw a line for.
 pub fn passes_by_role(conn: &Connection, automation_id: i64, reads: ReadsFrom) -> Result<Vec<RolePass>> {
     let automation = read::automation(conn, automation_id)?
         .ok_or_else(|| not_found("automation", automation_id))?;
@@ -801,10 +808,24 @@ pub fn passes_by_role(conn: &Connection, automation_id: i64, reads: ReadsFrom) -
         let Some((_, Some(to))) = crate::ops::automation_builtin_make::answered_role(&settings, pic.roles()) else {
             continue;
         };
-        if to != from.id {
+        if to != from.id && !crate::ops::automation_builtin_make::answered_takes(&settings) {
             let depends = crate::ops::automation_builtin_make::answered_depends(&settings);
-            passes.push(RolePass { from_role_id: from.id, to_role_id: to, placement_id: placement.id, depends });
+            passes.push(RolePass {
+                from_role_id: from.id,
+                to_role_id: to,
+                placement_id: placement.id,
+                depends,
+                last_task_id: None,
+            });
         }
+    }
+    let spots: Vec<i64> = passes.iter().map(|p| p.placement_id).collect();
+    let filed = read::automation_run_passes_at(conn, &spots)?;
+    for pass in &mut passes {
+        pass.last_task_id = filed
+            .iter()
+            .filter(|f| f.placement_id == Some(pass.placement_id) && f.to_role_id == Some(pass.to_role_id))
+            .find_map(|f| f.task_id);
     }
     Ok(passes)
 }

@@ -908,13 +908,25 @@ toRole: number,
  */
 placement: number, 
 /**
- * The action standing on that spot, by name — what the build screen labels the task by.
+ * The action standing on that spot, by name — what the build screen labels the task by until a
+ * run has passed one on from there, the title being written only when a run files it.
  */
 name: string, 
 /**
  * Whether the task it files is set to depend on another — what the build screen marks it with.
  */
-depends: boolean, };
+depends: boolean, 
+/**
+ * **The reference of the task a run last passed on from that spot**
+ * ([`amenbo_core::ops::automation_run::RolePass::last_task_id`]). Absent where no run has passed
+ * one from there yet, or the ones it did have since been deleted.
+ */
+taskRef?: string, 
+/**
+ * **The title of that task** — what the build screen names the task the role passes on by, in
+ * place of `name`. Absent where `task_ref` is.
+ */
+taskTitle?: string, };
 
 /**
  * **One run in the "running" tab** — what is going on right now, on one line.

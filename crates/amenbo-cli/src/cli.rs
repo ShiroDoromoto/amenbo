@@ -1902,9 +1902,10 @@ pub enum AutomationCmd {
         no_failures_to: bool,
     },
     /// Give an automation a trigger: every so many minutes, whenever none of its runs is under way,
-    /// whenever few enough tasks match a filter, or whenever a program says so, it files a task and
-    /// starts a run of the automation on it, with nobody pressing start (the entry has to be make_task)
-    /// — or take it away with --off. Only the app runs triggers
+    /// whenever few enough tasks match a filter, or whenever a program says so, it files a task — the
+    /// one written here, the one a file says, or the one a program writes — and starts a run of the
+    /// automation on it, with nobody pressing start (the entry has to be make_task) — or take it away
+    /// with --off. Only the app runs triggers
     Trigger {
         /// automation id
         id: i64,
@@ -1938,13 +1939,32 @@ pub enum AutomationCmd {
         #[arg(long, value_name = "MINUTES", requires = "if_script")]
         script_timeout_minutes: Option<i64>,
         /// the title of the task it files
-        #[arg(long, required_unless_present = "off")]
+        #[arg(long, required_unless_present_any = ["off", "task_from_file", "task_from_script"], conflicts_with_all = ["task_from_file", "task_from_script"])]
         title: Option<String>,
         /// that task's notes, in Markdown (`-` reads it from stdin)
-        #[arg(long)]
+        #[arg(long, conflicts_with_all = ["task_from_file", "task_from_script"])]
         notes: Option<String>,
+        /// instead of --title, read the task it files from this file, by its full path, each time it
+        /// files one: its first line that is not blank is the title, and the rest the notes
+        #[arg(long, value_name = "PATH", conflicts_with = "task_from_script")]
+        task_from_file: Option<String>,
+        /// instead of --title, have this program, by its full path, write the task each time it files
+        /// one: it writes {"version":1,"title":"…","notes":"…"} to the file named in AMENBO_OUTPUT (the
+        /// notes may be left out), and its exit code says only whether it ran to the end
+        #[arg(long, value_name = "PATH")]
+        task_from_script: Option<String>,
+        /// one argument handed to the --task-from-script program as it is, with no shell in between —
+        /// repeat it for each
+        // clap lets `requires` go when the arg it asks for conflicts with one given, so --title and
+        // --task-from-file are refused beside these outright.
+        #[arg(long = "task-script-arg", value_name = "ARG", requires = "task_from_script", conflicts_with_all = ["title", "notes", "task_from_file"], allow_hyphen_values = true)]
+        task_script_args: Vec<String>,
+        /// how long the --task-from-script program may run before it is stopped, 1 to 360 minutes (30
+        /// unless given)
+        #[arg(long, value_name = "MINUTES", requires = "task_from_script", conflicts_with_all = ["title", "notes", "task_from_file"])]
+        task_script_timeout_minutes: Option<i64>,
         /// take the trigger away
-        #[arg(long, conflicts_with_all = ["every", "when_idle", "if_tasks", "fewer_than", "if_script", "script_args", "script_timeout_minutes", "title", "notes"])]
+        #[arg(long, conflicts_with_all = ["every", "when_idle", "if_tasks", "fewer_than", "if_script", "script_args", "script_timeout_minutes", "title", "notes", "task_from_file", "task_from_script", "task_script_args", "task_script_timeout_minutes"])]
         off: bool,
     },
     /// Stop an automation from starting new rounds, or let it start them again with --off. While it is

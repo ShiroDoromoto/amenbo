@@ -88,13 +88,19 @@
 // would refuse a launch. While it is open the panel is the test's and the picture marks the box of the
 // step it stands on; pressing a box leaves it for that box's panel, as any other panel is left.
 //
+// **The roles stand down the left** (`./AutomationRoles`): the list with each one's step count and
+// the press that adds one, and over the picture the head of the one picked — its name, where it stands
+// in the list, and the agent and model its steps fall back to (`AMB-D-960`). They are written to the
+// draft like the rest.
+//
 // **The head says what is saved** (`./AutomationSaved`, `AMB-D-1005`): nothing yet, changes not
 // saved, or the version saved last and when. A write still marks the field it came from.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AutomationAboutPanel, AutomationNameField } from "./AutomationAboutPanel";
 import { Panel } from "./AutomationActionBuildScreen";
 import { AutomationLibraryPanel, placeKey, type PlaceTarget } from "./AutomationLibraryPanel";
 import { AutomationPicture } from "./AutomationPicture";
+import { AutomationRoleHead, AutomationRoleList } from "./AutomationRoles";
 import { automationGraph, pictureOrder } from "./automationLayout";
 import { AutomationActionMake } from "./AutomationActionMake";
 import { AutomationActionOver } from "./AutomationActionOver";
@@ -213,6 +219,19 @@ export function AutomationBuildScreen({
   const putForYou = (placed: number[]) => {
     if (placed.length > 0) setForYou((was) => new Set([...was, ...placed]));
   };
+  // The role picked on the left, which what is built in the middle is for. None picked is the first,
+  // and one that is gone — taken off, or only on a draft that was discarded — falls back to it too.
+  const [roleId, setRoleId] = useState<number | null>(null);
+  const role = automation?.roles.find((one) => one.id === roleId) ?? automation?.roles[0];
+  // A role just added is picked once it is in the list: it goes after the roles already there, so it
+  // is the last once the list is longer than it was at the press.
+  const [addedAt, setAddedAt] = useState<number | null>(null);
+  const roles = automation?.roles;
+  useEffect(() => {
+    if (addedAt === null || roles === undefined || roles.length <= addedAt) return;
+    setRoleId(roles[roles.length - 1].id);
+    setAddedAt(null);
+  }, [addedAt, roles]);
   const folders = useBoundFolders(projectId);
   const check = useLaunchCheck(id, projectId, folders.live.map((one) => one.path));
   // The press itself is the one every entrance makes (`../components/StartAutomation`): this screen
@@ -432,27 +451,42 @@ export function AutomationBuildScreen({
         />
       )}
 
-      <div className="actbuild__canvashead">
-        <span className="actbuild__sec">{t("auto.build.picture")}</span>
-      </div>
-      <div className="actbuild__canvas">
-        <AutomationPicture
-          graph={automationGraph(automation)}
-          selectedBoxId={testing !== null ? test.marked : pressed?.id}
-          placedForYou={forYou}
-          onPickBox={(box) => setShowing({ kind: "box", id: box })}
-          onInsert={(edgeId) => setShowing({ kind: "library", target: { edgeId } })}
-          onOpenExit={({ boxId, exitName }) => setShowing({ kind: "library", target: { fromId: boxId, exitName } })}
-        />
-        {automation !== null && automation.placements.length === 0 && (
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={() => setShowing({ kind: "library", target: { automationId: automation.id } })}
-          >
-            {t("auto.pic.first")}
-          </button>
+      <div className="actbuild__body">
+        {automation !== null && (
+          <AutomationRoleList
+            automation={automation}
+            pickedId={role?.id ?? null}
+            onPick={setRoleId}
+            onAdded={setAddedAt}
+          />
         )}
+        <div className="actbuild__main">
+          {automation !== null && role !== undefined && (
+            <AutomationRoleHead key={role.id} automation={automation} role={role} onRemoved={() => setRoleId(null)} />
+          )}
+          <div className="actbuild__canvashead">
+            <span className="actbuild__sec">{t("auto.build.picture")}</span>
+          </div>
+          <div className="actbuild__canvas">
+            <AutomationPicture
+              graph={automationGraph(automation)}
+              selectedBoxId={testing !== null ? test.marked : pressed?.id}
+              placedForYou={forYou}
+              onPickBox={(box) => setShowing({ kind: "box", id: box })}
+              onInsert={(edgeId) => setShowing({ kind: "library", target: { edgeId } })}
+              onOpenExit={({ boxId, exitName }) => setShowing({ kind: "library", target: { fromId: boxId, exitName } })}
+            />
+            {automation !== null && automation.placements.length === 0 && (
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => setShowing({ kind: "library", target: { automationId: automation.id } })}
+              >
+                {t("auto.pic.first")}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {automation !== null && showing?.kind === "library" && (

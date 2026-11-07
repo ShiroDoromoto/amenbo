@@ -707,6 +707,51 @@ export async function chooseAutomationAgent(
   return ack("automation_placement_step_set", { placementId, stepId, agent, model });
 }
 
+/**
+ * **Define a role in an automation**, after the roles already there. Like every other write on the
+ * definition it goes to the draft, and the role is in the version the next save makes.
+ */
+export async function addAutomationRole(automationId: number, name: string): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_role_add", { automationId, name });
+}
+
+/**
+ * **Rename a role, or choose the agent and model its steps fall back to** where a step chose none
+ * (`AMB-D-960`). `agent` / `model` take `null` to clear; clearing the agent clears the model with it,
+ * and a model is only named beside an agent.
+ */
+export async function editAutomationRole(
+  id: number,
+  patch: { name?: string; agent?: string | null; model?: string | null },
+): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_role_edit", {
+    id,
+    name: patch.name ?? null,
+    agent: patch.agent ?? null,
+    clearAgent: patch.agent === null,
+    model: patch.model ?? null,
+    clearModel: patch.model === null,
+  });
+}
+
+/** **Move a role** before or after another of the same automation's. */
+export async function moveAutomationRole(
+  id: number,
+  position: "before" | "after",
+  anchorId: number,
+): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_role_move", { id, position, anchorId });
+}
+
+/** **Take a role out of its automation.** Its placements stay on the picture. */
+export async function removeAutomationRole(id: number): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_role_remove", { id });
+}
+
 /** Which of the two declares a way out or an input: the library action, or one step inside it. */
 export type Declarer = "action" | "step";
 

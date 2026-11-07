@@ -7,7 +7,7 @@
 //! condition (`AutomationEdge`).
 //!
 //! **A role says where a round starts; this splits past it.** A role and a classification are not one
-//! thing: which placement a round begins at is its task's role (`automation_run::roles_started`), and
+//! thing: which placement a round begins at is the role its run is a seat of (`automation_run::roles_started`), and
 //! from there on a split may branch it like any other step. A line off one of its ways out is a line like
 //! any other built-in's, so one drawn to where another role starts is not refused at launch.
 //!

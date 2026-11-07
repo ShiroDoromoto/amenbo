@@ -810,6 +810,7 @@ pub(super) fn automation_run_row(r: &Row) -> rusqlite::Result<AutomationRun> {
         acknowledged_by_kind: enum_opt(r, C.acknowledged_by_kind, ActorKind::parse)?,
         stopped_detail: get(r, C.stopped_detail)?,
         launch_id: get(r, C.launch_id)?,
+        role_id: get(r, C.role_id)?,
         created_at,
         updated_at,
     })

@@ -254,7 +254,7 @@ pub struct Waits {
     /// no line of it.
     pub instead_of: &'static str,
     /// Whether what it waits for is there now in the project, read from the answers where it was
-    /// placed — of the roles the run starts a round of, where it starts any (`roles_started`).
+    /// placed — of the role the run is a seat of, where it has one (`roles_started`).
     pub turned_up: fn(&Connection, i64, &[i64], &[RunDefCfg]) -> Result<bool>,
     /// What it looks for, as a person reads it beside the automation while it waits — read from the
     /// same answers. What it would find is not listed or counted: that is asked of every task there is.

@@ -1537,6 +1537,12 @@ datasets! {
         // The launch the run was started in. NULL on a run written before launches were kept (v120
         // gives each run then under way one of its own) and on a test run, which belongs to none.
         launch_id: fk_opt("automation_launch", "RESTRICT"),
+        // The role the run is a seat of, set at launch and never changed while it lasts: the run takes
+        // only tasks worked under it. NULL for a run of an automation no role of which names where its
+        // round starts, and for a run that had ended before v128 gave each one under way the role of its
+        // last round. `SET NULL` rather than `RESTRICT`, so taking a role out is not stopped by the runs
+        // that sat in it — they are a record of what ran, as `automation_run_task.role_id` is.
+        role_id: fk_opt("automation_role", "SET NULL"),
     }
 
     // **The step as it was at launch** — one row per step of the automation, written when the run is

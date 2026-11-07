@@ -3532,11 +3532,9 @@ pub struct AutomationDetailDto {
     /// How many runs of it may be going at once, from 1 up to the cap. One launch runs up to it side by
     /// side, and a start past it is refused.
     pub(crate) max_concurrent_runs: u32,
-    /// What files a task on its own and starts a run with it — the first of the automation's triggers.
-    /// Absent for an automation only a person starts.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub(crate) trigger: Option<AutomationTriggerDto>,
+    /// **What files a task on its own and starts a run with it**, every one of the automation's
+    /// triggers in the order they are written in. Empty for an automation only a person starts.
+    pub(crate) triggers: Vec<AutomationTriggerDto>,
     /// Who a failed round is filed to. Absent while nobody is chosen, which the launch check refuses.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -3936,6 +3934,11 @@ impl From<AutomationScriptInputDto> for amenbo_core::ops::automation::NewScript 
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationTriggerDto {
+    /// What its rewriting, taking away and switching name it by.
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    /// Is it asked? One that is not files nothing.
+    pub(crate) enabled: bool,
     pub(crate) name: String,
     /// The role of the same automation the task it files is worked under. Absent for none.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -3953,11 +3956,18 @@ pub struct AutomationTriggerDto {
     /// When it is next asked whether to file a task, as an RFC3339 instant. Read only: it is counted
     /// from the write.
     pub(crate) next_at: String,
+    /// When it last filed a task, as an RFC3339 instant. Absent where it has filed none since it was
+    /// written.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) last_filed_at: Option<String>,
 }
 
 impl From<amenbo_core::model::AutomationTrigger> for AutomationTriggerDto {
     fn from(t: amenbo_core::model::AutomationTrigger) -> Self {
         AutomationTriggerDto {
+            id: t.id,
+            enabled: t.enabled,
             name: t.name,
             role_id: t.role_id,
             when: t.when.into(),
@@ -3965,6 +3975,7 @@ impl From<amenbo_core::model::AutomationTrigger> for AutomationTriggerDto {
             script: t.script.map(Into::into),
             task: t.task.into(),
             next_at: t.next_at.to_rfc3339_z(),
+            last_filed_at: t.last_filed_at.map(|at| at.to_rfc3339_z()),
         }
     }
 }

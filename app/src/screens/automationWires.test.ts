@@ -49,6 +49,7 @@ function detail(steps: AutomationPlacementDto[], wires: AutomationDetailDto["wir
     notes: "",
     archived: false,
     maxConcurrentRuns: 1,
+    triggers: [],
     roles: [],
     placements: steps,
     edges: [],

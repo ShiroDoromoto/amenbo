@@ -16,9 +16,10 @@
 // (`not_ready_automation_no_failures_to`), so a definition with none opens on "Choose one", which cannot
 // be picked back once something else is. The roles offered are this automation's own, in their order.
 //
-// **An automation has one trigger** (`AMB-D-1119`). Without one the column says so and offers "+ Add a
-// trigger"; with one it draws what it files and when, and pressing it opens the same dialog to change
-// it or take it away (`./AutomationTrigger`).
+// **The column draws the automation's first trigger** (`AMB-D-1119`); an automation may have more,
+// and listing them all is still to come. Without one the column says so and offers "+ Add a trigger";
+// with one it draws what it files and when, and pressing it opens the same dialog to change it or take
+// it away (`./AutomationTrigger`).
 import { useState } from "react";
 import { editAutomation, MAX_CONCURRENT_RUNS } from "../core/automations";
 import { errText, t, tf } from "../core/i18n";
@@ -75,7 +76,8 @@ export function AutomationSettings({ automation }: { automation: AutomationDetai
   const [triggering, setTriggering] = useState(false);
   const most = automation.maxConcurrentRuns;
   const failures = failuresValue(automation.failuresTo);
-  const trigger = automation.trigger;
+  // The first of its triggers, as the dialog writes it.
+  const trigger = automation.triggers[0];
   const triggerRoleId = trigger?.roleId;
   const triggerRole =
     triggerRoleId === undefined ? undefined : automation.roles.find((one) => one.id === triggerRoleId);

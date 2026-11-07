@@ -74,6 +74,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     notes: "",
     archived: false,
     maxConcurrentRuns: 1,
+    triggers: [],
     roles: [alice, bob],
     placements: [placement(1, 1, 2), placement(2, 1, 3), placement(3, 2, 1), placement(4, undefined, 4)],
     edges: [],

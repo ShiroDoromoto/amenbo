@@ -24,7 +24,9 @@ vi.mock("../core/automations", () => ({
     hoisted.edits.push(patch);
     return hoisted.refuse === null ? Promise.resolve() : Promise.reject(new Error(hoisted.refuse));
   },
-  setAutomationTrigger: () => Promise.resolve(),
+  addAutomationTrigger: () => Promise.resolve(),
+  updateAutomationTrigger: () => Promise.resolve(),
+  removeAutomationTrigger: () => Promise.resolve(),
   MAX_CONCURRENT_RUNS: 4,
 }));
 vi.mock("../core/dialog", () => ({ confirmDialog: () => Promise.resolve(false) }));
@@ -44,6 +46,7 @@ const automation: AutomationDetailDto = {
   notes: "",
   archived: false,
   maxConcurrentRuns: 1,
+  triggers: [],
   roles: [
     { id: 1, name: "Alice", passes: [] },
     { id: 2, name: "Bob", passes: [] },
@@ -57,6 +60,8 @@ const automation: AutomationDetailDto = {
 };
 
 const written: AutomationTriggerDto = {
+  id: 31,
+  enabled: true,
   name: "Top up the reviews",
   roleId: 2,
   when: { kind: "every", minutes: 30 },
@@ -155,7 +160,7 @@ describe("the trigger", () => {
   });
 
   it("draws the one written — its name, when, what it files and its role — and opens it on a press", async () => {
-    await render({ ...automation, trigger: written });
+    await render({ ...automation, triggers: [written] });
     const drawn = container.querySelector<HTMLButtonElement>(".autoside__trigger")!;
     expect(drawn.textContent).toContain("Top up the reviews");
     expect(drawn.textContent).toContain(tf("auto.side.every", { minutes: 30 }));

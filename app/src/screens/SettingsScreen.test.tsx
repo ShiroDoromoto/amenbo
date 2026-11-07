@@ -37,6 +37,8 @@ const hoisted = vi.hoisted(() => ({
   tickAnswers: [] as boolean[],
   /** What `answerTick` should refuse with, or null to let it land. */
   tickFails: null as string | null,
+  /** How many times the credits row asked for the credits screen. */
+  creditsOpened: 0,
 }));
 
 vi.mock("../core/snapshot", async (importOriginal) => {
@@ -116,7 +118,7 @@ function report(over: Partial<DoctorReportDto> = {}): DoctorReportDto {
 /** Draw the screen. Nothing is checked by doing so (`AMB-D-938`). */
 async function render() {
   await act(async () => {
-    root.render(createElement(SettingsScreen));
+    root.render(createElement(SettingsScreen, { onOpenCredits: () => { hoisted.creditsOpened += 1; } }));
   });
 }
 
@@ -178,6 +180,7 @@ beforeEach(() => {
   hoisted.defaultViews = [];
   hoisted.tickAnswers = [];
   hoisted.tickFails = null;
+  hoisted.creditsOpened = 0;
   setAsksBeforeTrash(true);
   applySnapshot({ ...getSnapshot(), tickConsent: null, tickRemovalLeavesARow: false });
   container = document.createElement("div");
@@ -188,6 +191,15 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+});
+
+describe("Settings > Credits", () => {
+  it("opens the credits screen from its row", async () => {
+    await render();
+    expect(container.textContent).toContain(t("settings.credits"));
+    await act(async () => buttonByLabel(t("settings.licensesOpen"))!.click());
+    expect(hoisted.creditsOpened).toBe(1);
+  });
 });
 
 describe("Settings > Integrity (doctor surface)", () => {

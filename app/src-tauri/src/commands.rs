@@ -1273,6 +1273,26 @@ pub fn store_locations() -> StoreLocationsDto {
     }
 }
 
+/// Read the two license files `tauri.conf.json` bundles into the resource directory, for the credits
+/// screen under Settings. They are read from the bundle rather than compiled in, so the app shows the
+/// same files a reader finds beside the installed binary. `tauri dev` copies the resources next to the
+/// debug build too, so the same lookup works there.
+///
+/// Async so the ~2 MB read runs on tokio rather than holding up the main thread.
+#[tauri::command]
+pub async fn licenses(app: tauri::AppHandle) -> Result<LicensesDto, CmdError> {
+    use tauri::Manager;
+    let dir = app
+        .path()
+        .resource_dir()
+        .map_err(|e| CmdError::from(format!("cannot work out where the app's resources are: {e}")))?;
+    let read = |name: &str| {
+        let path = dir.join(name);
+        std::fs::read_to_string(&path).map_err(|e| CmdError::from(format!("cannot read '{}': {e}", path.display())))
+    };
+    Ok(LicensesDto { license: read("LICENSE")?, third_party_notices: read("THIRD-PARTY-NOTICES")? })
+}
+
 /// What this build calls itself in the header, or `null` on production — production ships no badge
 /// (`AMB-D-390`). Constant for the life of the process: the channel is fixed at build time by
 /// `AMENBO_APP_NAME`, so the GUI asks once at startup and never again.

@@ -579,6 +579,7 @@ pub fn run() {
       commands::dev_badge,
       commands::cli_command_name,
       commands::open_logs_dir,
+      commands::licenses,
       commands::activity_page,
       commands::changes_since,
       commands::change_cursor,

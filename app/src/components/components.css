@@ -753,6 +753,14 @@ button.feed__target:hover { color: var(--c-accent); }
    control need none of this and do not wear it. */
 .settings__v { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
 
+/* ---------- credits (`screens/CreditsScreen`) ---------- */
+/* A license title that opens onto its text. The text is drawn only while it is open, because the
+   third-party notices run to about 2 MB. */
+.credits__fold { display: flex; flex-direction: column; gap: var(--s-1); }
+.credits__toggle { display: flex; align-items: center; gap: var(--s-1); background: none; border: none; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.credits__inner { display: flex; flex-direction: column; gap: var(--s-1); padding-left: var(--s-3); }
+.credits__text { margin: 0; font-family: var(--font-mono); font-size: var(--fs-xs); white-space: pre-wrap; overflow-wrap: anywhere; }
+
 /* ---------- the device's notification shelf (`screens/NotifyTargetsSetting`) ---------- */
 /* Rows of connection, read down the left edge. A shelf and not a table: every row carries the same
    four things, and the only column that has to line up is the kind. */

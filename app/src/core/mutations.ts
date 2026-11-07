@@ -15,7 +15,7 @@ import { type AttachTargetType } from "./reads";
 import { guessLang, t, tf, type CmdError, type CmdErrorPart, type ViewKind } from "./i18n";
 import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Schedule, Status, TaskCard } from "../mock/types";
-import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DimensionDecisionValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HandoverDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, TaskRoleDto, DecisionDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
+import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DimensionDecisionValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HandoverDto, HookNoticeDto, HookOfferDto, LicensesDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, TaskRoleDto, DecisionDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
 import { parseSchedule, scheduleText, todayStr } from "./calendar";
 
@@ -1619,6 +1619,15 @@ export async function fetchCliCommandName(): Promise<string | null> {
 export async function openLogsDir(): Promise<void> {
   if (!inTauri()) return;
   return invoke<void>("open_logs_dir");
+}
+
+/**
+ * The two license files bundled with the app — Amenbo's own `LICENSE` and `THIRD-PARTY-NOTICES` — for
+ * the credits screen. Null outside Tauri (browser mock), where there is no bundle to read them from.
+ */
+export async function fetchLicenses(): Promise<LicensesDto | null> {
+  if (!inTauri()) return null;
+  return invoke<LicensesDto>("licenses");
 }
 
 /** Set or edit the notes (Markdown); the empty string clears them. */

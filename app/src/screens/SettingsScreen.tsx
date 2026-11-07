@@ -30,8 +30,9 @@ import { Icon } from "../components/Icon";
 const VIEWS: ViewKind[] = ["list", "board", "calendar", "timeline"];
 
 // Settings: profile, appearance, AI policy, developer, and data (export and backup). The store is a
-// single local one, so there is no section for sharing, syncing, keys or members.
-export function SettingsScreen() {
+// single local one, so there is no section for sharing, syncing, keys or members. `onOpenCredits` opens
+// the credits screen, which shows the license files the app bundles.
+export function SettingsScreen({ onOpenCredits }: { onOpenCredits: () => void }) {
   const devBuild = useIsDevBuild();
 
   return (
@@ -115,6 +116,16 @@ export function SettingsScreen() {
 
       <Category title={t("settings.integrity")}>
         <DoctorSetting />
+      </Category>
+
+      <Category title={t("settings.credits")}>
+        <div className="settings__row">
+          <span className="settings__k">{t("settings.licenses")}</span>
+          <div className="settings__v">
+            <div><button className="btn" onClick={onOpenCredits}>{t("settings.licensesOpen")}</button></div>
+            <span className="meta">{t("settings.licensesNote")}</span>
+          </div>
+        </div>
       </Category>
     </div>
   );

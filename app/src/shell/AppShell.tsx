@@ -21,6 +21,7 @@ import { TickBanner } from "../components/TickBanner";
 import { ListScreen } from "../screens/ListScreen";
 import { SearchScreen } from "../screens/SearchScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
+import { CreditsScreen } from "../screens/CreditsScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { HookConsentModal } from "../screens/HookConsentModal";
 import { NudgeHost } from "../screens/NudgeHost";
@@ -858,7 +859,12 @@ export function AppShell() {
             />
           )}
           {nav.type === "view" && nav.id === "mcp" && <McpAppsScreen pick={nav.pick ?? null} />}
-          {nav.type === "view" && nav.id === "settings" && <SettingsScreen />}
+          {nav.type === "view" && nav.id === "settings" && (
+            <SettingsScreen onOpenCredits={() => navTo({ type: "view", id: "credits" })} />
+          )}
+          {nav.type === "view" && nav.id === "credits" && (
+            <CreditsScreen onBack={() => navTo({ type: "view", id: "settings" })} />
+          )}
           {nav.type === "view" && nav.id === "onboarding" && <OnboardingScreen onNav={navTo} />}
           {nav.type === "view" && nav.id === "newProject" && (
             <NewProjectScreen

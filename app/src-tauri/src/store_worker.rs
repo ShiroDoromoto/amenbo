@@ -118,7 +118,7 @@ pub const ON_WORKER: &[&str] = &[
 pub const OFF_WORKER: &[&str] = &[
     "skin_add", "skin_font_licence", "skin_in_use", "skin_read",
     "skin_template_to", "skin_write_out", "skin_list", "skin_tables", "skin_use", "store_locations",
-    "dev_badge", "cli_command_name", "open_logs_dir", "config_set_perf_log", "config_set_update_check",
+    "dev_badge", "cli_command_name", "open_logs_dir", "licenses", "config_set_perf_log", "config_set_update_check",
     "config_set_default_view", "config_set_autostart", "notify_os", "cancel_data_op", "ui_language",
     "restart_app", "migration_status", "attachment_save", "reveal_folder", "open_terminal",
     "tick_answer", "open_latest_installer", "viewer_app", "wake_model", "wake_switch",

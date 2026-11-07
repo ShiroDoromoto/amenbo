@@ -30,3 +30,10 @@ allow = [
 
 # amenbo's own crates carry no license text of their own to detect.
 private = { ignore = true }
+
+# rusqlite's bundled SQLCipher build pulls in `sqlcipher-src`, which vendors SQLite (the
+# public-domain "blessing") and libtomcrypt (WTFPL). Neither puts any obligation on us, but they
+# are allowed for this crate alone rather than for the whole tree.
+[[licenses.exceptions]]
+crate = "sqlcipher-src"
+allow = ["blessing", "WTFPL"]

@@ -238,14 +238,15 @@ jobs:
     # three siblings went green in four. The step never completed, so GitHub kept no log, and a re-run
     # of the same commit was green — which leaves a hang, and nothing to read about it. The default
     # here is six hours, and that is what held a runner and left the author of the push reading a
-    # diff the shard had not even reached. A shard of this job costs 4–5 minutes; 15 is three times
-    # that, so nothing that is merely slow is cut, and a hang is called a hang inside the quarter hour.
+    # diff the shard had not even reached. A shard of this job costs 9 minutes at the median and 13 at
+    # the slowest (156 shards across 60 runs, November 2026); 30 is more than twice the slowest, so a
+    # slow runner is not cut, and a hang is called a hang inside the half hour.
     #
     # The line is per job rather than workflow-wide: it is drawn from what this job costs, and every
     # other job here is still on the default until one of them has a measurement of its own to draw
     # from. Below it sits `terminate-after` in `.config/nextest.toml`, which kills a single hung test
     # at five minutes and names it; this catches a hang with no test to name — in the build or setup.
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -394,13 +395,14 @@ jobs:
     name: cargo test (CLI e2e, ${{ matrix.os }} ${{ matrix.shard }}/4)
     runs-on: ${{ matrix.os }}
     if: ${{ inputs.full }}
-    # The same line as `rust-e2e`, on the platforms that cost more: a shard here runs 6–7 minutes on
-    # macOS and 8–10 on Windows (nightly 35345887136), and 25 is two and a half times the slowest of
-    # them — the same kind of margin the Linux line leaves, over numbers half again as large.
+    # The same line as `rust-e2e`, on the platforms that cost more: across five nightlies (November
+    # 2026) the slowest shard ran 15 minutes on macOS and 18 on Windows, and 45 is two and a half times
+    # the slowest of them — the same kind of margin the Linux line leaves, over numbers half again as
+    # large.
     # It is here because the hang the other line was drawn from is not a Linux property — the suite
     # and its child processes are the same ones — and an unbounded shard is worth more on this leg,
     # where eight of them run and nobody is waiting on the result to press merge.
-    timeout-minutes: 25
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:

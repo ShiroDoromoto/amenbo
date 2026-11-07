@@ -82,9 +82,12 @@ jobs:
   check:
     name: check ${{ inputs.branch }}
     runs-on: ubuntu-latest
-    # A targeted run is one crate's build and a filter over its tests. Past half an hour it is a hang,
+    # A targeted run is one crate's build and a filter over its tests, and the slowest of them took
+    # 19 minutes. The line was half an hour until run 42296203624 was cut there: its apt install
+    # (`Install Tauri system deps`) took 23 minutes against the usual one, on a slow runner or mirror,
+    # and left the tests two. Sixty fits that run whole with room to spare. Past an hour it is a hang,
     # and the default of six hours would hold a runner the other sessions are queued for.
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Refuse a run that asks nothing
         if: ${{ inputs.test == '' && inputs.verify_args == '' && inputs.verify_script == '' }}

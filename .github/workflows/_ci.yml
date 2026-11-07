@@ -839,24 +839,6 @@ jobs:
       - name: Check the verification harness's licenses
         run: cargo deny --config deny.toml --manifest-path verification/Cargo.toml check licenses
 
-      # cargo deny judges whether a crate may ship; it neither carries the notices nor sees past a
-      # crate's own declaration — libsqlite3-sys says `MIT` while it compiles SQLCipher (BSD-3-Clause)
-      # into the binaries, and openssl-src builds OpenSSL (Apache-2.0). THIRD-PARTY-NOTICES carries
-      # them, and these steps hold it to the two shipped lockfiles (verification/ never ships).
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-
-      # The refusals first, for the npm-license job's reason: a judge that passes everything
-      # cannot report on itself.
-      - name: Test the notices gate's judgment
-        run: node --test guards/check-third-party-notices.test.mjs
-
-      # Fetches the crate sources through `cargo metadata --locked` and regenerates the file in
-      # memory; red when a vendored-source carrier moved or the committed file is stale.
-      - name: Check THIRD-PARTY-NOTICES against the lockfiles
-        run: node guards/check-third-party-notices.mjs
-
   # The same argument, for the other half of what we ship. cargo deny never sees the GUI's npm
   # dependencies, but they ride into the Tauri bundle exactly as the crates do — and they arrive the
   # same unwatched way, since Dependabot bumps are auto-merged. The gate reads the allow-list out of

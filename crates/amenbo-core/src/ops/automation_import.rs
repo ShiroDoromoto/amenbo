@@ -50,8 +50,9 @@ pub fn parse(text: &str) -> Result<AutomationFile> {
 /// and the roles defined in it.
 ///
 /// Refused for a file of another format, for a built-in this build does not have or has at an older
-/// version than the file, for an axis the project has no axis of that name for, and for a file whose
-/// places and names do not hold together. The caller's transaction takes the refusal back whole.
+/// version than the file, for an axis the project has no axis of that name for, for a role whose
+/// headcount is outside 1 to [`crate::model::MAX_ROLE_HEADCOUNT`], and for a file whose places and
+/// names do not hold together. The caller's transaction takes the refusal back whole.
 pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Result<Automation> {
     if file.format != FORMAT {
         return Err(Error::invalid(format!(
@@ -65,8 +66,8 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
         .map(|action| action_in(tx, project_id, action))
         .collect::<Result<Vec<_>>>()?;
 
-    // Where a failed round is filed is the automation's, as how many runs go at once is, and a file
-    // carries neither: the new automation names nobody until somebody says.
+    // Where a failed round is filed is the automation's, and a file does not carry it: the new
+    // automation names nobody until somebody says. How many runs go at once comes in with the roles.
     let new = NewAutomation { name: file.name.clone(), notes: file.notes.clone(), failures_to: None };
     let automation = automation::add(tx, project_id, new)?;
     let mut placed: Vec<Placed> = Vec::new();
@@ -132,7 +133,7 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
         let entry_placement_id = role.entry.map(|place| at(place).map(|p| p.id)).transpose()?;
         let new = NewRole {
             name: role.name.clone(),
-            headcount: None,
+            headcount: Some(role.headcount),
             icon: role.icon.clone(),
             entry_placement_id,
             agent: role.agent.clone(),
@@ -369,7 +370,7 @@ mod tests {
         automation::placement_step_set(tx, first.id, step, "claude", Some("opus")).expect("choose");
         let reviewer = NewRole {
             name: "レビュー".into(),
-            headcount: None,
+            headcount: Some(2),
             icon: Some("eye".into()),
             entry_placement_id: Some(second.id),
             agent: Some("codex".into()),
@@ -426,6 +427,9 @@ mod tests {
             let roles_before = count(tx, "automation_role");
             let imported = import(tx, into, &parse(&text).expect("parse")).expect("import");
             assert_eq!(count(tx, "automation_role"), roles_before + 2, "the roles come in as new");
+            let roles = read::automation_roles_of(tx.conn(), imported.id).expect("roles");
+            let headcounts: Vec<(&str, u32)> = roles.iter().map(|r| (r.name.as_str(), r.headcount)).collect();
+            assert_eq!(headcounts, [("レビュー", 2), ("実装", 1)], "each role comes in with its headcount");
             assert_eq!((imported.project_id, imported.name.as_str()), (into, "1件やりきる"));
             assert!(read::automation_version_latest(tx.conn(), imported.id).expect("read").is_none(), "not saved");
             assert!(automation::unsaved(tx.conn(), imported.id).expect("unsaved"), "left being written");
@@ -465,6 +469,16 @@ mod tests {
             let mut roleless = serde_json::to_value(&file).expect("json");
             roleless.as_object_mut().expect("a file").remove("roles");
             assert!(parse(&roleless.to_string()).expect("a file from before roles").roles.is_empty());
+            let mut uncounted = serde_json::to_value(&file).expect("json");
+            uncounted["roles"][0].as_object_mut().expect("a role").remove("headcount");
+            let uncounted = parse(&uncounted.to_string()).expect("a file from before headcounts");
+            assert_eq!(uncounted.roles[0].headcount, crate::model::DEFAULT_ROLE_HEADCOUNT, "an older file reads as one");
+
+            for headcount in [0, crate::model::MAX_ROLE_HEADCOUNT + 1] {
+                let mut counted = file.clone();
+                counted.roles[0].headcount = headcount;
+                assert!(matches!(import(tx, project, &counted), Err(Error::Invalid(_))), "a headcount of {headcount}");
+            }
 
             let other = AutomationFile { format: "amenbo-automation/v0".into(), ..file.clone() };
             assert!(matches!(import(tx, project, &other), Err(Error::Invalid(_))), "another format");

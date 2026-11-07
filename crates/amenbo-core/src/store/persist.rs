@@ -2107,6 +2107,24 @@ impl Store {
         })
     }
 
+    /// **Keep what an agent's step had on its terminal as its run failed** (one operation = one
+    /// transaction), answering whether it was written
+    /// ([`crate::ops::automation_stop::keep_failed_screen`]).
+    pub fn automation_keep_failed_screen(
+        &mut self,
+        run_step_id: i64,
+        screen: &str,
+        code: Option<i64>,
+    ) -> Result<bool> {
+        let Some(step) = crate::store_engine::read::automation_run_step(self.engine.conn(), run_step_id)?
+        else {
+            return Ok(false);
+        };
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, step.run_id)], |tx| {
+            crate::ops::automation_stop::keep_failed_screen(tx, run_step_id, screen, code)
+        })
+    }
+
     /// **Say a failed run has been seen** (one operation = one transaction), so it leaves the top of the
     /// runs tab for the history under it. The reach is the run's, like stopping it; `by` is kept as
     /// whose mark it is (`AMB-D-989`).

@@ -622,6 +622,8 @@ export const ko: Translation = {
     "quit.confirmNotAll": "Amenbo를 종료할까요? 열려 있는 터미널이 모두 끝납니다. 대화는 다음에 켜면 돌아오지만, {names} 페인은 돌아오지 않습니다. 그 안에서 돌던 것도 돌아오지 않습니다.",
 
     "face.ended": "이 터미널의 프로그램이 종료되었습니다.",
+    "face.endedCode": "프로세스가 종료되었습니다 (종료 코드 {code}).",
+    "face.endedNoCode": "프로세스가 종료되었습니다.",
 
     "face.endedGeminiUnset": "Gemini CLI에 인증 방법이 설정되어 있지 않습니다. 표시된 경로는 이 창만의 것이라 함께 사라지므로, 설정할 파일은 본인의 ~/.gemini/settings.json입니다.",
     "face.noWayBack": "이 대화는 더 이상 열 수 없습니다.",
@@ -1475,6 +1477,10 @@ export const ko: Translation = {
     "auto.run.viewList": "목록",
     "auto.run.backToRoles": "← 역할 보기로 돌아가기",
     "auto.run.otherRounds": "다른 회차:",
+    "auto.run.stepFailed": "{step} (실패)",
+    "auto.run.term.filedRole": "Amenbo가 장애 태스크를 {to}에게 등록했습니다.",
+    "auto.run.term.filedPerson": "Amenbo가 장애 태스크를 사람에게 등록했습니다.",
+    "auto.run.term.filed": "Amenbo가 장애 태스크를 등록했습니다.",
     "auto.run.roundTerminal": "{name}의 터미널",
     "auto.run.roundTerminalOf": "{name}의 터미널 ({which})",
     "auto.run.turnedForStep": "입력이 필요한 단계에 들어가서 {role}의 터미널로 전환했습니다.",

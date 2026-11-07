@@ -7785,6 +7785,28 @@ pub fn automation_run_tasks_for_task(
     )
 }
 
+/// **The round a task was filed as the failure of** — the stretch whose `incident_task_id` names it,
+/// the newest where more than one does. `None` for a task no failed round was filed as.
+///
+/// Read whatever has become of the run since: a failure that has been acknowledged has left the
+/// "running" tab for the history (`AMB-D-955`), and the task filed for it is still the way back to the
+/// round that fell.
+pub fn automation_run_task_of_incident(
+    conn: &Connection,
+    task_id: i64,
+) -> Result<Option<crate::model::AutomationRunTask>> {
+    const T: col::automation_run_task::Cols = col::automation_run_task::ALL;
+    Ok(automation_rows(
+        conn,
+        T.table,
+        &Pred::eq(T.incident_task_id, task_id),
+        &[Sort::by(T.id).desc()],
+        super::hydrate::automation_run_task_row,
+    )?
+    .into_iter()
+    .next())
+}
+
 /// The step executions of one run, in the order they happened.
 pub fn automation_run_steps_of(
     conn: &Connection,

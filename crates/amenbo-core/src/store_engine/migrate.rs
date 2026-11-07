@@ -1408,6 +1408,12 @@ pub const STEPS: &[Step] = &[
         // the build screen.
         apply: Apply::Custom(let_a_pass_say_which_spot_filed_it),
     },
+    Step {
+        to: 122,
+        name: "add automation_run_step.exit_code, what the program of an agent's step that failed its run exited with",
+        // **Left NULL on every row already there.** No code a program exited with was kept before this.
+        apply: Apply::Custom(let_a_step_keep_its_exit_code),
+    },
 ];
 
 /// v119: `automation_trigger`, an automation's triggers, one row each — and the `automation.trigger_*`
@@ -1532,6 +1538,18 @@ fn let_a_launch_hold_its_runs(ctx: &Ctx<'_>) -> Result<()> {
         )?;
         let launch = tx.last_insert_rowid();
         tx.execute("UPDATE automation_run SET launch_id = ?1 WHERE id = ?2", rusqlite::params![launch, u.run])?;
+    }
+    Ok(())
+}
+
+/// v122: `automation_run_step.exit_code`, what the program of an agent's step that failed its run
+/// exited with.
+///
+/// **Only where it is not there yet.** A store whose table was created in the live shape already has it.
+fn let_a_step_keep_its_exit_code(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_run_step")?.iter().any(|c| c == "exit_code") {
+        tx.execute_batch("ALTER TABLE automation_run_step ADD COLUMN exit_code BIGINT;")?;
     }
     Ok(())
 }
@@ -12098,6 +12116,34 @@ mod tests {
                 [],
             )
             .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v122: a step written before the step kept no exit code, and a step can keep one.
+    #[test]
+    fn a_step_written_before_v122_kept_no_exit_code() {
+        let dir = scratch("run-step-exit-code");
+        let engine = store_at(&dir, 121);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'failed');
+                 INSERT INTO automation_run_def (id, run_id, name, prompt) VALUES (1, 1, 'one', 'p');
+                 INSERT INTO automation_run_step (id, run_id, run_def_id, seq, status) VALUES (1, 1, 1, 1, 'failed');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let code: Option<i64> = engine
+            .conn()
+            .query_row("SELECT exit_code FROM automation_run_step WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(code, None, "a step from before kept no exit code");
+        engine.conn().execute("UPDATE automation_run_step SET exit_code = 1 WHERE id = 1", []).unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

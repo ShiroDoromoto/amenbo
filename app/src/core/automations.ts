@@ -1221,6 +1221,29 @@ export async function fetchRunCards(runs: readonly number[]): Promise<Automation
 }
 
 /**
+ * **The run whose failed round the task `taskId` was filed as** — whatever it stands at, an
+ * acknowledged failure on the "history" tab included (`AMB-D-955`). Null for a task no failed round
+ * was filed as, and outside Tauri.
+ */
+export async function fetchRunOfIncident(taskId: number): Promise<AutomationRunCardDto | null> {
+  if (!inTauri()) return null;
+  return invoke<AutomationRunCardDto | null>("automation_run_of_incident", { taskId });
+}
+
+/**
+ * Subscribing read of the run whose failed round a task was filed as. It sits under the running tab's
+ * key, so a round failing — the moment the task is filed — reads it again. Null until the first
+ * answer lands.
+ */
+export function useRunOfIncident(taskId: number): AutomationRunCardDto | null {
+  const { data } = useQuery<AutomationRunCardDto | null>(
+    ["automationRuns", "incident", taskId],
+    () => fetchRunOfIncident(taskId),
+  );
+  return data ?? null;
+}
+
+/**
  * **What is keeping a run waiting** (`AMB-D-999`): the tasks the built-in it waits on could take but for
  * what stops them, counted by that. Null for a run that is not waiting, and outside Tauri.
  */

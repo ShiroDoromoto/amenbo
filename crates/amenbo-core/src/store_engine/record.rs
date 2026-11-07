@@ -998,6 +998,7 @@ pub fn automation_run_step(s: &AutomationRunStep) -> Record {
                 ("status", tv(s.status.as_str())),
                 ("started_at", tsov(&s.started_at)),
                 ("ended_at", tsov(&s.ended_at)),
+                ("exit_code", s.exit_code.map(iv).unwrap_or(Value::Null)),
             ],
             &s.created_at,
             &s.updated_at,

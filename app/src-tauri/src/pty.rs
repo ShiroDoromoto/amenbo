@@ -371,6 +371,11 @@ impl Terminals {
         }
     }
 
+    /// The pane drawing this session, or `None` for one that is gone.
+    fn pane(&self, session: &str) -> Option<Arc<Pane>> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).get(session).map(|t| Arc::clone(&t.pane))
+    }
+
     /// Hand these bytes to the session's writing thread, and answer whether it took them: `false` for
     /// a terminal that is gone, and for one whose thread has stopped writing.
     fn send(&self, session: &str, bytes: Vec<u8>) -> bool {
@@ -411,6 +416,16 @@ impl Terminals {
         of_run.iter().filter_map(|id| open.remove(id)).filter(|one| !one.ended()).collect()
     }
 
+    /// The screen of each of this run's agent steps whose program is running, by the step it carries
+    /// out ([`step_screens_of`]).
+    fn step_screens_of(&self, run: i64) -> Vec<(i64, String)> {
+        let open = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        open.values()
+            .filter(|one| one.run == Some(run) && !one.ended())
+            .filter_map(|one| Some((one.run_step?, one.pane.screen())))
+            .collect()
+    }
+
     /// The runs with a step's program running, each once ([`runs_with_steps`]).
     fn runs_running_steps(&self) -> Vec<i64> {
         let open = self.0.lock().unwrap_or_else(PoisonError::into_inner);
@@ -422,8 +437,18 @@ impl Terminals {
 }
 
 /// How much of what has scrolled off the top is kept. None of it: what this is here to be read for is
-/// the screen a person is looking at, and a line that has scrolled away is not on it.
+/// the screen a person is looking at, and a line that has scrolled away is not on it. A step's
+/// terminal is the one that keeps some ([`STEP_SCROLLBACK`]).
 const SCROLLBACK: usize = 0;
+
+/// How much of what has scrolled off the top a **step's** terminal keeps, in rows — read only where
+/// the step fails its run ([`Drawn::kept`]). An agent prints its answer above the box it waits in,
+/// and what it draws in that box next — the list of commands a typed `/exit` opens — pushes the
+/// answer off the top: kept to the screen alone, the error the step fell on went with it. A row
+/// costs 32 bytes a cell, so a terminal 120 wide holds about 1.2 MB more, which is why only a step's
+/// terminal keeps any. [`automation_script::TAIL_BYTES`](amenbo_core::ops::automation_script::TAIL_BYTES)
+/// is what is kept of it in the end.
+const STEP_SCROLLBACK: usize = 300;
 
 /// The screen a terminal's output draws — the characters standing in its cells, as the program in the
 /// pane means them to look.
@@ -452,17 +477,117 @@ struct Drawn {
     parser: vt100::Parser,
     /// The size the screen is at, held here because a parser that panicked cannot be asked.
     at: Size,
+    /// How many rows that scrolled off the top are kept ([`SCROLLBACK`], [`STEP_SCROLLBACK`]).
+    scrollback: usize,
+    /// **What had been written the last time the program wiped the screen** ([`WIPES`]) — the rows
+    /// that had scrolled off, then the screen ([`Drawn::written`]) — or `None` where it never has:
+    /// what [`Drawn::kept`] reads beside what is written now.
+    wiped: Option<String>,
+    /// Whether anything has been written since the last wipe. Two wipes written one after the
+    /// other — Claude Code clears the screen and what scrolled off it together — are one: the
+    /// second finds only what the first left, and what the first found is what was wiped.
+    drawn_since_wipe: bool,
+    /// **What had been written each time a person started to type into a step's terminal that had
+    /// gone quiet**, folded into one ([`fold_in`]) — or `None` where nobody has. Read by
+    /// [`Drawn::kept`] in front of the rest.
+    ///
+    /// **Why a wipe is not enough.** An agent opens the list of commands a typed `/` starts by moving
+    /// the cursor back up and writing over the rows it drew last — the answer the step fell on among
+    /// them — and those rows neither scroll off the top nor are on the screen a wipe finds. What the
+    /// person was reading when they started to type is what the program had finished drawing, and the
+    /// error is on it.
+    seen: Option<String>,
+    /// Whether anything has been written since [`Drawn::seen`] was last taken.
+    drawn_since_seen: bool,
+}
+
+/// How long a terminal has to have written nothing for a key pressed in it to be taken as a person
+/// starting to type at what it had finished drawing ([`Pane::typed`]), in milliseconds. Shorter than
+/// a person takes to read an answer and start typing; longer than a person takes between two keys of
+/// one word, so one `/exit` is read once.
+const SETTLED_MS: i64 = 1_000;
+
+/// How many rows [`Drawn::seen`] holds at most, the newest kept.
+const SEEN_ROWS: usize = 2 * STEP_SCROLLBACK;
+
+/// **`after` with what `before` held and `after` no longer does put back where it stood.** Both are
+/// what a screen had written at two moments, one row per line ([`Drawn::written`]). The rows they
+/// begin with alike are written once; the rows only `before` had left — the ones written over since
+/// — come next, less any that `after` still shows below; then the rest of `after`. Rows `before` had
+/// above the first row of `after` are what scrolled off past what is kept, and stay in front.
+fn fold_in(before: &str, after: &str) -> String {
+    let before: Vec<&str> = before.lines().collect();
+    let after: Vec<&str> = after.lines().collect();
+    let Some(first) = after.first() else {
+        return before.join("\n");
+    };
+    let alike = |from: usize| before[from..].iter().zip(&after).take_while(|(a, b)| a == b).count();
+    let (from, same) = (0..before.len())
+        .filter(|&at| before[at] == *first)
+        .map(|at| (at, alike(at)))
+        .max_by_key(|&(at, same)| (same, std::cmp::Reverse(at)))
+        .unwrap_or((before.len(), 0));
+    let below: std::collections::HashSet<&str> = after[same..].iter().map(|row| row.trim()).collect();
+    let gone = before[from + same..].iter().filter(|row| !row.trim().is_empty() && !below.contains(row.trim()));
+    let rows: Vec<&str> = before[..from + same].iter().chain(gone).chain(&after[same..]).copied().collect();
+    rows.join("\n")
+}
+
+/// **What a program writes to wipe the screen it drew**: clearing the screen or what has scrolled off
+/// it, resetting the terminal, or leaving the alternate screen. An agent's TUI writes one of these as
+/// it ends, and what is left on the screen after is only what it printed on the way out — Claude Code
+/// leaves the two lines that say how to resume, and the error the step fell on is gone with the rest.
+const WIPES: [&[u8]; 6] = [b"\x1b[2J", b"\x1b[3J", b"\x1bc", b"\x1b[?1049l", b"\x1b[?1047l", b"\x1b[?47l"];
+
+/// Where the first of [`WIPES`] in `bytes` begins, with its length.
+fn first_wipe(bytes: &[u8]) -> Option<(usize, usize)> {
+    if !bytes.contains(&0x1b) {
+        return None;
+    }
+    WIPES
+        .iter()
+        .filter_map(|wipe| bytes.windows(wipe.len()).position(|at| at == *wipe).map(|at| (at, wipe.len())))
+        .min()
 }
 
 impl Drawn {
-    fn new(at: Size) -> Self {
-        Self { parser: parser(at), at }
+    fn new(at: Size, scrollback: usize) -> Self {
+        Self {
+            parser: parser(at, scrollback),
+            at,
+            scrollback,
+            wiped: None,
+            drawn_since_wipe: false,
+            seen: None,
+            drawn_since_seen: false,
+        }
     }
 
-    /// Take in a chunk, the same bytes [`Recent::push`] is given.
-    fn push(&mut self, bytes: &[u8]) {
+    /// Take in a chunk, the same bytes [`Recent::push`] is given. Where the chunk wipes the screen
+    /// ([`WIPES`]), what had been written just before is kept first ([`Drawn::wiped`]) — unless the
+    /// screen held nothing, or nothing was written since the wipe before: the second of two wipes
+    /// written one after the other.
+    fn push(&mut self, mut bytes: &[u8]) {
+        while let Some((at, len)) = first_wipe(bytes) {
+            self.process(&bytes[..at]);
+            if self.drawn_since_wipe && !self.contents().trim().is_empty() {
+                self.wiped = Some(self.written());
+            }
+            self.process(&bytes[at..at + len]);
+            self.drawn_since_wipe = false;
+            bytes = &bytes[at + len..];
+        }
+        self.process(bytes);
+    }
+
+    fn process(&mut self, bytes: &[u8]) {
+        if bytes.is_empty() {
+            return;
+        }
+        self.drawn_since_wipe = true;
+        self.drawn_since_seen = true;
         if catch_unwind(AssertUnwindSafe(|| self.parser.process(bytes))).is_err() {
-            self.parser = parser(self.at);
+            self.parser = parser(self.at, self.scrollback);
         }
     }
 
@@ -473,7 +598,7 @@ impl Drawn {
         let (cols, rows) = held(at);
         let resize = || self.parser.screen_mut().set_size(rows, cols);
         if catch_unwind(AssertUnwindSafe(resize)).is_err() {
-            self.parser = parser(at);
+            self.parser = parser(at, self.scrollback);
         }
     }
 
@@ -481,12 +606,90 @@ impl Drawn {
     fn contents(&self) -> String {
         self.parser.screen().contents()
     }
+
+    /// **Everything still written**: the rows that scrolled off the top, oldest first, then the
+    /// screen — one row per line, with the blank rows at the bottom left off. The emulator shows the
+    /// rows that scrolled off a screenful at a time, so they are read by moving its view up through
+    /// them and back to the screen.
+    fn written(&mut self) -> String {
+        let read = || {
+            let screen = self.parser.screen_mut();
+            let (rows, cols) = screen.size();
+            let (rows, cols) = (usize::from(rows.get()), cols.get());
+            let mut lines: Vec<String> = Vec::new();
+            let mut up = screen.scrollback_len();
+            while up > 0 {
+                screen.set_scrollback(up);
+                lines.extend(screen.rows(0, cols).take(up.min(rows)));
+                up = up.saturating_sub(rows);
+            }
+            screen.set_scrollback(0);
+            lines.extend(screen.rows(0, cols));
+            let text = lines.iter().map(|line| line.trim_end()).collect::<Vec<_>>().join("\n");
+            text.trim_end().to_owned()
+        };
+        match catch_unwind(AssertUnwindSafe(read)) {
+            Ok(text) => text,
+            Err(_) => {
+                self.parser = parser(self.at, self.scrollback);
+                String::new()
+            }
+        }
+    }
+
+    /// **A person has started to type at what the program had finished drawing**: what is written
+    /// now is folded into [`Drawn::seen`]. Only a step's terminal keeps it — the one whose screen is
+    /// read once its program has ended ([`STEP_SCROLLBACK`]) — and only where something was written
+    /// since the last time.
+    fn typed(&mut self) {
+        if self.scrollback == 0 || !self.drawn_since_seen {
+            return;
+        }
+        self.drawn_since_seen = false;
+        let now = self.written();
+        let folded = match &self.seen {
+            Some(before) => fold_in(before, &now),
+            None => now,
+        };
+        let rows: Vec<&str> = folded.lines().collect();
+        self.seen = Some(rows[rows.len().saturating_sub(SEEN_ROWS)..].join("\n"));
+    }
+
+    /// **What the screen has shown lately, as a step that failed its run is kept by**
+    /// (`crate::automation::keep_failed_screen`): what is written now ([`Drawn::written`]), with —
+    /// where the program last wiped more than is written now — what it wiped in front of it.
+    ///
+    /// **A wipe that drew as much again is a redraw, and the screen before it is not read.** A TUI
+    /// whose frame is taller than the terminal clears it and draws the whole frame afresh on every
+    /// change, and the screen it cleared is only an older copy of what is on it now. A program that
+    /// wipes its screen as it ends leaves less than it wiped, and what it wiped is what it last showed.
+    ///
+    /// **What a person was reading as they started to type goes in front of all of it**
+    /// ([`Drawn::seen`]), folded in so the rows both hold are written once ([`fold_in`]).
+    fn kept(&mut self) -> String {
+        let now = self.written();
+        let now = match &self.wiped {
+            Some(before) if lines_written(before) > lines_written(&now) => {
+                format!("{}\n{}", before.trim_end(), now)
+            }
+            _ => now,
+        };
+        match &self.seen {
+            Some(seen) => fold_in(seen, &now),
+            None => now,
+        }
+    }
+}
+
+/// How many rows of a screen have something written on them.
+fn lines_written(screen: &str) -> usize {
+    screen.lines().filter(|line| !line.trim().is_empty()).count()
 }
 
 /// An empty screen of that size.
-fn parser(at: Size) -> vt100::Parser {
+fn parser(at: Size, scrollback: usize) -> vt100::Parser {
     let (cols, rows) = held(at);
-    vt100::Parser::new(rows, cols, SCROLLBACK)
+    vt100::Parser::new(rows, cols, scrollback)
 }
 
 /// A size with no zero in it, width then height, as the emulator takes one. A terminal of no width
@@ -591,10 +794,19 @@ struct Renaming {
 
 impl Pane {
     fn new(target: &str, at: Size) -> Self {
+        Self::keeping(target, at, SCROLLBACK)
+    }
+
+    /// A step's pane, whose screen keeps what scrolls off its top ([`STEP_SCROLLBACK`]).
+    fn of_step(target: &str, at: Size) -> Self {
+        Self::keeping(target, at, STEP_SCROLLBACK)
+    }
+
+    fn keeping(target: &str, at: Size, scrollback: usize) -> Self {
         Self {
             target: Mutex::new(target.to_owned()),
             recent: Mutex::new(Recent::new(at)),
-            drawn: Mutex::new(Drawn::new(at)),
+            drawn: Mutex::new(Drawn::new(at, scrollback)),
             briefed: AtomicBool::new(false),
             unsent: Mutex::new(None),
             opening: AtomicBool::new(false),
@@ -770,6 +982,28 @@ impl Pane {
         }
     }
 
+    /// **A person pressed a key in this pane** ([`pty_write`]). Where the terminal had gone quiet
+    /// first ([`SETTLED_MS`]), what it had drawn is what they were reading, and the screen holds on to
+    /// it ([`Drawn::typed`]).
+    fn typed(&self) {
+        let quiet = self.last_output().is_some_and(|at| since_epoch_ms() - at >= SETTLED_MS);
+        if quiet {
+            self.drawn.lock().unwrap_or_else(PoisonError::into_inner).typed();
+        }
+    }
+
+    /// **What the screen has shown lately**, one row per line ([`Drawn::kept`]) — what a step's
+    /// terminal is kept by where its step failed its run (`crate::automation::keep_failed_screen`). It
+    /// is the screen and not the tail because an agent draws by moving the cursor about: what it last
+    /// showed is on the screen, and the tail holds every frame it drew on the way there. A step's
+    /// terminal puts the rows that scrolled off the top ([`STEP_SCROLLBACK`]) in front of the screen,
+    /// and where the program wiped the screen as it ended, what it wiped comes first. Where a person
+    /// started typing at what it had finished drawing, what they were reading is kept with it, rows
+    /// the program wrote over since included ([`Drawn::seen`]).
+    fn screen(&self) -> String {
+        self.drawn.lock().unwrap_or_else(PoisonError::into_inner).kept()
+    }
+
     /// Send what follows to this window, and answer with the tail as it stood at that moment — in
     /// the runs it was written in, each carrying the size it belongs to ([`Recent`]) — with the
     /// modes the terminal is in ([`Modes`]) in front of all of it.
@@ -861,6 +1095,10 @@ pub struct Terminal {
     /// The automation run this terminal carries a step of, or `None` for every other terminal. It is
     /// what the next step of the same run ends it by ([`open_step`]).
     run: Option<i64>,
+    /// The step execution an agent's terminal carries out ([`open_step`]), or `None` for every other
+    /// terminal, a script's among them. It is what the screen is kept on where the step failed its
+    /// run ([`step_screens_of`]).
+    run_step: Option<i64>,
     /// Whether nobody may write into it — a script step's terminal ([`open_script`]). Its program
     /// was handed everything it is given before it started, so nothing typed, pasted or handed over
     /// goes in (`AMB-D-931`).
@@ -1515,9 +1753,10 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
             frame: placed.clone(),
             started_at,
             run: step.map(|(run, _)| run),
+            run_step,
             read_only: false,
         },
-        move |app, itself, broke| {
+        move |app, itself, broke, pane, code| {
             // A program that ended by itself within moments of starting never got as far as a
             // session, so the handle written down for it is taken back before it can refuse the next
             // run too (`crate::frames::TalkFace::gave_up`).
@@ -1535,7 +1774,7 @@ fn start(app: &tauri::AppHandle, target: &str, opening: Opening) -> Result<PtySe
             // is not this. One ended over a panicking drain is: nobody chose to end it, and it will
             // not report now.
             if let Some(run_step) = run_step.filter(|_| itself || broke) {
-                crate::automation::step_program_ended(run_step);
+                crate::automation::step_program_ended(run_step, &pane.screen(), code);
             }
             no_way_back
         },
@@ -1582,6 +1821,7 @@ struct Spawn {
     frame: Option<String>,
     started_at: String,
     run: Option<i64>,
+    run_step: Option<i64>,
     read_only: bool,
 }
 
@@ -1604,17 +1844,18 @@ struct Spawned {
 /// is the same whatever is started in it.
 ///
 /// A thread drains it to its end and then waits for the program. Once it has ended, `ended` is asked
-/// what the pane is owed — handed whether the program ended by itself and whether the drain broke —
-/// and the pane is told the terminal closed.
+/// what the pane is owed — handed whether the program ended by itself, whether the drain broke, the
+/// pane, read to its end, and what the program exited with where that could be asked — and the pane is
+/// told the terminal closed.
 fn spawn(
     app: &tauri::AppHandle,
     target: &str,
     pair: portable_pty::PtyPair,
     cmd: portable_pty::CommandBuilder,
     parts: Spawn,
-    ended: impl FnOnce(&tauri::AppHandle, bool, bool) -> bool + Send + 'static,
+    ended: impl FnOnce(&tauri::AppHandle, bool, bool, &Pane, Option<i32>) -> bool + Send + 'static,
 ) -> Result<Spawned, CmdError> {
-    let Spawn { session, at, folder, agent, frame, started_at, run, read_only } = parts;
+    let Spawn { session, at, folder, agent, frame, started_at, run, run_step, read_only } = parts;
     let child = pair.slave.spawn_command(cmd).map_err(failed)?;
     let killer = child.clone_killer();
     let pid = child.process_id();
@@ -1628,7 +1869,7 @@ fn spawn(
     // The chunks go to whichever window asked for the terminal. Nothing here decides which that is:
     // the pane that called is the pane that draws, and if the user later moves it to the other
     // window, `pty_attach` moves this along with it.
-    let pane = Arc::new(Pane::new(target, at));
+    let pane = Arc::new(if run_step.is_some() { Pane::of_step(target, at) } else { Pane::new(target, at) });
 
     app.state::<Terminals>().0.lock().unwrap_or_else(PoisonError::into_inner).insert(
         session.clone(),
@@ -1642,6 +1883,7 @@ fn spawn(
             pane: Arc::clone(&pane),
             started_at,
             run,
+            run_step,
             read_only,
         },
     );
@@ -1680,7 +1922,7 @@ fn spawn(
         let code = reap(&child).and_then(|it| i32::try_from(it.exit_code()).ok());
         // The panic above takes the entry out the way `pty_close` does, so it reads as not by itself.
         let itself = app.state::<Terminals>().program_ended(&id);
-        let no_way_back = ended(&app, itself, broke);
+        let no_way_back = ended(&app, itself, broke, &pane, code);
         let ending = PtyClosedDto { session: id.clone(), code, no_way_back };
         let _ = app.emit_to(pane.target().as_str(), CLOSED_EVENT, ending);
     });
@@ -2183,6 +2425,14 @@ pub fn end_steps_of(app: &tauri::AppHandle, run: i64) {
     }
 }
 
+/// **The screen of each agent's step of the run `run` whose program is still running**, by the step
+/// execution it carries out — read before the app ends the terminal of a run that is over
+/// ([`end_steps_of`], `crate::automation_watch`), so the one whose step failed the run can be kept
+/// (`crate::automation::keep_failed_screen`).
+pub fn step_screens_of(app: &tauri::AppHandle, run: i64) -> Vec<(i64, String)> {
+    app.state::<Terminals>().step_screens_of(run)
+}
+
 /// **The runs that have a step's program running right now**, each once — what the watch compares
 /// with the runs still going, to end the terminals of the ones that are over
 /// (`crate::automation_watch`).
@@ -2290,9 +2540,10 @@ pub fn open_script(
             frame: None,
             started_at: amenbo_core::time::Timestamp::now().to_rfc3339_z(),
             run: Some(run),
+            run_step: None,
             read_only: true,
         },
-        |_, _, _| false,
+        |_, _, _, _, _| false,
     )?;
     Ok(ScriptTerminal {
         session,
@@ -2398,6 +2649,9 @@ pub fn pty_write(
 ) -> Result<(), CmdError> {
     terminals.writable(&session)?;
     let keys = terminals.keys(&session).ok_or_else(|| gone(&session))?;
+    if let Some(pane) = terminals.pane(&session) {
+        pane.typed();
+    }
     keys.send(data.into_bytes()).map_err(|_| stopped())
 }
 
@@ -2809,6 +3063,133 @@ mod tests {
             look.tail.windows(3).any(|w| w == b"\x1b[1"),
             "and the tail still carries every byte, which is what a pane adopting this replays"
         );
+    }
+
+    /// **A program that wipes its screen as it ends leaves what it wiped to be kept**: the error the
+    /// step fell on comes first, then the lines it printed on the way out ([`Drawn::kept`]).
+    #[test]
+    fn a_screen_wiped_as_its_program_ends_is_kept_with_what_it_wiped() {
+        let pane = Pane::new("main", OPENED_AT);
+        pane.keep(b"uploading v2.4.0\r\nError: upload failed (HTTP 503)\r\n> ");
+        pane.keep(b"\x1b[2J\x1b[3J\x1b[HResume this session with:\r\nclaude --resume 1");
+
+        let kept = pane.screen();
+        let error = kept.find("Error: upload failed (HTTP 503)").expect("the error is kept");
+        let resume = kept.find("Resume this session with:").expect("and what it printed after");
+        assert!(error < resume, "{kept}");
+        assert!(!pane.look().drawn.contains("Error"), "the screen itself is what it is now");
+    }
+
+    /// **What a step's program pushed off the top before it wiped the screen is kept too.** An agent
+    /// that answered with the error and then opened a list of commands under it has pushed the
+    /// error off the screen; the screen alone, as it stood at the wipe, no longer held it.
+    #[test]
+    fn a_step_keeps_what_scrolled_off_before_its_program_wiped_the_screen() {
+        let pane = Pane::of_step("main", OPENED_AT);
+        pane.keep(b"Error: upload failed (HTTP 503)\r\n");
+        for n in 0..40 {
+            pane.keep(format!("/command-{n}\r\n").as_bytes());
+        }
+        assert!(!pane.look().drawn.contains("Error"), "the error is off the screen");
+        pane.keep(b"\x1b[2J\x1b[3J\x1b[HResume this session with:\r\nclaude --resume 1");
+
+        let kept = pane.screen();
+        let error = kept.find("Error: upload failed (HTTP 503)").expect("the error is kept");
+        let first = kept.find("/command-0\n").expect("so is every row after it");
+        let resume = kept.find("Resume this session with:").expect("and what it printed after");
+        assert!(error < first && first < resume, "{kept}");
+        assert!(kept.contains("/command-39"), "{kept}");
+    }
+
+    /// A step's program that ends without wiping its screen leaves what scrolled off it as well as
+    /// the screen, in the order it wrote them.
+    #[test]
+    fn a_step_keeps_what_scrolled_off_a_screen_it_never_wiped() {
+        let pane = Pane::of_step("main", OPENED_AT);
+        pane.keep(b"Error: upload failed (HTTP 503)\r\n");
+        for n in 0..40 {
+            pane.keep(format!("line {n}\r\n").as_bytes());
+        }
+
+        let kept = pane.screen();
+        assert!(kept.starts_with("Error: upload failed (HTTP 503)\nline 0\n"), "{kept}");
+        assert!(kept.ends_with("line 39"), "{kept}");
+        assert!(!pane.look().drawn.contains("Error"), "the screen itself is still only the screen");
+    }
+
+    /// **The rows an agent writes over as it opens its list of commands are kept**, where a person
+    /// started typing `/exit` at the answer it had finished drawing. The list is drawn by moving the
+    /// cursor back up over the answer, so the answer neither scrolls off nor is on the screen the
+    /// wipe finds; it is what the person was reading as they typed ([`Drawn::typed`]).
+    #[test]
+    fn a_step_keeps_the_rows_written_over_after_a_person_started_to_type() {
+        let pane = Pane::of_step("main", OPENED_AT);
+        pane.keep(b"reply with: Error: upload failed (HTTP 503)\r\n");
+        pane.keep(b"Error: upload failed (HTTP 503)\r\nCooked for 4s\r\n> ");
+        pane.last_output.store(since_epoch_ms() - 5 * SETTLED_MS, Ordering::Relaxed);
+        pane.typed();
+        pane.keep(b"\x1b[2A\r\x1b[2K> /\r\n\x1b[2K/exit\r\n/context");
+        pane.typed();
+        assert!(!pane.look().drawn.contains("Cooked"), "the list wrote over the answer");
+        pane.keep(b"\x1b[2J\x1b[3J\x1b[HResume this session with:\r\nclaude --resume 1");
+
+        let kept = pane.screen();
+        let asked = kept.find("reply with:").expect("what it was asked is kept");
+        let error = kept.find("\nError: upload failed (HTTP 503)\nCooked for 4s").expect("so is the answer");
+        let list = kept.find("/exit").expect("and the list written over it");
+        let resume = kept.find("Resume this session with:").expect("and what it printed as it ended");
+        assert!(asked < error && error < list && list < resume, "{kept}");
+        assert_eq!(kept.matches("reply with:").count(), 1, "a row both moments hold is kept once: {kept}");
+    }
+
+    /// A key pressed while the terminal is still writing is not a person starting to read what it
+    /// drew, and what was on the screen then is not held on to.
+    #[test]
+    fn a_key_pressed_while_the_terminal_writes_holds_nothing() {
+        let pane = Pane::of_step("main", OPENED_AT);
+        pane.keep(b"thinking 1s\r\n> ");
+        pane.typed();
+        pane.keep(b"\x1b[1A\r\x1b[2Kdone\r\n> ");
+
+        assert!(!pane.screen().contains("thinking"), "{}", pane.screen());
+    }
+
+    /// Rows two moments both hold are written once, rows only the earlier one held stay where they
+    /// stood, and rows that had scrolled away before the later one stay in front ([`fold_in`]).
+    #[test]
+    fn folding_in_keeps_each_row_once_and_in_its_place() {
+        assert_eq!(fold_in("a\nb\nerror", "b\n> /\n/exit"), "a\nb\nerror\n> /\n/exit");
+        assert_eq!(fold_in("a\nbox\nerror", "a\nbox\nlist"), "a\nbox\nerror\nlist");
+        assert_eq!(fold_in("a\nb", ""), "a\nb");
+    }
+
+    /// Clearing what scrolled off and then the screen is one wipe: what is kept is everything written
+    /// before the first, not the screen the second found.
+    #[test]
+    fn two_wipes_one_after_the_other_keep_what_the_first_found() {
+        let pane = Pane::of_step("main", OPENED_AT);
+        pane.keep(b"Error: upload failed (HTTP 503)\r\n");
+        for n in 0..40 {
+            pane.keep(format!("line {n}\r\n").as_bytes());
+        }
+        pane.keep(b"\x1b[3J\x1b[2J\x1b[Hbye");
+
+        let kept = pane.screen();
+        assert!(kept.starts_with("Error: upload failed (HTTP 503)\n"), "{kept}");
+        assert!(kept.ends_with("bye"), "{kept}");
+    }
+
+    /// A program that clears its screen and draws as much again is redrawing, and the screen it
+    /// cleared is an older copy of the one it drew: only the screen as it stands is kept.
+    #[test]
+    fn a_screen_cleared_and_drawn_again_is_kept_as_it_stands() {
+        let pane = Pane::new("main", OPENED_AT);
+        pane.keep(b"frame one\r\nstatus");
+        pane.keep(b"\x1b[2J\x1b[Hframe two\r\nstatus");
+
+        let kept = pane.screen();
+        assert!(kept.contains("frame two"));
+        assert!(!kept.contains("frame one"), "{kept}");
     }
 
     /// A pane measured before the window has laid out. The emulator has no cell to draw in and
@@ -3254,6 +3635,8 @@ mod tests {
                 pane: Arc::new(Pane::new(crate::windows::BOARD, OPENED_AT)),
                 started_at: String::new(),
                 run,
+                // An agent's step is numbered after its run here, so a test can tell which it read.
+                run_step: run.filter(|_| !read_only).map(|run| run * 10),
                 read_only,
             },
         );
@@ -3322,6 +3705,29 @@ mod tests {
         assert_eq!(running.len(), 1, "only the one still running is handed back to be ended");
         let left: Vec<String> = open.0.lock().unwrap().keys().cloned().collect();
         assert_eq!(left, ["other run"]);
+        ending(children);
+    }
+
+    /// The screen of an agent's step is read by the step it carries out, for the run asked about only;
+    /// a script's terminal has its own tail and is not read, and nor is a program that has ended.
+    #[cfg(unix)]
+    #[test]
+    fn the_screens_of_a_runs_agent_steps_are_read_by_step() {
+        let open = Terminals::default();
+        let children = vec![
+            standing(&open, "agent", Some(7), false),
+            standing(&open, "script", Some(7), true),
+            standing(&open, "other run", Some(8), false),
+        ];
+        open.0.lock().unwrap()["agent"].pane.keep(b"uploading\r\nError: upload failed (HTTP 503)");
+
+        let screens = open.step_screens_of(7);
+        assert_eq!(screens.len(), 1, "only the agent's step of run 7: {screens:?}");
+        assert_eq!(screens[0].0, 70);
+        assert!(screens[0].1.contains("Error: upload failed (HTTP 503)"), "{}", screens[0].1);
+
+        open.program_ended("agent");
+        assert!(open.step_screens_of(7).is_empty(), "a program that ended is gone with its screen");
         ending(children);
     }
 

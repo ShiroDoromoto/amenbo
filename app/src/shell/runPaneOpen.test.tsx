@@ -17,6 +17,8 @@ import { t, tf } from "../core/i18n";
 const hoisted = vi.hoisted(() => ({
   /** Every script tail a pane drew, in order. */
   tails: [] as string[],
+  /** The lines Amenbo wrote under each of them, in the same order. */
+  after: [] as (readonly string[])[],
 }));
 
 // Nothing here opens a terminal, so what would draw one is stubbed out of the way.
@@ -25,10 +27,18 @@ vi.mock("../talk/terminal", async (actual) => ({
   ...(await actual<typeof import("../talk/terminal")>()),
   endTerminal: vi.fn(async () => {}),
   pasteIntoTerminal: vi.fn(async () => {}),
-  mountTail: (_host: HTMLElement, tail: string) => {
+  mountTail: (_host: HTMLElement, tail: string, after: readonly string[] = []) => {
     hoisted.tails.push(tail);
+    hoisted.after.push(after);
     return () => {};
   },
+}));
+// The project's roles, as the line saying where a failure was filed reads them (`./RunPicture`).
+vi.mock("../core/projectRoles", () => ({
+  useProjectRoles: () => [
+    { id: 12, name: "Bob", icon: null, automationId: 3, automationName: "Nightly" },
+    { id: 14, name: "Dave", icon: null, automationId: 3, automationName: "Nightly" },
+  ],
 }));
 // The row is a live thing of its own; what it draws is not what this is about.
 vi.mock("../talk/plate", () => ({
@@ -50,6 +60,7 @@ let root: Root;
 
 beforeEach(() => {
   hoisted.tails = [];
+  hoisted.after = [];
   window.innerWidth = 1600;
   container = document.createElement("div");
   document.body.append(container);
@@ -62,7 +73,7 @@ afterEach(() => {
 });
 
 /** A pane with no terminal in it, on a run or on none — with what a script step wrote, where one did. */
-async function pane(run: Say | null, tail: string | null = null): Promise<void> {
+async function pane(run: Say | null, tail: string | null = null, tailCode: number | null = null): Promise<void> {
   await act(async () => {
     root.render(createElement(TerminalPane, {
       frame: run === null ? "1" : "run-15",
@@ -74,6 +85,7 @@ async function pane(run: Say | null, tail: string | null = null): Promise<void> 
       focused: true,
       run,
       tail,
+      tailCode,
       onOpened: () => {},
       onSaid: () => {},
       onPath: () => {},
@@ -121,5 +133,44 @@ describe("opening a terminal in a pane with none in it", () => {
     await pane(FAILED, "built 3 files\nerror: no such file");
     expect(hoisted.tails).toEqual(["built 3 files\nerror: no such file"]);
     expect(container.querySelector(".slot__runbody"), "the body stood over the script's tail").toBeNull();
+  });
+
+  it("writes under a failed round's kept screen, as its last lines, how its program ended and where the failure was filed", async () => {
+    await pane(
+      { ...FAILED, round: { role: 12, startedAt: null, incident: { ref: "AMB-T-99", role: 14, person: false } } },
+      "uploading v2.4.0\nError: upload failed (HTTP 503)",
+      1,
+    );
+    expect(hoisted.tails).toEqual(["uploading v2.4.0\nError: upload failed (HTTP 503)"]);
+    expect(hoisted.after).toEqual([[
+      tf("face.endedCode", { code: "1" }),
+      tf("auto.run.term.filedRole", { to: "Dave" }),
+    ]]);
+    expect(container.querySelector(".workspace__note"), "nothing is said outside the terminal").toBeNull();
+  });
+
+  it("says the program ended without a code where none was kept", async () => {
+    await pane(
+      { ...FAILED, round: { role: 12, startedAt: null, incident: { ref: "AMB-T-99", role: null, person: true } } },
+      "Error: upload failed (HTTP 503)",
+    );
+    expect(hoisted.after).toEqual([[t("face.endedNoCode"), t("auto.run.term.filedPerson")]]);
+  });
+
+  it("says where the failure was filed for a round that has no role, and so no role card", async () => {
+    await pane(
+      { ...FAILED, round: { role: null, startedAt: null, incident: { ref: "AMB-T-99", role: 14, person: false } } },
+      "Error: upload failed (HTTP 503)",
+      0,
+    );
+    expect(hoisted.after).toEqual([[
+      tf("face.endedCode", { code: "0" }),
+      tf("auto.run.term.filedRole", { to: "Dave" }),
+    ]]);
+  });
+
+  it("writes nothing under a tail kept from a run that did not fail", async () => {
+    await pane({ ...FAILED, state: { ...FAILED.state!, status: "completed", word: "Completed" } }, "built 3 files");
+    expect(hoisted.after).toEqual([[]]);
   });
 });

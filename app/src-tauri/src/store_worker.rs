@@ -67,6 +67,7 @@ pub const ON_WORKER: &[&str] = &[
     "automation_save", "automation_discard", "automation_export",
     "automation_step_open",
     "automation_running_page", "automation_run_cards", "automation_launch_incidents",
+    "automation_run_of_incident",
     "automation_run_held_back",
     "automation_history_page", "automation_run_acknowledge", "automation_run_pause", "automation_run_resume",
     "automation_pause_before_next_task", "automation_run_stop", "automation_run_cancel",

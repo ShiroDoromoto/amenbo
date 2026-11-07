@@ -630,6 +630,8 @@ export const ja: Translation = {
     "quit.confirmNotAll": "Amenbo を終了しますか？開いている端末はすべて終わります。会話は次の起動で戻りますが、{names} のペインは戻りません。走っていたものも戻りません。",
 
     "face.ended": "この端末のプログラムは終了しました。",
+    "face.endedCode": "プロセスが終了しました（終了コード {code}）",
+    "face.endedNoCode": "プロセスが終了しました。",
 
     "face.endedGeminiUnset": "Gemini CLI に認証方法が設定されていません。画面のパスはこのペイン専用で一緒に捨てられるので、直すのはご自分の ~/.gemini/settings.json です。",
     "face.noWayBack": "この会話はもう開けません。",
@@ -1484,6 +1486,10 @@ export const ja: Translation = {
     "auto.run.viewList": "一覧",
     "auto.run.backToRoles": "← 役割の表示に戻る",
     "auto.run.otherRounds": "ほかの周：",
+    "auto.run.stepFailed": "{step}（落ちました）",
+    "auto.run.term.filedRole": "Amenbo が障害タスクを{to}に起票しました。",
+    "auto.run.term.filedPerson": "Amenbo が障害タスクを人に起票しました。",
+    "auto.run.term.filed": "Amenbo が障害タスクを起票しました。",
     "auto.run.roundTerminal": "{name}の端末",
     "auto.run.roundTerminalOf": "{name}の端末（{which}）",
     "auto.run.turnedForStep": "入力が必要なステップに入ったので、{role}の端末に切り替えました。",

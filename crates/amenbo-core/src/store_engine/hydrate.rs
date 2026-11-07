@@ -949,6 +949,7 @@ pub(super) fn automation_run_step_row(r: &Row) -> rusqlite::Result<AutomationRun
         status: enum_req(r, C.status, AutomationRunStepStatus::parse)?,
         started_at: ts_opt(r, C.started_at)?,
         ended_at: ts_opt(r, C.ended_at)?,
+        exit_code: get(r, C.exit_code)?,
         created_at,
         updated_at,
     })

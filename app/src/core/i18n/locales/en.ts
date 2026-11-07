@@ -716,6 +716,8 @@ const ui = {
   // (`AMB-T-3611`). It says a turn is standing and not whose: which pane it was is drawn where it
   // happened, and a toast that named one would answer in the one place a person cannot act on it.
   "face.ended": "The program in this terminal has exited.",
+  "face.endedCode": "The process exited (exit code {code}).",
+  "face.endedNoCode": "The process exited.",
   "face.endedGeminiUnset": "Gemini CLI has no authentication method set. The path it names is this pane's own and goes with it — the one to set is your own ~/.gemini/settings.json.",
   "face.noWayBack": "This conversation cannot be opened again.",
   "face.projects": "Projects",
@@ -1725,6 +1727,10 @@ const ui = {
   "auto.run.viewList": "List",
   "auto.run.backToRoles": "← Back to the roles",
   "auto.run.otherRounds": "Other rounds:",
+  "auto.run.stepFailed": "{step} (failed)",
+  "auto.run.term.filedRole": "Amenbo filed the failure as a task to {to}.",
+  "auto.run.term.filedPerson": "Amenbo filed the failure as a task to a person.",
+  "auto.run.term.filed": "Amenbo filed the failure as a task.",
   "auto.run.roundTerminal": "{name}'s terminal",
   "auto.run.roundTerminalOf": "{name}'s terminal ({which})",
   "auto.run.turnedForStep": "This step needs your input, so the pane switched to {role}'s terminal.",

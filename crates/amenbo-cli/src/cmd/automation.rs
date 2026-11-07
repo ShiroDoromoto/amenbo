@@ -2222,9 +2222,9 @@ fn render_move(
     Ok(())
 }
 
-/// The end of what a script step printed to stdout and stderr, under a heading, so a failed run can be
-/// read from the terminal (`AMB-D-1016`). Nothing where it printed nothing, which is every step that is
-/// not a script.
+/// The end of what a script step printed to stdout and stderr (`AMB-D-1016`), or the screen an agent's
+/// step had as it failed its run, under a heading, so a failed run can be read from the terminal.
+/// Nothing where nothing was kept, which is every other step.
 fn tail_lines(tail: &str) -> Vec<String> {
     if tail.trim().is_empty() {
         return Vec::new();

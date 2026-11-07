@@ -482,6 +482,10 @@ fn top_up(refused: &mut HashMap<i64, Instant>) -> Result<(), crate::error::CmdEr
 /// built-in or a script step a run stopped on was kept the same way, and without this a workspace put
 /// up again stood the stopped run's pane once more.
 ///
+/// **The screen of an agent's step that failed the run is kept before its terminal is ended**
+/// (`crate::automation::keep_failed_screen`), so the round can be read from the task it was filed as
+/// once the terminal is gone.
+///
 /// A paused run keeps its terminal and what was kept of it: it is not over, and the step it paused
 /// after may be asked why. A script step's terminal whose program has ended is not one this looks at:
 /// there is nothing in it to stop, and it stays for its pane to read (`crate::pty::runs_with_steps`).
@@ -503,7 +507,13 @@ fn end_what_is_over(app: &tauri::AppHandle, running: &[i64]) -> Result<(), crate
         terminals.iter().chain(kept.iter()).copied(),
         |run| Ok(amenbo_core::store_engine::read::automation_run(conn, run)?.map(|it| it.status)),
     )?;
+    drop(store);
     for run in terminals.into_iter().filter(|run| !live.contains(run)) {
+        // An agent's step that failed the run by its own error way out is still on its terminal, and
+        // the screen it stood at is kept before the terminal goes (`crate::automation::keep_failed_screen`).
+        for (run_step, screen) in crate::pty::step_screens_of(app, run) {
+            crate::automation::keep_failed_screen(run_step, &screen, None);
+        }
         crate::pty::end_steps_of(app, run);
     }
     for run in kept.into_iter().filter(|run| !live.contains(run)) {

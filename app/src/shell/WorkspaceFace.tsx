@@ -1809,6 +1809,18 @@ export function WorkspaceFace({
                   onGrab={panes.length > 1 ? (e) => grabPane(e, frame.id) : undefined}
                   onStretch={(e) => stretchPane(e, frame.id, { across, down })}
                   size={frame.size}
+                  // A round pressed on the bar over this run's terminal (`./RunPicture`): that run's
+                  // pane is brought up with its page, and a run with no pane yet is stood one, as a
+                  // row of the "running" tab does.
+                  onGoToRun={(run) => {
+                    const id = runFrameId(run);
+                    setLayout((was) => {
+                      if (was.frames.some((one) => one.id === id)) return focusOn(was, id);
+                      const stood = stoodForRun(was, frame.project, run);
+                      return focusOn(stood.layout, stood.frame.id);
+                    });
+                    landOn(id);
+                  }}
                   onSize={(to) => {
                     // As the corner does on letting go: the question about where a pane works
                     // would otherwise stand on whatever page this lands on.

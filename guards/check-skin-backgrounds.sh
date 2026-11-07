@@ -90,6 +90,9 @@ SETTLED = {
         "blown up to fill it, and the ring is there for the digits to stay readable",
     (".ptabs--compact .ptabs__count", "box-shadow"):
         "the workspace's side of the same ring",
+    (".runterm__dot", "border"):
+        "the 1px ring round a round's state dot in the terminal bar — a 7px dot of picture would be "
+        "a crop blown up to fill it, and the ring is there to lift the dot off the button's edge",
 }
 
 

@@ -12,15 +12,18 @@
 // roles are defined in, whatever the round is doing. **A card draws a line only to a role it touches**,
 // and where that role has no card it says "→ role" instead. **Where the cards do not all fit in the
 // room, each round is a row of a list**, unless the reader holds the room to one or the other.
+//
+// **A card or a row is pressed to read its round's terminal**, and the terminal has a bar over it: the way back to
+// the roles, the other rounds of the same automation, and — where a step turned the pane — why.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Say } from "../talk/nameplate";
-import type { TaskRoleDto } from "../bindings/bindings";
+import type { AutomationRunCardDto, TaskRoleDto } from "../bindings/bindings";
 import type { BuiltinRun } from "../talk/automationStep";
 import { TerminalPane } from "./TerminalPane";
 import { t, tf } from "../core/i18n";
-import { cardsFit, filedLine, fitOf, handsAway, handsOf, roleCards } from "./RunPicture";
+import { cardsFit, filedLine, fitOf, handsAway, handsOf, roleCards, roundsOf } from "./RunPicture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -43,6 +46,20 @@ vi.mock("../talk/plate", () => ({
 let roles: TaskRoleDto[] = [];
 vi.mock("../core/projectRoles", () => ({ useProjectRoles: () => roles }));
 
+/** The runs under way, as the bar over a run's terminal reads them (`../core/automations`). */
+let live: AutomationRunCardDto[] = [];
+vi.mock("../core/automations", async (actual) => ({
+  ...(await actual<typeof import("../core/automations")>()),
+  useLiveRuns: () => live,
+}));
+
+/** A run under way of the automation `automation`, as the "running" tab's row carries it. */
+const liveRun = (run: number, more: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto => ({
+  run, project: 1, projectName: "P", automation: 3, automationName: "Nightly", status: "running",
+  pauseRequested: false, pauseBeforeNextTask: false, pausableBeforeNextTask: false, waiting: false, waitsForRoom: false,
+  stepsDone: 1, reportWithheld: [], acknowledged: false, ...more,
+} as AutomationRunCardDto);
+
 const role = (id: number, name: string, automationId = 3, icon: string | null = null): TaskRoleDto => ({
   id, name, icon, automationId, automationName: "Nightly",
 });
@@ -59,6 +76,7 @@ let root: Root;
 
 beforeEach(() => {
   roles = [];
+  live = [];
   window.innerWidth = 1600;
   container = document.createElement("div");
   document.body.append(container);
@@ -71,7 +89,10 @@ afterEach(() => {
 });
 
 /** A pane, on a run or on none — with a terminal put up where `autoStart`, or a built-in in its place. */
-async function pane(run: Say | null, { autoStart = false, builtin = null }: { autoStart?: boolean; builtin?: BuiltinRun | null } = {}): Promise<void> {
+async function pane(
+  run: Say | null,
+  { autoStart = false, builtin = null, onGoToRun }: { autoStart?: boolean; builtin?: BuiltinRun | null; onGoToRun?: (run: number) => void } = {},
+): Promise<void> {
   await act(async () => {
     root.render(createElement(TerminalPane, {
       frame: run === null ? "1" : `run-${run.run}`,
@@ -94,6 +115,7 @@ async function pane(run: Say | null, { autoStart = false, builtin = null }: { au
       composeOpen: false,
       onFold: () => {},
       onFocus: () => {},
+      onGoToRun,
     }));
   });
 }
@@ -465,5 +487,130 @@ describe("cardsFit and fitOf", () => {
     expect(cards.view).toBe("cards");
     expect(fitOf(cards, 324, 134, 3).view).toBe("list");
     expect(fitOf(null, 10, 10, 0).view).toBe("cards");
+  });
+});
+
+/// A card is pressed to read its round's terminal, and the terminal has a bar over it.
+describe("the terminal of a round", () => {
+  const RUNNING: Say = {
+    ...FAILED,
+    run: 61,
+    step: "write the tests",
+    task: { ref: "AMB-T-7", title: "Fix the search filter", seq: 1 },
+    round: { role: 12, startedAt: null },
+    state: { ...FAILED.state!, status: "running", word: "Running" },
+  };
+  const bar = () => container.querySelector<HTMLElement>(".runterm");
+  const back = () => container.querySelector<HTMLButtonElement>(".runterm__back")!;
+  const notice = () => container.querySelector(".runterm__notice");
+  const rounds = () => [...container.querySelectorAll<HTMLButtonElement>(".runterm__round")];
+
+  it("turns to the terminal when a card is pressed, and back to the roles from the bar", async () => {
+    roles = [role(12, "Bob")];
+    await pane(RUNNING);
+    expect(pressed()).toBe(t("auto.run.faceRoles"));
+    const open = cards()[0]!.querySelector<HTMLButtonElement>(".runroles__open")!;
+    expect(open.getAttribute("aria-label")).toBe(tf("auto.run.roundTerminal", { name: "Bob" }));
+    await act(async () => open.click());
+    expect(pressed()).toBe(t("auto.run.faceTerminal"));
+    expect(shown()).toBeNull();
+    expect(bar()?.parentElement?.classList.contains("slot__body"), "the bar is not in the pane's body").toBe(true);
+    expect(container.querySelector(".runterm__task")?.textContent).toBe("Bob ・ AMB-T-7 Fix the search filter");
+    expect(container.querySelector(".runterm__step")?.textContent).toBe("write the tests");
+    expect(notice(), "a turn the reader made was said to be the step's").toBeNull();
+
+    expect(back().textContent).toBe(t("auto.run.backToRoles"));
+    await act(async () => back().click());
+    expect(pressed()).toBe(t("auto.run.faceRoles"));
+    expect(shown()).not.toBeNull();
+    expect(bar(), "the bar left the layout under the roles").not.toBeNull();
+  });
+
+  it("turns to the terminal when a row of the list is pressed, and back to the list from the bar", async () => {
+    roles = [role(12, "Bob")];
+    // A room too small for a card, so the round is a row.
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(140);
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(100);
+    try {
+      await pane({ ...RUNNING, run: 68 });
+      expect(cards()).toHaveLength(0);
+      const open = rows()[0]!.querySelector<HTMLButtonElement>(".runroles__open")!;
+      expect(open.getAttribute("aria-label")).toBe(tf("auto.run.roundTerminal", { name: "Bob" }));
+      await act(async () => open.click());
+      expect(pressed()).toBe(t("auto.run.faceTerminal"));
+
+      await act(async () => back().click());
+      expect(rows(), "the way back did not come back to the list").toHaveLength(1);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("says why in one line where a step that may wait for a person turned it", async () => {
+    roles = [role(12, "Bob")];
+    await pane({ ...RUNNING, run: 62 });
+    await pane({ ...RUNNING, run: 62, interactive: true });
+    expect(pressed()).toBe(t("auto.run.faceTerminal"));
+    expect(notice()?.textContent).toBe(tf("auto.run.turnedForStep", { role: "Bob" }));
+    // A press is the reader's, and the line goes with it.
+    await act(async () => back().click());
+    await act(async () => faces()[1]!.click());
+    expect(notice()).toBeNull();
+  });
+
+  it("says nothing where the reader had the terminal up already", async () => {
+    roles = [role(12, "Bob")];
+    await pane({ ...RUNNING, run: 63 });
+    await act(async () => faces()[1]!.click());
+    await pane({ ...RUNNING, run: 63, interactive: true });
+    expect(notice()).toBeNull();
+  });
+
+  it("puts the other rounds of the automation on the bar, and goes to one when it is pressed", async () => {
+    roles = [role(12, "Bob"), role(13, "Carol", 3, "robot")];
+    live = [liveRun(64), liveRun(66, { role: 13, status: "failed", task: { id: 1, ref: "AMB-T-9", title: "Tidy", seq: 1 } }), liveRun(65, { automation: 9 })];
+    const went: number[] = [];
+    await pane({ ...RUNNING, run: 64 }, { onGoToRun: (run) => went.push(run) });
+    await act(async () => faces()[1]!.click());
+    expect(rounds().map((one) => [one.dataset.run, one.dataset.state, one.getAttribute("aria-current")])).toEqual([
+      ["64", "running", "true"],
+      ["66", "failed", null],
+    ]);
+    // Each is named by its task, so two rounds under one role are told apart.
+    expect(rounds().map((one) => one.getAttribute("aria-label"))).toEqual([
+      tf("auto.run.roundTerminalOf", { name: "Bob", which: "AMB-T-7" }),
+      tf("auto.run.roundTerminalOf", { name: "Carol", which: "AMB-T-9" }),
+    ]);
+    await act(async () => rounds()[1]!.click());
+    expect(went).toEqual([66]);
+    // Its pane goes up on the terminal.
+    act(() => root.unmount());
+    root = createRoot(container);
+    await pane({ ...RUNNING, run: 66, round: { role: 13, startedAt: null }, state: FAILED.state });
+    expect(pressed()).toBe(t("auto.run.faceTerminal"));
+  });
+
+  it("draws no rounds where this run is the automation's only one", async () => {
+    live = [liveRun(67)];
+    await pane({ ...RUNNING, run: 67 });
+    expect(rounds()).toHaveLength(0);
+  });
+});
+
+describe("roundsOf", () => {
+  const RUN: Say = { ...FAILED, run: 5, round: { role: 2, startedAt: null }, interactive: true, state: { ...FAILED.state!, status: "running", word: "Running" } };
+
+  it("draws each round by its role, or by the automation where it has none, in the order the runs began", () => {
+    const task = { id: 1, ref: "AMB-T-2", title: "Tidy", seq: 1 };
+    const got = roundsOf(RUN, [liveRun(7, { waiting: true, task }), liveRun(5), liveRun(3, { status: "paused", automationName: "Old" })], [role(2, "B")]);
+    expect(got).toEqual([
+      { run: 3, name: "Old", icon: "robot", dot: "paused", which: "#3" },
+      { run: 5, name: "B", icon: "person", dot: "asks", which: "#5" },
+      { run: 7, name: "Nightly", icon: "robot", dot: "waiting", which: "AMB-T-2" },
+    ]);
+  });
+
+  it("draws none where no other run of the automation is under way", () => {
+    expect(roundsOf(RUN, [liveRun(5), liveRun(8, { automation: 4 })], [])).toEqual([]);
   });
 });

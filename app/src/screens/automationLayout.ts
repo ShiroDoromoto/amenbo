@@ -105,10 +105,12 @@ export type PicRound = {
   /** The whole automation's picture — what an input is fed by and a box is numbered by, which a round
    *  cut out of it cannot answer alone. */
   whole: PicGraph;
-  /** Where the round starts from: the automation's own start — directly, or through the boxes on no
-   *  role it reaches first — and the roles whose boxes hand on into it, then the actions, where the
-   *  box it comes from is on no round. */
-  receives: { start: boolean; roles: readonly string[] };
+  /** Where the round's task comes from, besides a person filing it: whether a failed round's incident
+   *  is filed to this role (`failuresTo`), the names of the triggers that file it, in the order they
+   *  are written — only those switched on, as one switched off files nothing — and the roles whose
+   *  boxes hand on into it, then the actions, where the box it comes from is on no round. None of the
+   *  three means only a person files it. */
+  receives: { failures: boolean; triggers: readonly string[]; roles: readonly string[] };
   /** The roles the round hands on to, each once, in the order the lines out of it are. */
   handsTo: readonly string[];
   /** Each line out of the round, by its edge, with the role it hands on to — or the action, where the
@@ -139,8 +141,8 @@ export type PicGraph = {
 /**
  * **One automation as a picture** — its boxes are the actions placed on it.
  *
- * Given a role, **only that role's round** (`AutomationPlacementDto::roleId`): received from the
- * automation's start or from another role, the actions it passes through with their steps inside, and
+ * Given a role, **only that role's round** (`AutomationPlacementDto::roleId`): received from a failed
+ * round, a trigger, another role or a person, the actions it passes through with their steps inside, and
  * handed on to the roles its lines leave for. A role that is gone draws the whole automation.
  */
 export function automationGraph(detail: AutomationDetailDto | null, roleId?: number): PicGraph | null {
@@ -173,18 +175,15 @@ export function automationGraph(detail: AutomationDetailDto | null, roleId?: num
       if (edge.ends === "go" && edge.fromId === at && edge.toId !== undefined && onNoRole(edge.toId)) queue.push(edge.toId);
     }
   }
-  // Into the round from a box on no part of it: from the automation's start, from the role that box
-  // is on, or — where it is on no round and not reached from the start — from the action standing there.
+  // Into the round from a box on no part of it: from the role that box is on, or — where it is on no
+  // round and not reached from the start — from the action standing there. A line from the start is
+  // a task a person filed, which is said where nothing else hands the round its task.
   // The roles come first and the actions on no round after them, whatever order the edges stand in.
-  let fromStart = role.entryPlacementId !== undefined && role.entryPlacementId === detail.entryPlacementId;
   const fromRoles: string[] = [];
   const fromActions: string[] = [];
   for (const edge of detail.edges) {
     if (edge.ends !== "go" || edge.toId === undefined || !inRound.has(edge.toId) || inRound.has(edge.fromId)) continue;
-    if (beforeAnyRole.has(edge.fromId)) {
-      fromStart = true;
-      continue;
-    }
+    if (beforeAnyRole.has(edge.fromId)) continue;
     const byRole = roleName(edge.fromId);
     if (byRole !== undefined) fromRoles.push(byRole);
     else {
@@ -214,7 +213,8 @@ export function automationGraph(detail: AutomationDetailDto | null, roleId?: num
     round: {
       whole,
       receives: {
-        start: fromStart,
+        failures: detail.failuresTo?.kind === "role" && detail.failuresTo.roleId === role.id,
+        triggers: detail.triggers.filter((one) => one.enabled && one.roleId === role.id).map((one) => one.name),
         roles: [...new Set([...fromRoles, ...fromActions])],
       },
       handsTo: [...new Set(handsTo)],

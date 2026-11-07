@@ -2037,6 +2037,7 @@ impl Store {
         show_decisions: Option<bool>,
         show_comments: Option<bool>,
         script: Option<Option<crate::ops::automation::NewScript>>,
+        expected_minutes: Option<Option<i64>>,
     ) -> Result<crate::model::AutomationStep> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Step, id)], |tx| {
             crate::ops::automation::step_update(
@@ -2052,6 +2053,7 @@ impl Store {
                 show_decisions,
                 show_comments,
                 script,
+                expected_minutes,
             )
         })
     }

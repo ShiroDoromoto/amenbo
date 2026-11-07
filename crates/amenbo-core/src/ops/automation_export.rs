@@ -193,6 +193,10 @@ pub struct StepFile {
     pub show_notes: bool,
     pub show_decisions: bool,
     pub show_comments: bool,
+    /// How long the step is expected to take, in minutes, or `None` for the default. A file written
+    /// before steps said this has none, and reads as the default.
+    #[serde(default)]
+    pub expected_minutes: Option<i64>,
     pub inputs: Vec<PortFile>,
     pub exits: Vec<ExitFile>,
 }
@@ -347,6 +351,7 @@ fn action_file(name: &str, note: &str, global: bool, def: &ActionDef) -> Result<
             show_notes: s.show_notes,
             show_decisions: s.show_decisions,
             show_comments: s.show_comments,
+            expected_minutes: s.expected_minutes,
             inputs: ports(&def.ports_of(AutomationPortOwner::Step, s.id, into)),
             exits: exits_of(AutomationOwner::Step, s.id),
         })

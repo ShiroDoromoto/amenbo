@@ -825,6 +825,7 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
             )
             .expect("rewrite the work");
             assert!(

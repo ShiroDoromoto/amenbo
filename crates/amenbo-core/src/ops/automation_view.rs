@@ -681,7 +681,7 @@ mod tests {
             action_version_add(tx, action.id).unwrap();
             let placement = placement_add_by_hand(tx, automation.id, action.id).unwrap();
             let step = action.entry_step_id.unwrap();
-            step_update(tx, step, None, Some("もう一度見る"), None, None, None, None, None, None, None, None)
+            step_update(tx, step, None, Some("もう一度見る"), None, None, None, None, None, None, None, None, None)
                 .unwrap();
             exit_add(tx, AutomationOwner::Action, action.id, Some("直す")).unwrap();
             let into = AutomationPortDirection::In;
@@ -782,7 +782,7 @@ mod tests {
             let (action, placement) = mk_placed(tx, &automation, "点検", "見る", "claude");
             action_version_add(tx, action.id).unwrap();
             let step = action.entry_step_id.unwrap();
-            step_update(tx, step, None, Some("もう一度見る"), None, None, None, None, None, None, None, None)
+            step_update(tx, step, None, Some("もう一度見る"), None, None, None, None, None, None, None, None, None)
                 .unwrap();
 
             let draft = action_detail(tx.conn(), action.id).unwrap().unwrap();
@@ -835,7 +835,7 @@ mod tests {
             assert_eq!(one.saved.map(|v| v.version), Some(1));
             assert!(!one.unsaved);
             let step = action.entry_step_id.unwrap();
-            step_update(tx, step, None, Some("もう一度見る"), None, None, None, None, None, None, None, None)
+            step_update(tx, step, None, Some("もう一度見る"), None, None, None, None, None, None, None, None, None)
                 .unwrap();
             let one = action_card(tx.conn(), action.id);
             assert_eq!(one.saved.map(|v| v.version), Some(1));

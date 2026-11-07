@@ -1256,6 +1256,10 @@ datasets! {
         show_notes: bool_col,
         show_decisions: bool_col,
         show_comments: bool_col,
+        // How long the step is expected to take, in minutes, or NULL for the default
+        // (`model::DEFAULT_EXPECTED_MINUTES`). It stops nothing: it is what the step is measured
+        // against before it is taken to have stalled.
+        expected_minutes: col(INT_OPT),
         order_key: col(ORDER_KEY),
     }
 
@@ -1564,6 +1568,9 @@ datasets! {
         show_notes: bool_col,
         show_decisions: bool_col,
         show_comments: bool_col,
+        // How long the step was expected to take, in minutes, with the default already put in where the
+        // step said nothing. NULL on a row written before this was copied, which reads as the default.
+        expected_minutes: col(INT_OPT),
         exits: col(REQ),
         ins: col(REQ),
         cfg: col(REQ),

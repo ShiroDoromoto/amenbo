@@ -608,6 +608,7 @@ pub fn automation_step_edit(
             task_decisions,
             task_comments,
             script,
+            None,
         )?;
         Ok(())
     })?;
@@ -651,6 +652,7 @@ pub fn automation_step_add(
         show_notes: true,
         show_decisions: true,
         show_comments: true,
+        expected_minutes: None,
         script: new_script(program, args, timeout_minutes),
     };
     with_store_mut(|store| {
@@ -775,6 +777,7 @@ pub fn automation_action_step_insert(
         show_notes: true,
         show_decisions: true,
         show_comments: true,
+        expected_minutes: None,
         script: new_script(program, args, timeout_minutes),
     };
     with_store_mut(|store| {

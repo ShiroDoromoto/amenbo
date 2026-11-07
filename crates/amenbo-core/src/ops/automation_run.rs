@@ -58,7 +58,7 @@ use crate::model::{
     AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStepStatus, AutomationStep, AutomationStoppedReason, AutomationEdge,
     RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, StepScript, ACTION_BOUNDARY,
-    ERROR_EXIT,
+    DEFAULT_EXPECTED_MINUTES, ERROR_EXIT,
 };
 use crate::ops::automation::{ActionDef, Picture};
 use crate::ops::automation_script;
@@ -2891,6 +2891,9 @@ fn snapshot(
         show_notes: step.show_notes,
         show_decisions: step.show_decisions,
         show_comments: step.show_comments,
+        // Copied with the default already put in, so the copy says what was expected at launch even
+        // where the default moves on afterwards.
+        expected_minutes: Some(step.expected_minutes.unwrap_or(DEFAULT_EXPECTED_MINUTES)),
         exits: serde_json::to_string(&exits).map_err(Error::from)?,
         ins: serde_json::to_string(&ins).map_err(Error::from)?,
         cfg: serde_json::to_string(&cfg).map_err(Error::from)?,
@@ -4476,7 +4479,7 @@ mod tests {
         let script =
             NewScript { program: program.to_string_lossy().into_owned(), args: Vec::new(), timeout_minutes: None };
         let script = Some(Some(script));
-        automation::step_update(tx, step.id, None, None, None, None, None, None, None, None, None, script)
+        automation::step_update(tx, step.id, None, None, None, None, None, None, None, None, None, script, None)
             .expect("make it a script");
     }
 
@@ -4870,11 +4873,49 @@ mod tests {
                 .expect("stop");
             automation::action_update(tx, action.id, Some("取り直す"), None)
                 .expect("edit the definition once the run is over");
-            automation::step_update(tx, step.id, None, Some("take another"), None, None, None, None, None, None, None, None)
+            automation::step_update(tx, step.id, None, Some("take another"), None, None, None, None, None, None, None, None, None)
             .expect("rewrite the prompt once the run is over");
             let copy = copy_of_it(tx);
             assert_eq!(copy.name, "直す", "the copy is what the run reads from here on");
             assert_eq!(copy.prompt.as_deref(), Some("fix it"));
+        });
+    }
+
+    /// **A run copies how long each step is expected to take**, with the default put in where the step
+    /// says nothing, so the copy keeps saying it once the step is written on.
+    #[test]
+    fn a_run_copies_how_long_a_step_is_expected_to_take() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let step = only_step(tx, &action);
+            let expected_of = |tx: &WriteTx<'_>, run: i64| {
+                read::automation_run_defs_of(tx.conn(), run)
+                    .expect("defs")
+                    .into_iter()
+                    .find(|d| d.placement_id == Some(placement.id))
+                    .expect("the placement's copy")
+                    .expected_minutes
+            };
+            let expect = |tx: &WriteTx<'_>, minutes| {
+                automation::step_update(tx, step.id, None, None, None, None, None, None, None, None, None, None, minutes)
+                    .expect("write how long it takes")
+            };
+            let stop = |tx: &WriteTx<'_>, run: i64| {
+                crate::ops::automation_stop::stop(tx, run, crate::ops::automation_stop::Ending::Canceled)
+                    .expect("stop")
+            };
+
+            let first = launch(tx, automation.id, &here(&claude())).expect("launch");
+            assert_eq!(expected_of(tx, first.id), Some(DEFAULT_EXPECTED_MINUTES), "a step that says nothing");
+            stop(tx, first.id);
+
+            expect(tx, Some(Some(25)));
+            let second = launch(tx, automation.id, &here(&claude())).expect("launch");
+            assert_eq!(expected_of(tx, second.id), Some(25));
+            stop(tx, second.id);
+
+            expect(tx, Some(Some(40)));
+            assert_eq!(expected_of(tx, second.id), Some(25), "the copy is what the run reads from");
         });
     }
 
@@ -4897,7 +4938,7 @@ mod tests {
             };
             stand_on(Some(1));
             let again = Some("fix it again");
-            automation::step_update(tx, step.id, None, again, None, None, None, None, None, None, None, None)
+            automation::step_update(tx, step.id, None, again, None, None, None, None, None, None, None, None, None)
                 .expect("write on");
             automation::exit_add(tx, AutomationOwner::Action, action.id, Some("直すところがある"))
                 .expect("a way out written since");

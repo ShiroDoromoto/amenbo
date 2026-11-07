@@ -97,7 +97,7 @@
 // a step chose for itself marked (`./AutomationRoleCarriers`).
 //
 // **What the automation holds as a whole stands down the right** (`./AutomationSettings`): who a
-// failed round is filed to, and its trigger, which opens its own dialog (`./AutomationTrigger`), each
+// failed round is filed to, and its triggers, each opening its own dialog (`./AutomationTrigger`), each
 // in a box of its own. They are about none of the roles in particular, so they stand beside
 // the left and the middle rather than in either.
 //

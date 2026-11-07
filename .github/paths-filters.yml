@@ -35,8 +35,8 @@ rust:
   # these entries cover the other direction — a tape edited on its own.
   - 'assets/cli-demo.tape'
   - 'assets/cli-demo.transcript.txt'
-  # The texts `amenbo licenses` compiles into the CLI binary: an edit to either alone changes
-  # what the build prints.
+  # The texts `amenbo licenses` compiles into the CLI binary, and that the GUI bundles carry as
+  # resources (app/src-tauri/tauri.conf.json): an edit to either alone changes what the build ships.
   - 'LICENSE'
   - 'THIRD-PARTY-NOTICES'
 # The pre-distribution verification harness is a third out-of-workspace cargo workspace,

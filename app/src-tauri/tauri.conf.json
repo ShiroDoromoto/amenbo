@@ -34,6 +34,10 @@
       "binaries/amenbo",
       "binaries/amenbo-askpass"
     ],
+    "resources": {
+      "../../LICENSE": "LICENSE",
+      "../../THIRD-PARTY-NOTICES": "THIRD-PARTY-NOTICES"
+    },
     "windows": {
       "nsis": {
         "installMode": "currentUser",

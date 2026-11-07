@@ -1803,10 +1803,10 @@ pub struct AutomationAction {
     /// ([`crate::ops::automation_builtin`]).
     #[serde(default)]
     pub builtin: Option<String>,
-    /// **The axis it split by**, on an action of the built-in `split_by_dim` an automation written before
-    /// automations had roles still places, and `None` on every other action. That built-in is gone —
-    /// where a round goes is its task's role — and an automation placing it is only exported, which
-    /// writes the axis out by name. `None` on one of them is an axis deleted from under it.
+    /// **The axis it splits by**, for the built-in whose ways out are an axis's values (`AMB-D-972`),
+    /// and `None` on every other action. There is one such action per axis: the ways out are the
+    /// action's rows, and they follow the axis's values ([`crate::ops::automation_builtin_split`]).
+    /// `None` on one of them is an axis deleted from under it.
     #[serde(default)]
     pub builtin_dimension_id: Option<i64>,
     /// **Which version of the built-in's definition these rows were written from**, or `None` for an

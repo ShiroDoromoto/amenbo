@@ -329,7 +329,8 @@ pub fn automation_builtin_page() -> Result<Vec<AutomationBuiltinDto>, CmdError> 
     let conn = store.read_model().conn();
     let mut out = Vec::new();
     for one in automation_builtin::all() {
-        // One action per version of it, and an automation placing two of them is still one automation.
+        // One action per version of it, and per axis for the one that splits by an axis — an automation
+        // placing two of them is still one automation.
         let mut placing = std::collections::BTreeSet::new();
         for action in read::automation_actions_builtin(conn, one.key)? {
             placing.extend(automation_view::automations_placing(conn, action.id)?);
@@ -378,7 +379,7 @@ fn builtin_port_dto(port: &automation_builtin::BuiltinPort) -> AutomationPortDto
 #[tauri::command]
 pub fn automation_builtin_place(automation_id: i64, key: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_place(automation_id, &key)?;
+        store.automation_builtin_place(automation_id, &key, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
@@ -390,7 +391,7 @@ pub fn automation_builtin_place(automation_id: i64, key: String) -> Result<Write
 #[tauri::command]
 pub fn automation_builtin_insert(edge_id: i64, key: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_insert(edge_id, &key)?;
+        store.automation_builtin_insert(edge_id, &key, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
@@ -405,7 +406,7 @@ pub fn automation_builtin_insert_at_exit(
     key: String,
 ) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_insert_at_exit(from_id, exit_name.as_deref(), &key)?;
+        store.automation_builtin_insert_at_exit(from_id, exit_name.as_deref(), &key, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))

@@ -20,6 +20,7 @@ const SECTIONS: Record<string, string> = {
   hand_back_task: "handBackTask",
   defer_task: "deferTask",
   fetch: "fetch",
+  split_by_dim: "splitByDim",
   wait: "wait",
 };
 

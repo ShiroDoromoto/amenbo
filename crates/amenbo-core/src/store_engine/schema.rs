@@ -1096,9 +1096,10 @@ datasets! {
         // and never edited: the ways out and the outputs they declare have to be the ones the code
         // leaves by.
         builtin: col(OPT),
-        // The axis the built-in `split_by_dim` split by (`AMB-D-972`), on an action of it an automation
-        // written before automations had roles still places, or NULL for every other action. That
-        // built-in is gone and such an automation is only exported, which writes the axis out by name.
+        // The axis a built-in that splits by one splits by (`AMB-D-972`), or NULL for every other
+        // action. Its ways out are that axis's values, so there is one such action per axis rather than
+        // one per key. An axis deleted from under it leaves it with none, and carrying it out then falls
+        // over rather than guess.
         builtin_dimension_id: fk_opt("dimension", "SET NULL"),
         // The version of the built-in's definition the rows were written from (`AMB-D-1000`), or NULL
         // for an action a person wrote. One action per version: a placement points at the one it was

@@ -174,6 +174,7 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "not_ready_automation_task_left_open",
   "not_ready_automation_task_left_open_at_end",
   "not_ready_automation_hands_on_task_taken",
+  "not_ready_automation_split_axis_gone",
   "not_ready_action_save",
   "not_ready_action_save_empty",
   "invalid_make_task_no_runs_task",

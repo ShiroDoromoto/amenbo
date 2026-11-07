@@ -15,7 +15,7 @@
 //! **A built-in is not read in.** The file names its key and the version it was placed at, and the
 //! placement stands on this build's version of it (`AMB-D-1000`): a file written by an older build is
 //! brought up to this one, and one written by a newer build is refused — as is one this build does not
-//! have, such as `split_by_dim`, which an automation written before automations had roles may place. A
+//! have, and `split_by_dim`, which stands on an axis a file is not read onto. A
 //! line or an answer on a built-in naming a way out, a port or a setting this build's version does not
 //! declare is left out, for the person to draw again.
 //!
@@ -392,9 +392,8 @@ mod tests {
     }
 
     /// **A file of another format, a built-in newer than this build, and a built-in this build does not
-    /// have are refused** — and the caller's transaction takes back what was written before the refusal.
-    /// `split_by_dim` is one: an automation written before automations had roles may place it, and a
-    /// round now goes where its task's role says.
+    /// read in are refused** — and the caller's transaction takes back what was written before the
+    /// refusal. `split_by_dim` is one: it stands on an axis, and a file is not read onto one.
     #[test]
     fn what_cannot_be_read_in_is_refused() {
         with_tx(|tx| {
@@ -422,7 +421,7 @@ mod tests {
             let mut split = file.clone();
             split.placements[3].stands_on =
                 StandsOn::Builtin(BuiltinFile { key: "split_by_dim".into(), version: 1, dimension: Some("職能".into()) });
-            assert!(matches!(import(tx, project, &split), Err(Error::Invalid(_))), "a built-in that is gone");
+            assert!(matches!(import(tx, project, &split), Err(Error::Invalid(_))), "a built-in that stands on an axis");
         });
     }
 

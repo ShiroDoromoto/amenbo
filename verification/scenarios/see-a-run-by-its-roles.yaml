@@ -5,7 +5,8 @@
 # the pane goes back to its roles. The line over the pane turns it either way by hand.
 #
 # The automation is the one hold-a-run-from-its-pane walks, with its first step made one that may wait
-# for a person. It defines no role, so its round is one card named after the automation.
+# for a person. Its one role, the one it was born with, starts nowhere and the task names no role, so
+# its round is one card named after the automation.
 id: see-a-run-by-its-roles
 title: A run's pane shows its round as a card, and turns to the terminal while a step may wait for a person
 description: >

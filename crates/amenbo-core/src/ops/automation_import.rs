@@ -68,7 +68,9 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
     // Where a failed round is filed is the automation's, as how many runs go at once is, and a file
     // carries neither: the new automation names nobody until somebody says.
     let new = NewAutomation { name: file.name.clone(), notes: file.notes.clone(), failures_to: None };
-    let automation = automation::add(tx, project_id, new)?;
+    // Born with no role: the file's roles are its roles, and only a file with none (one written before
+    // roles existed) leaves it the role an automation is born with, so that it has one.
+    let automation = automation::add_with_no_role(tx, project_id, new)?;
     let mut placed: Vec<Placed> = Vec::new();
     for placement in &file.placements {
         let (action_id, steps, builtin) = match &placement.stands_on {
@@ -139,6 +141,9 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
             model: role.model.clone(),
         };
         automation::role_add(tx, automation.id, new)?;
+    }
+    if file.roles.is_empty() {
+        automation::role_add(tx, automation.id, automation::born_role(&automation))?;
     }
     read::automation(tx.conn(), automation.id)?
         .ok_or_else(|| Error::not_found(format!("automation '{}' not found", automation.id)))
@@ -425,7 +430,7 @@ mod tests {
             let actions_before = count(tx, "automation_action");
             let roles_before = count(tx, "automation_role");
             let imported = import(tx, into, &parse(&text).expect("parse")).expect("import");
-            assert_eq!(count(tx, "automation_role"), roles_before + 2, "the roles come in as new");
+            assert_eq!(count(tx, "automation_role"), roles_before + 3, "the roles come in as new, the one it was born with among them");
             assert_eq!((imported.project_id, imported.name.as_str()), (into, "1件やりきる"));
             assert!(read::automation_version_latest(tx.conn(), imported.id).expect("read").is_none(), "not saved");
             assert!(automation::unsaved(tx.conn(), imported.id).expect("unsaved"), "left being written");

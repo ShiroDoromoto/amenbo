@@ -1255,14 +1255,31 @@ fn take_off_as_before(tx: &WriteTx<'_>, placement_id: i64) -> Result<()> {
 pub struct NewAutomation {
     pub name: String,
     pub notes: String,
-    /// Where a failed round is filed, or `None` to say later. A new automation defines no role yet, so
-    /// only a person can be named here.
+    /// Where a failed round is filed, or `None` to say later. The one role a new automation is born
+    /// with has no id until it is made, so only a person can be named here.
     pub failures_to: Option<FailuresTo>,
 }
 
-/// Create an automation. It is born with nothing placed on it and no entry, and with nobody to file a
-/// failed round to unless `new` names a person; what refuses to launch it is the launch check, not this.
+/// Create an automation. It is born with nothing placed on it and no entry, with one role
+/// (`born_role`), and with nobody to file a failed round to unless `new` names a person; what refuses
+/// to launch it is the launch check, not this.
 pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Automation> {
+    let automation = add_with_no_role(tx, project_id, new)?;
+    role_add(tx, automation.id, born_role(&automation))?;
+    Ok(automation)
+}
+
+/// **The role an automation is born with**: named after it (its name with the suffix that reads "the one
+/// in charge of"), one in it, starting nowhere.
+/// An automation always has at least one role ([`role_delete`] keeps the last), and this is the first.
+/// Its name is only a placeholder, to be changed like any role's.
+pub(crate) fn born_role(automation: &Automation) -> NewRole {
+    NewRole { name: format!("{}の係", automation.name), ..NewRole::default() }
+}
+
+/// [`add`], with no role yet — for a caller that defines the roles itself and makes sure there is one
+/// by the time it is done (`ops::automation_import`).
+pub(crate) fn add_with_no_role(tx: &WriteTx<'_>, project_id: i64, new: NewAutomation) -> Result<Automation> {
     let name = checked_name("automation", &new.name)?;
     if read::project(tx.conn(), project_id)?.is_none() {
         return Err(crate::ops::project::NOUN.not_found(project_id.to_string()));
@@ -1771,8 +1788,9 @@ pub fn save(tx: &WriteTx<'_>, automation_id: i64, default_agent: Option<&str>) -
 }
 
 /// **Does the draft hold anything its newest saved version does not?** For an automation nobody has
-/// saved, anything on its picture at all is unsaved. Its name and notes are not part of a version, so
-/// writing them leaves this as it was.
+/// saved, anything on its picture at all is unsaved — but the one role it is born with (`born_role`),
+/// as long as nothing past a name is written on it, is not something to save. Its name and notes are
+/// not part of a version, so writing them leaves this as it was.
 pub fn unsaved(conn: &Connection, automation_id: i64) -> Result<bool> {
     let automation =
         read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
@@ -1781,8 +1799,18 @@ pub fn unsaved(conn: &Connection, automation_id: i64) -> Result<bool> {
         Some(latest) => Ok(!draft.is(&latest)?),
         None => Ok(draft.entry_placement_id.is_some()
             || !draft.placements.is_empty()
-            || !draft.roles.is_empty()),
+            || draft.roles.len() > 1
+            || !draft.roles.iter().all(only_named)),
     }
+}
+
+/// Whether a role holds nothing but its name — the way the one an automation is born with does.
+fn only_named(role: &AutomationRole) -> bool {
+    role.headcount == DEFAULT_ROLE_HEADCOUNT
+        && role.icon.is_none()
+        && role.entry_placement_id.is_none()
+        && role.agent.is_none()
+        && role.model.is_none()
 }
 
 /// **Throw away what is written on the automation since its newest version**, putting every row back as
@@ -2763,9 +2791,19 @@ pub fn role_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationR
 /// Take a role out of its automation. The placement its round started at stays on the picture, and the
 /// tasks worked under it are left with no role. Where failed rounds were filed to it, the automation is
 /// left with nobody to file them to, which the launch check refuses until somebody says again.
+///
+/// **The last role is not taken out**: an automation always has at least one. Its name and the rest can
+/// be changed instead ([`role_update`]).
 pub fn role_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let role = live_role(tx, id)?;
     rewritable(tx, Def::Automation(role.automation_id))?;
+    if read::automation_role_siblings(tx.conn(), role.automation_id, Some(id))?.is_empty() {
+        return Err(Error::invalid(format!(
+            "role '{}' is the last one of its automation, and an automation always has at least one role \
+             — change it instead of taking it out",
+            role.name
+        )));
+    }
     take_role_off_tasks(tx, id)?;
     stop_filing_failures_to(tx, &role)?;
     take_role_off_triggers(tx, &role)?;
@@ -4457,7 +4495,34 @@ mod tests {
             let capped = role_update(tx, role.id, RoleChange { headcount: Some(MAX_ROLE_HEADCOUNT), ..RoleChange::default() })
                 .expect("up to the cap");
             assert_eq!(capped.headcount, MAX_ROLE_HEADCOUNT);
-            assert_eq!(read::automation_roles_of(tx.conn(), automation.id).expect("read").len(), 2);
+            assert_eq!(read::automation_roles_of(tx.conn(), automation.id).expect("read").len(), 3, "the one born with it too");
+        });
+    }
+
+    /// **An automation is born with one role, and its last role is not taken out.** The role is named after
+    /// it and holds one; while it is the only one, the automation does not read as unsaved. Taken out once
+    /// another stands beside it, the other is then the last.
+    #[test]
+    fn an_automation_is_born_with_a_role_and_keeps_its_last() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let roles = |tx: &WriteTx<'_>| read::automation_roles_of(tx.conn(), automation.id).expect("read");
+            let born = roles(tx);
+            assert_eq!(born.len(), 1, "one role");
+            assert_eq!((born[0].name.as_str(), born[0].headcount), ("1件やりきるの係", 1));
+            assert_eq!((born[0].entry_placement_id, born[0].agent.as_deref()), (None, None), "starting nowhere");
+            assert!(!unsaved(tx.conn(), automation.id).expect("unsaved"), "nothing to save yet");
+
+            let last = role_delete(tx, born[0].id);
+            assert!(matches!(last, Err(Error::Invalid(_))), "the last role stays");
+            assert_eq!(roles(tx).len(), 1);
+
+            let other = role_add(tx, automation.id, NewRole { name: "さくら".into(), ..NewRole::default() })
+                .expect("another");
+            assert!(unsaved(tx.conn(), automation.id).expect("unsaved"), "a second role is something to save");
+            role_delete(tx, born[0].id).expect("not the last any more");
+            assert!(matches!(role_delete(tx, other.id), Err(Error::Invalid(_))), "now it is the last");
+            assert_eq!(roles(tx).iter().map(|r| r.id).collect::<Vec<_>>(), [other.id]);
         });
     }
 
@@ -4471,7 +4536,7 @@ mod tests {
                 .expect("a role");
             let saved = version_add(tx, automation.id).expect("save");
             let roles: Vec<AutomationRole> = serde_json::from_str(&saved.roles).expect("roles");
-            assert_eq!(roles[0].headcount, 2);
+            assert_eq!(roles.iter().find(|r| r.id == role.id).map(|r| r.headcount), Some(2));
             assert!(!unsaved(tx.conn(), automation.id).expect("unsaved"), "nothing changed since");
 
             role_update(tx, role.id, RoleChange { headcount: Some(3), ..RoleChange::default() }).expect("change it");
@@ -4765,7 +4830,7 @@ mod tests {
 
     /// **Where a failed round is filed is set, kept and left unsaid again.** A person or one of the
     /// automation's own roles; a role of another automation, or none at all, is refused, and a new
-    /// automation can name only a person, having no role yet.
+    /// automation can name only a person, its role having no id until it is made.
     #[test]
     fn where_a_failed_round_is_filed_is_a_person_or_one_of_its_own_roles() {
         use crate::model::FailuresTo;
@@ -4808,7 +4873,7 @@ mod tests {
                     ..Default::default()
                 },
             );
-            assert!(matches!(refused, Err(Error::Invalid(_))), "a new automation has no role of its own");
+            assert!(matches!(refused, Err(Error::Invalid(_))), "a role of another automation is not one of a new one's");
             assert_eq!(live_automation(tx, automation.id).expect("read").failures_to, Some(to_role));
 
             let cleared = update(tx, automation.id, None, None, None, Some(None)).expect("leave it unsaid");
@@ -4844,7 +4909,7 @@ mod tests {
             role_delete(tx, kept.id).expect("take a role out");
             assert_eq!(failures_to(tx), Some(FailuresTo::Human), "a person is left alone");
 
-            version_add(tx, automation.id).expect("save with no role");
+            version_add(tx, automation.id).expect("save with the role it was born with");
             let added = role_add(tx, automation.id, NewRole { name: "足す".into(), ..NewRole::default() }).expect("a role");
             to(tx, added.id);
             discard(tx, automation.id).expect("throw the draft away");
@@ -4885,7 +4950,7 @@ mod tests {
             let names = |tx: &WriteTx<'_>| -> Vec<String> {
                 read::automation_roles_of(tx.conn(), automation.id).expect("read").into_iter().map(|r| r.name).collect()
             };
-            assert_eq!(names(tx), ["実装", "レビュー"], "in the order they are defined in");
+            assert_eq!(names(tx), ["1件やりきるの係", "実装", "レビュー"], "in the order they are defined in");
 
             let blank = role_add(tx, automation.id, NewRole { name: " ".into(), ..NewRole::default() });
             assert!(matches!(blank, Err(Error::Invalid(_))), "a role has a name");
@@ -4908,9 +4973,9 @@ mod tests {
             assert_eq!((cleared.agent, cleared.model), (None, None), "the model goes with the agent");
 
             role_move(tx, second.id, Position::Top).expect("move it up");
-            assert_eq!(names(tx), ["レビュー", "見る"]);
+            assert_eq!(names(tx), ["レビュー", "1件やりきるの係", "見る"]);
             role_delete(tx, second.id).expect("take it out");
-            assert_eq!(names(tx), ["見る"]);
+            assert_eq!(names(tx), ["1件やりきるの係", "見る"]);
             assert!(matches!(role_delete(tx, second.id), Err(Error::NotFound(_))));
         });
     }
@@ -4945,7 +5010,8 @@ mod tests {
             let kept = role_add(tx, automation.id, new).expect("define a role");
             let saved = version_add(tx, automation.id).expect("save");
             let held: Vec<AutomationRole> = serde_json::from_str(&saved.roles).expect("roles");
-            assert_eq!(held.iter().map(|r| r.id).collect::<Vec<_>>(), [kept.id]);
+            assert_eq!(held.last().map(|r| r.id), Some(kept.id), "after the one it was born with");
+            assert_eq!(held.len(), 2);
             assert!(!unsaved(tx.conn(), automation.id).expect("unsaved"));
 
             let change = RoleChange { name: Some("見る".into()), ..RoleChange::default() };
@@ -5052,7 +5118,7 @@ mod tests {
             role_delete(tx, role.id).expect("take the role out");
             assert_eq!(role_of(tx, id), None);
 
-            version_add(tx, automation.id).expect("save with no role");
+            version_add(tx, automation.id).expect("save with the role it was born with");
             let added = role_add(tx, automation.id, NewRole { name: "見る".into(), ..NewRole::default() }).expect("a role");
             let id = under(tx, added.id);
             discard(tx, automation.id).expect("throw the draft away");

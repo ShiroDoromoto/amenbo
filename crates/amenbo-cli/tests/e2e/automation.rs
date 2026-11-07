@@ -586,8 +586,8 @@ fn a_role_holds_one_to_the_cap() {
     let (_, code) = cli.run_err(&["automation", "role-add", &a, "--name", "Carol", "--headcount", "0"]);
     assert_ne!(code, 0, "a role is not born with zero");
     let listed = cli.json(&["automation", "role-list", &a, "--json"]);
-    assert_eq!(listed["count"].as_u64(), Some(1), "{listed}");
-    assert_eq!(listed["roles"][0]["headcount"], serde_json::json!(cap), "a refused update changes nothing: {listed}");
+    assert_eq!(listed["count"].as_u64(), Some(2), "the one it was born with, and Bob: {listed}");
+    assert_eq!(listed["roles"][1]["headcount"], serde_json::json!(cap), "a refused update changes nothing: {listed}");
 }
 
 /// `automation stop` stops an automation, `show` says so, and `--off` lets it start new rounds again.
@@ -1336,10 +1336,12 @@ fn saved(cli: &Cli, a: &str) {
     cli.json(&["automation", "save", a, "--json"]);
 }
 
-/// Let the automation have two runs going at once: a role of two, saved, since the runs under way are
-/// measured against its newest saved version.
+/// Let the automation have two runs going at once: the role it was born with made one of two, saved,
+/// since the runs under way are measured against its newest saved version.
 fn room_for_two(cli: &Cli, a: &str) {
-    cli.json(&["automation", "role-add", a, "--name", "Alice", "--headcount", "2", "--json"]);
+    let listed = cli.json(&["automation", "role-list", a, "--json"]);
+    let born = id_str(&listed["roles"][0]["id"]);
+    cli.json(&["automation", "role-update", &born, "--headcount", "2", "--json"]);
     saved(cli, a);
 }
 
@@ -1867,8 +1869,9 @@ fn a_role_is_defined_listed_changed_and_taken_out() {
     assert_eq!(added["draft"]["kind"].as_str(), Some("automation"), "it goes into the draft: {added}");
 
     let listed = cli.json(&["automation", "role-list", &a, "--json"]);
-    assert_eq!(listed["count"].as_u64(), Some(1), "{listed}");
-    assert_eq!(listed["roles"][0]["agent"].as_str(), Some("codex"));
+    assert_eq!(listed["count"].as_u64(), Some(2), "after the one it was born with: {listed}");
+    assert_eq!(listed["roles"][0]["name"].as_str(), Some("Aの係"), "named after it: {listed}");
+    assert_eq!(listed["roles"][1]["agent"].as_str(), Some("codex"));
     let (shown, code) = cli.run(&["automation", "show", &a]);
     assert_eq!(code, 0, "{shown}");
     assert!(
@@ -1886,7 +1889,12 @@ fn a_role_is_defined_listed_changed_and_taken_out() {
 
     cli.json(&["automation", "role-rm", &role, "--yes", "--json"]);
     let listed = cli.json(&["automation", "role-list", &a, "--json"]);
-    assert_eq!(listed["count"].as_u64(), Some(0), "{listed}");
+    assert_eq!(listed["count"].as_u64(), Some(1), "{listed}");
+    let born = id_str(&listed["roles"][0]["id"]);
+    let (err, code) = cli.run_err(&["automation", "role-rm", &born, "--yes", "--json"]);
+    assert_ne!(code, 0, "the last role is not taken out: {err}");
+    let listed = cli.json(&["automation", "role-list", &a, "--json"]);
+    assert_eq!(listed["count"].as_u64(), Some(1), "{listed}");
 }
 
 /// **A task is worked under a role by the id `role-list` hands back**: set on add, read back by `task

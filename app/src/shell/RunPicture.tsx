@@ -58,8 +58,8 @@
 // Nothing else is animated: a pane that changes size moves its cards only by where they stand.
 //
 // **One run is one pane** (`AMB-D-939`), and a run walks one round at a time, so the cards are its
-// round's role or none. An automation that defines no role still walks rounds: its round is drawn as
-// one card named after the automation, with no bar under it.
+// round's role or none. A round under no role — a task that names none, on an automation whose roles
+// start nowhere — is drawn as one card named after the automation, its roles all on the bar.
 //
 // The role's name and icon are the definition's as it is now (`AMB-D-1015`), read by the project's
 // roles (`../core/projectRoles`) — the run's copy holds only which role its round is under.
@@ -90,9 +90,9 @@ export type RoundState =
   /** The run failed in it. */
   | "failed";
 
-/** One card: the role, or the automation where it defines none, and what its round is doing. */
+/** One card: the role, or the automation where its round is under none, and what its round is doing. */
 export type RoleCard = {
-  /** The role's id, or null for the round of an automation that defines no role. */
+  /** The role's id, or null for a round under no role. */
   readonly role: number | null;
   readonly name: string;
   readonly icon: IconName;
@@ -117,12 +117,12 @@ export function roleCards(run: Say, roles: readonly TaskRoleDto[]): { cards: Rol
   const state: RoundState =
     status === "failed" ? "failed" : status === "paused" ? "paused" : run.interactive ? "asks" : "running";
   const own = roles.filter((role) => role.automationId === run.automationId);
-  if (own.length === 0) {
+  const at = going ? run.round?.role ?? null : null;
+  if (at === null) {
     // A pane no step has arrived in, on a run that has not read back yet, has no round to draw.
     const drawn = going && (run.round !== undefined || run.step !== "");
-    return { cards: drawn ? [{ role: null, name: run.automation, icon: "robot", state }] : [], idle: [] };
+    return { cards: drawn ? [{ role: null, name: run.automation, icon: "robot", state }] : [], idle: own };
   }
-  const at = going ? run.round?.role ?? null : null;
   return {
     cards: own
       .filter((role) => role.id === at)
@@ -409,7 +409,7 @@ export function filedLine(cards: readonly RoleCard[], run: Say, roles: readonly 
 
 /** One line out of a card: to the role it hands on to, or to the role its failure was filed to. */
 export type Hand = {
-  /** The card's role, or null for the round of an automation that defines no role. */
+  /** The card's role, or null for a round under no role. */
   readonly from: number | null;
   readonly to: number;
   /** The name of the role at the other end. */

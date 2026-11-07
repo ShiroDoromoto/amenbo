@@ -7,6 +7,7 @@
 // way out is drawn on every box, as the stop it is where nobody said what follows it**; and **a spot nothing reaches is still
 // drawn**, which is the state every half-built automation is in.
 import { describe, expect, it } from "vitest";
+import { tf } from "../core/i18n";
 import {
   automationGraph,
   edgeWord,
@@ -2276,5 +2277,152 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
       }),
     );
     expect(picture.opens).toEqual([]);
+  });
+});
+
+describe("one role's round, as the build screen draws it", () => {
+  // Research hands Design its task; Design writes, checks, goes back to writing on "again", and hands
+  // Build the rest. What Design writes takes the notes Research wrote, by a wire from its box.
+  const roles = [
+    { id: 10, name: "Research", entryPlacementId: 1 },
+    { id: 20, name: "Design", entryPlacementId: 2 },
+    { id: 30, name: "Build", entryPlacementId: 5 },
+    { id: 40, name: "Upkeep" },
+  ];
+  const automation: AutomationDetailDto = {
+    id: 7,
+    projectId: 1,
+    name: "Morning round",
+    notes: "",
+    entryPlacementId: 1,
+    archived: false,
+    maxConcurrentRuns: 1,
+    roles,
+    placements: [
+      step({
+        id: 1,
+        name: "調べる",
+        roleId: 10,
+        exits: [
+          { id: 101, name: "完了", outputs: [port("notes", "value")] },
+          { id: 102, name: "*", outputs: [] },
+        ],
+      }),
+      step({ id: 2, name: "設計", roleId: 20 }),
+      step({
+        id: 3,
+        name: "書く",
+        roleId: 20,
+        inputs: [port("notes", "value")],
+        steps: [
+          { stepId: 1, name: "案を考える" },
+          { stepId: 2, name: "設計を書く" },
+        ],
+      }),
+      step({
+        id: 4,
+        name: "確かめる",
+        roleId: 20,
+        exits: [
+          { id: 401, name: "完了", outputs: [] },
+          { id: 402, name: "again", outputs: [] },
+          { id: 403, name: "*", outputs: [] },
+        ],
+      }),
+      step({ id: 5, name: "実装", roleId: 30 }),
+    ],
+    edges: [
+      edge({ id: 1, fromId: 1, toId: 2 }),
+      edge({ id: 2, fromId: 2, toId: 3 }),
+      edge({ id: 3, fromId: 3, toId: 4 }),
+      edge({ id: 4, fromId: 4, exitName: "again", toId: 3 }),
+      edge({ id: 5, fromId: 4, toId: 5 }),
+    ],
+    wires: [wire({ id: 1, fromId: 1, fromExitName: "完了", fromPortName: "notes", toId: 3, toPortName: "notes" })],
+    heldBy: [],
+    unsaved: false,
+    saveBlocks: [],
+  };
+
+  it("draws only the boxes the role's round reaches, from where the round starts", () => {
+    const graph = automationGraph(automation, 20)!;
+    expect(graph.boxes.map((box) => box.id)).toEqual([2, 3, 4]);
+    expect(graph.entryId).toBe(2);
+    expect(graph.edges.map((one) => one.id)).toEqual([2, 3, 4, 5]);
+  });
+
+  it("says where the round receives its task from, and whom it hands on to", () => {
+    expect(automationGraph(automation, 20)!.round).toMatchObject({
+      receives: { start: false, roles: ["Research"] },
+      handsTo: ["Build"],
+    });
+    // The automation's start, and no role after the last.
+    expect(automationGraph(automation, 10)!.round).toMatchObject({ receives: { start: true, roles: [] } });
+    expect(automationGraph(automation, 30)!.round).toMatchObject({ handsTo: [] });
+  });
+
+  it("says the round starts where the automation does when the built-in it starts with hands it the task", () => {
+    // The automation starts with a built-in on no role, which hands Research the task through one more
+    // box on no role; a box on no role the start does not reach hands Design the task by its name.
+    const started: AutomationDetailDto = {
+      ...automation,
+      entryPlacementId: 8,
+      placements: [
+        step({ id: 8, name: "take", builtin: "take_task" }),
+        step({ id: 9, name: "sort" }),
+        step({ id: 6, name: "file" }),
+        ...automation.placements,
+      ],
+      edges: [
+        edge({ id: 8, fromId: 8, toId: 9 }),
+        edge({ id: 9, fromId: 9, toId: 1 }),
+        edge({ id: 6, fromId: 6, toId: 2 }),
+        ...automation.edges,
+      ],
+    };
+    expect(automationGraph(started, 10)!.round).toMatchObject({ receives: { start: true, roles: [] } });
+    expect(automationGraph(started, 20)!.round).toMatchObject({ receives: { start: false, roles: ["Research", "file"] } });
+  });
+
+  it("draws the whole automation where no role is given, or the role is gone", () => {
+    expect(automationGraph(automation)!.boxes).toHaveLength(5);
+    expect(automationGraph(automation)!.round).toBeUndefined();
+    expect(automationGraph(automation, 99)!.boxes).toHaveLength(5);
+  });
+
+  it("hangs the line out of the round as one that goes nowhere, naming the role it hands on to", () => {
+    const picture = layOut(automationGraph(automation, 20));
+    const out = picture.lines.find((line) => line.key === "edge-5")!;
+    expect(out.points).toHaveLength(2);
+    expect(out.handsTo).toBe("Build");
+    expect(edgeWord(out)).toContain(tf("auto.pic.endsHandsTo", { to: "Build" }));
+    // It is still an edge, and a box can be put in on it.
+    expect(picture.inserts.some((one) => one.edgeId === 5)).toBe(true);
+  });
+
+  it("draws the line going back as a loop under the box it goes back to, not as a line", () => {
+    const picture = layOut(automationGraph(automation, 20));
+    expect(picture.lines.some((line) => line.key === "edge-4")).toBe(false);
+    expect(at(picture, 3).returns).toEqual([{ no: 4, exitName: "again", builtin: undefined }]);
+    expect(at(picture, 4).returns).toBeUndefined();
+    // Its way out is decided, so no press for the next action hangs from it.
+    expect(picture.opens.some((one) => one.boxId === 4 && one.exitName === "again")).toBe(false);
+    // The whole automation's picture still draws it as a line.
+    expect(layOut(automationGraph(automation)).lines.find((line) => line.key === "edge-4")?.back).toBe(true);
+  });
+
+  it("numbers each box as the whole automation does, and holds the steps inside each action", () => {
+    const picture = layOut(automationGraph(automation, 20));
+    expect(picture.nodes.map((node) => node.no)).toEqual([2, 3, 4]);
+    expect(at(picture, 3).steps).toEqual(["案を考える", "設計を書く"]);
+    expect(at(picture, 2).steps).toEqual([]);
+  });
+
+  it("counts an input fed from another role's box as reached", () => {
+    expect(at(layOut(automationGraph(automation, 20)), 3).unfed).toEqual([]);
+  });
+
+  it("has nothing to draw for a role whose round reaches nothing", () => {
+    expect(layOut(automationGraph(automation, 40)).nodes).toEqual([]);
   });
 });

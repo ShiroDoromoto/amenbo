@@ -223,6 +223,9 @@ export function AutomationBuildScreen({
   // and one that is gone — taken off, or only on a draft that was discarded — falls back to it too.
   const [roleId, setRoleId] = useState<number | null>(null);
   const role = automation?.roles.find((one) => one.id === roleId) ?? automation?.roles[0];
+  // The picture in the middle is that role's round (`automationGraph`), laid out again only when the
+  // definition or the role changes.
+  const roundGraph = useMemo(() => automationGraph(automation, role?.id), [automation, role?.id]);
   // A role just added is picked once it is in the list: it goes after the roles already there, so it
   // is the last once the list is longer than it was at the press.
   const [addedAt, setAddedAt] = useState<number | null>(null);
@@ -469,7 +472,7 @@ export function AutomationBuildScreen({
           </div>
           <div className="actbuild__canvas">
             <AutomationPicture
-              graph={automationGraph(automation)}
+              graph={roundGraph}
               selectedBoxId={testing !== null ? test.marked : pressed?.id}
               placedForYou={forYou}
               onPickBox={(box) => setShowing({ kind: "box", id: box })}

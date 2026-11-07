@@ -604,3 +604,132 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
     expect(presses()[0]!.disabled).toBe(true);
   });
 });
+
+describe("one role's round, as the build screen draws it", () => {
+  const done = (id: number) => [{ id, name: "完了", outputs: [] }];
+  function rounds(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
+    return {
+      id: 7,
+      projectId: 1,
+      name: "Morning round",
+      notes: "",
+      entryPlacementId: 1,
+      archived: false,
+      maxConcurrentRuns: 1,
+      roles: [
+        { id: 10, name: "Research", entryPlacementId: 1 },
+        { id: 20, name: "Design", entryPlacementId: 2 },
+        { id: 30, name: "Build", entryPlacementId: 4 },
+        { id: 40, name: "Upkeep" },
+      ],
+      placements: [
+        step({
+          id: 1,
+          name: "調べる",
+          roleId: 10,
+          exits: [{ id: 10, name: "完了", outputs: [{ name: "notes", kind: "value", required: true }] }],
+        }),
+        step({
+          id: 2,
+          name: "書く",
+          roleId: 20,
+          inputs: [{ name: "notes", kind: "value", required: true }],
+          exits: [{ id: 20, name: "完了", outputs: [{ name: "design", kind: "value", required: true }] }],
+          steps: [
+            { stepId: 1, name: "案を考える" },
+            { stepId: 2, name: "設計を書く" },
+          ],
+        }),
+        step({
+          id: 3,
+          name: "確かめる",
+          roleId: 20,
+          exits: [...done(30), { id: 31, name: "again", outputs: [] }],
+        }),
+        step({ id: 4, name: "実装", roleId: 30, exits: done(40) }),
+      ],
+      edges: [
+        { id: 1, fromId: 1, exitName: "完了", ends: "go", toId: 2 },
+        { id: 2, fromId: 2, exitName: "完了", ends: "go", toId: 3 },
+        { id: 3, fromId: 3, exitName: "again", ends: "go", toId: 2 },
+        { id: 4, fromId: 3, exitName: "完了", ends: "go", toId: 4 },
+      ],
+      wires: [{ id: 1, fromId: 1, fromExitName: "完了", fromPortName: "notes", toId: 2, toPortName: "notes" }],
+      heldBy: [],
+      unsaved: false,
+      saveBlocks: [],
+      ...over,
+    };
+  }
+
+  it("says over the round where it receives its task from, and under it whom it hands on to", async () => {
+    await render({ graph: automationGraph(rounds(), 20) });
+    const ends = [...container.querySelectorAll(".autopic__end")].map((one) => one.textContent);
+    expect(ends).toEqual([
+      t("auto.pic.receives") + tf("auto.pic.fromRole", { role: "Research" }),
+      t("auto.pic.handsOn") + "Build",
+    ]);
+    expect(nodes().map((one) => one.querySelector(".autopic__nodename")!.textContent)).toEqual(["書く", "確かめる"]);
+  });
+
+  it("says the round starts where the automation does, and ends at done where it hands on to nobody", async () => {
+    await render({ graph: automationGraph(rounds({ edges: [] }), 10) });
+    const ends = [...container.querySelectorAll(".autopic__end")].map((one) => one.textContent);
+    expect(ends).toEqual([t("auto.pic.receives") + t("auto.pic.entry"), t("auto.pic.handsOn") + t("auto.pic.handsNone")]);
+  });
+
+  it("says the round starts where the automation does when the built-in it starts with hands it the task", async () => {
+    const r = rounds();
+    await render({
+      graph: automationGraph(
+        rounds({
+          entryPlacementId: 9,
+          placements: [step({ id: 9, name: "take", builtin: "take_task", exits: done(90) }), ...r.placements],
+          edges: [{ id: 9, fromId: 9, exitName: "完了", ends: "go", toId: 1 }, ...r.edges],
+        }),
+        10,
+      ),
+    });
+    const ends = [...container.querySelectorAll(".autopic__end")].map((one) => one.textContent);
+    expect(ends[0]).toBe(t("auto.pic.receives") + t("auto.pic.entry"));
+  });
+
+  it("writes the steps inside the action, what it takes in and hands on, and the loop back into it", async () => {
+    await render({ graph: automationGraph(rounds(), 20) });
+    const write = nodes()[0]!;
+    expect(write.textContent).toContain("案を考える → 設計を書く");
+    // The input is fed from Research's box, numbered as the whole automation numbers it.
+    expect(write.textContent).toContain(tf("auto.pic.ioIn", { names: tf("auto.pic.ioFrom", { name: "notes", no: 1 }) }));
+    expect(write.textContent).toContain(tf("auto.pic.ioOut", { names: "design" }));
+    expect(write.querySelector(".autopic__loop")!.textContent).toBe(tf("auto.pic.loopBack", { no: 3, exit: "again" }));
+    expect(nodes()[1]!.querySelector(".autopic__loop")).toBeNull();
+    // No line goes back up the margin, and the legend says the loop in its place.
+    expect(container.querySelector(".autopic__line--back")).toBeNull();
+    expect(container.querySelector(".autopic__swatch--back")).toBeNull();
+    expect(container.querySelector(".autopic__legend")!.textContent).toContain(t("auto.pic.legendLoop"));
+  });
+
+  it("keeps the presses: a box opens its panel, and a line out of the round takes a box", async () => {
+    const onPickBox = vi.fn();
+    const onInsert = vi.fn();
+    await render({ graph: automationGraph(rounds(), 20), onPickBox, onInsert });
+    await act(async () => {
+      nodes()[1]!.click();
+    });
+    expect(onPickBox).toHaveBeenCalledWith(3);
+    expect(plusses().length).toBeGreaterThan(0);
+  });
+
+  it("marks where a run opens only on the round that holds it", async () => {
+    await render({ graph: automationGraph(rounds(), 20) });
+    expect(container.querySelector(".autopic__node .autopic__entry")).toBeNull();
+    await render({ graph: automationGraph(rounds(), 10) });
+    expect(nodes()[0]!.querySelector(".autopic__entry")).not.toBeNull();
+  });
+
+  it("says so in words where the role's round reaches nothing", async () => {
+    await render({ graph: automationGraph(rounds(), 40) });
+    expect(nodes()).toHaveLength(0);
+    expect(container.textContent).toBe(t("auto.pic.roundEmpty"));
+  });
+});

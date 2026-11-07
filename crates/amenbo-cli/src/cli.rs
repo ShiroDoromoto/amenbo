@@ -1903,16 +1903,22 @@ pub enum AutomationCmd {
         #[arg(long, conflicts_with = "failures_to")]
         no_failures_to: bool,
     },
-    /// Give an automation a trigger: every so many minutes, whenever none of its runs is under way,
-    /// whenever few enough tasks match a filter, or whenever a program says so, it files a task — the
-    /// one written here, the one a file says, or the one a program writes — and starts a run of the
-    /// automation on it, with nobody pressing start (the entry has to be make_task) — or take it away
-    /// with --off. Only the app runs triggers
+    /// Add a trigger to an automation, after the ones it has: every so many minutes, whenever none of
+    /// its runs is under way, whenever few enough tasks match a filter, or whenever a program says so,
+    /// it files a task — the one written here, the one a file says, or the one a program writes — and
+    /// starts a run of the automation on it, with nobody pressing start (the entry has to be
+    /// make_task). With --trigger instead of the automation, write that one trigger afresh, take it
+    /// away with --rm, or switch it on and off with --on and --off. Only the app runs triggers
     Trigger {
-        /// automation id
-        id: i64,
+        /// automation id, to add a trigger to it
+        #[arg(required_unless_present = "trigger", conflicts_with = "trigger")]
+        id: Option<i64>,
+        /// trigger id (the one `automation show` prints), to write that trigger afresh, or with --rm,
+        /// --on or --off
+        #[arg(long, value_name = "TRIGGER_ID")]
+        trigger: Option<i64>,
         /// file a task every this many minutes, counted from now and then from each task filed
-        #[arg(long, value_name = "MINUTES", required_unless_present_any = ["off", "when_idle", "if_tasks", "if_script"], conflicts_with = "when_idle", value_parser = clap::value_parser!(u32).range(i64::from(amenbo_core::model::MIN_TRIGGER_EVERY_MINUTES)..))]
+        #[arg(long, value_name = "MINUTES", required_unless_present_any = ["rm", "on", "off", "when_idle", "if_tasks", "if_script"], conflicts_with = "when_idle", value_parser = clap::value_parser!(u32).range(i64::from(amenbo_core::model::MIN_TRIGGER_EVERY_MINUTES)..))]
         every: Option<u32>,
         /// file a task whenever none of the automation's runs is running or paused, a minute after it
         /// last filed one at the soonest
@@ -1941,7 +1947,7 @@ pub enum AutomationCmd {
         #[arg(long, value_name = "MINUTES", requires = "if_script")]
         script_timeout_minutes: Option<i64>,
         /// the title of the task it files
-        #[arg(long, required_unless_present_any = ["off", "task_from_file", "task_from_script"], conflicts_with_all = ["task_from_file", "task_from_script"])]
+        #[arg(long, required_unless_present_any = ["rm", "on", "off", "task_from_file", "task_from_script"], conflicts_with_all = ["task_from_file", "task_from_script"])]
         title: Option<String>,
         /// that task's notes, in Markdown (`-` reads it from stdin)
         #[arg(long, conflicts_with_all = ["task_from_file", "task_from_script"])]
@@ -1972,14 +1978,21 @@ pub enum AutomationCmd {
         /// this automation's own roles. Left out, it files the task under no role
         #[arg(long, value_name = "ROLE_ID")]
         role: Option<i64>,
-        /// take the trigger away
-        #[arg(long, conflicts_with_all = ["every", "when_idle", "if_tasks", "fewer_than", "if_script", "script_args", "script_timeout_minutes", "title", "notes", "task_from_file", "task_from_script", "task_script_args", "task_script_timeout_minutes", "name", "role"])]
+        /// take the --trigger trigger away; the automation's other triggers stay — confirms unless -y
+        #[arg(long, requires = "trigger", conflicts_with_all = ["id", "on", "off", "every", "when_idle", "if_tasks", "fewer_than", "if_script", "script_args", "script_timeout_minutes", "title", "notes", "task_from_file", "task_from_script", "task_script_args", "task_script_timeout_minutes", "name", "role"])]
+        rm: bool,
+        /// have the --trigger trigger asked again
+        #[arg(long, requires = "trigger", conflicts_with_all = ["id", "off", "every", "when_idle", "if_tasks", "fewer_than", "if_script", "script_args", "script_timeout_minutes", "title", "notes", "task_from_file", "task_from_script", "task_script_args", "task_script_timeout_minutes", "name", "role"])]
+        on: bool,
+        /// have the --trigger trigger asked no more, kept as it is: it files nothing, and its next time
+        /// stays where it was
+        #[arg(long, requires = "trigger", conflicts_with_all = ["id", "every", "when_idle", "if_tasks", "fewer_than", "if_script", "script_args", "script_timeout_minutes", "title", "notes", "task_from_file", "task_from_script", "task_script_args", "task_script_timeout_minutes", "name", "role"])]
         off: bool,
     },
     /// Stop an automation from starting new rounds, or let it start them again with --off. While it is
-    /// stopped, a start and its trigger are refused, and a run of it finishes the round it is on and
-    /// pauses before it takes its next task — one waiting for room to take one pauses at once, and a wait
-    /// for a task ends. Picking such a run up again (`resume`) is refused until the automation is started
+    /// stopped, a start is refused and its triggers file nothing, and a run of it finishes the round it
+    /// is on and pauses before it takes its next task — one waiting for room to take one pauses at once,
+    /// and a wait for a task ends. Picking such a run up again (`resume`) is refused until the automation is started
     /// again
     Stop {
         /// automation id

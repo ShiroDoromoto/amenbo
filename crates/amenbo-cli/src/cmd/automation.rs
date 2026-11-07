@@ -498,6 +498,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
         }
         AutomationCmd::Trigger {
             id,
+            trigger: trigger_id,
             every,
             when_idle,
             if_tasks,
@@ -513,10 +514,33 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             task_script_timeout_minutes,
             name,
             role,
+            rm,
+            on,
             off,
         } => {
             use amenbo_core::model::{TriggerCondition, TriggerWhen};
-            use amenbo_core::ops::automation::NewTriggerTask;
+            use amenbo_core::ops::automation::{NewTrigger, NewTriggerTask};
+            // clap takes the automation or --trigger, never both, and --rm, --on and --off only with
+            // --trigger.
+            let target = match (id, trigger_id) {
+                (_, Some(trigger_id)) => trigger_id,
+                (Some(automation_id), None) => automation_id,
+                (None, None) => unreachable!("clap asks for the automation or --trigger"),
+            };
+            if rm {
+                if !confirm(flags, "take trigger away")? {
+                    return Ok(0);
+                }
+                store.automation_trigger_delete(target).map_err(CliError::from)?;
+                write_envelope(flags, "automation.trigger", "automation_trigger", json!({ "id": target, "deleted": true }), None, false, format!("✓ Took trigger away: {target}"));
+                return Ok(0);
+            }
+            if on || off {
+                let t = store.automation_trigger_set_enabled(target, on).map_err(CliError::from)?;
+                let line = format!("✓ Switched a trigger of automation {} — {}", t.automation_id, trigger_line(&t));
+                write_envelope(flags, "automation.trigger", "automation_trigger", serde_json::to_value(&t).unwrap(), None, false, line);
+                return Ok(0);
+            }
             let condition = match (if_tasks, fewer_than) {
                 (Some(filter), Some(below)) => Some(TriggerCondition { filter, below }),
                 // clap asks for both or neither.
@@ -528,41 +552,29 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 timeout_minutes: script_timeout_minutes,
             });
             let when = match (every, when_idle, &condition, &script) {
-                (Some(minutes), _, _, _) => Some(TriggerWhen::Every { minutes }),
-                (None, true, _, _) => Some(TriggerWhen::Idle),
-                (None, false, Some(_), _) => Some(TriggerWhen::Tasks),
-                (None, false, None, Some(_)) => Some(TriggerWhen::Script),
-                (None, false, None, None) => None,
+                (Some(minutes), _, _, _) => TriggerWhen::Every { minutes },
+                (None, true, _, _) => TriggerWhen::Idle,
+                (None, false, Some(_), _) => TriggerWhen::Tasks,
+                (None, false, None, Some(_)) => TriggerWhen::Script,
+                (None, false, None, None) => unreachable!("clap asks for a when unless --rm, --on or --off"),
             };
             let task = match (title, task_from_file, task_from_script) {
-                (Some(title), _, _) => Some(NewTriggerTask::Fixed { title, notes: body_arg_opt(notes)?.unwrap_or_default() }),
-                (None, Some(path), _) => Some(NewTriggerTask::File { path }),
-                (None, None, Some(program)) => Some(NewTriggerTask::Script(NewScript {
+                (Some(title), _, _) => NewTriggerTask::Fixed { title, notes: body_arg_opt(notes)?.unwrap_or_default() },
+                (None, Some(path), _) => NewTriggerTask::File { path },
+                (None, None, Some(program)) => NewTriggerTask::Script(NewScript {
                     program,
                     args: task_script_args,
                     timeout_minutes: task_script_timeout_minutes,
-                })),
-                (None, None, None) => None,
-            };
-            let trigger = match (off, when, task) {
-                (false, Some(when), Some(task)) => Some(amenbo_core::ops::automation::NewTrigger {
-                    name: name.unwrap_or_default(),
-                    role_id: role,
-                    when,
-                    condition,
-                    script,
-                    task,
                 }),
-                // clap asks for a when and one of --title, --task-from-file and --task-from-script unless
-                // --off is given, and refuses them beside it.
-                _ => None,
+                (None, None, None) => unreachable!("clap asks for the task unless --rm, --on or --off"),
             };
-            let a = store.automation_trigger_set(id, trigger).map_err(CliError::from)?;
-            let line = match a.triggers.first() {
-                Some(t) => format!("✓ Automation {} ({}) {}", a.name, a.id, trigger_line(t)),
-                None => format!("✓ Automation {} ({}) has no trigger", a.name, a.id),
+            let new = NewTrigger { name: name.unwrap_or_default(), role_id: role, when, condition, script, task };
+            let (t, done) = match trigger_id {
+                Some(trigger_id) => (store.automation_trigger_update(trigger_id, new).map_err(CliError::from)?, "Rewrote a trigger of"),
+                None => (store.automation_trigger_add(target, new).map_err(CliError::from)?, "Added a trigger to"),
             };
-            write_envelope(flags, "automation.trigger", "automation", serde_json::to_value(&a).unwrap(), None, false, line);
+            let line = format!("✓ {done} automation {} — {}", t.automation_id, trigger_line(&t));
+            write_envelope(flags, "automation.trigger", "automation_trigger", serde_json::to_value(&t).unwrap(), None, false, line);
         }
         AutomationCmd::Stop { id, off } => {
             let done = store.automation_set_stopped(id, !off).map_err(CliError::from)?;
@@ -1580,7 +1592,7 @@ fn render_automation(
     } else {
         human(flags, failures_to_line(a.failures_to, &view.roles));
     }
-    if let Some(trigger) = a.triggers.first() {
+    for trigger in &a.triggers {
         human(flags, trigger_line(trigger));
     }
     if let Some(waits) = waits {
@@ -1599,9 +1611,11 @@ fn render_automation(
     }
 }
 
-/// What an automation's first trigger is called and does, the tasks it looks at and the program it asks
-/// first, the task it files (or the file or program that says it) and the role it files it under, and
-/// when it is next asked (for an `idle`, a `tasks` or a `script`, the soonest it may be).
+/// One of an automation's triggers: its id, whether it is on, what it is called and does, the tasks it
+/// looks at and the program it asks first, the task it files (or the file or program that says it) and
+/// the role it files it under, when it is next asked (for an `idle`, a `tasks` or a `script`, the
+/// soonest it may be — and nothing, for one that is off, as it is asked no more), and when it last
+/// filed a task.
 fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
     use amenbo_core::model::{TriggerTask, TriggerWhen};
     let fewer = trigger.condition.as_ref().map(|c| match c.filter.as_str() {
@@ -1630,7 +1644,19 @@ fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
         name => format!(" as \"{name}\""),
     };
     let under = trigger.role_id.map(|role| format!(" under role {role}")).unwrap_or_default();
-    format!("starts a run on its own{called} {when}, filing {task}{under} — {next} {}", trigger.next_at.to_rfc3339_z())
+    let (state, next) = if trigger.enabled {
+        ("on", format!("{next} {}", trigger.next_at.to_rfc3339_z()))
+    } else {
+        ("off", "asked no more until --on".to_string())
+    };
+    let last = match &trigger.last_filed_at {
+        Some(at) => format!("last filed one at {}", at.to_rfc3339_z()),
+        None => "has filed none yet".to_string(),
+    };
+    format!(
+        "trigger {} {state}: starts a run on its own{called} {when}, filing {task}{under} — {next}; {last}",
+        trigger.id
+    )
 }
 
 /// An automation Amenbo is waiting on a task for: since when, what for, and how to stop it.

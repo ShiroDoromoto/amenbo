@@ -2875,6 +2875,25 @@ pub struct AutomationRunTask {
     pub updated_at: Timestamp,
 }
 
+/// **One task a round filed for another role to work** — passed from the role of the round
+/// (`run_task_id`'s [`AutomationRunTask::role_id`]) to `to_role_id`. Written where the task is filed
+/// ([`crate::ops::automation_builtin_make`]), so it stands whether or not the run goes on to take it.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationRunPass {
+    pub id: i64,
+    pub run_id: i64,
+    /// The round that filed it.
+    pub run_task_id: i64,
+    /// The role it was filed under. `None` where that role has since been taken out.
+    #[serde(default)]
+    pub to_role_id: Option<i64>,
+    /// The task it filed. `None` where the task has since been deleted.
+    #[serde(default)]
+    pub task_id: Option<i64>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
 /// **One step, run once.** `seq` is the move number within the run, so a step the run comes back to has
 /// a row per visit.
 ///

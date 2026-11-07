@@ -7538,6 +7538,27 @@ pub fn automation_run_task_ids(conn: &Connection, run_id: i64) -> Result<Vec<i64
     select_ids(conn, T.id, Some(&Pred::eq(T.run_id, run_id)))
 }
 
+/// The tasks one run's rounds passed to another role, as rows of the run.
+pub fn automation_run_pass_ids(conn: &Connection, run_id: i64) -> Result<Vec<i64>> {
+    const P: col::automation_run_pass::Cols = col::automation_run_pass::ALL;
+    select_ids(conn, P.id, Some(&Pred::eq(P.run_id, run_id)))
+}
+
+/// **The tasks one run's rounds passed to another role**, in the order they were filed.
+pub fn automation_run_passes_of(
+    conn: &Connection,
+    run_id: i64,
+) -> Result<Vec<crate::model::AutomationRunPass>> {
+    const P: col::automation_run_pass::Cols = col::automation_run_pass::ALL;
+    automation_rows(
+        conn,
+        P.table,
+        &Pred::eq(P.run_id, run_id),
+        &[Sort::by(P.id)],
+        super::hydrate::automation_run_pass_row,
+    )
+}
+
 /// The step executions of one run.
 pub fn automation_run_step_ids(conn: &Connection, run_id: i64) -> Result<Vec<i64>> {
     const S: col::automation_run_step::Cols = col::automation_run_step::ALL;

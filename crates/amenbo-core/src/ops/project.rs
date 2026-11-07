@@ -221,7 +221,7 @@ mod tests {
         Value::Text(s.to_string())
     }
 
-    /// One run, written straight at the five tables. Writing a run is the launch side's op, and this
+    /// One run, written straight at the six tables. Writing a run is the launch side's op, and this
     /// fixture is not standing in for it: what the delete has to walk is rows, and these are the columns
     /// the walk reads. Two step executions, because the reference that decides the order is between them
     /// — the second's input says which execution produced it.
@@ -242,6 +242,10 @@ mod tests {
             .unwrap();
         let run_task = read::next_id(tx.conn(), "automation_run_task").unwrap();
         tx.put_record("automation_run_task", run_task, &[("run_id", int(run)), ("seq", int(1))])
+            .unwrap();
+        // A task the round passed on names the round, so the delete has to take it first.
+        let pass = read::next_id(tx.conn(), "automation_run_pass").unwrap();
+        tx.put_record("automation_run_pass", pass, &[("run_id", int(run)), ("run_task_id", int(run_task))])
             .unwrap();
         let mut steps = Vec::new();
         for seq in 1..=2 {

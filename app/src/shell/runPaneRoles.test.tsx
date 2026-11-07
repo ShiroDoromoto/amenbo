@@ -62,7 +62,7 @@ vi.mock("../core/automations", async (actual) => ({
 const liveRun = (run: number, more: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto => ({
   run, project: 1, projectName: "P", automation: 3, automationName: "Nightly", status: "running",
   pauseRequested: false, pauseBeforeNextTask: false, pausableBeforeNextTask: false, waiting: false, waitsForRoom: false,
-  stepsDone: 1, reportWithheld: [], acknowledged: false, ...more,
+  stepsDone: 1, passes: [], reportWithheld: [], acknowledged: false, ...more,
 } as AutomationRunCardDto);
 
 const role = (id: number, name: string, automationId = 3, icon: string | null = null): TaskRoleDto => ({

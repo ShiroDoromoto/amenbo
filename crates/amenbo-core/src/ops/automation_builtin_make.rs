@@ -30,14 +30,19 @@
 //! exception — it is filled from the period that contains today, as `task add` fills it ([`with_time_axis`]). The launch checks all of
 //! it before a run is made ([`handed_at_launch`]).
 //!
+//! **It can file the task under another role** ([`ROLE`]), by the name of one of the automation's roles.
+//! Where the round it runs in is worked under a role and files the task under a different one, that is
+//! a task passed from one role to the other, and it is recorded on the run
+//! ([`crate::model::AutomationRunPass`]) — what the run's pane draws a line between two roles by.
+//!
 //! **Its creation is finished here.** A task left being created is one nobody can reserve.
 //!
 //! **A setting it cannot follow files nothing.** A built-in that falls over leaves by the error way out
 //! inside the transaction that opened its step, and nothing takes back what it wrote before that — so
 //! every refusal the writes would raise is asked first ([`refusal`]): a task, a decision or a folder it
-//! cannot find in this run's project, the folder left empty with several linked to fill it from, a
-//! classification it cannot find or may not use, a required axis left empty, a task to depend on that
-//! would keep the new one from being taken.
+//! cannot find in this run's project, a role its automation does not have exactly one of, the folder
+//! left empty with several linked to fill it from, a classification it cannot find or may not use, a
+//! required axis left empty, a task to depend on that would keep the new one from being taken.
 
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{ActorKind, AttachmentTarget, AutomationCfgKind, AutomationPortKind, Priority};
@@ -47,7 +52,8 @@ use crate::ops::automation_builtin::{
 use crate::ops::automation_report::{self, Produced};
 use crate::run_wording::builtin as say;
 use crate::ops::task::{self, parse_number_ref, parse_typed_ref, NewTask, TypedKind};
-use crate::store_engine::read;
+use crate::store_engine::{read, record};
+use crate::time::Timestamp;
 
 /// The built-in's key.
 pub const KEY: &str = "make_task";
@@ -90,6 +96,9 @@ pub const FOLDER: &str = "作業フォルダ";
 pub const ASSIGNEE: &str = "担当";
 /// The setting that says how urgent it is.
 pub const PRIORITY: &str = "優先度";
+/// The setting that names the role the task is worked under — one of the automation's roles, by its
+/// name. Left empty, it is filed under no role ([`role`]).
+pub const ROLE: &str = "役割";
 /// The choice on every choice setting here that sets nothing — also what it does left unanswered.
 pub const NONE: &str = "なし";
 const HUMAN: &str = "人";
@@ -100,12 +109,12 @@ const LOW: &str = "低";
 
 pub(super) const MAKE_TASK: Builtin = Builtin {
     key: KEY,
-    version: 1,
+    version: 2,
     name: "タスクを起票する",
     does: "受け取ったタイトルと本文で、タスクを1件起票する。設定で、起票と同時に進行中にし、この実行で扱える",
     steps: &[
         "設定と入力をすべて読み、依存させる相手・分類・作業フォルダ・リンクする決定がこのプロジェクトにあるかを確かめる。1つでも従えなければ、何も起票しない",
-        "受け取ったタイトルと本文でタスクを1件起票し、分類・担当・優先度・依存・決定を付ける。最初のステップに置いたときは、起動のときに渡されたファイルをタスクに移す",
+        "受け取ったタイトルと本文でタスクを1件起票し、分類・担当・優先度・役割・依存・決定を付ける。いまの周の役割と違う役割で起票したら、その役割へ渡したと記録する。最初のステップに置いたときは、起動のときに渡されたファイルをタスクに移す",
         "設定「起票したタスク」で進行中にすると決めてあれば、進行中にして「起票して着手した」から出る。そうでなければ、未着手のまま「起票した」から出てタスクを渡す",
     ],
     halts: &[
@@ -115,6 +124,7 @@ pub(super) const MAKE_TASK: Builtin = Builtin {
         "AI に選ばせる軸に無い軸か、分類で決めてある軸の値を受け取った",
         "このプロジェクトが必須にしている軸に、値が付かない",
         "進行中にするのに、依存させる相手がまだ閉じていない",
+        "設定に書いた役割が、このオートメーションの役割の1つに決まらない",
     ],
     settings: &[
         BuiltinSetting {
@@ -144,6 +154,7 @@ pub(super) const MAKE_TASK: Builtin = Builtin {
             required: false,
             options: Some(r#"["なし","高","中","低"]"#),
         },
+        BuiltinSetting { name: ROLE, kind: AutomationCfgKind::Text, required: false, options: None },
         BuiltinSetting { name: DECISIONS, kind: AutomationCfgKind::Text, required: false, options: None },
         BuiltinSetting { name: FOLDER, kind: AutomationCfgKind::Folder, required: false, options: None },
     ],
@@ -178,6 +189,7 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
     depends_on.extend(named(carry, DEPENDS_ON_TASKS, TypedKind::Task)?);
     let decisions = named(carry, DECISIONS, TypedKind::Decision)?;
     let at_binding_id = folder(carry)?;
+    let named_role = role(carry)?;
     let conn = carry.tx.conn();
     let project_id = carry.run.project_id;
     let mut values = fixed(conn, project_id, choice(carry, CLASSIFY)?.as_deref())?;
@@ -187,7 +199,7 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
         true => crate::ops::automation_run::HandedTask::of(carry.run)?,
         false => None,
     };
-    let role_id = handed.as_ref().and_then(|h| h.role_id);
+    let role_id = handed.as_ref().and_then(|h| h.role_id).or(named_role);
     if let Some(written) = carry.input(CHOSEN).filter(|w| !w.trim().is_empty()) {
         let ai_axes = choice(carry, AI_AXES)?;
         let by = match at_launch {
@@ -245,6 +257,9 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
         attach_handed(carry, filed.id)?;
     }
     let filed = task::finish_creating(tx, filed.id, ActorKind::Ai)?;
+    if let (Some(to_role_id), false) = (role_id, takes) {
+        record_pass(carry, to_role_id, filed.id)?;
+    }
 
     if takes {
         let taken = automation_report::take(tx, carry.run_step.id, filed.id)?;
@@ -284,6 +299,94 @@ fn attach_handed(carry: &Carry<'_, '_>, task_id: i64) -> Result<()> {
         crate::ops::attachment::remove(tx, file.id)?;
     }
     Ok(())
+}
+
+/// **The role [`ROLE`] names**, by its name among the roles of the run's automation, or `None` where it is
+/// left empty. A name no role has, or one two roles share, is refused: a role's name is not held unique,
+/// and filing the task under whichever came first would be the built-in choosing for the person.
+fn role(carry: &Carry<'_, '_>) -> Result<Option<i64>> {
+    let Some(written) = choice(carry, ROLE)? else { return Ok(None) };
+    let name = written.trim();
+    if name.is_empty() {
+        return Ok(None);
+    }
+    let roles = read::automation_roles_of(carry.tx.conn(), carry.run.automation_id)?;
+    match role_named(&roles, name) {
+        Some(id) => Ok(Some(id)),
+        None => Err(Error::Invalid(
+            Msg::new(format!("'{ROLE}' names '{name}', which is not exactly one of this automation's roles"))
+                .coded(ErrorCode::InvalidMakeTaskRoleUnknown)
+                .with("role", name),
+        )),
+    }
+}
+
+/// **The one role of `roles` called `name`**, or `None` where no role or more than one is ([`role`]).
+pub(crate) fn role_named(roles: &[crate::model::AutomationRole], name: &str) -> Option<i64> {
+    match roles.iter().filter(|r| r.name == name).collect::<Vec<_>>().as_slice() {
+        [one] => Some(one.id),
+        _ => None,
+    }
+}
+
+/// **The role [`ROLE`] is answered with, among `roles`** — `None` where it is left empty, `Some(None)`
+/// where the name is not exactly one of them. Read by the launch check ([`unfound_role`]) and by the
+/// build screen, which draws the role a placement passes its task to
+/// ([`crate::ops::automation_run::passes_by_role`]).
+pub(crate) fn answered_role(
+    settings: &[crate::model::AutomationCfg],
+    roles: &[crate::model::AutomationRole],
+) -> Option<(String, Option<i64>)> {
+    let written = answered(settings, ROLE).ok().flatten()?;
+    let name = written.trim();
+    if name.is_empty() {
+        return None;
+    }
+    Some((name.to_string(), role_named(roles, name)))
+}
+
+/// **Whether the task it files is set to depend on another** — on the task this run works
+/// ([`DEPENDS_ON`]), or on a task named ([`DEPENDS_ON_TASKS`]). What the build screen marks a task a
+/// role passes on with ([`crate::ops::automation_run::passes_by_role`]).
+pub(crate) fn answered_depends(settings: &[crate::model::AutomationCfg]) -> bool {
+    let written = |name: &str| answered(settings, name).ok().flatten();
+    written(DEPENDS_ON).as_deref() == Some(THE_RUNS_TASK)
+        || written(DEPENDS_ON_TASKS).is_some_and(|tasks| !tasks.trim().is_empty())
+}
+
+/// **The name [`ROLE`] is answered with, where it is not exactly one of `roles`** — the launch check's
+/// counterpart of [`unfound`] for the role, which the built-in would refuse when a run reached it.
+pub(crate) fn unfound_role(
+    settings: &[crate::model::AutomationCfg],
+    roles: &[crate::model::AutomationRole],
+) -> Option<(&'static str, String)> {
+    match answered_role(settings, roles)? {
+        (name, None) => Some((ROLE, name)),
+        (_, Some(_)) => None,
+    }
+}
+
+/// **Record the task as passed on**, where the round this step runs in is worked under a role and the
+/// task was filed under another. A round worked under no role passes nothing: there is no role it
+/// came from. Neither does a task filed under the round's own role.
+fn record_pass(carry: &Carry<'_, '_>, to_role_id: i64, task_id: i64) -> Result<()> {
+    let tx = carry.tx;
+    let Some(round_id) = carry.run_step.run_task_id else { return Ok(()) };
+    let Some(round) = read::automation_run_task(tx.conn(), round_id)? else { return Ok(()) };
+    if round.role_id.is_none_or(|from| from == to_role_id) {
+        return Ok(());
+    }
+    let now = Timestamp::now();
+    let pass = crate::model::AutomationRunPass {
+        id: read::next_id(tx.conn(), "automation_run_pass")?,
+        run_id: carry.run.id,
+        run_task_id: round.id,
+        to_role_id: Some(to_role_id),
+        task_id: Some(task_id),
+        created_at: now,
+        updated_at: now,
+    };
+    crate::ops::emit_create(tx, record::automation_run_pass(&pass))
 }
 
 /// The choice written for one setting, or `None` where nobody answered it.
@@ -951,6 +1054,18 @@ mod tests {
         close_first: bool,
         chose: Option<&str>,
     ) -> (AutomationRun, i64, i64, Next) {
+        carried_under(tx, p, close_first, chose, None)
+    }
+
+    /// [`carried_choosing`], with the round the built-in runs in worked under `role` — written on the
+    /// round by hand, as the take of a task under a role whose round starts at the entry would.
+    fn carried_under(
+        tx: &WriteTx<'_>,
+        p: &Picture,
+        close_first: bool,
+        chose: Option<&str>,
+        role: Option<i64>,
+    ) -> (AutomationRun, i64, i64, Next) {
         let run = launched(tx, &p.automation);
         let claude = ["claude".to_string()];
         let def_of = |placement: i64| {
@@ -966,6 +1081,12 @@ mod tests {
         };
         let first = crate::ops::test_support::mk_task_in(tx, "the first", Some(p.project));
         automation_report::take(tx, opening.run_step.id, first).expect("take");
+        if let Some(role) = role {
+            let before = read::automation_run_task_last(tx.conn(), run.id).expect("read").expect("round");
+            let after = crate::model::AutomationRunTask { role_id: Some(role), ..before.clone() };
+            crate::ops::emit_update(tx, record::automation_run_task(&before), record::automation_run_task(&after))
+                .expect("the round's role");
+        }
         let handed = [("title", Some("  a follow-up  ")), ("notes", Some("what to do")), ("trade", chose)];
         for (port, value) in handed {
             let Some(value) = value else { continue };
@@ -1284,6 +1405,114 @@ mod tests {
             .to_vec();
             assert_eq!(found, expected);
         });
+    }
+
+    /// **Filed under another role than its round's, the task is recorded as passed to that role** — from
+    /// the round's role, to the role [`ROLE`] names, which the task is worked under. Filed under the
+    /// round's own role, or from a round worked under none, it is worked under the role named and
+    /// nothing is recorded.
+    #[test]
+    fn a_task_filed_under_another_role_is_recorded_as_passed_to_it() {
+        use crate::ops::automation_run::{passes_of_run, RunPass};
+        let new_role = |name: &str| automation::NewRole { name: name.into(), ..Default::default() };
+        with_tx(|tx| {
+            let p = picture(tx);
+            let alice = automation::role_add(tx, p.automation.id, new_role("Alice")).expect("Alice");
+            let bob = automation::role_add(tx, p.automation.id, new_role("Bob")).expect("Bob");
+            answer(tx, &p, ROLE, " Bob ");
+            let (run, _, run_step_id, _) = carried_under(tx, &p, false, None, Some(alice.id));
+            let (filed, exit) = handed(tx, run_step_id);
+            assert_eq!(exit, way_out(tx, run_step_id, MADE));
+            assert_eq!(filed.role_id, Some(bob.id), "worked under the role named");
+            let round = read::automation_run_task_last(tx.conn(), run.id).expect("read").expect("round");
+            let passed = passes_of_run(tx.conn(), run.id).expect("passes");
+            let expected = RunPass {
+                run_task_id: round.id,
+                from_role_id: Some(alice.id),
+                to_role_id: Some(bob.id),
+                task_id: Some(filed.id),
+            };
+            assert_eq!(passed, vec![expected]);
+        });
+        for (round_role, why) in [(true, "filed under the round's own role"), (false, "from a round under no role")] {
+            with_tx(|tx| {
+                let p = picture(tx);
+                let bob = automation::role_add(tx, p.automation.id, new_role("Bob")).expect("Bob");
+                answer(tx, &p, ROLE, "Bob");
+                let (run, _, run_step_id, _) =
+                    carried_under(tx, &p, false, None, round_role.then_some(bob.id));
+                let (filed, _) = handed(tx, run_step_id);
+                assert_eq!(filed.role_id, Some(bob.id), "{why}: worked under the role named");
+                assert!(passes_of_run(tx.conn(), run.id).expect("passes").is_empty(), "{why}: nothing passed");
+            });
+        }
+    }
+
+    /// **The build screen reads what each role's round passes on** off the definition: the placement of
+    /// the built-in inside one role's round, answered with another role, and whether the task it files
+    /// depends on another. Answered with the round's own role, it passes nothing.
+    #[test]
+    fn what_a_roles_round_passes_on_is_read_off_the_definition() {
+        use crate::ops::automation_run::{passes_by_role, RolePass};
+        with_tx(|tx| {
+            let p = picture(tx);
+            let starting = |name: &str, at: Option<i64>| automation::NewRole {
+                name: name.into(),
+                entry_placement_id: at,
+                ..Default::default()
+            };
+            let alice = automation::role_add(tx, p.automation.id, starting("Alice", Some(p.first.id))).expect("Alice");
+            let bob = automation::role_add(tx, p.automation.id, starting("Bob", None)).expect("Bob");
+            let passes = || passes_by_role(tx.conn(), p.automation.id, ReadsFrom::Draft).expect("passes");
+            assert!(passes().is_empty(), "left unanswered, it passes nothing");
+
+            answer(tx, &p, ROLE, "Bob");
+            let expected =
+                RolePass { from_role_id: alice.id, to_role_id: bob.id, placement_id: p.make.id, depends: false };
+            assert_eq!(passes(), vec![expected.clone()]);
+
+            answer(tx, &p, DEPENDS_ON, THE_RUNS_TASK);
+            assert_eq!(passes(), vec![RolePass { depends: true, ..expected.clone() }], "on the run's task");
+            answer(tx, &p, DEPENDS_ON, NONE);
+            answer(tx, &p, DEPENDS_ON_TASKS, "AMB-T-1");
+            assert_eq!(passes(), vec![RolePass { depends: true, ..expected }], "on a task named");
+
+            answer(tx, &p, ROLE, "Alice");
+            assert!(passes().is_empty(), "filed under its own round's role, it passes nothing");
+        });
+    }
+
+    /// **A role its automation does not have exactly one of is refused** — a name no role has, or one two
+    /// roles share — by the launch check first, and by the built-in where a run reaches it anyway, which
+    /// files nothing.
+    #[test]
+    fn a_role_named_by_no_role_or_by_two_is_refused() {
+        let new_role = |name: &str| automation::NewRole { name: name.into(), ..Default::default() };
+        for (roles, named) in [(vec!["Alice"], "Carol"), (vec!["Alice", "Alice"], "Alice")] {
+            with_tx(|tx| {
+                let p = picture(tx);
+                for name in &roles {
+                    automation::role_add(tx, p.automation.id, new_role(name)).expect("a role");
+                }
+                answer(tx, &p, ROLE, named);
+                let startable = ["claude".to_string()];
+                let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked(), None).expect("check");
+                let found: Vec<(String, String)> = unmet
+                    .into_iter()
+                    .filter_map(|unmet| match unmet {
+                        Unmet::CfgNotFound { cfg, line, placement, .. } if placement == p.make.id => Some((cfg, line)),
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(found, vec![(ROLE.to_string(), named.to_string())], "{roles:?}");
+
+                let (_, first, run_step_id, next) = carried(tx, &p, false);
+                assert!(matches!(next, Next::Halted(_)), "{roles:?}: {next:?}");
+                let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
+                assert!(ran.report.contains(named), "the refusal names the role: {}", ran.report);
+                nothing_filed(tx, run_step_id, first, "nothing filed");
+            });
+        }
     }
 
     /// **The launch check names a classification on a value that is closed** (`AMB-T-5689`), apart from

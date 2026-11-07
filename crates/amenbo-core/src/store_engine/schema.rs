@@ -1605,6 +1605,21 @@ datasets! {
         incident_task_id: fk_opt("task", "SET NULL"),
     }
 
+    // **One task a round filed for another role to work** — the round (`run_task_id`) whose role
+    // passed it, the role it was filed under (`to_role_id`) and the task itself. Written where the task
+    // is filed (`automation_builtin_make`), so it stands whether or not this run goes on to take it. A
+    // round passing more than one task has a row per task, in the order it filed them.
+    //
+    // The role it was passed from is the round's own (`automation_run_task.role_id`), read from there
+    // rather than kept twice. `to_role_id` and `task_id` are `SET NULL` for the reason the round's
+    // `task_id` is.
+    automation_run_pass {
+        run_id: fk("automation_run", "RESTRICT"),
+        run_task_id: fk("automation_run_task", "RESTRICT"),
+        to_role_id: fk_opt("automation_role", "SET NULL"),
+        task_id: fk_opt("task", "SET NULL"),
+    }
+
     // **One step, run once.** `seq` is the move number within the run, so a step the run comes back
     // to has a row per visit.
     //

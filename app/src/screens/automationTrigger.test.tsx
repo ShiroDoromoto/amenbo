@@ -36,8 +36,8 @@ function detail(trigger?: AutomationTriggerDto): AutomationDetailDto {
     maxConcurrentRuns: 1,
     trigger,
     roles: [
-      { id: 1, name: "Alice" },
-      { id: 2, name: "Bob" },
+      { id: 1, name: "Alice", passes: [] },
+      { id: 2, name: "Bob", passes: [] },
     ],
     placements: [],
     edges: [],

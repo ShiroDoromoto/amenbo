@@ -553,6 +553,11 @@ entryPlacementId?: number, archived: boolean,
  */
 maxConcurrentRuns: number, 
 /**
+ * What files a task on its own and starts a run with it. Absent for an automation only a person
+ * starts.
+ */
+trigger?: AutomationTriggerDto, 
+/**
  * **The automation's roles, in the order they are defined in.** A placement names the one whose
  * round reaches it (`AutomationPlacementDto::role_id`), and a step the one it falls back to
  * (`AutomationCarrierDto::chosen_at`).
@@ -1091,6 +1096,12 @@ seq: number, };
 export type AutomationSavedDto = { version: number, savedAt: string, };
 
 /**
+ * **A script as a screen writes it** — [`AutomationStepScriptDto`] with the timeout left out where it
+ * is the default ([`amenbo_core::ops::automation::NewScript`]).
+ */
+export type AutomationScriptInputDto = { program: string, args: Array<string>, timeoutMinutes?: number, };
+
+/**
  * **One step inside an action**: the terminal it stands up, and what it declares inside the picture.
  *
  * The prompt and the three flags are the step's own, which is why they are read here rather than off
@@ -1271,6 +1282,57 @@ folder?: string,
  * The way out it was taken to leave by, as the run's copy names it.
  */
 exit: string, };
+
+/**
+ * **The tasks a trigger looks at before it files one** ([`amenbo_core::model::TriggerCondition`]): it
+ * files one only while fewer than `below` tasks of the project match `filter`.
+ */
+export type AutomationTriggerConditionDto = { filter: string, below: number, };
+
+/**
+ * **An automation's trigger** — the wire form of [`amenbo_core::model::AutomationTrigger`]: whether
+ * to file a task now (`when`, with its `condition` and `script`), what the task says (`task`), and
+ * the role it is worked under. The words for each kind are the GUI's (`AMB-D-396`).
+ */
+export type AutomationTriggerDto = { name: string, 
+/**
+ * The role of the same automation the task it files is worked under. Absent for none.
+ */
+roleId?: number, when: AutomationTriggerWhenDto, condition?: AutomationTriggerConditionDto, 
+/**
+ * The program asked before filing a task. Absent where none is asked.
+ */
+script?: AutomationStepScriptDto, task: AutomationTriggerTaskDto, 
+/**
+ * When it is next asked whether to file a task, as an RFC3339 instant. Read only: it is counted
+ * from the write.
+ */
+nextAt: string, };
+
+/**
+ * **A trigger as a screen writes it** ([`amenbo_core::ops::automation::NewTrigger`]) —
+ * [`AutomationTriggerDto`] without `nextAt`, which is counted from the write.
+ */
+export type AutomationTriggerInputDto = { name: string, roleId?: number, when: AutomationTriggerWhenDto, condition?: AutomationTriggerConditionDto, script?: AutomationScriptInputDto, task: AutomationTriggerTaskInputDto, };
+
+/**
+ * **What the task a trigger files says** — the wire form of [`amenbo_core::model::TriggerTask`]:
+ * `fixed` with its title and notes, `file` read from its full path, `script` written by a program.
+ */
+export type AutomationTriggerTaskDto = { "kind": "fixed", title: string, notes: string, } | { "kind": "file", path: string, } | { "kind": "script", script: AutomationStepScriptDto, };
+
+/**
+ * **What the task a trigger files is written to say** ([`amenbo_core::ops::automation::NewTriggerTask`])
+ * — [`AutomationTriggerTaskDto`] with the program's timeout left out where it is the default.
+ */
+export type AutomationTriggerTaskInputDto = { "kind": "fixed", title: string, notes: string, } | { "kind": "file", path: string, } | { "kind": "script", script: AutomationScriptInputDto, };
+
+/**
+ * **Whether a trigger files a task now** — the wire form of [`amenbo_core::model::TriggerWhen`]:
+ * `every` so many minutes, `idle` whenever no run of it is under way, `tasks` whenever its condition
+ * holds, `script` whenever its script says to.
+ */
+export type AutomationTriggerWhenDto = { "kind": "every", minutes: number, } | { "kind": "idle" } | { "kind": "tasks" } | { "kind": "script" };
 
 /**
  * **What is handed from one box to the next**, on whichever picture it is drawn on —

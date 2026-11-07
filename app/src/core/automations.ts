@@ -45,6 +45,7 @@ import type {
   AutomationRunHistoryDto,
   AutomationRunStartedDto,
   AutomationTestRunDto,
+  AutomationTriggerInputDto,
   EveryAutomationActionCardDto,
   EveryAutomationCardDto,
   WakeDto,
@@ -152,6 +153,20 @@ export async function editAutomation(
     archived: patch.archived ?? null,
     maxConcurrentRuns: patch.maxConcurrentRuns ?? null,
   });
+}
+
+/**
+ * **Write an automation's trigger, or take it away** (`null`) — what files a task on its own and
+ * starts a run of this automation with it. When it is next asked is counted from the write, so it is
+ * not passed. What core refuses — a wait under a minute, a task with no title, a role of another
+ * automation — reaches the caller as core's own sentence.
+ */
+export async function setAutomationTrigger(
+  id: number,
+  trigger: AutomationTriggerInputDto | null,
+): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_trigger_set", { id, trigger });
 }
 
 /**

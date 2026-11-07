@@ -3519,6 +3519,11 @@ pub struct AutomationDetailDto {
     pub(crate) archived: bool,
     /// How many runs of it may be going at once, from 1 up to the cap; a launch past it is refused.
     pub(crate) max_concurrent_runs: u32,
+    /// What files a task on its own and starts a run with it. Absent for an automation only a person
+    /// starts.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) trigger: Option<AutomationTriggerDto>,
     /// **The automation's roles, in the order they are defined in.** A placement names the one whose
     /// round reaches it (`AutomationPlacementDto::role_id`), and a step the one it falls back to
     /// (`AutomationCarrierDto::chosen_at`).
@@ -3847,6 +3852,213 @@ pub struct AutomationStepScriptDto {
     pub(crate) args: Vec<String>,
     #[ts(type = "number")]
     pub(crate) timeout_minutes: i64,
+}
+
+/// **A script as a screen writes it** — [`AutomationStepScriptDto`] with the timeout left out where it
+/// is the default ([`amenbo_core::ops::automation::NewScript`]).
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationScriptInputDto {
+    pub(crate) program: String,
+    #[serde(default)]
+    pub(crate) args: Vec<String>,
+    #[serde(default)]
+    #[ts(optional, type = "number")]
+    pub(crate) timeout_minutes: Option<i64>,
+}
+
+impl From<AutomationScriptInputDto> for amenbo_core::ops::automation::NewScript {
+    fn from(s: AutomationScriptInputDto) -> Self {
+        amenbo_core::ops::automation::NewScript {
+            program: s.program,
+            args: s.args,
+            timeout_minutes: s.timeout_minutes,
+        }
+    }
+}
+
+/// **An automation's trigger** — the wire form of [`amenbo_core::model::AutomationTrigger`]: whether
+/// to file a task now (`when`, with its `condition` and `script`), what the task says (`task`), and
+/// the role it is worked under. The words for each kind are the GUI's (`AMB-D-396`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationTriggerDto {
+    pub(crate) name: String,
+    /// The role of the same automation the task it files is worked under. Absent for none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) role_id: Option<i64>,
+    pub(crate) when: AutomationTriggerWhenDto,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) condition: Option<AutomationTriggerConditionDto>,
+    /// The program asked before filing a task. Absent where none is asked.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) script: Option<AutomationStepScriptDto>,
+    pub(crate) task: AutomationTriggerTaskDto,
+    /// When it is next asked whether to file a task, as an RFC3339 instant. Read only: it is counted
+    /// from the write.
+    pub(crate) next_at: String,
+}
+
+impl From<amenbo_core::model::AutomationTrigger> for AutomationTriggerDto {
+    fn from(t: amenbo_core::model::AutomationTrigger) -> Self {
+        AutomationTriggerDto {
+            name: t.name,
+            role_id: t.role_id,
+            when: t.when.into(),
+            condition: t.condition.map(Into::into),
+            script: t.script.map(Into::into),
+            task: t.task.into(),
+            next_at: t.next_at.to_rfc3339_z(),
+        }
+    }
+}
+
+impl From<amenbo_core::model::StepScript> for AutomationStepScriptDto {
+    fn from(s: amenbo_core::model::StepScript) -> Self {
+        AutomationStepScriptDto { program: s.program, args: s.args, timeout_minutes: s.timeout_minutes }
+    }
+}
+
+/// **A trigger as a screen writes it** ([`amenbo_core::ops::automation::NewTrigger`]) —
+/// [`AutomationTriggerDto`] without `nextAt`, which is counted from the write.
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationTriggerInputDto {
+    #[serde(default)]
+    pub(crate) name: String,
+    #[serde(default)]
+    #[ts(optional, type = "number")]
+    pub(crate) role_id: Option<i64>,
+    pub(crate) when: AutomationTriggerWhenDto,
+    #[serde(default)]
+    #[ts(optional)]
+    pub(crate) condition: Option<AutomationTriggerConditionDto>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub(crate) script: Option<AutomationScriptInputDto>,
+    pub(crate) task: AutomationTriggerTaskInputDto,
+}
+
+impl From<AutomationTriggerInputDto> for amenbo_core::ops::automation::NewTrigger {
+    fn from(t: AutomationTriggerInputDto) -> Self {
+        amenbo_core::ops::automation::NewTrigger {
+            name: t.name,
+            role_id: t.role_id,
+            when: t.when.into(),
+            condition: t.condition.map(Into::into),
+            script: t.script.map(Into::into),
+            task: t.task.into(),
+        }
+    }
+}
+
+/// **Whether a trigger files a task now** — the wire form of [`amenbo_core::model::TriggerWhen`]:
+/// `every` so many minutes, `idle` whenever no run of it is under way, `tasks` whenever its condition
+/// holds, `script` whenever its script says to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum AutomationTriggerWhenDto {
+    Every { minutes: u32 },
+    Idle,
+    Tasks,
+    Script,
+}
+
+impl From<amenbo_core::model::TriggerWhen> for AutomationTriggerWhenDto {
+    fn from(w: amenbo_core::model::TriggerWhen) -> Self {
+        use amenbo_core::model::TriggerWhen;
+        match w {
+            TriggerWhen::Every { minutes } => AutomationTriggerWhenDto::Every { minutes },
+            TriggerWhen::Idle => AutomationTriggerWhenDto::Idle,
+            TriggerWhen::Tasks => AutomationTriggerWhenDto::Tasks,
+            TriggerWhen::Script => AutomationTriggerWhenDto::Script,
+        }
+    }
+}
+
+impl From<AutomationTriggerWhenDto> for amenbo_core::model::TriggerWhen {
+    fn from(w: AutomationTriggerWhenDto) -> Self {
+        use amenbo_core::model::TriggerWhen;
+        match w {
+            AutomationTriggerWhenDto::Every { minutes } => TriggerWhen::Every { minutes },
+            AutomationTriggerWhenDto::Idle => TriggerWhen::Idle,
+            AutomationTriggerWhenDto::Tasks => TriggerWhen::Tasks,
+            AutomationTriggerWhenDto::Script => TriggerWhen::Script,
+        }
+    }
+}
+
+/// **The tasks a trigger looks at before it files one** ([`amenbo_core::model::TriggerCondition`]): it
+/// files one only while fewer than `below` tasks of the project match `filter`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationTriggerConditionDto {
+    pub(crate) filter: String,
+    pub(crate) below: u32,
+}
+
+impl From<amenbo_core::model::TriggerCondition> for AutomationTriggerConditionDto {
+    fn from(c: amenbo_core::model::TriggerCondition) -> Self {
+        AutomationTriggerConditionDto { filter: c.filter, below: c.below }
+    }
+}
+
+impl From<AutomationTriggerConditionDto> for amenbo_core::model::TriggerCondition {
+    fn from(c: AutomationTriggerConditionDto) -> Self {
+        amenbo_core::model::TriggerCondition { filter: c.filter, below: c.below }
+    }
+}
+
+/// **What the task a trigger files says** — the wire form of [`amenbo_core::model::TriggerTask`]:
+/// `fixed` with its title and notes, `file` read from its full path, `script` written by a program.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum AutomationTriggerTaskDto {
+    Fixed { title: String, notes: String },
+    File { path: String },
+    Script { script: AutomationStepScriptDto },
+}
+
+impl From<amenbo_core::model::TriggerTask> for AutomationTriggerTaskDto {
+    fn from(t: amenbo_core::model::TriggerTask) -> Self {
+        use amenbo_core::model::TriggerTask;
+        match t {
+            TriggerTask::Fixed { title, notes } => AutomationTriggerTaskDto::Fixed { title, notes },
+            TriggerTask::File { path } => AutomationTriggerTaskDto::File { path },
+            TriggerTask::Script { script } => AutomationTriggerTaskDto::Script { script: script.into() },
+        }
+    }
+}
+
+/// **What the task a trigger files is written to say** ([`amenbo_core::ops::automation::NewTriggerTask`])
+/// — [`AutomationTriggerTaskDto`] with the program's timeout left out where it is the default.
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum AutomationTriggerTaskInputDto {
+    Fixed { title: String, notes: String },
+    File { path: String },
+    Script { script: AutomationScriptInputDto },
+}
+
+impl From<AutomationTriggerTaskInputDto> for amenbo_core::ops::automation::NewTriggerTask {
+    fn from(t: AutomationTriggerTaskInputDto) -> Self {
+        use amenbo_core::ops::automation::NewTriggerTask;
+        match t {
+            AutomationTriggerTaskInputDto::Fixed { title, notes } => NewTriggerTask::Fixed { title, notes },
+            AutomationTriggerTaskInputDto::File { path } => NewTriggerTask::File { path },
+            AutomationTriggerTaskInputDto::Script { script } => NewTriggerTask::Script(script.into()),
+        }
+    }
 }
 
 /// **A way out of a spot**, and what leaving through it hands on.

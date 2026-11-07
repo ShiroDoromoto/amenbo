@@ -142,6 +142,16 @@ describe("the face a run's pane is turned to", () => {
     expect(shown()?.parentElement?.classList.contains("slot__body"), "the roles are not drawn over the terminal face").toBe(true);
   });
 
+  // The body is clipped where the roles or a card stand straight in it (`styles/global.css`), so that
+  // in a pane an eighth of the page the card's "!" and the roles stay inside the frame. jsdom lays
+  // nothing out, so what is pinned is the shape that rule asks for.
+  it("stands the roles and the failed run's card straight in the body the clip is drawn on", async () => {
+    await pane(FAILED);
+    const body = container.querySelector(".slot__body");
+    expect(body?.querySelector(":scope > .runroles"), "the roles are not a child of the body").not.toBeNull();
+    expect(body?.querySelector(":scope > .slot__builtin.slot__runbody"), "the run's card is not a child of the body").not.toBeNull();
+  });
+
   it("turns to the terminal and back, and keeps the turn for that run's pane", async () => {
     await pane(FAILED);
     await act(async () => faces()[1]!.click());

@@ -96,9 +96,9 @@
 // not a script step nor one that asks a person — with the agent and model that carry it out, the ones
 // a step chose for itself marked (`./AutomationRoleCarriers`).
 //
-// **What the automation holds as a whole stands down the right** (`./AutomationSettings`): how many
-// of its runs may go at once, who a failed round is filed to, and its trigger, which opens its own
-// dialog (`./AutomationTrigger`). They are about none of the roles in particular, so they stand beside
+// **What the automation holds as a whole stands down the right** (`./AutomationSettings`): who a
+// failed round is filed to, and its trigger, which opens its own dialog (`./AutomationTrigger`), each
+// in a box of its own. They are about none of the roles in particular, so they stand beside
 // the left and the middle rather than in either.
 //
 // **The head says what is saved** (`./AutomationSaved`, `AMB-D-1005`): nothing yet, changes not

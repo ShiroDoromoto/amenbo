@@ -2051,19 +2051,13 @@ button.feed__target:hover { color: var(--c-accent); }
   flex: 0 0 240px; display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-3);
   background: var(--c-sunken-pic) var(--c-sunken); border-inline-start: var(--border-w) var(--border-style) var(--c-rule);
 }
-.autoside__group { display: flex; flex-direction: column; gap: var(--s-1); }
+/* Each thing the column holds is a box of its own, so where one ends and the next begins can be seen.
+   The box is not pressed; what is pressed inside it keeps its own fill or edge (`AMB-D-841`). */
+.autoside__group {
+  display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3);
+  background: var(--c-surface-pic) var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
+}
 .autoside__group > select { min-width: 0; }
-.autoside__stepline { display: flex; align-items: center; gap: var(--s-2); }
-.autoside__stepper {
-  display: inline-flex; align-items: center;
-  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
-}
-.autoside__stepper > button {
-  width: 28px; height: 26px; font: inherit; color: inherit; background: none; border: 0; cursor: pointer;
-}
-.autoside__stepper > button:hover:not(:disabled) { background: var(--c-hover); }
-.autoside__stepper > button:disabled { color: var(--c-text-faint); cursor: default; }
-.autoside__stepper > output { min-width: 2ch; text-align: center; font-variant-numeric: tabular-nums; }
 .autoside__add { align-self: flex-start; }
 .autoside__trigger {
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: var(--s-2);

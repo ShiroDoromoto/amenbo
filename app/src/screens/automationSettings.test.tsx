@@ -2,11 +2,11 @@
 // What the automation holds as a whole, down the build screen's right. The writes are stubbed; every
 // press and pulldown runs for real.
 //
-// What these guard: **the most runs at once steps between 1 and the cap and writes each press**;
-// **who failures are filed to is required, offers the automation's roles and the person, and writes
-// the one picked**; **the trigger is offered to add while there is none, and drawn — what it files,
-// when and under which role — once there is one, each opening the trigger's dialog**; and **a refusal
-// is drawn in core's words**.
+// What these guard: **the column holds two boxes — who failures are filed to, and the trigger — and
+// no count of runs at once**; **who failures are filed to is required, offers the automation's roles
+// and the person, and writes the one picked**; **the trigger is offered to add while there is none,
+// and drawn — what it files, when and under which role — once there is one, each opening the
+// trigger's dialog**; and **a refusal is drawn in core's words**.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,7 +27,6 @@ vi.mock("../core/automations", () => ({
   addAutomationTrigger: () => Promise.resolve(),
   updateAutomationTrigger: () => Promise.resolve(),
   removeAutomationTrigger: () => Promise.resolve(),
-  MAX_CONCURRENT_RUNS: 4,
 }));
 vi.mock("../core/dialog", () => ({ confirmDialog: () => Promise.resolve(false) }));
 
@@ -98,25 +97,15 @@ const pick = (value: string) =>
   });
 const dialog = () => document.body.querySelector('[role="dialog"]');
 
-describe("the most runs at once", () => {
-  it("draws the stored number and the cap", async () => {
-    await render({ ...automation, maxConcurrentRuns: 2 });
-    expect(container.querySelector("output")?.textContent).toBe("2");
-    expect(container.textContent).toContain(tf("auto.side.cap", { n: 4 }));
-  });
-
-  it("writes one more or one fewer on each press", async () => {
-    await render({ ...automation, maxConcurrentRuns: 2 });
-    await press(button(t("auto.side.more")));
-    await press(button(t("auto.side.fewer")));
-    expect(hoisted.edits).toEqual([{ maxConcurrentRuns: 3 }, { maxConcurrentRuns: 1 }]);
-  });
-
-  it("cannot be pressed under 1 or past the cap", async () => {
+describe("the column", () => {
+  it("holds who failures are filed to and the trigger, each in a box of its own, and no count of runs at once", async () => {
     await render();
-    expect(button(t("auto.side.fewer"))!.disabled).toBe(true);
-    await render({ ...automation, maxConcurrentRuns: 4 });
-    expect(button(t("auto.side.more"))!.disabled).toBe(true);
+    const boxes = Array.from(container.querySelectorAll(".autoside > .autoside__group"));
+    expect(boxes).toHaveLength(2);
+    expect(boxes[0]!.textContent).toContain(t("auto.side.failuresTo"));
+    expect(boxes[0]!.querySelector("select")).not.toBeNull();
+    expect(boxes[1]!.textContent).toContain(t("auto.side.trigger"));
+    expect(container.querySelector("output")).toBeNull();
   });
 });
 

@@ -1,7 +1,6 @@
 // What the automation itself holds — its name, its notes, whether it is kept out of the way, and the
-// one press that takes the whole definition away. How many of its runs may go at once, who failures
-// are filed to and its trigger stand down the build screen's right instead (`./AutomationSettings`),
-// in view without opening anything.
+// one press that takes the whole definition away. Who failures are filed to and its trigger stand
+// down the build screen's right instead (`./AutomationSettings`), in view without opening anything.
 //
 // **It opens in the build screen's panel, from "Edit" on the head** (`./AutomationBuildScreen`). What a
 // reader opens a definition for is the picture and the spot they are about to fix; everything here is

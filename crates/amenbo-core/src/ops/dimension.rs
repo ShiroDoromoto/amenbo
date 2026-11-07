@@ -1018,6 +1018,23 @@ pub(crate) fn delete_value_subtree(tx: &WriteTx<'_>, value_id: i64) -> Result<()
 /// here on. What was already filed under it is untouched, which is why the refusal sits after the noop —
 /// a task carrying the value may go on carrying it.
 pub fn set(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<(TaskDimensionValue, bool)> {
+    assign(tx, task_id, value_id, false)
+}
+
+/// **Carry a classification over from one task to another** — [`set`], except that a closed value is
+/// taken too. Closing retires a value from what is newly filed under it (`AMB-D-829`); a value carried
+/// over from a task that already holds it is that task's filing, copied, not a new one. It is what a
+/// failed round's task hands to the task filed for it, so that one can always finish being created.
+pub(crate) fn carry_over(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<(TaskDimensionValue, bool)> {
+    assign(tx, task_id, value_id, true)
+}
+
+fn assign(
+    tx: &WriteTx<'_>,
+    task_id: i64,
+    value_id: i64,
+    closed_too: bool,
+) -> Result<(TaskDimensionValue, bool)> {
     let Some(task) = read::task(tx.conn(), task_id)? else {
         return Err(crate::ops::task::NOUN.not_found(task_id.to_string()));
     };
@@ -1044,8 +1061,8 @@ pub fn set(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<(TaskDimensi
 
     // Read after the noop above, deliberately: closing retires a value from what is filed under it from
     // here on, and says nothing about what already is (`AMB-D-829`). A task carrying the value keeps it,
-    // and asking for it again is the same noop it was.
-    if value.closed {
+    // and asking for it again is the same noop it was. A value carried over is that filing copied.
+    if value.closed && !closed_too {
         return Err(value_is_closed(&axis.name, &value.name));
     }
 

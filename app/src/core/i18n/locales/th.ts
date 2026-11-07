@@ -1370,6 +1370,7 @@ export const th: Translation = {
     "auto.run.roles.idle": "บทบาทที่ว่าง {n}",
     "auto.run.roles.idleOne": "{name} (ว่าง)",
     "auto.run.roles.asks": "รอการป้อนข้อมูล",
+    "auto.run.roles.working": "กำลังทำงาน",
     "auto.run.roles.failed": "ล้มเหลว",
     "auto.run.roles.none": "ตอนนี้ไม่มีบทบาทใดกำลังทำรอบอยู่",
     "auto.run.roles.filedRole": "รอบของ {role} ล้มเหลว แจ้งปัญหาไปที่ {to} แล้ว ({ref})",

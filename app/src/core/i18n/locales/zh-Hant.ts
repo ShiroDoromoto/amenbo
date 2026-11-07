@@ -1371,6 +1371,7 @@ export const zhHant: Translation = {
     "auto.run.roles.idle": "空閒的角色 {n}",
     "auto.run.roles.idleOne": "{name}（空閒）",
     "auto.run.roles.asks": "等待輸入",
+    "auto.run.roles.working": "工作中",
     "auto.run.roles.failed": "失敗",
     "auto.run.roles.none": "目前沒有正在進行一輪的角色。",
     "auto.run.roles.filedRole": "{role}的輪次失敗了。已向{to}提交故障（{ref}）",

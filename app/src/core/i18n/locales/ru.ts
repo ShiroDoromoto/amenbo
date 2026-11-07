@@ -1386,6 +1386,7 @@ export const ru: Translation = {
     "auto.run.roles.idle": "Свободные роли {n}",
     "auto.run.roles.idleOne": "{name} (свободна)",
     "auto.run.roles.asks": "Ждёт ввода",
+    "auto.run.roles.working": "В работе",
     "auto.run.roles.failed": "Сбой",
     "auto.run.roles.none": "Сейчас ни у одной роли не идёт круг.",
     "auto.run.roles.filedRole": "Раунд роли {role} завершился с ошибкой. Задача {ref} заведена для {to}.",

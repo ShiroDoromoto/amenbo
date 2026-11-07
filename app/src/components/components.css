@@ -2409,6 +2409,16 @@ button.feed__target:hover { color: var(--c-accent); }
 .runroles__top { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
 .runroles__top > .icon { flex: none; }
 .runroles__name { font-weight: var(--fw-bold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The dot on a card whose round is under way: the one thing in the pane that moves. It stays lit,
+   still, where the reader asks for less motion. */
+.runroles__pulse {
+  flex: none; margin-left: auto;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--c-accent);
+  animation: runroles-pulse 2.4s ease-in-out infinite;
+}
+@keyframes runroles-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .runroles__pulse { animation: none; } }
 .runroles__task {
   font-size: var(--fs-xs);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;

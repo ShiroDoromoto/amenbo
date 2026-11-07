@@ -1370,6 +1370,7 @@ export const vi: Translation = {
     "auto.run.roles.idle": "Vai trò đang rảnh {n}",
     "auto.run.roles.idleOne": "{name} (đang rảnh)",
     "auto.run.roles.asks": "Đang chờ nhập",
+    "auto.run.roles.working": "Đang làm",
     "auto.run.roles.failed": "Thất bại",
     "auto.run.roles.none": "Hiện không có vai trò nào đang chạy vòng.",
     "auto.run.roles.filedRole": "Vòng của {role} đã thất bại. Đã ghi sự cố cho {to} ({ref}).",

@@ -13,7 +13,8 @@
 # shipped crates and the GUI's shipped npm packages alike. That file also covers what this list
 # cannot see — license texts of C sources vendored inside a crate, which sit beside those sources
 # rather than at the crate's top level
-# (SQLCipher, SQLite and libtomcrypt in sqlcipher-src, OpenSSL in openssl-src).
+# (SQLCipher, SQLite and libtomcrypt in sqlcipher-src, OpenSSL in openssl-src), and the data the
+# GUI bundles out of packages or out of VS Code, recorded in guards/check-grammar-licenses.mjs.
 
 [licenses]
 # Permissive, plus weak (file-level) copyleft. MPL-2.0 and EPL-2.0 oblige us to publish changes

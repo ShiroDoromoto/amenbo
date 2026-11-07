@@ -68,6 +68,11 @@ const CMAPS = import.meta.glob<string>(
  *
  * Foxit's two are PDFium's, under BSD-3-Clause (`standard_fonts/LICENSE_FOXIT` inside pdfjs-dist),
  * which is on `deny.toml`'s allow-list.
+ *
+ * `guards/check-grammar-licenses.mjs` reads the `/node_modules/pdfjs-dist/…` names in this file
+ * (the character maps' glob above, these two fonts) and holds each to a record in its `PDFJS_DATA`,
+ * which is also where THIRD-PARTY-NOTICES takes their texts from — a file named here without a
+ * record goes red.
  */
 const FONTS = import.meta.glob<string>(
   [

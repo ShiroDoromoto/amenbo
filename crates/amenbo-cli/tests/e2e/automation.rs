@@ -739,6 +739,47 @@ fn a_trigger_is_written_shown_and_taken_away() {
     assert!(!text.contains("starts a run on its own"), "{text}");
 }
 
+/// **A trigger is named and files its task under one of its automation's roles**: `--name` and
+/// `--role` are read back by `show`, both left out leave it blank and under no role, another
+/// automation's role is refused, and neither goes beside `--off`.
+#[test]
+fn a_trigger_is_named_and_files_under_a_role_of_its_own() {
+    let cli = Cli::new();
+    let (p, a, _, _) = an_automation(&cli);
+    let role = id_of(&cli.json(&["automation", "role-add", &a, "--name", "Review", "--json"]), "automation_role");
+
+    let set = cli.json(&[
+        "automation", "trigger", &a, "--every", "60", "--name", "Inbox", "--role", &role, "--title", "Look over the inbox", "--json",
+    ]);
+    let trigger = &set["automation"]["trigger"];
+    assert_eq!(trigger["name"].as_str(), Some("Inbox"), "{set}");
+    assert_eq!(id_str(&trigger["role_id"]), role, "{set}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(
+        text.contains(&format!("starts a run on its own as \"Inbox\" every 60 minute(s), filing \"Look over the inbox\" under role {role} — next at")),
+        "{text}"
+    );
+
+    let plain = cli.json(&["automation", "trigger", &a, "--every", "60", "--title", "Look over the inbox", "--json"]);
+    let trigger = &plain["automation"]["trigger"];
+    assert_eq!(trigger["name"].as_str(), Some(""), "written again, it is blank: {plain}");
+    assert!(trigger.get("role_id").is_none(), "and under no role: {plain}");
+
+    let other = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "B", "--failures-to", "human", "--json"]), "automation");
+    let theirs = id_of(&cli.json(&["automation", "role-add", &other, "--name", "Theirs", "--json"]), "automation_role");
+    let (err, code) = cli.run_err(&["automation", "trigger", &a, "--every", "60", "--role", &theirs, "--title", "x", "--json"]);
+    assert_ne!(code, 0, "another automation's role is refused: {err}");
+    assert!(err.contains("belongs to another automation"), "{err}");
+
+    for wrong in [
+        vec!["automation", "trigger", a.as_str(), "--off", "--name", "Inbox"],
+        vec!["automation", "trigger", a.as_str(), "--off", "--role", role.as_str()],
+    ] {
+        let (_, code) = cli.run_err(&wrong);
+        assert_ne!(code, 0, "{wrong:?} is refused");
+    }
+}
+
 /// The library answers as the one list an automation could place, and `--global` narrows it to the
 /// device's shelf rather than opening a second place to look.
 #[test]

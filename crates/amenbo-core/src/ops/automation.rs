@@ -50,7 +50,7 @@ use crate::model::{
     AutomationStep, AutomationVersion, AutomationWire, StepScript, ACTION_BOUNDARY,
     DEFAULT_MAX_TIMES, DEFAULT_ROLE_HEADCOUNT, DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
     ERROR_EXIT, FailuresTo, MAX_EXPECTED_MINUTES, MAX_ROLE_HEADCOUNT, MAX_SCRIPT_TIMEOUT_MINUTES,
-    AutomationTrigger, TriggerCondition, TriggerTask, TriggerWhen, MIN_TRIGGER_EVERY_MINUTES,
+    AutomationTrigger, TakeOrder, TriggerCondition, TriggerTask, TriggerWhen, MIN_TRIGGER_EVERY_MINUTES,
 };
 use crate::ops::{automation_builtin, automation_run, emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
@@ -1803,6 +1803,7 @@ pub fn unsaved(conn: &Connection, automation_id: i64) -> Result<bool> {
 /// Whether a role holds nothing but its name — the way the one an automation is born with does.
 fn only_named(role: &AutomationRole) -> bool {
     role.headcount == DEFAULT_ROLE_HEADCOUNT
+        && role.take_order == TakeOrder::default()
         && role.icon.is_none()
         && role.entry_placement_id.is_none()
         && role.agent.is_none()
@@ -2644,6 +2645,8 @@ pub struct NewRole {
     pub name: String,
     /// How many are in it, from 1 up to [`MAX_ROLE_HEADCOUNT`]. `None` is [`DEFAULT_ROLE_HEADCOUNT`].
     pub headcount: Option<u32>,
+    /// The order it takes its tasks in. `None` is [`TakeOrder::Priority`].
+    pub take_order: Option<TakeOrder>,
     /// The icon it is drawn with, by the name the GUI knows it under.
     pub icon: Option<String>,
     /// The placement its round starts at — one of the same automation's.
@@ -2660,6 +2663,8 @@ pub struct RoleChange {
     pub name: Option<String>,
     /// How many are in it, from 1 up to [`MAX_ROLE_HEADCOUNT`].
     pub headcount: Option<u32>,
+    /// The order it takes its tasks in.
+    pub take_order: Option<TakeOrder>,
     pub icon: Option<Option<String>>,
     pub entry_placement_id: Option<Option<i64>>,
     /// Taking the agent away takes the model with it.
@@ -2725,6 +2730,7 @@ pub fn role_add(tx: &WriteTx<'_>, automation_id: i64, new: NewRole) -> Result<Au
         automation_id,
         name,
         headcount,
+        take_order: new.take_order.unwrap_or_default(),
         icon: checked_opt("icon", new.icon.as_deref())?,
         entry_placement_id: new.entry_placement_id,
         agent: checked_opt("agent", new.agent.as_deref())?,
@@ -2738,8 +2744,9 @@ pub fn role_add(tx: &WriteTx<'_>, automation_id: i64, new: NewRole) -> Result<Au
     Ok(role)
 }
 
-/// Change a role's name, how many are in it, icon, way of working (the placement its round starts at), or
-/// default agent and model. Only the fields `change` names are written.
+/// Change a role's name, how many are in it, the order it takes its tasks in, icon, way of working (the
+/// placement its round starts at), or default agent and model. Only the fields `change` names are
+/// written.
 pub fn role_update(tx: &WriteTx<'_>, id: i64, change: RoleChange) -> Result<AutomationRole> {
     let before = live_role(tx, id)?;
     rewritable(tx, Def::Automation(before.automation_id))?;
@@ -2749,6 +2756,9 @@ pub fn role_update(tx: &WriteTx<'_>, id: i64, change: RoleChange) -> Result<Auto
     }
     if let Some(headcount) = change.headcount {
         after.headcount = checked_headcount(headcount)?;
+    }
+    if let Some(take_order) = change.take_order {
+        after.take_order = take_order;
     }
     if let Some(icon) = &change.icon {
         after.icon = checked_opt("icon", icon.as_deref())?;
@@ -4542,6 +4552,45 @@ mod tests {
         });
     }
 
+    /// **A role takes its tasks by priority at birth, and the order it takes them in is set and kept.**
+    /// Leaving it out keeps what is there; a saved version keeps it, and the draft reads as changed once
+    /// it moves away from the version's. The one role an automation is born with and given another order
+    /// is something to save.
+    #[test]
+    fn a_role_takes_by_priority_at_birth_and_keeps_the_order_it_is_given() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let born = read::automation_roles_of(tx.conn(), automation.id).expect("read").remove(0);
+            assert_eq!(born.take_order, TakeOrder::Priority, "born taking by priority");
+            role_update(tx, born.id, RoleChange { take_order: Some(TakeOrder::Due), ..RoleChange::default() })
+                .expect("by due date");
+            assert!(unsaved(tx.conn(), automation.id).expect("unsaved"), "another order is something to save");
+
+            for order in TakeOrder::ALL {
+                let role =
+                    role_add(tx, automation.id, NewRole { name: "さくら".into(), take_order: Some(order), ..NewRole::default() })
+                        .expect("a role");
+                assert_eq!(live_role(tx, role.id).expect("read").take_order, order);
+            }
+
+            let role = role_add(tx, automation.id, NewRole { name: "山田".into(), ..NewRole::default() }).expect("a role");
+            assert_eq!(role.take_order, TakeOrder::Priority, "left out, by priority");
+            role_update(tx, role.id, RoleChange { take_order: Some(TakeOrder::Order), ..RoleChange::default() })
+                .expect("by hand");
+            let renamed = role_update(tx, role.id, RoleChange { name: Some("佐藤".into()), ..RoleChange::default() })
+                .expect("rename");
+            assert_eq!(renamed.take_order, TakeOrder::Order, "left out, it is kept");
+
+            let saved = version_add(tx, automation.id).expect("save");
+            let roles: Vec<AutomationRole> = serde_json::from_str(&saved.roles).expect("roles");
+            assert_eq!(roles.iter().find(|r| r.id == role.id).map(|r| r.take_order), Some(TakeOrder::Order));
+            assert!(!unsaved(tx.conn(), automation.id).expect("unsaved"), "nothing changed since");
+            role_update(tx, role.id, RoleChange { take_order: Some(TakeOrder::Created), ..RoleChange::default() })
+                .expect("change it");
+            assert!(unsaved(tx.conn(), automation.id).expect("unsaved"), "the order is part of the version");
+        });
+    }
+
     /// **The one trigger an automation has**, or `None` for none — [`trigger_set`] leaves it no more.
     fn only(automation: Automation) -> Option<AutomationTrigger> {
         assert!(automation.triggers.len() <= 1, "more than one trigger: {:?}", automation.triggers);
@@ -4932,6 +4981,7 @@ mod tests {
             let new = NewRole {
                 name: " 実装 ".into(),
                 headcount: None,
+                take_order: None,
                 icon: Some("hammer".into()),
                 entry_placement_id: Some(placement.id),
                 agent: Some("claude-code".into()),

@@ -11,15 +11,20 @@
 // **Why pdf.js and not the webview's own viewer** (`AMB-D-907`): handing a PDF to the built-in
 // viewer needs the sandbox taken off the frame it is shown in, which would leave PDFs — and PDFs
 // alone — a defence short. Every comparable application ships pdf.js for the same reason, and on
-// Linux the built-in viewer *is* pdf.js. The version is the last one that publishes no wasm file of
-// its own, which `AMB-D-769` does not allow; what it does carry, inlined in the worker, is the
-// JPEG 2000 decoder, and a document holding such an image is the only thing that reaches it.
+// Linux the built-in viewer *is* pdf.js.
+//
+// **No WebAssembly runs here** (`AMB-D-769`). pdf.js publishes four wasm files of its own — the
+// JPEG 2000 and JBIG2 decoders, the colour-profile engine and a script sandbox — and is told
+// `useWasm: false` (`READER_OPTIONS`), so none of them is fetched and none is carried in the bundle
+// (`guards/check-no-wasm.sh`). What decodes a JPEG 2000 or JBIG2 image instead is the JavaScript
+// build of the same decoder that pdf.js publishes beside it, served from a folder of ours
+// (`vite.config.ts`).
 //
 // **The bytes are fetched, not carried.** The address is the door the picture beside the document is
 // drawn from — a file by its path for the panel (`../core/fileUrl`), an attachment by its hash for a
 // record (`../core/blobUrl`) — so nothing of the file crosses the command seam.
 
-import type { RenderTask } from "pdfjs-dist";
+import type { PDFDocumentLoadingTask, RenderTask } from "pdfjs-dist";
 
 /**
  * The character maps a PDF written in Japanese, Chinese or Korean is read through.
@@ -57,7 +62,7 @@ const CMAPS = import.meta.glob<string>(
  *
  * Carrying the two files is what makes such a page the same on the three systems, which is what
  * `AMB-D-907` paid pdf.js's bulk for, and they cost 62 KB across the two modules that hold them —
- * fetched, like a map, only where a document names one. The fifteen files beside them in the
+ * fetched, like a map, only where a document names one. The twelve fonts beside them in the
  * package are for Times, Helvetica and Courier, which pdf.js asks for only where system fonts are
  * turned off — the XFA path, and XFA is off.
  *
@@ -81,34 +86,51 @@ function carried(url: string): Uint8Array {
 }
 
 /**
- * What pdf.js asks for a character map with. It is handed the class rather than an address, so what
- * answers is `CMAPS` and nothing is fetched (`AMB-D-907`).
+ * What pdf.js asks for a character map's or a standard font's bytes with. It is handed the class
+ * rather than an address, so what answers is `CMAPS` or `FONTS` and nothing is fetched
+ * (`AMB-D-907`). No `standardFontDataUrl` is handed over either: that would name the twelve fonts
+ * that are not carried (`AMB-D-923`).
  *
- * A name nobody shipped is refused the way pdf.js refuses one: the page still draws, without the
- * glyphs that map could have named.
+ * A file nobody shipped is refused the way pdf.js refuses one. A page missing a map still draws,
+ * without the glyphs that map could have named, and a font missing goes on to the machine's own
+ * faces, which is the road every name but Symbol and ZapfDingbats takes anyway. The wasm files are
+ * asked for through here too where pdf.js means to run them, and with `useWasm: false` it does not.
  */
-class Maps {
-  async fetch({ name }: { name: string }): Promise<{ cMapData: Uint8Array; isCompressed: boolean }> {
-    const load = CMAPS[`/node_modules/pdfjs-dist/cmaps/${name}.bcmap`];
-    if (load === undefined) throw new Error(`no character map called ${name} is shipped`);
-    return { cMapData: carried(await load()), isCompressed: true };
+class Carried {
+  async fetch({ kind, filename }: { kind: string; filename: string }): Promise<Uint8Array> {
+    const load =
+      kind === "cMapUrl" ? CMAPS[`/node_modules/pdfjs-dist/cmaps/${filename}`]
+      : kind === "standardFontDataUrl" ? FONTS[`/node_modules/pdfjs-dist/standard_fonts/${filename}`]
+      : undefined;
+    if (load === undefined) throw new Error(`no ${kind} file called ${filename} is shipped`);
+    return carried(await load());
   }
 }
 
 /**
- * What pdf.js asks for a standard font's bytes with, on the same terms as `Maps`: the class rather
- * than an address, so `FONTS` answers and no door has to.
- *
- * A file nobody shipped is refused the way pdf.js refuses one — it says so and goes on to the
- * machine's own faces, which is the road every name but these two takes anyway.
+ * Where pdf.js's worker imports the JavaScript decoders from, when a document holds a JPEG 2000 or
+ * JBIG2 image. pdf.js appends the file's own name to it, so the folder is one the build emits them
+ * into under those names (`vite.config.ts`). It starts at the root because the worker resolves the
+ * address against its own, which sits under `assets/`.
  */
-class Fonts {
-  async fetch({ filename }: { filename: string }): Promise<Uint8Array> {
-    const load = FONTS[`/node_modules/pdfjs-dist/standard_fonts/${filename}`];
-    if (load === undefined) throw new Error(`no standard font called ${filename} is shipped`);
-    return carried(await load());
-  }
-}
+const FALLBACKS = `${import.meta.env.BASE_URL}pdfjs/`;
+
+/**
+ * What every document is opened with, apart from its bytes and the worker it is read in.
+ *
+ * **`useWasm: false` is the decision this reader rests on** (`AMB-D-769`), and the test beside this
+ * module fails if it goes. Left on, pdf.js decodes JPEG 2000 and JBIG2 images, converts colour
+ * profiles and compiles a document's PostScript functions to WebAssembly — the last out of bytes the
+ * document chose, which no scan of the package can see. Off, it takes the JavaScript path for each,
+ * and none of them builds code out of a document. Code built out of a document is what
+ * CVE-2024-4367 ran, and what `isEvalSupported: false` used to answer for here; pdf.js 6 has no
+ * `eval` left for that switch to turn off, so it is gone and this one stands in its place.
+ */
+export const READER_OPTIONS = {
+  useWasm: false,
+  wasmUrl: FALLBACKS,
+  BinaryDataFactory: Carried,
+} as const;
 
 /**
  * How far outside the visible part of the panel a page is already drawn.
@@ -168,33 +190,28 @@ export async function mountPdf(
   // served over a scheme of ours, so its own worker reads as a stranger's, and pdf.js wraps it in a
   // `blob:` that imports it. A blob is not `'self'`: the CSP refuses the worker, and a PDF that was
   // never going to be a problem does not open. Handed a port instead, pdf.js uses what it is given.
+  // `create` rather than the constructor: the two take the same port, but the constructor's published
+  // types read the port as always `null`, and only `create` is typed to take a `Worker`.
   const port = new Worker(built.default, { type: "module" });
-  const worker = pdfjs.PDFWorker.fromPort({ port });
+  const worker = pdfjs.PDFWorker.create({ port });
 
   // **The file is fetched here rather than by pdf.js**, for the reason the worker is started here:
   // pdf.js fetches a document itself only over http and https, and everything else falls to a path
   // of its own that our door answers with nothing at all — measured, a status of 0 and no bytes.
   // `fetch` is what reaches these doors (`../components/Attachments`), and what the host already
   // refused to answer for is anything over the cap, so what arrives here is bounded (`AMB-D-907`).
-  //
-  // `isEvalSupported` off is CVE-2024-4367's fix standing on its own: pdf.js compiles a font's
-  // charstrings with `eval` where it can, and the window's CSP already refuses that — turning it
-  // off here is what keeps a refused eval from being the first thing anyone hears about it.
+  let opening: PDFDocumentLoadingTask;
   let doc;
   try {
     const answer = await fetch(url);
     // A door of ours answers with a status; one that answered with none still answered.
     if (!answer.ok && answer.status !== 0) throw new Error(`the file door said ${answer.status}`);
     const data = new Uint8Array(await answer.arrayBuffer());
-    doc = await pdfjs.getDocument({
-      data,
-      worker,
-      isEvalSupported: false,
-      CMapReaderFactory: Maps,
-      StandardFontDataFactory: Fonts,
-    }).promise;
+    opening = pdfjs.getDocument({ ...READER_OPTIONS, data, worker });
+    doc = await opening.promise;
   } catch (e) {
     // The worker is this document's, so a document that never opened takes it back down with it.
+    worker.destroy();
     port.terminate();
     throw e;
   }
@@ -224,9 +241,7 @@ export async function mountPdf(
       canvas.className = "files__pdfpaper";
       canvas.setAttribute("role", "img");
       canvas.setAttribute("aria-label", label(at, of));
-      const into = canvas.getContext("2d");
-      if (into === null) return;
-      const task = page.render({ canvasContext: into, viewport: view });
+      const task = page.render({ canvas, viewport: view });
       drawing.add(task);
       try {
         await task.promise;
@@ -277,10 +292,17 @@ export async function mountPdf(
       for (const task of drawing) task.cancel();
       drawing.clear();
       parent.replaceChildren();
-      void doc.destroy();
-      // Started here, so stopped here: `destroy` lets go of a port it was handed and leaves the
-      // worker behind it running.
-      port.terminate();
+      // Started here, so stopped here: the loading task lets go of the document and leaves a worker
+      // it was handed alone, and that worker lets go of its port and leaves the thread behind it
+      // running. Each is stopped after the one before it is done, so the document's last word to the
+      // worker still has somewhere to go.
+      void opening
+        .destroy()
+        .finally(() => {
+          worker.destroy();
+          port.terminate();
+        })
+        .catch(() => undefined);
     },
   };
 }

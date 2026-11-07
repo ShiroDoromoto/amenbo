@@ -3,27 +3,29 @@
 #
 # This gate is the whole of that: allowing a module would mean deciding that arbitrary bytecode may
 # run where the person's tasks are, and nothing else refuses one. The CSP is not a second lock — it
-# reaches the document and not a worker, measured on both engines, which is the allowance below.
-# What makes that easy to lose is that dependency bumps are merged unattended. `pdfjs-dist` is the
-# one already on its way: 4.10.38 is what this tree holds, 5.0.375 is the first release to publish
-# `wasm/openjpeg.wasm` and `wasm/qcms_bg.wasm` as files of their own, and 6.3.289 adds
-# `wasm/jbig2.wasm` and `wasm/quickjs-eval.wasm` to them.
+# reaches the document and not a worker, measured on both engines (tauri sets the
+# `Content-Security-Policy` header on `.html` and on nothing else, 2.11.5), and pdf.js reads a
+# document in a worker. What makes that easy to lose is that dependency bumps are merged unattended.
 #
 # What is measured, in the order it is read:
 #
 #  1. **A wasm file inside a package that ships.** `npm ls --omit=dev` is the shipped half of the
 #     tree — the same split the license and audit gates take — and a `.wasm` in one of them is wasm
 #     that arrived, whether or not this build happens to emit it. A reader handed one it may not run
-#     is not a reader that still works; it is one that fails on the documents it wanted it for.
+#     is not a reader that still works; it is one that fails on the documents it wanted it for. One
+#     package is allowed the files it publishes, and only those, below.
 #  2. **A wasm file in the bundle.** `app/dist` is what Tauri ships (`frontendDist`), so a module
-#     emitted beside it is one the window can fetch.
+#     emitted beside it is one the window can fetch. Nothing is allowed here, the package above
+#     included.
 #  3. **A wasm module inlined into JavaScript**, which is the other form it arrives in — a `data:`
-#     URL holding the module's bytes, bundled along with the code that instantiates it. One package
-#     carries one today and is named below.
+#     URL holding the module's bytes, bundled along with the code that instantiates it. No package is
+#     allowed one.
 #
 # What it does not catch: a module assembled at run time out of bytes that are not recognisable as
 # one. That is not what this guards against — the question is what a bump drags in, not what
-# someone determined could hide.
+# someone determined could hide. pdf.js does build one that way, out of a document's PostScript
+# functions, and what keeps it from running is `useWasm: false` in `app/src/files/pdfLoad.ts`, which
+# the test beside that module holds in place.
 #
 # Usage: guards/check-no-wasm.sh   (no args; run it after `npm --prefix app run build`)
 # Exit codes: 0 = no wasm anywhere it was read for, 1 = some, or the tree is not in a state to read.
@@ -35,32 +37,19 @@ cd "$root"
 app=app
 dist=$app/dist
 
-# The one package allowed to carry an inlined module, and what the allowance rests on.
+# The one package allowed wasm files of its own, and which files they are.
 #
-# `pdfjs-dist` 4.10.38 inlines an Emscripten build of OpenJPEG — 260,823 bytes, as a `data:` URL —
-# into its worker, its sandbox and its image decoders. It is the JPEG 2000 decoder, reached from
-# `JpxImage` and from nowhere else, so the only thing that asks for it is a PDF holding such an image.
+# `pdfjs-dist` publishes four from 6.3.289 on (5.0.375 was the first, with two): the JPEG 2000 and
+# JBIG2 decoders, the colour-profile engine and the script sandbox. **They sit in node_modules and
+# go no further.** The reader opens every document with `useWasm: false`, so pdf.js neither fetches
+# nor runs them, and the build carries none of them — the second scan below holds that. What decodes
+# a JPEG 2000 or JBIG2 image instead is the JavaScript build of the same decoder that pdf.js
+# publishes beside it (`*_nowasm_fallback.js`), which `app/vite.config.ts` emits into the bundle.
 #
-# **It runs, on both of the engines this window is drawn by.** A PDF whose image is a `/JPXDecode`
-# stream drew that image in the pane on macOS (WebKit) and on Windows (WebView2, Chromium 153),
-# which only the decoder can have done.
-#
-# The two get there differently. WebKit does not gate WebAssembly on `script-src` at all. Chromium
-# does — a module compiled in the document is refused with "Compiling or instantiating WebAssembly
-# module violates the following Content Security policy directive", measured on that same engine
-# build under this window's own CSP — but the decoder is not compiled in the document. It is
-# compiled in pdf.js's worker, and the worker is handed no CSP to be refused by: tauri sets the
-# `Content-Security-Policy` header on `.html` and on nothing else (2.11.5, `manager/mod.rs`), and
-# Chromium takes a worker's policy from that worker script's own response rather than from the
-# document that started it.
-#
-# So the allowance is not "it cannot run", and not "it runs on one engine": it runs on both, and what
-# it rests on is that nothing we draw goes near it unless a document brought a JPEG 2000 image with
-# it.
-#
-# **The allowance is a claim about that one decoder, not about the package.** A wasm file published
-# beside the code is caught by the scan above it regardless of who published it.
-INLINE_ALLOWED=pdfjs-dist
+# **The allowance names files, not the package.** A fifth wasm file in pdfjs-dist, or one of these
+# four moved, is caught like any other.
+WASM_PACKAGE=pdfjs-dist
+WASM_ALLOWED="wasm/openjpeg.wasm wasm/jbig2.wasm wasm/qcms_bg.wasm wasm/quickjs-eval.wasm"
 
 [ -d "$app/node_modules" ] || {
     echo "✗ no wasm: $app/node_modules is missing — run \`npm ci\` in $app first." >&2
@@ -85,7 +74,13 @@ shipped=$(cd "$app" && npm ls --omit=dev --parseable --all 2>/dev/null | tail -n
 carried=$(printf '%s\n' "$shipped" \
     | while IFS= read -r dir; do
         [ -d "$dir" ] || continue
-        find "$dir" -name '*.wasm' -not -path "$dir/node_modules/*" 2>/dev/null || true
+        find "$dir" -name '*.wasm' -not -path "$dir/node_modules/*" 2>/dev/null \
+          | while IFS= read -r file; do
+              case "${dir##*/node_modules/}" in
+                "$WASM_PACKAGE") case " $WASM_ALLOWED " in *" ${file#"$dir"/} "*) continue ;; esac ;;
+              esac
+              printf '%s\n' "$file"
+            done || true
       done)
 if [ -n "$carried" ]; then
     echo "✗ no wasm: a package that ships carries a WebAssembly module of its own." >&2
@@ -106,24 +101,23 @@ fi
 # inlined one is carried in.
 inlined=$(printf '%s\n' "$shipped" \
     | while IFS= read -r dir; do
-        case "${dir##*/node_modules/}" in "$INLINE_ALLOWED"|"$INLINE_ALLOWED"/*) continue ;; esac
         [ -d "$dir" ] || continue
-        grep -rl 'AGFzbQ' "$dir" --exclude-dir=node_modules 2>/dev/null || true
+        grep -rl 'AGFzbQ' "$dir" --exclude-dir=node_modules --exclude='*.wasm' 2>/dev/null || true
       done)
 if [ -n "$inlined" ]; then
     echo "✗ no wasm: a package that ships carries a WebAssembly module inline (base64)." >&2
     printf '%s\n' "$inlined" | sed "s|^$root/||" >&2
-    echo "  Only $INLINE_ALLOWED is allowed one, and only because the window never runs it — read the" >&2
-    echo "  allowance in this guard before widening it." >&2
+    echo "  No package is allowed one — read the allowance in this guard before widening it." >&2
     exit 1
 fi
 
 # The allowance answers for something that is still there. Once it is not, it is a waiver suppressing
 # a question that answers itself, and the gate says to drop it rather than keep it.
-if ! grep -rlq 'AGFzbQ' "$app/node_modules/$INLINE_ALLOWED" --exclude-dir=node_modules 2>/dev/null; then
-    echo "✗ no wasm: $INLINE_ALLOWED no longer carries an inlined module, so the allowance in this" >&2
-    echo "  guard answers for nothing. Delete it — an exception nobody revisits is one nobody notices." >&2
+for file in $WASM_ALLOWED; do
+    [ -f "$app/node_modules/$WASM_PACKAGE/$file" ] && continue
+    echo "✗ no wasm: $WASM_PACKAGE no longer publishes $file, so the allowance for it in this guard" >&2
+    echo "  answers for nothing. Delete it — an exception nobody revisits is one nobody notices." >&2
     exit 1
-fi
+done
 
-echo "✓ no wasm: none of the $(printf '%s\n' "$shipped" | wc -l | tr -d ' ') packages that ship publishes one, and the bundle emits none"
+echo "✓ no wasm: of the $(printf '%s\n' "$shipped" | wc -l | tr -d ' ') packages that ship, only $WASM_PACKAGE publishes any — the four it is allowed — and the bundle emits none"

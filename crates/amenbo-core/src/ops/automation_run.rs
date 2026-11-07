@@ -44,12 +44,13 @@
 //! run a trigger starts ([`fire`]), or one started once a task turns up ([`start_waiting`]), joins the
 //! launch standing, and opens one where none is. A test run belongs to none.
 //!
-//! **Where a round goes after its task is taken is the task's role.** An automation's roles each name
-//! the placement their round starts at, and a launch copies that onto the run ([`AutomationRunDef::roles`]);
-//! the way out that hands on the task taken then goes on to where the task's role starts rather than
-//! along a line ([`by_role`]), and only a task of one of those roles is taken ([`roles_started`]). A task
-//! with no role is not taken at all. An automation with no role naming where its round starts walks its
-//! picture as it is drawn.
+//! **A run is a seat of one role** ([`AutomationRun::role_id`]). An automation's roles each name the
+//! placement their round starts at, and a launch copies that onto the run ([`AutomationRunDef::roles`]).
+//! The launch also binds the run to one of those roles ([`seat`]), and the run keeps it until it ends —
+//! copying the automation down again does not change it. Only a task worked under that role is taken
+//! ([`roles_started`]), and the way out that hands on the task taken goes on to where the role starts
+//! rather than along a line ([`by_role`]). A task with no role, or of another role, is not taken at all.
+//! An automation with no role naming where its round starts walks its picture as it is drawn.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -2218,14 +2219,34 @@ struct EntryBuiltin {
     roles: Vec<i64>,
 }
 
-/// **The roles a run launched from `pic` would start rounds of** — [`roles_started`] read before any
-/// run is: the picture's roles that name a placement on it as where their round starts, each once.
+/// **The roles a run launched from `pic` would start rounds of** — the picture's roles that name a
+/// placement on it as where their round starts, each once, in the order they are defined in. The run is
+/// a seat of one of them ([`seat`]).
 fn roles_on(pic: &Picture) -> Vec<i64> {
     pic.roles()
         .iter()
         .filter(|r| r.entry_placement_id.is_some_and(|id| pic.placement(id).is_some()))
         .map(|r| r.id)
         .collect()
+}
+
+/// **The role a run launched from `pic` is a seat of** ([`AutomationRun::role_id`]) — of the roles it
+/// would start rounds of ([`roles_on`]), in the order they are defined in, the first with a task to take
+/// at the entry now, or the first of them where none has one or the entry takes no task. `None` where
+/// no role names where its round starts: that run walks its picture as it is drawn.
+fn seat(conn: &Connection, project_id: i64, pic: &Picture) -> Result<Option<i64>> {
+    let roles = roles_on(pic);
+    let Some(&first) = roles.first() else { return Ok(None) };
+    if let Some(e) = entry_builtin(conn, pic)? {
+        for &role in &roles {
+            let there =
+                crate::ops::automation_builtin::there_to_take(conn, project_id, &[role], e.builtin.as_deref(), &e.cfg)?;
+            if there == Some(true) {
+                return Ok(Some(role));
+            }
+        }
+    }
+    Ok(Some(first))
 }
 
 /// **Mark an automation as waiting for a task** ([`Automation::waits_for_task_since`]) — from now, or
@@ -3015,6 +3036,7 @@ fn launch_asking(
             }
         }
     }
+    let role_id = seat(tx.conn(), automation.project_id, &pic)?;
     let now = Timestamp::now();
     let run = AutomationRun {
         id: read::next_id(tx.conn(), "automation_run")?,
@@ -3033,6 +3055,7 @@ fn launch_asking(
         handed_task,
         acknowledged_by_kind: None,
         stopped_detail: None,
+        role_id,
         created_at: now,
         updated_at: now,
     };
@@ -3677,10 +3700,11 @@ pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64
 /// drawn from it. `None` for any other way out, and for every way out of a run whose automation defines
 /// no role that names where its round starts: that run walks its picture as it is drawn.
 ///
-/// The role is the one the round was taken under ([`crate::model::AutomationRunTask::role_id`]). Only a
-/// task of a role the copies start a round of is taken ([`roles_started`]), so a round with none has
-/// nowhere to go ([`Onward::Nowhere`]) — which a task whose role was changed under the run as it was being
-/// taken is the one way to reach.
+/// The role is the one the round was taken under ([`crate::model::AutomationRunTask::role_id`]), which is
+/// the run's own: only a task of that role is taken ([`roles_started`]). A round with none has nowhere to
+/// go ([`Onward::Nowhere`]) — which a task whose role was changed under the run as it was being taken
+/// reaches, and so does a run whose role no copy starts any longer, the automation having been copied
+/// down again without it ([`copy_down_again`], [`take_up_newer`]).
 ///
 /// No line is drawn for it, so the line it hands back is made up: on the automation's picture, from the
 /// placement it leaves, with no edge (`edge_id` 0) and no limit on how often it is taken. That it is on the
@@ -3713,12 +3737,20 @@ fn by_role(conn: &Connection, def: &AutomationRunDef, taken: &RunDefExit) -> Res
     Ok(Some(Onward::Go { def: Box::new(next), line }))
 }
 
-/// **The roles a run's copies start rounds of** ([`AutomationRunDef::roles`]), as it was last copied down,
-/// each once. Empty for a run whose automation defines no role that names where its round starts.
+/// **The roles a run takes tasks of** — the one role it is a seat of ([`AutomationRun::role_id`]), which
+/// it keeps until it ends, however its copies are copied down again.
+///
+/// A run with no role takes those its copies start rounds of ([`AutomationRunDef::roles`]), as it was last
+/// copied down, each once: what a run launched before runs were given a role (v128) did, and what one
+/// does whose role has since been taken out. Empty for a run whose automation defines no role that names
+/// where its round starts.
 ///
 /// Where there are any, the built-in that takes a task takes only a task of one of them, so a task with
-/// no role, or one of a role no copy starts, is not taken.
+/// no role, or one of another role, is not taken.
 pub(crate) fn roles_started(conn: &Connection, run_id: i64) -> Result<Vec<i64>> {
+    if let Some(role) = read::automation_run(conn, run_id)?.and_then(|run| run.role_id) {
+        return Ok(vec![role]);
+    }
     let mut roles = Vec::new();
     for role in current_defs(conn, run_id)?.iter().flat_map(|d| d.role_ids()) {
         if !roles.contains(&role) {

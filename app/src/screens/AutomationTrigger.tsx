@@ -43,10 +43,12 @@ import { confirmDialog } from "../core/dialog";
 import { dueLabel, errText, t, tf } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
+import { filterValueLabel } from "./automationParts";
 import type {
   AutomationDetailDto,
   AutomationScriptInputDto,
   AutomationStepScriptDto,
+  AutomationTriggerConditionDto,
   AutomationTriggerDto,
   AutomationTriggerInputDto,
 } from "../bindings/bindings";
@@ -279,17 +281,51 @@ function Part({ no, title, children }: { no: number; title: string; children: Re
   );
 }
 
-/** When the trigger files a task, in the words of the card's part 1. */
-export function whenLine(trigger: AutomationTriggerDto): string {
+/** How often an "every" trigger is asked, in the largest unit the minutes divide into. */
+function everyLine(minutes: number): string {
+  if (minutes % 1440 === 0) return tf("auto.side.everyDays", { days: minutes / 1440 });
+  if (minutes % 60 === 0) return tf("auto.side.everyHours", { hours: minutes / 60 });
+  return tf("auto.side.every", { minutes });
+}
+
+/**
+ * What a trigger's condition counts, in the words the filter's values are drawn with elsewhere
+ * (`filterValueLabel`): the values one key takes are joined by "/", the keys and the role the tasks
+ * are worked under stand side by side. Empty where every task is counted.
+ */
+function countedWords(condition: AutomationTriggerConditionDto, roles: AutomationDetailDto["roles"]): string {
+  const groups: string[] = [];
+  for (const part of condition.filter.split(/\s+/)) {
+    const at = part.indexOf(":");
+    if (at <= 0) continue;
+    const key = part.slice(0, at);
+    const values = part.slice(at + 1).split(",").filter((one) => one !== "");
+    if (values.length > 0) groups.push(values.map((one) => filterValueLabel(key, one)).join("/"));
+  }
+  const role = roles.find((one) => one.id === condition.roleId);
+  if (role !== undefined) groups.push(role.name);
+  return groups.join(" ");
+}
+
+/** How few of what the condition counts it waits for, naming what it counts where it says. */
+function belowLine(condition: AutomationTriggerConditionDto, roles: AutomationDetailDto["roles"]): string {
+  const counted = countedWords(condition, roles);
+  return counted === ""
+    ? tf("auto.side.below", { below: condition.below })
+    : tf("auto.side.belowOf", { what: counted, below: condition.below });
+}
+
+/** When the trigger files a task, in the words of the card's part 1, with what its condition counts. */
+export function whenLine(trigger: AutomationTriggerDto, roles: AutomationDetailDto["roles"]): string {
   const when =
     trigger.when.kind === "every"
-      ? tf("auto.side.every", { minutes: trigger.when.minutes })
+      ? everyLine(trigger.when.minutes)
       : trigger.when.kind === "idle"
         ? t("auto.trigger.whenIdle")
         : trigger.when.kind === "tasks"
           ? t("auto.trigger.whenTasks")
           : t("auto.trigger.whenScript");
-  const below = trigger.condition === undefined ? null : tf("auto.side.below", { below: trigger.condition.below });
+  const below = trigger.condition === undefined ? null : belowLine(trigger.condition, roles);
   // "Tasks" is the condition with nothing else, so it is named by the condition alone.
   if (trigger.when.kind === "tasks" && below !== null) return below;
   return below === null ? when : `${when} ・ ${below}`;
@@ -322,8 +358,12 @@ function TriggerList({ automation }: { automation: AutomationDetailDto }) {
       <ul className="trigstage__list" data-list="triggers">
         {automation.triggers.map((one) => (
           <li key={one.id}>
-            <b>{one.name.trim() || whenLine(one)}</b>{" "}
-            {[one.name.trim() === "" ? null : whenLine(one), taskLine(one), roleLine(automation, one.roleId)]
+            <b>{one.name.trim() || whenLine(one, automation.roles)}</b>{" "}
+            {[
+              one.name.trim() === "" ? null : whenLine(one, automation.roles),
+              taskLine(one),
+              roleLine(automation, one.roleId),
+            ]
               .filter((part) => part !== null && part !== "")
               .join(" ・ ")}
           </li>

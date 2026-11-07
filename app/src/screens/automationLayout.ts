@@ -31,10 +31,11 @@
 // automation's picture has no such boundary, and draws neither.
 //
 // **On the build screen an automation is drawn one role at a time** (`automationGraph` with a role):
-// the boxes that role's round reaches, from where it receives its task down to the roles it hands on
-// to. A line out of the round hangs as one that goes nowhere, naming the role it hands on to, and a
-// line going back is no line but a loop under the box it goes back to — a round that checks and goes
-// round again reads as one action doing its work twice, not as a line up the margin.
+// the boxes that role's round reaches, laid out across from where it receives its task to the roles it
+// hands on to (`layOutAcross`), each depth a column. A line out of the round hangs as one that goes
+// nowhere, naming the role it hands on to, and a line going back is no line but a loop under the box it
+// goes back to — a round that checks and goes round again reads as one action doing its work twice,
+// not as a line back along the picture.
 //
 // **What a box hands on is not drawn** (`AMB-D-1001`). The wires are only read here for the inputs
 // nothing reaches, which a box wears as its "⚠". Drawn as lines they took the whole right margin and
@@ -252,16 +253,27 @@ export const ERROR_EXIT = "*";
 /** The name core gives the way out every step and action is born with — core's `DONE_EXIT`. */
 export const DONE_EXIT = "完了";
 
-/** How big a box is, and how much room is left around it. All of it fixed. Two lines tall — the name, and under it where the action comes from or
- *  what it is missing — as the mock draws it. */
+/** How big a box is, and how much room is left around it. All of it fixed, but for an action's box on
+ *  a role's picture, which is sized to what it says and never wider than this (below). Two lines tall
+ *  — the name, and under it where the action comes from or what it is missing — as the mock draws it. */
 const NODE_W = 220;
 const NODE_H = 46;
 /** A step's box on an action's picture, one line taller: what it takes in and what it hands on have a
  *  line each under its name (`AMB-T-5798`), so neither cuts the other short. */
 const STEP_H = 62;
-/** An action's box on a role's picture: under its name the steps inside it, what it takes in, what it
- *  hands on, and the loop back into it — a line each. */
-const ROUND_H = 100;
+/** An action's box on a role's picture (`layOutAcross`), sized to what it says (`roundSize`): under
+ *  its name the steps inside it, what it takes in, what it hands on, and the loop back into it — a line
+ *  each. As narrow as its name and its steps let it be, between the two widths; the lines past what the
+ *  narrowest can hold are cut short, and said whole on hover. */
+const ROUND_MIN_W = 132;
+const ROUND_HEAD_H = 22;
+const ROUND_LINE_H = 16;
+const ROUND_PAD_H = 10;
+const ROUND_PAD_W = 22;
+/** How much bigger a box's name is drawn than the words on its lines, and the room the number before
+ *  it takes. */
+const ROUND_NAME = 13 / 12;
+const ROUND_NO_W = 22;
 /** Between two boxes standing side by side at the same depth. */
 const COL_GAP = 24;
 /** Between one depth and the next — the room a line and its `+` are drawn in. */
@@ -862,11 +874,402 @@ export function wordW(exitName: string | undefined): number {
   return [...exitName].reduce((sum, one) => sum + (one.codePointAt(0)! > 0x2e80 ? 12 : 7), 0);
 }
 
+/** The ways out of a box nothing has been decided for (`AMB-D-1003`): no line leaves by them yet. The
+ *  error one is left out — with no line it stops the run and calls a person — and so is the one a
+ *  built-in never leaves by, as its settings stand. */
+function undecidedExits(graph: PicGraph, box: PicBox): readonly AutomationExitDto[] {
+  return box.exits.filter(
+    (exit) =>
+      exit.name !== ERROR_EXIT &&
+      exit.name !== box.neverLeavesBy &&
+      !graph.edges.some((edge) => edge.fromId === box.id && edge.exitName === exit.name),
+  );
+}
+
+/**
+ * The colour each edge is drawn in (`PicLine.tone`), by its line's key. A box with two or more named
+ * ways out is one the run branches at, and every line out of it says so; the error way out, and a line
+ * that stops the run, are the stop colour.
+ */
+function tonesOf(
+  edges: readonly AutomationEdgeDto[],
+  boxes: ReadonlyMap<number, PicBox>,
+): Map<string, PicLine["tone"]> {
+  const named = (box: PicBox | undefined) =>
+    box?.exits.filter((exit) => exit.name !== undefined && exit.name !== ERROR_EXIT).length ?? 0;
+  return new Map<string, PicLine["tone"]>(
+    edges.map((edge) => [
+      lineKey(edge.id),
+      edge.exitName === ERROR_EXIT || edge.ends === "halt"
+        ? "error"
+        : named(boxes.get(edge.fromId)) > 1
+          ? "branch"
+          : "next",
+    ]),
+  );
+}
+
+/**
+ * What each box of a picture is drawn as, wherever it stands: its name, its number, and its marks.
+ *
+ * On a role's picture an input is fed, and a box numbered, as the whole automation has it: the round
+ * is cut out of it, and a wire into it may come from another role's box. A box there holds besides the
+ * steps inside it, and the lines that come back into it from further on, each from the box it leaves.
+ * `no` is the number a box is given where no whole automation numbers it.
+ */
+function nodeMaker(
+  graph: PicGraph,
+  live: ReadonlySet<number>,
+  goesBack: ReadonlySet<number>,
+): (box: PicBox, place: PicRect, no: number) => PicNode {
+  const round = graph.round;
+  const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
+  const feeds = round?.whole ?? graph;
+  const reached = round === undefined ? live : walk(round.whole).live;
+  const numberOf = round === undefined ? undefined : pictureOrder(round.whole).numberOf;
+  const roundOf = (box: PicBox): Pick<PicNode, "steps" | "returns"> => {
+    const returns = graph.edges
+      .filter((edge) => goesBack.has(edge.id) && edge.toId === box.id)
+      .map((edge) => ({
+        no: numberOf?.get(edge.fromId) ?? 0,
+        exitName: edge.exitName,
+        builtin: boxes.get(edge.fromId)?.builtin,
+      }));
+    return { steps: box.stepNames ?? [], ...(returns.length === 0 ? {} : { returns }) };
+  };
+  return (box, place, no) => ({
+    boxId: box.id,
+    // A built-in's words are drawn in the screen's language; the box's own name stays the store's.
+    name: builtinWord(box.builtin, box.name),
+    ...place,
+    no: numberOf?.get(box.id) ?? no,
+    takes: takesTask(box),
+    global: box.global,
+    builtin: box.builtin,
+    empty: box.draft !== true && box.builtin === undefined && box.steps !== undefined && box.steps.length === 0,
+    draft: box.draft === true,
+    behind: behindOf(box),
+    unfed: !reached.has(box.id)
+      ? []
+      : box.inputs
+          .filter((port) => port.required && !fed(feeds, box.id, port.name))
+          .map((port) => builtinWord(box.builtin, port.name)),
+    ...(round === undefined ? {} : roundOf(box)),
+  });
+}
+
+/** How big an action's box is on a role's picture: as wide as its name or its steps on one line,
+ *  between `ROUND_MIN_W` and `NODE_W`, and as tall as the lines it has. */
+function roundSize(box: PicBox, returns: boolean): { w: number; h: number } {
+  const name = ROUND_NO_W + Math.ceil(wordW(builtinWord(box.builtin, box.name)) * ROUND_NAME);
+  const steps = wordW((box.stepNames ?? []).join(" → "));
+  const w = Math.min(NODE_W, Math.max(ROUND_MIN_W, Math.max(name, steps) + ROUND_PAD_W));
+  const lines = [
+    true,
+    box.inputs.length > 0,
+    box.exits.some((exit) => exit.outputs.length > 0),
+    returns,
+  ].filter(Boolean).length;
+  return { w, h: ROUND_PAD_H + ROUND_HEAD_H + lines * ROUND_LINE_H };
+}
+
+/** On a role's picture, laid out across: the room a line out of a box's right edge runs in before it
+ *  turns, past the name written over it — and after the turn, the room its `+` sits in. */
+const ACROSS_WORD = 12;
+const ACROSS_TAIL = 28;
+/** Where two lines out of one column turn, how far apart. */
+const ACROSS_TURN = 12;
+/** Between two boxes of one column, under what hangs from the upper one. */
+const ACROSS_UNDER = 24;
+/** How far apart the lanes under a role's picture run, where a line goes past the next column. */
+const ACROSS_LANE = 20;
+
+/**
+ * **Lay one role's round out across** (`PicGraph.round`), as the build screen reads it: what the round
+ * receives on its left, the actions it passes through from left to right, and what it hands on on its
+ * right — the two ends are the screen's, not the picture's.
+ *
+ * Each depth the walk reaches is a column, its boxes one under another where the round branches. A
+ * line to the next column leaves the box's right edge, its name over it, turns where the column's
+ * lines turn, and goes into the next box's left edge, its `+` on the last leg. A line to a box past
+ * the next column runs along a lane under every box, out of the box's bottom and up into the other's,
+ * landing left of everything that leaves that box's bottom, so it does not run through their names.
+ * A line that goes nowhere — out of the round, to done, to a stop — and a way out with nothing decided
+ * hang under their box as they do on every picture, with their names and the press for the next action
+ * (`AMB-D-1003`). A line going back is a loop under the box it goes back to (`PicNode.returns`).
+ */
+function layOutAcross(graph: PicGraph, round: PicRound): Picture {
+  const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
+  const { laps, live, back: goesBack } = walk(graph);
+  const nodeOf = nodeMaker(graph, live, goesBack);
+  // The lines that are drawn: one going back is a loop under its box instead, and keeps the way out it
+  // leaves by decided.
+  const edges = graph.edges.filter((edge) => !goesBack.has(edge.id));
+  const columns = laps.flatMap((lap, nth) => lap.rows.map((ids) => ({ lap: nth, ids })));
+  const columnOf = new Map(columns.flatMap((column, nth) => column.ids.map((id) => [id, nth] as const)));
+  const toOf = (edge: AutomationEdgeDto): number | undefined =>
+    edge.ends === "go" && edge.toId !== undefined && columnOf.has(edge.toId) ? edge.toId : undefined;
+  const isNext = (edge: AutomationEdgeDto): boolean => {
+    const toId = toOf(edge);
+    return toId !== undefined && columnOf.get(toId) === columnOf.get(edge.fromId)! + 1;
+  };
+  const exitAt = (box: PicBox, edge: AutomationEdgeDto) => box.exits.findIndex((exit) => exit.name === edge.exitName);
+  /** How many lines from the lanes land on a box. They land along its bottom from the left, before
+   *  everything that leaves it there, so none of them runs up through the name of a line hanging
+   *  under it — those names are written from their leg to the right. */
+  const landsOf = (box: PicBox) => edges.filter((edge) => toOf(edge) === box.id && !isNext(edge)).length;
+  /** Where the nth thing leaving a box along its bottom stands, from its left edge: past the lines
+   *  landing on it. */
+  const outAt = (box: PicBox, boxW: number, nth: number) =>
+    Math.min(ATTACH + landsOf(box) * LAND_GAP + nth * EXIT_GAP, boxW - ATTACH);
+  /** What hangs under a box, from its left: the legs out to the lanes, then the lines that go nowhere,
+   *  then the ways out with nothing decided. */
+  const underOf = (box: PicBox) => {
+    const own = edges.filter((edge) => edge.fromId === box.id).sort((a, b) => exitAt(box, a) - exitAt(box, b));
+    return {
+      lanes: own.filter((edge) => toOf(edge) !== undefined && !isNext(edge)),
+      nowhere: own.filter((edge) => toOf(edge) === undefined),
+      open: undecidedExits(graph, box),
+    };
+  };
+  /** How a line that goes nowhere ends: at done, at a stop, or handed on to another role. */
+  const endOf = (edge: AutomationEdgeDto): Pick<PicLine, "ends" | "handsTo"> => ({
+    ends: edge.ends === "done" || edge.ends === "halt" ? edge.ends : undefined,
+    handsTo: round.handOff.get(edge.id),
+  });
+  const pressW = wordW(openWord(false)) + 28;
+  const sizeOf = (box: PicBox) =>
+    roundSize(box, graph.edges.some((edge) => goesBack.has(edge.id) && edge.toId === box.id));
+  /** How far under a box what hangs from it reaches, and how far past its right edge its names run. */
+  const hangOf = (box: PicBox): { down: number; right: number } => {
+    const boxW = sizeOf(box).w;
+    const { lanes: legs, nowhere, open } = underOf(box);
+    const words = [
+      ...nowhere.map((edge) => ({ word: wordW(edgeWord({ exitName: edge.exitName, builtin: box.builtin, ...endOf(edge) })), press: 0 })),
+      ...open.map((exit) => ({ word: wordW(exitWord({ exitName: exit.name, builtin: box.builtin })), press: BESIDE / 2 + pressW })),
+    ];
+    const right = Math.max(
+      0,
+      ...words.map(({ word, press }, nth) => outAt(box, boxW, legs.length + nth) - 6 + word + press - boxW),
+    );
+    const down = words.length === 0 ? (legs.length === 0 ? 0 : DROP) : STUB + (words.length - 1) * OPEN_H + OVER + PRESS_H / 2;
+    return { down, right };
+  };
+  /** The lines from a column to the next, in the order they turn in: from the top. */
+  const nextOf = (column: readonly number[]) =>
+    column.flatMap((id) =>
+      edges
+        .filter((edge) => edge.fromId === id && isNext(edge))
+        .sort((a, b) => exitAt(boxes.get(id)!, a) - exitAt(boxes.get(id)!, b)),
+    );
+
+  // The columns, left to right: each as wide as its widest box, and after it the room its lines turn
+  // in — past the longest name over a line out of it, and past the names that hang under its boxes.
+  const top = laps.some((lap) => lap.head !== null) ? LAP_TOP : 0;
+  const nodes: PicNode[] = [];
+  const turnAt = new Map<number, number>();
+  const columnX: number[] = [];
+  const columnW: number[] = [];
+  let x = 0;
+  columns.forEach((column, nth) => {
+    if (nth > 0 && columns[nth - 1]!.lap !== column.lap) x += LAP_PAD * 2 + LAP_GAP;
+    columnX.push(x);
+    let y = top;
+    let wide = 0;
+    for (const id of column.ids) {
+      const box = boxes.get(id)!;
+      const size = sizeOf(box);
+      nodes.push(nodeOf(box, { x, y, ...size }, nodes.length + 1));
+      y += size.h + hangOf(box).down + ACROSS_UNDER;
+      wide = Math.max(wide, size.w);
+    }
+    columnW.push(wide);
+    const lines = nextOf(column.ids);
+    const words = Math.max(
+      0,
+      ...lines.map((edge) => wordW(lineWord({ exitName: edge.exitName, builtin: boxes.get(edge.fromId)!.builtin })) + 6),
+      ...column.ids.map((id) => sizeOf(boxes.get(id)!).w + hangOf(boxes.get(id)!).right - wide),
+    );
+    const turn = x + wide + words + ACROSS_WORD;
+    lines.forEach((edge, at) => turnAt.set(edge.id, turn + at * ACROSS_TURN));
+    x = turn + Math.max(0, lines.length - 1) * ACROSS_TURN + ACROSS_TAIL;
+  });
+  if (nodes.length === 0) return { width: 0, height: 0, laps: [], nodes: [], lines: [], inserts: [], opens: [], marks: [] };
+  const node = new Map(nodes.map((one) => [one.boxId, one]));
+  const under = Math.max(...nodes.map((one) => one.y + one.h + hangOf(boxes.get(one.boxId)!).down));
+
+  const tones = tonesOf(edges, boxes);
+  const lines: PicLine[] = [];
+  const inserts: PicInsert[] = [];
+  const opens: PicOpen[] = [];
+  // Where each line to a box past the next column runs: a lane under every box, the ones that run past
+  // the same columns apart.
+  const asides = edges.flatMap((edge) => {
+    const toId = toOf(edge);
+    if (toId === undefined || isNext(edge)) return [];
+    const from = node.get(edge.fromId)!;
+    const to = node.get(toId)!;
+    return [{ edge, from, to, key: lineKey(edge.id), top: Math.min(from.x, to.x), bottom: Math.max(from.x + from.w, to.x + to.w) }];
+  });
+  const laneOf = lanes(asides);
+  // Where along its bottom each line from a lane lands on its box, from the left: the one on the lane
+  // nearest the boxes first, so the one from a lane further down goes up past where it ended.
+  const landing = new Map<number, number>();
+  for (const one of nodes) {
+    asides
+      .filter((aside) => aside.to.boxId === one.boxId)
+      .sort((a, b) => laneOf.get(a.key)! - laneOf.get(b.key)! || a.from.x - b.from.x)
+      .forEach((aside, nth) => landing.set(aside.edge.id, nth));
+  }
+
+  for (const from of nodes) {
+    const box = boxes.get(from.boxId)!;
+    const { lanes: legs, nowhere, open } = underOf(box);
+    const sy = from.y + from.h;
+    const out = (nth: number) => from.x + outAt(box, from.w, nth);
+    // Out of the right edge, a place each, into the next column.
+    const right = edges
+      .filter((edge) => edge.fromId === box.id && isNext(edge))
+      .sort((a, b) => node.get(toOf(a)!)!.y - node.get(toOf(b)!)!.y || exitAt(box, a) - exitAt(box, b));
+    right.forEach((edge, nth) => {
+      const to = node.get(toOf(edge)!)!;
+      const ry = from.y + Math.round(((nth + 1) * from.h) / (right.length + 1));
+      const sx = from.x + from.w;
+      const tx = to.x;
+      const ty = to.y + Math.round(to.h / 2);
+      const mx = turnAt.get(edge.id)!;
+      inserts.push({ edgeId: edge.id, x: Math.round((mx + tx) / 2), y: ty });
+      lines.push({
+        key: lineKey(edge.id),
+        points: [
+          { x: sx, y: ry },
+          { x: mx, y: ry },
+          { x: mx, y: ty },
+          { x: tx, y: ty },
+        ],
+        back: false,
+        exitName: edge.exitName,
+        builtin: box.builtin,
+        at: { x: sx + 6, y: ry - 4 },
+        align: "start",
+      });
+    });
+    // Out of the bottom, from the left: down to a lane under every box, and up into the box it goes to.
+    legs.forEach((edge, nth) => {
+      const to = node.get(toOf(edge)!)!;
+      const sx = out(nth);
+      const ly = under + DROP + laneOf.get(lineKey(edge.id))! * ACROSS_LANE;
+      const tx = landAt(to, landing.get(edge.id)!);
+      inserts.push({ edgeId: edge.id, x: Math.round((sx + tx) / 2), y: ly });
+      lines.push({
+        key: lineKey(edge.id),
+        points: [
+          { x: sx, y: sy },
+          { x: sx, y: ly },
+          { x: tx, y: ly },
+          { x: tx, y: to.y + to.h },
+        ],
+        back: false,
+        exitName: edge.exitName,
+        builtin: box.builtin,
+        at: { x: sx + 6, y: ly - 4 },
+        align: "start",
+      });
+    });
+    // Hanging under it: the ones further left hang lower, so their names pass under the shorter ones.
+    const hanging = nowhere.length + open.length;
+    nowhere.forEach((edge, nth) => {
+      const sx = out(legs.length + nth);
+      const foot = sy + STUB + (hanging - 1 - nth) * OPEN_H;
+      inserts.push({ edgeId: edge.id, x: sx, y: sy + STUB_PLUS });
+      lines.push({
+        key: lineKey(edge.id),
+        points: [
+          { x: sx, y: sy },
+          { x: sx, y: foot },
+        ],
+        back: false,
+        exitName: edge.exitName,
+        builtin: box.builtin,
+        ...endOf(edge),
+        at: { x: sx - 6, y: foot + OVER },
+        align: "start",
+      });
+    });
+    open.forEach((exit, nth) => {
+      const sx = out(legs.length + nowhere.length + nth);
+      const foot = sy + STUB + (open.length - 1 - nth) * OPEN_H;
+      lines.push({
+        key: `open-${box.id}-${exit.name}`,
+        points: [
+          { x: sx, y: sy },
+          { x: sx, y: foot },
+        ],
+        back: false,
+        open: true,
+        exitName: exit.name,
+        builtin: box.builtin,
+        at: { x: sx - 6, y: foot + OVER },
+        align: "start",
+      });
+      const word = exitWord({ exitName: exit.name, builtin: box.builtin });
+      opens.push({ boxId: box.id, exitName: exit.name, x: sx - 6 + wordW(word) + BESIDE / 2, y: foot + OVER - 4 });
+    });
+  }
+
+  // The dashed outline round the columns one task is worked by.
+  const bottom = Math.max(under, ...lines.flatMap((line) => line.points.map((p) => p.y)));
+  const outlines: PicLap[] = laps.flatMap((lap, nth) => {
+    if (lap.head === null) return [];
+    const own = columns.flatMap((column, at) => (column.lap === nth ? [at] : []));
+    const left = Math.min(...own.map((at) => columnX[at]!)) - LAP_PAD;
+    const right = Math.max(...own.map((at) => columnX[at]! + columnW[at]!)) + LAP_PAD;
+    return [{ headBoxId: lap.head, x: left, y: 0, w: right - left, h: bottom + LAP_PAD }];
+  });
+
+  // Everything was laid out from 0: move it in by the room round it, past the furthest name and press.
+  type Rect = [number, number, number, number];
+  const rects: Rect[] = [
+    ...nodes.map((one): Rect => [one.x, one.y - (one.takes === true ? WORD_H : 0), one.x + one.w, one.y + one.h]),
+    ...lines.flatMap((line) => {
+      const wide = wordW(edgeWord(line));
+      const left = wordLeft(line, wide);
+      return [
+        ...line.points.map((p): Rect => [p.x, p.y, p.x, p.y]),
+        ...(wide === 0 ? [] : [[left, line.at.y - 10, left + wide, line.at.y + 2] as Rect]),
+      ];
+    }),
+    ...opens.map((one): Rect => [one.x, one.y - PRESS_H / 2, one.x + pressW, one.y + PRESS_H / 2]),
+    ...inserts.map((one): Rect => [one.x - 10, one.y - 10, one.x + 10, one.y + 10]),
+    ...outlines.map((lap): Rect => [lap.x, lap.y - WORD_H, lap.x + lap.w, lap.y + lap.h]),
+  ];
+  const dx = PAD - Math.min(...rects.map((one) => one[0]));
+  const dy = PAD - Math.min(...rects.map((one) => one[1]));
+  return {
+    width: Math.max(...rects.map((one) => one[2])) + dx + PAD,
+    height: Math.max(...rects.map((one) => one[3])) + dy + PAD,
+    laps: outlines.map((lap) => ({ ...lap, x: lap.x + dx, y: lap.y + dy })),
+    nodes: nodes.map((one) => ({ ...one, x: one.x + dx, y: one.y + dy })),
+    lines: lines.map((line) => ({
+      ...line,
+      tone: tones.get(line.key) ?? line.tone,
+      points: line.points.map((p) => ({ x: p.x + dx, y: p.y + dy })),
+      at: { x: line.at.x + dx, y: line.at.y + dy },
+    })),
+    inserts: inserts.map((one) => ({ ...one, x: one.x + dx, y: one.y + dy })),
+    opens: opens.map((one) => ({ ...one, x: one.x + dx, y: one.y + dy })),
+    marks: [],
+  };
+}
+
 /** How many times `layOut` lays the rows out at the most. */
 const LAYOUT_ROUNDS = 16;
 
 /**
  * Lay one picture out.
+ *
+ * **A role's round is laid out across** (`layOutAcross`): the build screen reads it from left to right,
+ * between what it receives and what it hands on. Every other picture is laid out down, as here.
  *
  * Everything is placed with the boxes starting at x=0 and shifted right at the end by however many
  * lanes the left margin turned out to need — which is not known until every line has one.
@@ -884,6 +1287,7 @@ const LAYOUT_ROUNDS = 16;
  * out `rounds` times at the most, and the picture of the last is drawn as it stands.
  */
 export function layOut(graph: PicGraph | null, rounds = LAYOUT_ROUNDS): Picture {
+  if (graph !== null && graph.round !== undefined && graph.boxes.length > 0) return layOutAcross(graph, graph.round);
   let legs = new Map<string, number>();
   let turns = new Map<number, number>();
   let gaps = new Map<number, number>();
@@ -915,30 +1319,17 @@ function layOutWith(
   if (graph === null || graph.boxes.length === 0) return { picture: empty, legsOf, turnsOf, gapsOf };
 
   const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
-  const round = graph.round;
-  const nodeH = graph.boundary !== undefined ? STEP_H : round !== undefined ? ROUND_H : NODE_H;
+  const nodeH = graph.boundary !== undefined ? STEP_H : NODE_H;
   const { laps, live, back: goesBack } = walk(graph);
-  // On a role's picture an input is fed, and a box numbered, as the whole automation has it: the round
-  // is cut out of it, and a wire into it may come from another role's box.
-  const feeds = round?.whole ?? graph;
-  const reached = round === undefined ? live : walk(round.whole).live;
-  const numberOf = round === undefined ? undefined : pictureOrder(round.whole).numberOf;
-  // The lines that are drawn. On a role's picture one going back is a loop under the box it goes back
-  // to instead (`PicNode.returns`), and keeps the way out it leaves by decided.
-  const edges = round === undefined ? graph.edges : graph.edges.filter((edge) => !goesBack.has(edge.id));
+  const nodeOf = nodeMaker(graph, live, goesBack);
+  const edges = graph.edges;
   // The action's ways out, the error one last — the order the declaration lists them in.
   const outs = [...(graph.boundary?.exits ?? [])].sort(
     (a, b) => Number(a.name === ERROR_EXIT) - Number(b.name === ERROR_EXIT),
   );
   // How many of each box's ways out say nothing yet (`AMB-D-1003`) — each hangs a row lower than the
   // one to its right, and under the row they hang from they need the room.
-  const undecidedOf = (box: PicBox): readonly AutomationExitDto[] =>
-    box.exits.filter(
-      (exit) =>
-        exit.name !== ERROR_EXIT &&
-        exit.name !== box.neverLeavesBy &&
-        !graph.edges.some((edge) => edge.fromId === box.id && edge.exitName === exit.name),
-    );
+  const undecidedOf = (box: PicBox) => undecidedExits(graph, box);
   // How far under a box what hangs from it reaches. The legs of its lines out to one margin hang a row
   // of words apart, and a line down to the next row turns under the lowest of them, so the name over
   // its turn is not written across one (`AMB-T-5824`).
@@ -1029,19 +1420,6 @@ function layOutWith(
     ...laps.flatMap((lap) => lap.rows.map((row) => columnsOf(row).w)),
   );
 
-  // What a box on a role's picture holds besides: the steps inside it, and the lines that come back
-  // into it from further on, each from the box it leaves.
-  const roundOf = (box: PicBox): Pick<PicNode, "steps" | "returns"> => {
-    const returns = graph.edges
-      .filter((edge) => goesBack.has(edge.id) && edge.toId === box.id)
-      .map((edge) => ({
-        no: numberOf?.get(edge.fromId) ?? 0,
-        exitName: edge.exitName,
-        builtin: boxes.get(edge.fromId)?.builtin,
-      }));
-    return { steps: box.stepNames ?? [], ...(returns.length === 0 ? {} : { returns }) };
-  };
-
   // Which row of which stretch each box landed in — what says whether two boxes are neighbours.
   const at = new Map<number, { lap: number; row: number }>();
   const nodes: PicNode[] = [];
@@ -1086,28 +1464,7 @@ function layOutWith(
         hangUnder.set(boxId, hang);
         stairUnder.set(boxId, stair);
         rowBottom.set(boxId, rowY + rowH);
-        nodes.push({
-          boxId,
-          // A built-in's words are drawn in the screen's language; the box's own name stays the store's.
-          name: builtinWord(box.builtin, box.name),
-          x: startX + columns.xs[column],
-          y: rowY,
-          w: NODE_W,
-          h: nodeH,
-          no: numberOf?.get(boxId) ?? nodes.length + 1,
-          takes: takesTask(box),
-          global: box.global,
-          builtin: box.builtin,
-          empty: box.draft !== true && box.builtin === undefined && box.steps !== undefined && box.steps.length === 0,
-          draft: box.draft === true,
-          behind: behindOf(box),
-          unfed: !reached.has(boxId)
-            ? []
-            : box.inputs
-                .filter((port) => port.required && !fed(feeds, boxId, port.name))
-                .map((port) => builtinWord(box.builtin, port.name)),
-          ...(round === undefined ? {} : roundOf(box)),
-        });
+        nodes.push(nodeOf(box, { x: startX + columns.xs[column], y: rowY, w: NODE_W, h: nodeH }, nodes.length + 1));
       });
     });
     // Under the last row, room for what hangs lowest from it, and for the stair the lines down to the
@@ -1490,7 +1847,6 @@ function layOutWith(
         exitName: edge.exitName,
         builtin: from.builtin,
         ends: edge.ends === "done" || edge.ends === "halt" ? edge.ends : undefined,
-        handsTo: round?.handOff.get(edge.id),
         at: { x: sx - 6, y: foot + OVER },
         align: "start",
       });
@@ -1702,21 +2058,7 @@ function layOutWith(
   /** Where the lines of a margin land on a box's top: left of its first way out, or right of its last. */
   const inX = (line: Aside) => (line.side === "left" ? landAt(line.to, 0) : line.to.x + line.to.w - LAND);
 
-  // The colour each edge is drawn in (`PicLine.tone`). A box with two or more named ways out is one
-  // the run branches at, and every line out of it says so; the error way out, and a line that stops
-  // the run, are the stop colour.
-  const named = (box: PicBox | undefined) =>
-    box?.exits.filter((exit) => exit.name !== undefined && exit.name !== ERROR_EXIT).length ?? 0;
-  const tones = new Map<string, PicLine["tone"]>(
-    edges.map((edge) => [
-      lineKey(edge.id),
-      edge.exitName === ERROR_EXIT || edge.ends === "halt"
-        ? "error"
-        : named(boxes.get(edge.fromId)) > 1
-          ? "branch"
-          : "next",
-    ]),
-  );
+  const tones = tonesOf(edges, boxes);
   // The lines themselves. One alone into its box runs all the way; where several go into one box from
   // one margin, each runs out to the lane and stops there. The lane is drawn a piece per stretch
   // between two joinings, so no two lie over each other, and one more line takes it on into the box.

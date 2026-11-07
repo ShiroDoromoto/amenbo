@@ -4,8 +4,8 @@
 //
 // What these guard: **the card stands in the page, not in a dialog, its head naming the trigger,
 // whether it is on and when it last filed**, with "On" switching it off at once; **it asks in three
-// numbered parts**; **a new trigger starts as one that files every hour, and the save sends what was
-// typed** as a trigger added; **a trigger already written opens as it stands and goes back
+// numbered parts**; **a new trigger, opened on none even with others written, starts as one that files every hour, and the save sends what was
+// typed** as a trigger added; **the trigger it is opened on opens as it stands and goes back
 // unchanged**, rewritten under its id, the others left alone; **"while fewer than N tasks match"
 // always carries its condition, and "when a script says so" its script**, while with the other kinds
 // each is sent only when asked for; **the note, the list and the preview say what will be filed** —
@@ -74,10 +74,10 @@ const written: AutomationTriggerDto = {
 
 const page = () => document.body;
 
-/** The card, opened on the automation's first trigger unless told another, or none. */
+/** The card, opened on `trigger`, or on a new one without it. */
 async function draw(
   automation: AutomationDetailDto,
-  trigger: AutomationTriggerDto | undefined = automation.triggers[0],
+  trigger?: AutomationTriggerDto,
   onSaved = vi.fn(),
   onClose = vi.fn(),
 ) {
@@ -205,13 +205,14 @@ describe("the form and what it sends", () => {
 
 describe("the card's head", () => {
   it("stands in the page rather than in a dialog of its own", async () => {
-    await draw(detail(written));
+    await draw(detail(written), written);
     expect(page().querySelector("[role=dialog]")).toBeNull();
     expect(container.querySelector("form.trigcard")).not.toBeNull();
   });
 
   it("names the trigger in place, says it is on, and when it last filed", async () => {
-    await draw(detail({ ...written, lastFiledAt: "2026-11-07T12:40:00Z" }));
+    const filed = { ...written, lastFiledAt: "2026-11-07T12:40:00Z" };
+    await draw(detail(filed), filed);
     const head = container.querySelector(".trigcard__head")!;
     expect((head.querySelector(`[aria-label="${t("auto.trigger.name")}"]`) as HTMLInputElement).value).toBe(
       "Top up the reviews",
@@ -223,16 +224,17 @@ describe("the card's head", () => {
   });
 
   it("says a trigger that has filed nothing has not filed yet", async () => {
-    await draw(detail(written));
+    await draw(detail(written), written);
     expect(page().querySelector("[data-head=filed]")?.textContent).toBe(t("auto.trigger.neverFiled"));
   });
 
   it("switches the trigger off at once, and a stopped one back on", async () => {
-    await draw(detail(written));
+    await draw(detail(written), written);
     await press(buttonNamed(t("auto.trigger.enabled")));
     expect(hoisted.enable).toHaveBeenCalledWith(31, false);
 
-    await draw(detail({ ...written, enabled: false }));
+    const stopped = { ...written, enabled: false };
+    await draw(detail(stopped), stopped);
     expect(buttonNamed(t("auto.trigger.disabled"))?.getAttribute("aria-pressed")).toBe("false");
     await press(buttonNamed(t("auto.trigger.disabled")));
     expect(hoisted.enable).toHaveBeenLastCalledWith(31, true);
@@ -281,7 +283,7 @@ describe("the card", () => {
   });
 
   it("opens a trigger already written as it stands", async () => {
-    await draw(detail(written));
+    await draw(detail(written), written);
     expect((box(t("auto.trigger.name")) as HTMLInputElement).value).toBe("Top up the reviews");
     expect(radio(t("auto.trigger.whenIdle"))?.checked).toBe(true);
     expect(radio(t("auto.trigger.taskFile"))?.checked).toBe(true);
@@ -292,12 +294,12 @@ describe("the card", () => {
     expect(buttonNamed("Bob")?.getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("rewrites the trigger it was opened on under its id, leaving the others", async () => {
+  it("rewrites the trigger it is opened on under its id, leaving the others", async () => {
     const other: AutomationTriggerDto = { ...written, id: 32, name: "Daily check" };
     await draw(detail(written, other), other);
+    expect((box(t("auto.trigger.name")) as HTMLInputElement).value).toBe("Daily check");
     await type(box(t("auto.trigger.name")), "Daily check again");
     await press(buttonNamed(t("auto.trigger.save")));
-    expect(hoisted.update).toHaveBeenCalledTimes(1);
     expect(hoisted.update).toHaveBeenCalledWith(32, expect.objectContaining({ name: "Daily check again" }));
     expect(hoisted.add).not.toHaveBeenCalled();
   });
@@ -330,7 +332,7 @@ describe("the card", () => {
   });
 
   it("says what is recorded, under the trigger's name", async () => {
-    await draw(detail(written));
+    await draw(detail(written), written);
     expect(page().querySelector("[data-note=recorded]")?.textContent).toBe(
       tf("auto.trigger.recorded", { name: "Top up the reviews" }),
     );
@@ -370,7 +372,7 @@ describe("the card", () => {
     expect(lines[0]).toContain("/Users/alice/next.md");
     expect(lines[0]).toContain(tf("auto.side.triggerRole", { role: "Bob" }));
     expect(lines[1]).toContain("Daily check");
-    expect(lines[1]).toContain(tf("auto.side.every", { minutes: 1440 }));
+    expect(lines[1]).toContain(tf("auto.side.everyDays", { days: 1 }));
     expect(lines[1]).toContain(t("auto.side.triggerRoleNone"));
   });
 
@@ -385,15 +387,24 @@ describe("the card", () => {
   });
 
   it("removes a trigger already written once the reader confirms", async () => {
-    const { onClose } = await draw(detail(written));
+    const { onClose } = await draw(detail(written), written);
     await press(buttonNamed(t("auto.trigger.remove")));
     expect(hoisted.confirm).toHaveBeenCalledWith(tf("auto.trigger.removeConfirm", { name: "Top up the reviews" }));
     expect(hoisted.remove).toHaveBeenCalledWith(31);
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("offers no removal while there is no trigger", async () => {
-    await draw(detail());
+  it("adds a new one when opened on none, even with others written", async () => {
+    await draw(detail(written));
+    expect((box(t("auto.trigger.name")) as HTMLInputElement).value).toBe("");
+    await type(box(t("auto.trigger.taskTitle")), "Check the reports");
+    await press(buttonNamed(t("auto.trigger.save")));
+    expect(hoisted.add).toHaveBeenCalledWith(7, expect.objectContaining({ name: "" }));
+    expect(hoisted.update).not.toHaveBeenCalled();
+  });
+
+  it("offers no removal while opened on a new one", async () => {
+    await draw(detail(written));
     expect(buttonNamed(t("auto.trigger.remove"))).toBeUndefined();
   });
 });

@@ -1,11 +1,11 @@
 // **What the automation holds as a whole, down the build screen's right** (`./AutomationBuildScreen`):
-// who a failed round is filed to, and its trigger. The roles stand down the left and what is built for
+// who a failed round is filed to, and its triggers. The roles stand down the left and what is built for
 // the picked one in the middle; these two are about none of the roles in particular, so they stand
 // beside both, always in view, each in a box of its own. How many go at once is no longer the
 // automation's to say: it is to be said role by role, by how many each has (`AMB-D-1123`).
 //
 // **Every press here writes at once**, the way the "Edit" panel's fields do (`./AutomationAboutPanel`).
-// The trigger is a setting kept apart from the saved versions (`AMB-D-1119`), so the head's "Save" and
+// A trigger is a setting kept apart from the saved versions (`AMB-D-1119`), so the head's "Save" and
 // "Discard changes" neither keep nor undo it. A refusal is drawn once, at the top of the column, in the
 // words core wrote.
 //
@@ -13,10 +13,11 @@
 // (`not_ready_automation_no_failures_to`), so a definition with none opens on "Choose one", which cannot
 // be picked back once something else is. The roles offered are this automation's own, in their order.
 //
-// **The column draws the automation's first trigger** (`AMB-D-1119`); an automation may have more,
-// and listing them all is still to come. Without one the column says so and offers "+ Add a trigger";
-// with one it draws what it files and when. Either press asks the build screen to open the trigger's
-// card in its middle (`./AutomationTrigger`), to change it or take it away, or to write a new one.
+// **The column lists every trigger the automation has** (`AMB-D-1119`), in its order, one box each:
+// when it files a task, what the task says, and the role it is worked under. "+ Add a trigger" stands
+// under the list however many there are; with none, the column says so above it. Pressing a box, or
+// "+ Add a trigger", asks the build screen to open that trigger's card in its middle
+// (`./AutomationTrigger`), to change it or take it away, or to write a new one.
 import { useState } from "react";
 import { editAutomation } from "../core/automations";
 import { errText, t, tf } from "../core/i18n";
@@ -50,11 +51,10 @@ export function AutomationSettings({
 }) {
   const [refused, setRefused] = useState<string | null>(null);
   const failures = failuresValue(automation.failuresTo);
-  // The first of its triggers.
-  const trigger = automation.triggers[0];
-  const triggerRoleId = trigger?.roleId;
-  const triggerRole =
-    triggerRoleId === undefined ? undefined : automation.roles.find((one) => one.id === triggerRoleId);
+  const roleLine = (trigger: AutomationTriggerDto) => {
+    const role = automation.roles.find((one) => one.id === trigger.roleId);
+    return role === undefined ? t("auto.side.triggerRoleNone") : tf("auto.side.triggerRole", { role: role.name });
+  };
 
   const write = (patch: Parameters<typeof editAutomation>[1]) => {
     setRefused(null);
@@ -95,30 +95,29 @@ export function AutomationSettings({
 
       <div className="autoside__group">
         <span className="autostep__label">{t("auto.side.trigger")}</span>
-        {trigger === undefined ? (
-          <>
-            <span className="autostep__hint">{t("auto.side.triggerNone")}</span>
-            <button type="button" className="btn autoside__add" onClick={() => onOpenTrigger(undefined)}>
-              {t("auto.side.triggerAdd")}
-            </button>
-          </>
+        {automation.triggers.length === 0 ? (
+          <span className="autostep__hint">{t("auto.side.triggerNone")}</span>
         ) : (
-          <button
-            type="button"
-            className="autoside__trigger"
-            title={t("auto.trigger.title")}
-            onClick={() => onOpenTrigger(trigger)}
-          >
-            <span className="autoside__when">{trigger.name.trim() || whenLine(trigger)}</span>
-            {trigger.name.trim() !== "" && <span className="autostep__hint">{whenLine(trigger)}</span>}
-            <span className="autoside__what">{taskLine(trigger)}</span>
-            <span className="autostep__hint">
-              {triggerRole === undefined
-                ? t("auto.side.triggerRoleNone")
-                : tf("auto.side.triggerRole", { role: triggerRole.name })}
-            </span>
-          </button>
+          <ul className="autoside__triggers">
+            {automation.triggers.map((trigger) => (
+              <li key={trigger.id}>
+                <button
+                  type="button"
+                  className="autoside__trigger"
+                  title={trigger.name.trim() || t("auto.trigger.title")}
+                  onClick={() => onOpenTrigger(trigger)}
+                >
+                  <span className="autoside__when">{whenLine(trigger, automation.roles)}</span>
+                  <span className="autoside__what">{taskLine(trigger)}</span>
+                  <span className="autostep__hint">{roleLine(trigger)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
+        <button type="button" className="btn autoside__add" onClick={() => onOpenTrigger(undefined)}>
+          {t("auto.side.triggerAdd")}
+        </button>
       </div>
     </div>
   );

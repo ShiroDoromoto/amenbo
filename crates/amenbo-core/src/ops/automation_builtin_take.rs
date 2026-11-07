@@ -9,10 +9,10 @@
 //! reserved, so the filter's own `status:` and `ready:` are dropped and those two put in their place:
 //! a setting that asked for anything else would be asking for a task the reservation refuses.
 //!
-//! **Only a task of one of the run's roles is taken**, where the automation's roles say where each
-//! starts ([`roles_started`]): a task is worked under the role it names, so one naming none, or a role
-//! the run starts no round of, is left for a person. An automation defining no such role takes any task
-//! the filter finds.
+//! **Only a task of the role the run is a seat of is taken** ([`roles_started`]): a run is bound to one
+//! role at launch and keeps it until it ends, and a task is worked under the role it names, so one naming
+//! none, or another role, is left — for a person, or for a run of that role. An automation defining no
+//! role that says where its round starts takes any task the filter finds.
 //!
 //! **Left unanswered, the filter is the tasks given to the AI** (`assignee:me-ai`). The built-in that
 //! hands a task back to a person gives it to the human, and so does a run a person canceled; a filter
@@ -231,8 +231,8 @@ fn titled(
         .collect()
 }
 
-/// One page of the tasks the filter answered with lists, in the order it asks for — of those worked under a
-/// role the run starts a round of, where it starts any ([`roles_started`]).
+/// One page of the tasks the filter answered with lists, in the order it asks for — of those worked under
+/// the role the run is a seat of, where it has one ([`roles_started`]).
 fn search(
     conn: &Connection,
     run: &AutomationRun,
@@ -1318,6 +1318,63 @@ mod tests {
                 unmet.iter().any(|u| matches!(u, Unmet::OpenExit { placement, .. } if *placement == Some(bare.id))),
                 "its way out has nothing after it: {unmet:?}",
             );
+        });
+    }
+
+    /// **A run is a seat of one role, and takes only that role's tasks.** It is bound at launch to the
+    /// first role with a task to take, and a task of another role is left however high it stands.
+    #[test]
+    fn a_run_takes_only_the_tasks_of_the_role_it_is_a_seat_of() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, [(builder, _), (reviewer, review)]) = by_role(tx, project);
+            let reviewed = for_ai(tx, "to review", project, None);
+            under(tx, reviewed, reviewer);
+
+            let run = launched(tx, &automation);
+            assert_eq!(run.role_id, Some(reviewer), "the first role with a task to take");
+            let built = for_ai(tx, "to build", project, Some(Priority::High));
+            under(tx, built, builder);
+
+            let Opened::Carried { next, .. } = open_entry(tx, &run) else { panic!("the built-in is carried out") };
+            assert_eq!(status(tx, reviewed), TaskStatus::InProgress, "its own role's task is taken");
+            assert_eq!(status(tx, built), TaskStatus::Todo, "another role's is left, however high it stands");
+            let Next::Step(def) = next else { panic!("the round goes on, not {next:?}") };
+            assert_eq!(def.placement_id, Some(review.id));
+            assert_eq!(read::automation_run(tx.conn(), run.id).expect("read").expect("run").role_id, Some(reviewer));
+        });
+    }
+
+    /// **With no task to take, a run is a seat of the first role**, in the order they are defined in.
+    #[test]
+    fn a_run_with_no_task_to_take_is_a_seat_of_the_first_role() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, [(builder, _), _]) = by_role(tx, project);
+            assert_eq!(launched(tx, &automation).role_id, Some(builder));
+        });
+    }
+
+    /// **A run keeps its role until it ends**: copied down again from a newer version, it is still a seat
+    /// of the role it launched in, and does not take a task of another role that has turned up since.
+    #[test]
+    fn a_run_keeps_its_role_when_it_takes_up_a_newer_version() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, [(builder, _), (reviewer, _)]) = by_role(tx, project);
+            let run = launched(tx, &automation);
+            assert_eq!(run.role_id, Some(builder));
+            let reviewed = for_ai(tx, "to review", project, None);
+            under(tx, reviewed, reviewer);
+
+            automation::version_add(tx, automation.id).expect("save the automation");
+            assert!(matches!(
+                take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look"),
+                TakenUp::Copied(_)
+            ));
+            assert_eq!(read::automation_run(tx.conn(), run.id).expect("read").expect("run").role_id, Some(builder));
+            open_entry(tx, &run);
+            assert_eq!(status(tx, reviewed), TaskStatus::Todo, "a task of another role is not taken");
         });
     }
 

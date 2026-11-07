@@ -1379,7 +1379,102 @@ pub const STEPS: &[Step] = &[
         // before this takes the default, and so does every copy a run took of one.
         apply: Apply::Custom(let_a_step_say_how_long_it_takes),
     },
+    Step {
+        to: 118,
+        name: "move an automation's trigger out of its automation.trigger_* columns into automation_trigger, so an automation can hold more than one",
+        // **Seeded from what is there.** The trigger an automation already had becomes its first row:
+        // asked, as it was, and with nothing filed yet, since no time it filed one was kept.
+        apply: Apply::Custom(give_the_triggers_a_table_of_their_own),
+    },
 ];
+
+/// v118: `automation_trigger`, an automation's triggers, one row each — and the `automation.trigger_*`
+/// columns that held the one trigger an automation had, gone.
+///
+/// The trigger already written becomes its automation's first row, under the same answers, `enabled`
+/// and with no `last_filed_at`: no time it filed a task was kept. Its `order_key` is `m`, the key
+/// `crate::order::key_between` gives the first of an empty set. It is dated from when its automation
+/// was last written, the latest the trigger can have been (from its `next_at` on a row never dated).
+///
+/// **Each part only where it is still to do.** The table is laid down only where it is missing, and the
+/// columns are moved and dropped only where they are still there: a store whose automation table was
+/// created in the live shape has none of them. A column is dropped in place, not by rebuilding the table,
+/// for v106's reason.
+fn give_the_triggers_a_table_of_their_own(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    tx.execute_batch(AUTOMATION_TRIGGER_TABLE)?;
+    let cols = column_names(tx, "automation")?;
+    if !cols.iter().any(|c| c == "trigger_when_kind") {
+        return Ok(());
+    }
+    tx.execute_batch(
+        "INSERT INTO automation_trigger (automation_id, enabled, name, role_id, when_kind, every_minutes, \
+             condition_filter, condition_below, script_program, script_args, script_timeout_minutes, \
+             task_kind, task_title, task_notes, task_path, task_script_program, task_script_args, \
+             task_script_timeout_minutes, next_at, last_filed_at, order_key, created_at, updated_at) \
+         SELECT id, 1, COALESCE(trigger_name, ''), trigger_role_id, trigger_when_kind, trigger_every_minutes, \
+             trigger_condition_filter, trigger_condition_below, trigger_script_program, trigger_script_args, \
+             trigger_script_timeout_minutes, trigger_task_kind, trigger_task_title, trigger_task_notes, \
+             trigger_task_path, trigger_task_script_program, trigger_task_script_args, \
+             trigger_task_script_timeout_minutes, trigger_next_at, NULL, 'm', \
+             COALESCE(NULLIF(updated_at, ''), trigger_next_at), COALESCE(NULLIF(updated_at, ''), trigger_next_at) \
+         FROM automation WHERE trigger_when_kind IS NOT NULL ORDER BY id;",
+    )?;
+    for column in [
+        "trigger_when_kind",
+        "trigger_every_minutes",
+        "trigger_condition_filter",
+        "trigger_condition_below",
+        "trigger_script_program",
+        "trigger_script_args",
+        "trigger_script_timeout_minutes",
+        "trigger_task_kind",
+        "trigger_task_title",
+        "trigger_task_notes",
+        "trigger_task_path",
+        "trigger_task_script_program",
+        "trigger_task_script_args",
+        "trigger_task_script_timeout_minutes",
+        "trigger_name",
+        "trigger_role_id",
+        "trigger_next_at",
+    ] {
+        if cols.iter().any(|c| c == column) {
+            tx.execute_batch(&format!("ALTER TABLE automation DROP COLUMN {column};"))?;
+        }
+    }
+    Ok(())
+}
+
+/// The table v118 lays down — frozen text, like every step's.
+const AUTOMATION_TRIGGER_TABLE: &str = r"
+CREATE TABLE IF NOT EXISTS automation_trigger (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    enabled BOOLEAN NOT NULL DEFAULT 0 CHECK(enabled IN (0, 1)),
+    name TEXT NOT NULL DEFAULT '',
+    role_id BIGINT REFERENCES automation_role(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    when_kind TEXT NOT NULL DEFAULT '' CHECK(when_kind IN ('', 'every', 'idle', 'tasks', 'script')),
+    every_minutes BIGINT,
+    condition_filter TEXT,
+    condition_below BIGINT,
+    script_program TEXT,
+    script_args TEXT NOT NULL DEFAULT '',
+    script_timeout_minutes BIGINT,
+    task_kind TEXT NOT NULL DEFAULT '' CHECK(task_kind IN ('', 'fixed', 'file', 'script')),
+    task_title TEXT,
+    task_notes TEXT,
+    task_path TEXT,
+    task_script_program TEXT,
+    task_script_args TEXT NOT NULL DEFAULT '',
+    task_script_timeout_minutes BIGINT,
+    next_at TEXT NOT NULL DEFAULT '' CHECK(next_at = '' OR next_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    last_filed_at TEXT CHECK(last_filed_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    order_key TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
+);
+";
 
 /// v117: `automation_action_step.expected_minutes` and `automation_run_def.expected_minutes` — how long
 /// a step is expected to take, and that as a run copied it at launch.
@@ -11602,9 +11697,9 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(107), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 107);
         let (when, next): (Option<String>, Option<String>) = engine
             .conn()
             .query_row("SELECT trigger_when_kind, trigger_next_at FROM automation WHERE id = 1", [], |r| {
@@ -11649,9 +11744,9 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(108), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 108);
         let kinds: Vec<(Option<String>, Option<i64>)> = engine
             .conn()
             .prepare("SELECT trigger_when_kind, trigger_every_minutes FROM automation ORDER BY id")
@@ -11702,6 +11797,61 @@ mod tests {
             assert_eq!(expected, None, "{table}: nobody said how long a step takes before");
             engine.conn().execute(&format!("UPDATE {table} SET expected_minutes = 20 WHERE id = 1"), []).unwrap();
         }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v118: the trigger an automation had becomes its first `automation_trigger` row, asked and with
+    /// nothing filed, an automation with none gets no row, and the `automation.trigger_*` columns are gone.
+    #[test]
+    fn a_trigger_written_before_v118_becomes_the_first_row_of_its_automation() {
+        let dir = scratch("automation-trigger-table");
+        let engine = store_at(&dir, 117);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, updated_at) VALUES (1, 1, 'work', '2026-11-01T00:00:00Z');
+                 INSERT INTO automation_role (id, automation_id, name) VALUES (1, 1, 'reviewer');
+                 UPDATE automation SET trigger_when_kind = 'tasks', trigger_condition_filter = 'status:todo', \
+                     trigger_condition_below = 3, trigger_script_program = '/usr/local/bin/judge', \
+                     trigger_script_args = '[\"-v\"]', trigger_script_timeout_minutes = 30, \
+                     trigger_task_kind = 'fixed', trigger_task_title = 'look', trigger_task_notes = 'notes', \
+                     trigger_name = 'every hour', trigger_role_id = 1, \
+                     trigger_next_at = '2026-11-07T00:00:00Z' WHERE id = 1;
+                 INSERT INTO automation (id, project_id, name) VALUES (2, 1, 'still');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let count: i64 = engine.conn().query_row("SELECT COUNT(*) FROM automation_trigger", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 1, "the one trigger there is moved, and the automation with none gets no row");
+        let moved: String = engine
+            .conn()
+            .query_row(
+                "SELECT automation_id || ' ' || enabled || ' ' || name || ' ' || role_id || ' ' || when_kind || ' ' \
+                     || condition_filter || ' ' || condition_below || ' ' || script_program || ' ' || script_args \
+                     || ' ' || script_timeout_minutes || ' ' || task_kind || ' ' || task_title || ' ' || task_notes \
+                     || ' ' || next_at || ' ' || COALESCE(last_filed_at, '-') || ' ' || order_key || ' ' || created_at \
+                 FROM automation_trigger",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            moved,
+            "1 1 every hour 1 tasks status:todo 3 /usr/local/bin/judge [\"-v\"] 30 fixed look notes \
+             2026-11-07T00:00:00Z - m 2026-11-01T00:00:00Z",
+            "under the same answers, asked, with nothing filed, dated from when its automation was last written",
+        );
+        assert!(
+            !column_names(&engine.conn().unchecked_transaction().unwrap(), "automation")
+                .unwrap()
+                .iter()
+                .any(|c| c.starts_with("trigger_")),
+            "the automation holds no trigger of its own any more",
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -11838,9 +11988,9 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(111), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 111);
         let kept: (Option<String>, Option<String>, Option<i64>) = engine
             .conn()
             .query_row(
@@ -11880,9 +12030,9 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(114), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 114);
         let kept: (Option<String>, Option<String>, String, Option<i64>) = engine
             .conn()
             .query_row(
@@ -11923,9 +12073,9 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(115), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 115);
         type Kept = (Option<String>, Option<String>, Option<String>, Option<String>, Option<String>, String, Option<i64>);
         let kept: Kept = engine
             .conn()
@@ -11981,9 +12131,9 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(116), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 116);
         let kept = |id: i64| -> (Option<String>, Option<i64>) {
             engine
                 .conn()

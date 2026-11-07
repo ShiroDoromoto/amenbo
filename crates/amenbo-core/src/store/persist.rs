@@ -1363,7 +1363,7 @@ impl Store {
         })
     }
 
-    /// Write an automation's trigger, or take it away (one operation = one transaction) —
+    /// Have an automation's triggers be the one given, or none (one operation = one transaction) —
     /// [`crate::ops::automation::trigger_set`].
     pub fn automation_trigger_set(
         &mut self,
@@ -1767,24 +1767,27 @@ impl Store {
         )
     }
 
-    /// **Fire an automation's trigger** — file its task and start a run on it, or decide not to (one
-    /// operation = one transaction) — [`crate::ops::automation_run::fire`]. A launch its checks refuse
-    /// takes the whole transaction with it, so nothing of that time is left. `said` is what the
+    /// **Fire one trigger of an automation** — file its task and start a run on it, or decide not to
+    /// (one operation = one transaction) — [`crate::ops::automation_run::fire`]. A launch its checks
+    /// refuse takes the whole transaction with it, so nothing of that time is left. `said` is what the
     /// trigger's scripts said to file one, run before this write
-    /// ([`crate::ops::automation_run::ask_trigger`]); `None` for a trigger with no script.
+    /// ([`crate::ops::automation_run::ask_trigger`]); `None` for a trigger with no script. A trigger
+    /// taken away since it was found due files nothing.
     pub fn automation_trigger_fire(
         &mut self,
-        automation_id: i64,
+        trigger_id: i64,
         by: &crate::ops::automation_run::Launcher<'_>,
         said: Option<&crate::ops::automation_run::ScriptsSaid>,
     ) -> Result<Option<crate::model::AutomationRun>> {
+        let Some(trigger) = crate::store_engine::read::automation_trigger(self.engine.conn(), trigger_id)? else {
+            return Ok(None);
+        };
+        let automation_id = trigger.automation_id;
         let agent = self.automation_default_agent(automation_id)?;
         let by = crate::ops::automation_run::Launcher { default_agent: agent.as_deref(), ..*by };
         self.write_one(
             &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
-            |tx| {
-                crate::ops::automation_run::fire(tx, automation_id, &by, crate::time::Timestamp::now(), said)
-            },
+            |tx| crate::ops::automation_run::fire(tx, trigger_id, &by, crate::time::Timestamp::now(), said),
         )
     }
 

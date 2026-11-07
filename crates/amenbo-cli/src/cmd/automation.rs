@@ -558,7 +558,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 _ => None,
             };
             let a = store.automation_trigger_set(id, trigger).map_err(CliError::from)?;
-            let line = match &a.trigger {
+            let line = match a.triggers.first() {
                 Some(t) => format!("✓ Automation {} ({}) {}", a.name, a.id, trigger_line(t)),
                 None => format!("✓ Automation {} ({}) has no trigger", a.name, a.id),
             };
@@ -1580,7 +1580,7 @@ fn render_automation(
     } else {
         human(flags, failures_to_line(a.failures_to, &view.roles));
     }
-    if let Some(trigger) = &a.trigger {
+    if let Some(trigger) = a.triggers.first() {
         human(flags, trigger_line(trigger));
     }
     if let Some(waits) = waits {
@@ -1599,7 +1599,7 @@ fn render_automation(
     }
 }
 
-/// What an automation's trigger is called and does, the tasks it looks at and the program it asks
+/// What an automation's first trigger is called and does, the tasks it looks at and the program it asks
 /// first, the task it files (or the file or program that says it) and the role it files it under, and
 /// when it is next asked (for an `idle`, a `tasks` or a `script`, the soonest it may be).
 fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {

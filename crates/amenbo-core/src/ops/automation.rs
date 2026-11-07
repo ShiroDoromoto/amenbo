@@ -4956,6 +4956,7 @@ mod tests {
                     at_binding_id: None,
                     made_in: None,
                     role_id: Some(role.id),
+                    made_in_run_step_id: None,
                 },
             )
             .expect("file it under the role");

@@ -590,6 +590,7 @@ mod tests {
                 created_by_kind: Some(ActorKind::Ai),
                 at_binding_id: None,
                 role_id: None,
+                made_in_run_step_id: None,
                 made_in: None,
             })
             .unwrap();

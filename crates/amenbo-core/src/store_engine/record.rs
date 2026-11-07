@@ -178,6 +178,7 @@ pub fn task(t: &Task) -> Record {
                 ("order_key", ov(&t.order_key)),
                 ("at_binding_id", kv_opt(&t.at_binding_id)),
                 ("role_id", kv_opt(&t.role_id)),
+                ("made_in_run_step_id", kv_opt(&t.made_in_run_step_id)),
             ],
             &t.created_at,
             &t.updated_at,

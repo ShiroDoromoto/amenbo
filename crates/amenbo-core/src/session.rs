@@ -72,6 +72,20 @@ pub const PANE_VAR: &str = "AMENBO_PANE";
 /// Unset everywhere else, which is what tells those commands they were typed outside a step.
 pub const STEP_VAR: &str = "AMENBO_AUTOMATION_STEP";
 
+/// The variable naming the **run** a script step's program was started for
+/// ([`crate::model::AutomationRun`]). Set beside [`RUN_STEP_VAR`] on that program alone
+/// ([`crate::ops::automation_script::prepare`]), for the program to read.
+pub const RUN_VAR: &str = "AMENBO_RUN";
+
+/// The variable naming the **step execution** a script step's program was started for — what an
+/// `amenbo task add` it runs records the task as filed in ([`crate::model::Task::made_in_run_step_id`]).
+///
+/// **It is not [`STEP_VAR`]**, and that is the point of it: `STEP_VAR` is what makes `amenbo automation
+/// step-done` and the like speak for a step, and a script step reports by what its program leaves, not
+/// by an `amenbo` it calls, so it is started without `STEP_VAR` (`AMB-D-1016`). This one says where a
+/// task was filed and nothing else: no command reports, waits or ends a step by it.
+pub const RUN_STEP_VAR: &str = "AMENBO_RUN_STEP";
+
 /// The variable the way back into that pane's conversation is carried in — the handle its provider
 /// is resumed from ([`crate::frames::SavedPane::resume`]).
 ///

@@ -141,6 +141,13 @@ pub fn automation_step() -> Option<i64> {
     var(crate::session::STEP_VAR)?.trim().parse().ok()
 }
 
+/// `AMENBO_RUN_STEP` — the step execution a script step's program was started for
+/// ([`crate::session::RUN_STEP_VAR`]). `None` everywhere but in that program and what it starts. A value
+/// that is not a number reads as `None`, for the reason [`automation_step`] gives.
+pub fn run_step() -> Option<i64> {
+    var(crate::session::RUN_STEP_VAR)?.trim().parse().ok()
+}
+
 /// `AMENBO_HW_ID` — override the machine UUID, to pose as a different machine during development.
 pub fn hw_id() -> Option<OsString> {
     var_os("AMENBO_HW_ID")

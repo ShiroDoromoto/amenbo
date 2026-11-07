@@ -363,6 +363,7 @@ fn file_the_failure(tx: &WriteTx<'_>, run: &AutomationRun, task_id: i64, line: &
             at_binding_id: None,
             made_in: None,
             role_id,
+            made_in_run_step_id: None,
         },
     )?;
     if let Some(project_id) = project_id {

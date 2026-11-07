@@ -642,6 +642,12 @@ datasets! {
         // and leaves this alone. NULL is a task with no role. `RESTRICT`, so a role is taken off the
         // tasks that name it before it goes (`ops::automation`).
         role_id: fk_opt("automation_role", "RESTRICT"),
+        // The step of an automation run this task was filed in, where one was — an AI step's terminal, a
+        // script step's program, or the built-in that files a task. The step execution and not the run:
+        // a run walks several steps, and the run is read off the step (`automation_run_step.run_id`).
+        // NULL is every task filed outside a run. `SET NULL` for the reason the comment's provenance
+        // is (`task_comment.automation_run_step_id`): the task has to outlive the run it came from.
+        made_in_run_step_id: fk_opt("automation_run_step", "SET NULL"),
     }
 
     decision {

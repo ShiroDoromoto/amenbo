@@ -5,15 +5,18 @@
 // The notices file is committed rather than written at release time, so a release can carry it as a
 // plain file beside LICENSE and a reader can open it to see what amenbo carries. That only
 // holds while it is what scripts/gen-third-party-notices.mjs would write for the current
-// Cargo.lock, app/src-tauri/Cargo.lock and app/package-lock.json — and Dependabot bumps are
-// auto-merged, so nobody would regenerate it by hand.
+// Cargo.lock, app/src-tauri/Cargo.lock and app/package-lock.json, and for the records of bundled
+// data in guards/check-grammar-licenses.mjs — and Dependabot bumps are auto-merged, so nobody would
+// regenerate it by hand.
 //
 // Two questions, both a red:
 //   1. Do the bundled C sources still match BUNDLED_SOURCES? sqlcipher-src and openssl-src vendor
 //      SQLCipher, SQLite, libtomcrypt and OpenSSL, and their license texts sit beside those sources
 //      rather than at the crate's top level — so a bump of either carrier, or a new `*-src` crate, has to be
 //      read by a human before it ships.
-//   2. Is the committed file what the generator writes for this tree?
+//   2. Is the committed file what the generator writes for this tree? That covers the bundled data
+//      too: a grammar, configuration or pdf.js file recorded in guards/check-grammar-licenses.mjs
+//      and missing from the file — or there under another license — is a red here.
 //
 // Usage: node guards/check-third-party-notices.mjs   (from anywhere; needs cargo, fetches crates, and
 //        reads app/node_modules — run `npm ci --ignore-scripts` in app/ first)
@@ -23,6 +26,7 @@ import { fileURLToPath } from 'node:url'
 import {
   NOTICES,
   checkBundledSources,
+  collectData,
   collectNpm,
   collectShipped,
   generate,
@@ -59,9 +63,10 @@ function main() {
   }
 
   const npm = collectNpm(readNpmLock())
-  const diff = firstDifference(committed, generate(packages, npm))
+  const data = collectData()
+  const diff = firstDifference(committed, generate(packages, npm, data))
   if (diff) {
-    console.error('✗ THIRD-PARTY-NOTICES is not what the lockfiles generate. First difference, line ' + diff.line + ':')
+    console.error('✗ THIRD-PARTY-NOTICES is not what the lockfiles and the bundled-data records generate. First difference, line ' + diff.line + ':')
     console.error(`    committed: ${diff.committed}`)
     console.error(`    generated: ${diff.fresh}`)
     console.error('  Run node scripts/gen-third-party-notices.mjs and commit the result.')
@@ -69,7 +74,7 @@ function main() {
   }
 
   console.log(
-    `✓ THIRD-PARTY-NOTICES matches the ${packages.length} shipped crates and ${npm.length} shipped npm packages in the lockfiles`,
+    `✓ THIRD-PARTY-NOTICES matches the ${packages.length} shipped crates and ${npm.length} shipped npm packages in the lockfiles, and the ${data.length} bundled data files recorded in guards/check-grammar-licenses.mjs`,
   )
   return 0
 }

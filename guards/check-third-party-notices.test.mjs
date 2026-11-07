@@ -4,7 +4,8 @@
 // never that it can still say no. These pin the refusals: a carrier of vendored C sources bumped
 // without anyone re-reading them, a new `*-src` crate nobody looked at, vendored license files that
 // moved, a test-only crate counted as shipped, a dev-only npm package counted as shipped, an npm
-// tree that is not installed as the lockfile says, and a committed file that drifted.
+// tree that is not installed as the lockfile says, bundled data whose record and installed files
+// disagree, and a committed file that drifted.
 //
 // Run: node --test guards/
 //
@@ -13,7 +14,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { checkBundledSources, collectNpm, render, shippedPackages, NoticeError } from '../scripts/gen-third-party-notices.mjs'
+import {
+  checkBundledSources,
+  collectData,
+  collectNpm,
+  noticeBlocks,
+  render,
+  shippedPackages,
+  NoticeError,
+} from '../scripts/gen-third-party-notices.mjs'
 import { firstDifference } from './check-third-party-notices.mjs'
 
 // --- the shipped tree ---------------------------------------------------------------------------
@@ -202,6 +211,129 @@ test('npm texts follow the crates, MPL and EPL texts are kept, and identical tex
   assert.match(out, /ship no license file of their own[^]*\n {2}a\n/)
   assert.match(out, /prebuilt for one platform[^]*\n {2}canvas-linux-x64\n/)
   assert.ok(!out.includes('not a license'))
+})
+
+// --- the bundled data ------------------------------------------------------------------------------
+
+const RULE = '='.repeat(40)
+const DASH = '-'.repeat(40)
+const TM_NOTICE = [
+  'THIRD-PARTY SOFTWARE NOTICES',
+  '',
+  RULE,
+  'Files:   css.json, rust.json, html.json',
+  'License: https://raw.githubusercontent.com/example/editor/main/LICENSE.txt',
+  'SPDX:    MIT',
+  DASH,
+  'Editor MIT text',
+  '---',
+  'still the same text',
+  '',
+  RULE,
+  'Files:   cobol.json',
+  'License: https://example.invalid/LICENSE',
+  'SPDX:    GPL-3.0',
+  DASH,
+  'GPL text',
+].join('\n')
+
+const SOURCE = (key, names) =>
+  JSON.stringify({
+    repository: 'https://github.com/example/editor',
+    licence: 'MIT',
+    tag: '1.0.0',
+    revision: 'a'.repeat(40),
+    files: names.map((n) => ({ [key]: n })),
+  })
+
+const DATA_FILES = {
+  '/app/node_modules/tm-grammars/NOTICE': TM_NOTICE,
+  '/tree/langconfig/SOURCE.json': SOURCE('lang', ['css']),
+  '/tree/tmgrammar/SOURCE.json': SOURCE('scope', ['text.html.php']),
+  '/app/node_modules/pdfjs-dist/package.json': '{"version":"1.0.0"}',
+  '/app/node_modules/pdfjs-dist/cmaps/LICENSE': 'Adobe BSD text\n',
+  '/app/node_modules/pdfjs-dist/wasm/LICENSE_OPENJPEG': 'OpenJPEG BSD text\n',
+}
+const DATA = {
+  root: '/tree',
+  npmDir: '/app',
+  langconfig: '/tree/langconfig',
+  tmgrammar: '/tree/tmgrammar',
+  grammars: {
+    rust: [{ grammar: 'rust', license: 'MIT', source: 'https://example.invalid/rust' }],
+    yaml: [{ grammar: 'yaml', grant: 'open', source: 'https://example.invalid/yaml' }],
+  },
+  grants: { open: { from: 'https://example.invalid/terms', text: 'Anything goes.' } },
+  pdfjs: {
+    version: '1.0.0',
+    files: {
+      'cmaps/*.bcmap': { license: 'BSD-3-Clause', texts: ['cmaps/LICENSE'] },
+      'wasm/openjpeg_nowasm_fallback.js': { license: 'BSD-2-Clause', texts: ['wasm/LICENSE_OPENJPEG'] },
+    },
+  },
+}
+const data = (files = DATA_FILES, over = {}) => collectData({ read: (p) => files[p] ?? null, ...DATA, ...over })
+
+test("tm-grammars' NOTICE is cut into its blocks, a short rule inside a text included", () => {
+  const blocks = noticeBlocks(TM_NOTICE)
+  assert.equal(blocks.length, 2)
+  assert.deepEqual(blocks[0].files, ['css.json', 'rust.json', 'html.json'])
+  assert.equal(blocks[0].spdx, 'MIT')
+  assert.equal(blocks[0].text, 'Editor MIT text\n---\nstill the same text')
+})
+
+test('every recorded grammar, baked file and pdf.js file is one entry', () => {
+  assert.deepEqual(data().map((e) => e.name), [
+    'tm-grammars: rust.json',
+    'tm-grammars: yaml.json',
+    'langconfig/css.json',
+    'tmgrammar/text.html.php.json',
+    'pdfjs-dist: cmaps/*.bcmap',
+    'pdfjs-dist: wasm/openjpeg_nowasm_fallback.js',
+  ])
+})
+
+test('a grammar carries the NOTICE text for its file; a grant carries the grant as recorded', () => {
+  const [rust, yaml] = data()
+  assert.deepEqual(rust.texts, ['Editor MIT text\n---\nstill the same text'])
+  assert.match(rust.declared, /^MIT, read at https:\/\/example\.invalid\/rust$/)
+  assert.deepEqual(yaml.texts, ['Anything goes.\n\n(https://example.invalid/terms)'])
+})
+
+test("the baked trees carry their repository's text, under the licence their manifest records", () => {
+  const css = data().find((e) => e.name === 'langconfig/css.json')
+  assert.deepEqual(css.texts, ['Editor MIT text\n---\nstill the same text'])
+  assert.match(css.declared, /MIT, from https:\/\/github\.com\/example\/editor at 1\.0\.0/)
+})
+
+test('a grammar the NOTICE puts under another licence than its record stops the generator', () => {
+  const grammars = { cobol: [{ grammar: 'cobol', license: 'MIT', source: 'https://example.invalid/cobol' }] }
+  assert.throws(() => data(DATA_FILES, { grammars }), (e) => e instanceof NoticeError && /cobol\.json is GPL-3\.0/.test(e.message))
+})
+
+test('a grammar the NOTICE does not name stops the generator', () => {
+  const grammars = { go: [{ grammar: 'go', license: 'MIT', source: 'https://example.invalid/go' }] }
+  assert.throws(() => data(DATA_FILES, { grammars }), (e) => e instanceof NoticeError && /names no license for go\.json/.test(e.message))
+})
+
+test('pdfjs-dist installed at another version than its record stops the generator', () => {
+  const bumped = { ...DATA_FILES, '/app/node_modules/pdfjs-dist/package.json': '{"version":"1.0.1"}' }
+  assert.throws(() => data(bumped), (e) => e instanceof NoticeError && /1\.0\.1, but PDFJS_DATA was read at 1\.0\.0/.test(e.message))
+})
+
+test('a pdf.js licence file that moved stops the generator', () => {
+  const { ['/app/node_modules/pdfjs-dist/wasm/LICENSE_OPENJPEG']: _, ...moved } = DATA_FILES
+  assert.throws(() => data(moved), (e) => e instanceof NoticeError && /no wasm\/LICENSE_OPENJPEG/.test(e.message))
+})
+
+test('the bundled data follows the npm packages, and each text is written once', () => {
+  const read = (p) => FILES[p] ?? DATA_FILES[p] ?? null
+  const out = render(shipped(['openssl-src', '300.0.0']), { read, files, table: TABLE, data: data() })
+  assert.ok(out.indexOf('npm packages (bundled into the GUI)') < out.indexOf('Data bundled into the GUI'))
+  assert.match(out, /pdfjs-dist: wasm\/openjpeg_nowasm_fallback\.js — BSD-2-Clause/)
+  assert.match(out, /Used by: langconfig\/css\.json, tm-grammars: rust\.json, tmgrammar\/text\.html\.php\.json\n-+\nEditor MIT text\n/)
+  assert.match(out, /Used by: pdfjs-dist: cmaps\/\*\.bcmap\n-+\nAdobe BSD text\n/)
+  assert.equal(out.match(/Editor MIT text/g).length, 1)
 })
 
 test('a committed file that drifted is reported at its first differing line', () => {

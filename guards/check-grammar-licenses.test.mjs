@@ -3,14 +3,23 @@
 // Same argument as its sibling's tests: a real run only exercises the catalog we HAVE, which is
 // green, so it shows the gate can say yes and never that it can still say no. Every case below is
 // a way it must refuse — a grammar bundled with no licence recorded, a copyleft one, a stale entry,
-// and a grant nobody claims.
+// a grant nobody claims, and a pdf.js file shipped without a record or out of a package nobody
+// re-read.
 //
 // Run: node --test guards/
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { bundledGrammars, judgeGrammars, judgeLangConfig, judgeTmGrammar } from './check-grammar-licenses.mjs'
+import {
+  PDFJS_DATA,
+  bundledGrammars,
+  judgeGrammars,
+  judgeLangConfig,
+  judgePdfjs,
+  judgeTmGrammar,
+  shippedPdfjsData,
+} from './check-grammar-licenses.mjs'
 
 const ALLOW = new Set(['MIT', 'Apache-2.0'])
 const GRANTS = { open: { from: 'https://example.invalid', text: 'anything goes', why: 'no condition attached' } }
@@ -194,6 +203,71 @@ test('the catalog we actually ship passes', async () => {
   const { violations } = judgeGrammars(
     bundledGrammars(await import('node:fs').then((fs) => fs.readFileSync('app/src/files/grammars.ts', 'utf8'))),
     new Set(['MIT']),
+  )
+  assert.deepEqual(violations, [])
+})
+
+// --- the PDF reader's data ---------------------------------------------------------------------
+
+const READER = `
+  const CMAPS = import.meta.glob<string>("/node_modules/pdfjs-dist/cmaps/*.bcmap", { query: "?inline" });
+  const FONTS = import.meta.glob<string>(["/node_modules/pdfjs-dist/standard_fonts/FoxitSymbol.pfb"]);
+  const load = CMAPS[\`/node_modules/pdfjs-dist/cmaps/\${filename}\`];
+`
+const VITE = `const PDF_FALLBACKS = ["openjpeg_nowasm_fallback.js"];`
+const PDFJS = {
+  version: '1.0.0',
+  files: {
+    'cmaps/*.bcmap': { license: 'MIT', texts: ['cmaps/LICENSE'] },
+    'standard_fonts/FoxitSymbol.pfb': { license: 'MIT', texts: ['standard_fonts/LICENSE_FOXIT'] },
+    'wasm/openjpeg_nowasm_fallback.js': { license: 'MIT AND Apache-2.0', texts: ['wasm/LICENSE_OPENJPEG'] },
+  },
+}
+const shipped = () => shippedPdfjsData(READER, VITE)
+
+test('the pdf.js data shipped is what the reader names and the decoders the build copies out of wasm/', () => {
+  assert.deepEqual([...shipped()].sort(), ['cmaps/*.bcmap', 'standard_fonts/FoxitSymbol.pfb', 'wasm/openjpeg_nowasm_fallback.js'])
+})
+
+test('a reader that names no pdfjs-dist file, or a build with no decoder list, stops the gate', () => {
+  assert.throws(() => shippedPdfjsData('', VITE), /reader moved/)
+  assert.throws(() => shippedPdfjsData(READER, ''), /build moved/)
+})
+
+test('pdf.js data that matches its record passes', () => {
+  assert.deepEqual(judgePdfjs(shipped(), '1.0.0', ALLOW, PDFJS).violations, [])
+})
+
+test('a pdf.js file shipped with no licence recorded is refused', () => {
+  const more = new Set([...shipped(), 'standard_fonts/FoxitDingbats.pfb'])
+  const { violations } = judgePdfjs(more, '1.0.0', ALLOW, PDFJS)
+  assert.ok(violations.some((v) => /FoxitDingbats\.pfb is shipped but no licence is recorded/.test(v)))
+})
+
+test('a pdf.js file recorded but no longer shipped is refused', () => {
+  const fewer = new Set([...shipped()].filter((p) => !p.startsWith('wasm/')))
+  const { violations } = judgePdfjs(fewer, '1.0.0', ALLOW, PDFJS)
+  assert.ok(violations.some((v) => /openjpeg_nowasm_fallback\.js is recorded in PDFJS_DATA but no longer shipped/.test(v)))
+})
+
+test('a bumped pdfjs-dist is refused until its licence files are read again', () => {
+  const { violations } = judgePdfjs(shipped(), '1.0.1', ALLOW, PDFJS)
+  assert.ok(violations.some((v) => /pdfjs-dist is 1\.0\.1 .* read at 1\.0\.0/.test(v)))
+})
+
+test('a pdf.js file is held to every licence in its expression', () => {
+  const { violations } = judgePdfjs(shipped(), '1.0.0', new Set(['MIT']), PDFJS)
+  assert.ok(violations.some((v) => /openjpeg_nowasm_fallback\.js is MIT AND Apache-2\.0, which is not allowed/.test(v)))
+})
+
+test('the pdf.js data we actually ship passes', async () => {
+  const fs = await import('node:fs')
+  const lock = JSON.parse(fs.readFileSync('app/package-lock.json', 'utf8'))
+  const { violations } = judgePdfjs(
+    shippedPdfjsData(fs.readFileSync('app/src/files/pdfLoad.ts', 'utf8'), fs.readFileSync('app/vite.config.ts', 'utf8')),
+    lock.packages['node_modules/pdfjs-dist'].version,
+    new Set(['BSD-2-Clause', 'BSD-3-Clause', 'Apache-2.0']),
+    PDFJS_DATA,
   )
   assert.deepEqual(violations, [])
 })

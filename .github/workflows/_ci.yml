@@ -844,9 +844,11 @@ jobs:
   # The license gates judge whether a package may ship; they neither carry the notices nor see past
   # a crate's own declaration — sqlcipher-src vendors SQLCipher (BSD-3-Clause) and keeps its text
   # beside the sources, and openssl-src builds OpenSSL (Apache-2.0). THIRD-PARTY-NOTICES carries
-  # them and the GUI's shipped npm packages, and this job holds it to the three shipped lockfiles
-  # (verification/ never ships). It runs on either side's change, since a bump on either side can
-  # leave the file stale — and Dependabot bumps are auto-merged.
+  # them, the GUI's shipped npm packages and the data the GUI bundles (the editor's grammars and
+  # language configurations, the PDF reader's character maps, fonts and decoders), and this job
+  # holds it to the three shipped lockfiles (verification/ never ships) and to the records of that
+  # data in guards/check-grammar-licenses.mjs. It runs on either side's change, since a bump on
+  # either side can leave the file stale — and Dependabot bumps are auto-merged.
   third-party-notices:
     name: THIRD-PARTY-NOTICES
     runs-on: ubuntu-latest
@@ -860,9 +862,10 @@ jobs:
           node-version-file: .nvmrc
 
       # The refusals first, for the npm-license job's reason: a judge that passes everything
-      # cannot report on itself.
+      # cannot report on itself. The grammar gate's tests run here too: its records of the
+      # bundled data are what the notices for that data are written from.
       - name: Test the notices gate's judgment
-        run: node --test guards/check-third-party-notices.test.mjs
+        run: node --test guards/check-third-party-notices.test.mjs guards/check-grammar-licenses.test.mjs
 
       # package-lock.json records each package's license but not its text, so the texts are read
       # from an install. No scripts: only the files on disk are read, nothing is built or run.
@@ -908,9 +911,10 @@ jobs:
         run: node guards/check-npm-licenses.mjs
 
       # One license per package is as deep as npm records, and the file panel's TextMate grammars
-      # are other people's work inside a package that declares only its own. This reads the panel's
-      # catalog instead — also a file, also no install.
-      - name: Check the bundled TextMate grammars' licenses
+      # are other people's work inside a package that declares only its own — as is the data the
+      # PDF reader carries out of pdfjs-dist. This reads the panel's catalog and the reader instead
+      # — also files, also no install.
+      - name: Check the bundled grammars' and PDF data's licenses
         run: node guards/check-grammar-licenses.mjs
 
   # The Tauri host crate (app/src-tauri) is `exclude`d from the root workspace, so

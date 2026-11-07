@@ -20,7 +20,13 @@
 // Two trees of it are VS Code's, baked in by a script rather than installed: the language
 // configurations under `app/src/files/langconfig/`, and the grammars under
 // `app/src/files/tmgrammar/` that no package republishes. Neither is an npm package at all, so no
-// dependency gate has ever had a chance to see either.
+// dependency gate has ever had a chance to see either. The PDF reader's data is the third: the
+// character maps, fonts and decoders it carries out of `pdfjs-dist` each have a licence of their
+// own, which the package's one field does not name.
+//
+// The records here are also what THIRD-PARTY-NOTICES is written from
+// (scripts/gen-third-party-notices.mjs), so what this gate allows and what the notices carry are
+// one list.
 //
 // Like the npm gate, the verdict is a pure function of files in the tree — no install, no network.
 // A grammar added to the panel without a line here goes red, which is the whole point: the line is
@@ -36,8 +42,11 @@ import { allowed, parse, parseAllowList, tokenize } from './check-npm-licenses.m
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CATALOG = join(ROOT, 'app', 'src', 'files', 'grammars.ts')
-const LANGCONFIG = join(ROOT, 'app', 'src', 'files', 'langconfig')
-const TMGRAMMAR = join(ROOT, 'app', 'src', 'files', 'tmgrammar')
+export const LANGCONFIG = join(ROOT, 'app', 'src', 'files', 'langconfig')
+export const TMGRAMMAR = join(ROOT, 'app', 'src', 'files', 'tmgrammar')
+const PDF_READER = join(ROOT, 'app', 'src', 'files', 'pdfLoad.ts')
+const VITE_CONFIG = join(ROOT, 'app', 'vite.config.ts')
+const NPM_LOCK = join(ROOT, 'app', 'package-lock.json')
 
 // What each baked tree is called in a violation, what its files are named after, and how to write it
 // again. The judgment below is one function because the question is one question: the manifest says
@@ -57,7 +66,7 @@ const TM_GRAMMAR_TREE = { dir: 'tmgrammar', key: 'scope', regen: 'make tm-gramma
 //
 // This is the only door around the allow-list, and it is deliberately narrow: a grant nothing
 // claims goes red, exactly as a stale exception does in the npm gate.
-const GRANTS = {
+export const GRANTS = {
   'textmate-bundle': {
     from: 'https://github.com/textmate/yaml.tmbundle#license',
     text:
@@ -99,7 +108,10 @@ const GRANTS = {
 // `markdown-basics` for `textmate/markdown.tmbundle`, which the MIT component is itself built from.
 // The grant is unconditional either way, so neither changes what may be shipped — only which line
 // answers for it.
-const GRAMMARS = {
+//
+// scripts/gen-third-party-notices.mjs reads this table too, so the notice a grammar travels with is
+// the licence recorded here and nothing else.
+export const GRAMMARS = {
   css: [
     { grammar: 'css', license: 'MIT', source: 'https://github.com/microsoft/vscode/blob/af600487b1e94374d9f48f57cbf2cad24656b07f/extensions/css/syntaxes/css.tmLanguage.json' },
   ],
@@ -166,6 +178,37 @@ const GRAMMARS = {
   ],
 }
 
+// What the PDF reader carries out of `pdfjs-dist` that is not pdf.js's own code. The package declares
+// Apache-2.0, and that is true of pdf.js — but the character maps, the two fonts and the two
+// decoders each sit beside a licence file of their own, and the package's one field answers for none
+// of them. Keyed by the path inside the package, written the way the reader names it: the character
+// maps by the glob `app/src/files/pdfLoad.ts` hands Vite, the fonts by name, and the decoders by the
+// names `app/vite.config.ts` copies out of `wasm/` (the `.wasm` beside them is not shipped).
+//
+// `texts` are the licence files inside the package, which scripts/gen-third-party-notices.mjs
+// reproduces. They were read at `version`, so a bump of the package stops this gate until somebody
+// has read them again — the files are where a new licence would show up first.
+export const PDFJS_DATA = {
+  version: '6.5.438',
+  files: {
+    // Adobe's character maps for CJK text, under the BSD-3-Clause the file itself spells out.
+    'cmaps/*.bcmap': { license: 'BSD-3-Clause', texts: ['cmaps/LICENSE'] },
+    // PDFium's Symbol and ZapfDingbats. `LICENSE_LIBERATION` is for fonts we do not carry.
+    'standard_fonts/FoxitDingbats.pfb': { license: 'BSD-3-Clause', texts: ['standard_fonts/LICENSE_FOXIT'] },
+    'standard_fonts/FoxitSymbol.pfb': { license: 'BSD-3-Clause', texts: ['standard_fonts/LICENSE_FOXIT'] },
+    // OpenJPEG compiled to JavaScript, with pdf.js's wrapping round it.
+    'wasm/openjpeg_nowasm_fallback.js': {
+      license: 'BSD-2-Clause',
+      texts: ['wasm/LICENSE_OPENJPEG', 'wasm/LICENSE_PDFJS_OPENJPEG'],
+    },
+    // PDFium's JBIG2 decoder, whose licence file carries both texts, and pdf.js's Apache-2.0 wrapping.
+    'wasm/jbig2_nowasm_fallback.js': {
+      license: 'BSD-3-Clause AND Apache-2.0',
+      texts: ['wasm/LICENSE_JBIG2', 'wasm/LICENSE_PDFJS_JBIG2'],
+    },
+  },
+}
+
 class GateError extends Error {}
 const refuse = (msg) => {
   throw new GateError(msg)
@@ -183,6 +226,18 @@ export function bundledGrammars(source) {
     refuse(`${CATALOG} imports no tm-grammars grammar — the catalog moved; fix this gate`)
   }
   return new Set(ids)
+}
+
+// What the PDF reader carries out of pdfjs-dist: the files `pdfLoad.ts` names under
+// `/node_modules/pdfjs-dist/`, and the decoders `vite.config.ts` lists in `PDF_FALLBACKS`, which it
+// reads out of the package's `wasm/`.
+export function shippedPdfjsData(reader, viteConfig) {
+  const named = [...reader.matchAll(/["']\/node_modules\/pdfjs-dist\/([^"']+)["']/g)].map((m) => m[1])
+  if (named.length === 0) refuse(`${PDF_READER} names no pdfjs-dist file — the reader moved; fix this gate`)
+  const list = viteConfig.match(/PDF_FALLBACKS\s*=\s*\[([^\]]*)\]/)
+  if (list === null) refuse(`${VITE_CONFIG} has no PDF_FALLBACKS list — the build moved; fix this gate`)
+  const fallbacks = [...list[1].matchAll(/["']([^"']+)["']/g)].map((m) => `wasm/${m[1]}`)
+  return new Set([...named, ...fallbacks])
 }
 
 // --- the judgment ------------------------------------------------------------------------------
@@ -238,6 +293,37 @@ export function judgeGrammars(bundled, allow, table = GRAMMARS, grants = GRANTS)
   }
 
   return { violations, judged, usedGrants }
+}
+
+// Pure, like the two above: what the reader ships, the version the lockfile pins and the allow-list
+// in, verdict out.
+export function judgePdfjs(shipped, version, allow, record = PDFJS_DATA) {
+  const violations = []
+  if (version !== record.version) {
+    violations.push(
+      `pdfjs-dist is ${version} in app/package-lock.json, but its bundled data was read at ${record.version} — ` +
+        're-read the licence files PDFJS_DATA names and update the record',
+    )
+  }
+  for (const path of [...shipped].sort()) {
+    const entry = record.files[path]
+    if (entry === undefined) {
+      violations.push(`pdfjs-dist/${path} is shipped but no licence is recorded for it — read the package's licence files and add it to PDFJS_DATA`)
+      continue
+    }
+    let ok
+    try {
+      ok = allowed(parse(tokenize(entry.license)), allow)
+    } catch (e) {
+      violations.push(`pdfjs-dist/${path}: cannot read the license expression "${entry.license}" (${e.message})`)
+      continue
+    }
+    if (!ok) violations.push(`pdfjs-dist/${path} is ${entry.license}, which is not allowed`)
+  }
+  for (const path of Object.keys(record.files)) {
+    if (!shipped.has(path)) violations.push(`pdfjs-dist/${path} is recorded in PDFJS_DATA but no longer shipped — drop the entry`)
+  }
+  return { violations, judged: shipped.size }
 }
 
 // --- the baked trees ----------------------------------------------------------------------------
@@ -315,18 +401,26 @@ function main() {
   const grammars = judgeTmGrammar(baked, there, allow)
   violations.push(...grammars.violations)
 
+  const pdfjs = judgePdfjs(
+    shippedPdfjsData(readFileSync(PDF_READER, 'utf8'), readFileSync(VITE_CONFIG, 'utf8')),
+    JSON.parse(readFileSync(NPM_LOCK, 'utf8')).packages?.['node_modules/pdfjs-dist']?.version,
+    allow,
+  )
+  violations.push(...pdfjs.violations)
+
   if (violations.length > 0) {
     console.error('✗ grammar license gate:')
     for (const v of violations) console.error(`    ${v}`)
     console.error('  Data amenbo ships is bound by the same allow-list as everything else:')
     console.error("  deny.toml's [licenses] allow. Read it at its source and record the verdict with that URL")
-    console.error('  — in GRAMMARS here, or by re-running `make lang-config` or `make tm-grammar` — or take the data back out.')
+    console.error('  — in GRAMMARS or PDFJS_DATA here, or by re-running `make lang-config` or `make tm-grammar` — or take the data back out.')
     return 1
   }
 
   console.log(`→ grammar licenses: ${judged.size} grammars named by the panel's catalog, all within deny.toml's allow-list`)
   console.log(`→ language configurations: ${files(config.judged)}, ${manifest.licence} from ${manifest.repository} at ${manifest.tag}`)
   console.log(`→ baked grammars: ${files(grammars.judged)}, ${baked.licence} from ${baked.repository} at ${baked.tag}`)
+  console.log(`→ pdf.js data: ${files(pdfjs.judged)} out of pdfjs-dist ${PDFJS_DATA.version}, each under the licence recorded for it`)
   for (const grant of usedGrants) {
     console.log(`  (${grant}: no SPDX identifier — the grant is quoted in this file, read from ${GRANTS[grant].from})`)
   }

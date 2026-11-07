@@ -1212,15 +1212,16 @@ brand:
 ## editor reads to know where a new line is indented, what folds, and which brackets pair up.
 ## Like `brand`, everything it writes is tracked and nothing in a build waits on it — it wants the
 ## network, and a merge should not. Run it by hand when the pinned VS Code release moves, and commit
-## what changes. See scripts/gen-lang-config.mjs.
+## what changes — with THIRD-PARTY-NOTICES regenerated (scripts/gen-third-party-notices.mjs), which
+## lists each file it writes. See scripts/gen-lang-config.mjs.
 lang-config:
 	node scripts/gen-lang-config.mjs
 
 ## Re-bake the TextMate grammars no package republishes — the root a PHP file is read from, which VS
 ## Code ships inside its own extension and nobody has put on npm. Same terms as `lang-config`: what
 ## it writes is tracked, it wants the network, and the licence gate reads the manifest it leaves.
-## Run it by hand when the pinned VS Code release moves, and commit what changes.
-## See scripts/gen-tm-grammar.mjs.
+## Run it by hand when the pinned VS Code release moves, and commit what changes — with
+## THIRD-PARTY-NOTICES regenerated, as for `lang-config`. See scripts/gen-tm-grammar.mjs.
 tm-grammar:
 	node scripts/gen-tm-grammar.mjs
 

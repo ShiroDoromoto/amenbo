@@ -124,7 +124,8 @@ cargo_deps:
   - 'deny.toml'
   # The notices the third-party-notices job checks against the lockfiles: the committed file,
   # the generator that writes it (and names the vendored C sources), and the gate with its
-  # tests. That job also runs on npm_deps, since the file carries the GUI's npm packages too.
+  # tests. That job also runs on npm_deps, since the file carries the GUI's npm packages and
+  # the data it bundles too.
   - 'THIRD-PARTY-NOTICES'
   - 'scripts/gen-third-party-notices.mjs'
   - 'guards/check-third-party-notices*.mjs'
@@ -139,12 +140,18 @@ npm_deps:
   # verdict — a test edited alone still has to re-open this.
   - 'deny.toml'
   - 'guards/*.mjs'
-  # The other things the same job judges, neither of which npm can answer for: the TextMate
+  # The other things the same job judges, none of which npm can answer for: the TextMate
   # grammars the file panel bundles are licensed one by one inside a package that declares
-  # only its own license, and the language configurations baked out of VS Code are not an npm
-  # package at all. Both lists have to re-open the gate that reads them.
+  # only its own license, the language configurations and the grammar baked out of VS Code
+  # are not an npm package at all, and the data the PDF reader carries out of pdfjs-dist
+  # (named in the reader and in the build config) sits under licence files of its own. Each
+  # of these re-opens the gate that reads it — and the third-party-notices job, which writes
+  # their notices from the same records.
   - 'app/src/files/grammars.ts'
   - 'app/src/files/langconfig/**'
+  - 'app/src/files/tmgrammar/**'
+  - 'app/src/files/pdfLoad.ts'
+  - 'app/vite.config.ts'
   - '.github/workflows/_ci.yml'
   - '.github/paths-filters.yml'
   - '.github/workflows/_rot-gates.yml'

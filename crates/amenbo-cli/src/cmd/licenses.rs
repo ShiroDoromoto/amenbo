@@ -9,8 +9,8 @@ use crate::output::{print_json, CliError, Flags};
 const LICENSE: &str = include_str!("../../../../LICENSE");
 
 /// The third-party notices, the repository root's `THIRD-PARTY-NOTICES`. CI holds that file to the
-/// lockfiles, and it is read again on every build, so what is printed here is the set this binary was
-/// built from.
+/// lockfiles and to the records of the data the GUI bundles, and it is read again on every build, so
+/// what is printed here is the set this binary was built from.
 const THIRD_PARTY_NOTICES: &str = include_str!("../../../../THIRD-PARTY-NOTICES");
 
 /// `amenbo licenses`: print both texts. They live inside the binary rather than beside it because the

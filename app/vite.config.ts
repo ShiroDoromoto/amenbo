@@ -16,6 +16,9 @@ import react from "@vitejs/plugin-react";
  * pdfjs-dist), and PDFium's JBIG2 decoder, under BSD-3-Clause and Apache-2.0
  * (`wasm/LICENSE_JBIG2`). pdf.js's own wrapping is BSD-2-Clause and Apache-2.0
  * (`wasm/LICENSE_PDFJS_*`). All of them are on `deny.toml`'s allow-list.
+ * `guards/check-grammar-licenses.mjs` reads `PDF_FALLBACKS` and holds each name to a record in its
+ * `PDFJS_DATA`, which is also where THIRD-PARTY-NOTICES takes their texts from — a decoder added
+ * here without a record goes red.
  */
 const PDF_FALLBACK_DIR = "pdfjs/";
 const PDF_FALLBACKS = ["openjpeg_nowasm_fallback.js", "jbig2_nowasm_fallback.js"];

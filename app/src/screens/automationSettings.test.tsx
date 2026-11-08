@@ -2,8 +2,12 @@
 // What the automation holds as a whole, down the build screen's right. The writes are stubbed; every
 // press and pulldown runs for real.
 //
-// What these guard: **the column holds two boxes — who failures are filed to, and the trigger — and
-// no count of runs at once**; **who failures are filed to is required, offers the automation's roles
+// What these guard: **the column holds three boxes — who failures are filed to, the triggers, and how
+// many each role has — and no count of runs at once for the automation as a whole**; **every role
+// has a row, in order, with the actions placed for it and a stepper held between 1 and the cap, which
+// writes the role's headcount; the sum is the most tasks at once; a row whose draft differs from the
+// saved version says what the version holds; and the foot saves or discards the draft with the head's
+// presses, or says it is the saved version**; **who failures are filed to is required, offers the automation's roles
 // and the person, and writes the one picked**; **every trigger is listed in order — when, what it
 // files and under which role, the wait in the largest unit it divides into and the condition by what
 // it counts — and a press asks the build screen to open that one's card**; **"+ Add a trigger" is
@@ -25,6 +29,10 @@ const hoisted = vi.hoisted(() => ({
 vi.mock("../core/automations", () => ({
   editAutomation: (_id: number, patch: unknown) => {
     hoisted.edits.push(patch);
+    return hoisted.refuse === null ? Promise.resolve() : Promise.reject(new Error(hoisted.refuse));
+  },
+  editAutomationRole: (id: number, patch: unknown) => {
+    hoisted.edits.push({ role: id, ...(patch as object) });
     return hoisted.refuse === null ? Promise.resolve() : Promise.reject(new Error(hoisted.refuse));
   },
   addAutomationTrigger: () => Promise.resolve(),
@@ -55,6 +63,7 @@ const automation: AutomationDetailDto = {
   placements: [],
   edges: [],
   wires: [],
+  maxHeadcount: 10,
   heldBy: [],
   unsaved: false,
   saveBlocks: [],
@@ -73,6 +82,7 @@ const written: AutomationTriggerDto = {
 beforeEach(() => {
   hoisted.edits = [];
   hoisted.refuse = null;
+  Object.assign(draft, { saved: 0, discarded: 0, canSave: true, canDiscard: true });
   hoisted.opened = [];
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -84,11 +94,20 @@ afterEach(() => {
   container.remove();
 });
 
+/** The head's two presses, as the build screen hands them down: each press counted. */
+const draft = { saved: 0, discarded: 0, canSave: true, canDiscard: true };
+
 const render = (shown: AutomationDetailDto = automation) =>
   act(async () => {
     root.render(
       createElement(AutomationSettings, {
         automation: shown,
+        draft: {
+          save: () => draft.saved++,
+          discard: () => draft.discarded++,
+          canSave: draft.canSave,
+          canDiscard: draft.canDiscard,
+        },
         onOpenTrigger: (trigger: AutomationTriggerDto | undefined) => hoisted.opened.push(trigger),
       }),
     );
@@ -107,14 +126,111 @@ const pick = (value: string) =>
   });
 
 describe("the column", () => {
-  it("holds who failures are filed to and the trigger, each in a box of its own, and no count of runs at once", async () => {
+  it("holds who failures are filed to, the triggers and the headcounts, each in a box of its own", async () => {
     await render();
     const boxes = Array.from(container.querySelectorAll(".autoside > .autoside__group"));
-    expect(boxes).toHaveLength(2);
+    expect(boxes).toHaveLength(3);
     expect(boxes[0]!.textContent).toContain(t("auto.side.failuresTo"));
     expect(boxes[0]!.querySelector("select")).not.toBeNull();
     expect(boxes[1]!.textContent).toContain(t("auto.side.trigger"));
-    expect(container.querySelector("output")).toBeNull();
+    expect(boxes[2]!.textContent).toContain(t("auto.side.headcount"));
+    // A number stepped is a role's alone: there is no count for the automation as a whole.
+    expect(container.querySelectorAll("output")).toHaveLength(automation.roles.length);
+  });
+});
+
+/** One placement of an action, put down for the role `roleId`. */
+const placed = (id: number, name: string, roleId: number) =>
+  ({ id, name, roleId }) as unknown as AutomationDetailDto["placements"][number];
+
+const rows = () => Array.from(container.querySelectorAll(".autoside__role"));
+const stepperOf = (role: string) =>
+  container.querySelector<HTMLElement>(`[role="group"][aria-label="${tf("auto.side.headcountOf", { role })}"]`)!;
+const stepButton = (role: string, label: string) =>
+  Array.from(stepperOf(role).querySelectorAll("button")).find((b) => b.getAttribute("aria-label") === label)!;
+
+describe("the headcounts", () => {
+  it("give every role a row, in order, with the actions placed for it and its headcount", async () => {
+    await render({
+      ...automation,
+      roles: [
+        { id: 1, name: "Alice", headcount: 3, passes: [] },
+        { id: 2, name: "Bob", headcount: 1, passes: [] },
+      ],
+      placements: [placed(11, "Read the context", 1), placed(12, "Implement", 1), placed(13, "Review", 2)],
+    });
+    expect(rows().map((row) => row.querySelector(".autoside__rolename")!.textContent)).toEqual(["Alice", "Bob"]);
+    expect(Array.from(rows()[0]!.querySelectorAll(".autoside__act")).map((one) => one.textContent)).toEqual([
+      "Read the context",
+      "Implement",
+    ]);
+    expect(stepperOf("Alice").querySelector("output")!.textContent).toBe(tf("auto.side.headcountValue", { n: 3 }));
+    expect(container.querySelector(".autoside__total")!.textContent).toContain("4");
+    expect(container.textContent).toContain(tf("auto.side.headcountRange", { min: 1, max: 10 }));
+  });
+
+  it("step one at a time, held between 1 and the cap, and write the role's headcount", async () => {
+    await render({
+      ...automation,
+      roles: [
+        { id: 1, name: "Alice", headcount: 1, passes: [] },
+        { id: 2, name: "Bob", headcount: 10, passes: [] },
+      ],
+    });
+    const less = t("auto.side.headcountLess");
+    const more = t("auto.side.headcountMore");
+    expect(stepButton("Alice", less).disabled).toBe(true);
+    expect(stepButton("Bob", more).disabled).toBe(true);
+    await press(stepButton("Alice", more));
+    await press(stepButton("Bob", less));
+    expect(hoisted.edits).toEqual([
+      { role: 1, headcount: 2 },
+      { role: 2, headcount: 9 },
+    ]);
+    expect(document.activeElement).toBe(stepButton("Bob", less));
+  });
+
+  it("say what the saved version holds where the draft differs from it, and nothing where it does not", async () => {
+    await render({
+      ...automation,
+      unsaved: true,
+      roles: [
+        { id: 1, name: "Alice", headcount: 3, savedHeadcount: 2, passes: [] },
+        { id: 2, name: "Bob", headcount: 1, savedHeadcount: 1, passes: [] },
+        { id: 3, name: "Carol", headcount: 2, passes: [] },
+      ],
+    });
+    expect(rows()[0]!.textContent).toContain(tf("auto.side.headcountSaved", { n: 2 }));
+    expect(rows()[1]!.textContent).not.toContain(tf("auto.side.headcountSaved", { n: 1 }));
+    expect(rows()[2]!.querySelector(".autostep__hint")).toBeNull();
+  });
+
+  it("end on the head's save and discard while the draft holds changes", async () => {
+    await render({ ...automation, unsaved: true });
+    expect(container.textContent).toContain(t("auto.side.draftUnsaved"));
+    await press(button(t("auto.side.draftSave")));
+    await press(button(t("auto.side.draftDiscard")));
+    expect([draft.saved, draft.discarded]).toEqual([1, 1]);
+  });
+
+  it("hold the two presses back on the head's terms", async () => {
+    Object.assign(draft, { canSave: false, canDiscard: false });
+    await render({ ...automation, unsaved: true });
+    expect(button(t("auto.side.draftSave"))!.disabled).toBe(true);
+    expect(button(t("auto.side.draftDiscard"))!.disabled).toBe(true);
+  });
+
+  it("say the draft is the saved version where nothing is unsaved", async () => {
+    await render();
+    expect(container.textContent).toContain(t("auto.side.draftSame"));
+    expect(button(t("auto.side.draftSave"))).toBeUndefined();
+  });
+
+  it("draw a refused step in core's words", async () => {
+    hoisted.refuse = "how many are in a role is from 1 to 10, not 11";
+    await render();
+    await press(stepButton("Alice", t("auto.side.headcountMore")));
+    expect(container.textContent).toContain("how many are in a role is from 1 to 10, not 11");
   });
 });
 

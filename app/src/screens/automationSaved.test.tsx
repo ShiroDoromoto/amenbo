@@ -8,7 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { told } from "../core/automationSave";
 import { t } from "../core/i18n";
-import { MARK_MS, useSaved, type SavedState } from "./AutomationSaved";
+import { fieldOf, MARK_MS, markBeside, useSaved, type SavedState } from "./AutomationSaved";
 
 /** A write the test settles by hand. */
 function pending() {
@@ -121,5 +121,39 @@ describe("a head handed the definition's saved state", () => {
     expect(head()?.classList.contains("actsaved--failed")).toBe(true);
     expect(head()?.textContent).toContain("held by a run");
     expect(marks()).toHaveLength(0);
+  });
+});
+
+describe("where Written stands", () => {
+  /** An element drawn from `left` to `right`, 20px high at the top of the window. */
+  function drawn(el: Element, left: number, right: number): Element {
+    el.getBoundingClientRect = () => ({ left, right, top: 0, bottom: 20, width: right - left, height: 20 }) as DOMRect;
+    return el;
+  }
+
+  it("takes a control of a stepper as the whole stepper", () => {
+    const group = document.createElement("span");
+    group.setAttribute("data-saved-field", "");
+    const plus = document.createElement("button");
+    group.appendChild(plus);
+    const input = document.createElement("input");
+    expect(fieldOf(plus)).toBe(group);
+    expect(fieldOf(input)).toBe(input);
+  });
+
+  it("stands right of a field with room, and inside one at the window's end", () => {
+    const end = window.innerWidth;
+    expect(markBeside(drawn(document.createElement("input"), 10, 100), 1)).toMatchObject({ left: 106, inside: false });
+    expect(markBeside(drawn(document.createElement("input"), end - 200, end - 10), 1)).toMatchObject({
+      left: end - 16,
+      inside: true,
+    });
+  });
+
+  it("stands left of a stepper at the window's end, off its number", () => {
+    const end = window.innerWidth;
+    const group = drawn(document.createElement("span"), end - 110, end - 10);
+    group.setAttribute("data-saved-field", "");
+    expect(markBeside(group, 1)).toMatchObject({ left: end - 116, inside: true });
   });
 });

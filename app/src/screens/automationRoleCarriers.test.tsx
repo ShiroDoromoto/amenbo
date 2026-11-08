@@ -130,6 +130,7 @@ function detail(): AutomationDetailDto {
     ],
     edges: [{ id: 5, fromId: 2, exitName: "完了", toId: 1, ends: "go" }],
     wires: [],
+    maxHeadcount: 10,
     heldBy: [],
     unsaved: false,
     saveBlocks: [],

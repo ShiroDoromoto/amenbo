@@ -55,6 +55,7 @@ function detail(...triggers: AutomationTriggerDto[]): AutomationDetailDto {
     placements: [],
     edges: [],
     wires: [],
+    maxHeadcount: 10,
     heldBy: [],
     unsaved: false,
     saveBlocks: [],

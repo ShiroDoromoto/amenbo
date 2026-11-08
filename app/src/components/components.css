@@ -2087,6 +2087,48 @@ button.feed__target:hover { color: var(--c-accent); }
 .autoside__trigger:hover { background: var(--c-hover); }
 .autoside__when { color: var(--c-text-muted); }
 .autoside__what { font-weight: var(--fw-medium); }
+/* How many each role has: one row per role, the sum on a sunken band under them, and the draft's
+   save and discard at the foot. The rows run edge to edge, so the box gives up its padding and each
+   part keeps its own. Narrow, the stepper goes under the role's name; wide, it stands at the right. */
+.autoside__group--flush { padding: 0; gap: 0; overflow: hidden; container: autoheads / inline-size; }
+.autoside__pad { padding: var(--s-3) var(--s-3) var(--s-1); }
+.autoside__roles { list-style: none; margin: 0; padding: 0; }
+.autoside__role {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: var(--s-1) var(--s-2); align-items: center;
+  padding: var(--s-2) var(--s-3); border-block-end: var(--border-w) var(--border-style) var(--c-rule);
+}
+.autoside__role > .stepper { grid-column: 2; justify-self: start; }
+@container autoheads (min-width: 22rem) {
+  .autoside__role { grid-template-columns: 22px minmax(0, 1fr) auto; }
+  .autoside__role > .stepper { grid-column: auto; }
+}
+.autoside__rolebody { display: flex; flex-direction: column; min-width: 0; }
+.autoside__rolename { font-weight: var(--fw-bold); overflow-wrap: anywhere; }
+.autoside__acts { font-size: var(--fs-xs); color: var(--c-text-muted); }
+.autoside__act {
+  display: inline-block; margin: 3px 4px 0 0; padding: 0 6px; line-height: 18px; border-radius: var(--r-sm);
+  background: var(--c-sunken-pic) var(--c-sunken); color: var(--c-text-muted);
+}
+.autoside__total {
+  display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); align-items: center; padding: var(--s-2) var(--s-3);
+  background: var(--c-sunken-pic) var(--c-sunken); font-size: var(--fs-xs);
+}
+.autoside__num { font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; }
+.autoside__draft {
+  display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-3); align-items: center; padding: var(--s-2) var(--s-3);
+  border-block-start: var(--border-w) var(--border-style) var(--c-rule); font-size: var(--fs-xs);
+}
+.autoside__presses { display: flex; gap: var(--s-2); margin-inline-start: auto; }
+/* A number stepped between two bounds (`./Stepper`). */
+.stepper {
+  display: inline-flex; align-items: center; overflow: hidden;
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm); background: var(--c-surface-pic) var(--c-surface);
+}
+.stepper > button { font: inherit; width: 30px; height: 30px; border: 0; background: var(--c-surface-pic) var(--c-surface); color: var(--c-text); cursor: pointer; }
+.stepper > button:hover:not(:disabled) { background: var(--c-hover); }
+.stepper > button:disabled { color: var(--c-text-faint); cursor: default; }
+.stepper > button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+.stepper__value { min-width: 48px; text-align: center; font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; }
 /* The same, where the picked role's round does not fit the middle beside the two sides
    (`useStacked` in `../screens/AutomationBuildScreen`): the round then has the screen's whole width. */
 .actbuild__body--stacked { flex-direction: column; }

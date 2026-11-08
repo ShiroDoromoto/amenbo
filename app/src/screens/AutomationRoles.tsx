@@ -34,7 +34,7 @@ export function roleStepCount(automation: AutomationDetailDto, roleId: number): 
 }
 
 /** A role's picture, drawn from its icon seed, or from what the role is called until one is written. */
-function RoleIcon({ role, size }: { role: AutomationRoleDto; size: number }) {
+export function RoleIcon({ role, size }: { role: AutomationRoleDto; size: number }) {
   return <Identicon seed={role.icon ?? role.name} size={size} />;
 }
 

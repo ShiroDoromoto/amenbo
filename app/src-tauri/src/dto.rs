@@ -3540,6 +3540,9 @@ pub struct AutomationDetailDto {
     /// round reaches it (`AutomationPlacementDto::role_id`), and a step the one it falls back to
     /// (`AutomationCarrierDto::chosen_at`).
     pub(crate) roles: Vec<AutomationRoleDto>,
+    /// **The most a role can have** ([`amenbo_core::model::MAX_ROLE_HEADCOUNT`], `AMB-D-1124`), so the
+    /// build screen stops its "+" where core would refuse.
+    pub(crate) max_headcount: u32,
     pub(crate) placements: Vec<AutomationPlacementDto>,
     pub(crate) edges: Vec<AutomationEdgeDto>,
     pub(crate) wires: Vec<AutomationWireDto>,
@@ -3569,6 +3572,11 @@ pub struct AutomationRoleDto {
     pub(crate) name: String,
     /// How many are in it — how many of its tasks may be under way at once, from 1 up to the cap.
     pub(crate) headcount: u32,
+    /// **How many it has in the newest saved version** — what the next launch goes with. Absent for a
+    /// role the version does not hold, and for every role of an automation nobody has saved.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) saved_headcount: Option<u32>,
     /// The icon it is drawn with, by the name the GUI knows it under. Absent for none chosen.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

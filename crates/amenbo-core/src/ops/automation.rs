@@ -1666,9 +1666,9 @@ pub fn move_to(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<Automation> {
 
 /// **Name any placement as the entry**, whatever stands on it. No op a person presses does this: the
 /// entry is the first thing put on a picture, one of the built-ins a run can start at, and it is changed
-/// by [`entry_replace`] (`AMB-D-977`). Two roads still need it — an imported file names its entry as
-/// it was drawn ([`crate::ops::automation_import`]), and a store written before that rule can name any
-/// placement, a shape the run side goes on answering for and its tests draw this way.
+/// by [`entry_replace`] (`AMB-D-977`). A store written before that rule can name any placement, a shape
+/// the run side goes on answering for and its tests draw this way.
+#[cfg(test)]
 pub(crate) fn set_entry(
     tx: &WriteTx<'_>,
     automation_id: i64,

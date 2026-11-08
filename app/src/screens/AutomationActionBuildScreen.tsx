@@ -265,7 +265,7 @@ export function AutomationActionBuildScreen({
   /** A press at the far end of the head, after "Edit". */
   headEnd?: ReactNode;
   /** Go to the pane a run going on this action is drawn in. */
-  onGoToRun?: (project: number, run: number) => void;
+  onGoToRun?: (project: number, run: number, launch?: number | null) => void;
   /** Go to the build screen of an automation this action is placed on. Absent, the names are read
    *  and not pressed. */
   onGoToAutomation?: (project: number, automation: number) => void;

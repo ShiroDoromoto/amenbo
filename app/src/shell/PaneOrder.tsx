@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
-import { gridAt, movedWithin, placing, type Frame } from "../talk/layout";
+import { gridAt, movedWithin, placing, terminalOf, type Frame } from "../talk/layout";
 import type { FrameNames } from "../talk/frames";
 import { draggedFar, elementUnder, type Point } from "../core/pointerDrag";
 import { faceOf, type Face, type Plate as Row, type Say } from "../talk/nameplate";
@@ -71,7 +71,7 @@ export function PaneOrder({ panes, names, rows, sayOf, onClose, onOrder }: {
     const drawn = rows.get(frame.id)?.() ?? null;
     if (drawn !== null) return { name: drawn.name, face: drawn.dot.face, state: drawn.run?.state?.word ?? null };
     const run = sayOf(frame);
-    return { name: plateName(run, names, frame.id, frame.folder), face: faceOf(false), state: run?.state?.word ?? null };
+    return { name: plateName(run, names, terminalOf(frame), frame.folder), face: faceOf(false), state: run?.state?.word ?? null };
   }
   // Read once, as the modal opens. What is drawn in here is a proposal about an arrangement, not a
   // second screen for watching the panes on: a card that moved under the hand carrying it would be

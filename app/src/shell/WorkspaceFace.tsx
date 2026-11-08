@@ -14,9 +14,10 @@ import {
 } from "../talk/frames";
 import {
   addPane, closedFrame, closedIn, EMPTY_LAYOUT, filledPages, focusOn, folding, goPage, goProject,
-  gridAt, landingOn, laidOut, movedTo, movedWithin, needsNobody, openedFrame, openedIn, pageCount,
-  paneIn, panesOf, reordered, resized, restored, runFrameId, runsKept, slotsOf, stoodForRun,
-  withoutRuns, writing, type Frame, type Layout, type SavedLayout, type Size,
+  gridAt, landingOn, laidOut, launchesKept, movedTo, movedWithin, needsNobody, openedFrame, openedIn,
+  pageCount, paneIdOf, paneIn, paneOfLaunch, paneOfTerminal, panesOf, reordered, resized, restored,
+  runFrameId, runsKept, seatedIn, seatedOn, slotsOf, stoodForLaunch, stoodForRun, terminalOf,
+  withoutRuns, writing, type Frame, type Layout, type SavedLayout, type Seat, type Size,
 } from "../talk/layout";
 import { onStep, standingSteps, type BuiltinRun, type StepOpened, type StepRun } from "../talk/automationStep";
 import { axisOnPane, sideOnPane, sizeStretchedTo } from "./paneDrag";
@@ -46,7 +47,7 @@ import type { PtySessionDto } from "../bindings/bindings";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
-import { fetchRunCards, useRunCards } from "../core/automations";
+import { fetchLiveRuns, fetchRunCards, useRunCards } from "../core/automations";
 import { roomWaitState, roundOf, runSayOf, waitingState } from "../core/runWords";
 import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 
@@ -124,9 +125,28 @@ function without<T>(all: Record<string, T>, keys: string[]): Record<string, T> {
 async function settledRunsLeftOut(saved: SavedLayout | null): Promise<SavedLayout | null> {
   if (saved === null) return null;
   const runs = runsKept(saved);
-  if (runs.length === 0) return saved;
-  const cards = await fetchRunCards(runs).catch(() => []);
-  return withoutRuns(saved, new Set(cards.filter(needsNobody).map((card) => card.run)));
+  const cards = runs.length === 0 ? [] : await fetchRunCards(runs).catch(() => []);
+  return settledLaunchesSeated(withoutRuns(saved, new Set(cards.filter(needsNobody).map((card) => card.run))));
+}
+
+/**
+ * **The launches' panes the store kept, each with the seat to draw in front** (`../talk/layout`'s
+ * `seatedOn`): the oldest of its runs somebody still has something to do with — going, held, or a
+ * failure nobody has acknowledged (`AMB-D-955`), which is what the "running" tab lists. A launch with
+ * none of those has no seat to draw, and its pane is left behind: over and needing nobody, or with no
+ * seat under way yet, when the next step of it stands the pane again (`stoodForLaunch`).
+ */
+async function settledLaunchesSeated(saved: SavedLayout): Promise<SavedLayout> {
+  const launches = new Set(launchesKept(saved));
+  if (launches.size === 0) return saved;
+  const live = await fetchLiveRuns().catch(() => []);
+  const seats = new Map<number, number>();
+  for (const card of [...live].sort((a, b) => a.run - b.run)) {
+    if (card.launch !== undefined && launches.has(card.launch) && !seats.has(card.launch)) {
+      seats.set(card.launch, card.run);
+    }
+  }
+  return seatedOn(saved, seats);
 }
 
 /**
@@ -256,7 +276,7 @@ export function WorkspaceFace({
    * gone to where it is on the screen, and opened again under that same id where it is not, at which
    * point it is asked where it works the way every new pane is (`./EmptySlot`).
    */
-  openIn?: { project: number; dir?: string; pane?: string; run?: number; nth: number } | null;
+  openIn?: { project: number; dir?: string; pane?: string; run?: number; launch?: number; nth: number } | null;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   // The reading column itself, so a press can be told apart from one inside it (`isBlankSpaceClose`).
@@ -401,7 +421,9 @@ export function WorkspaceFace({
   // mark of it would be saying something about a file the reader has long since sent.
   const [landed, setLanded] = useState<string | null>(null);
   /**
-   * **The step each run's pane is standing on**, by the pane's id (`../talk/automationStep`).
+   * **The step each run is standing on**, by the name its terminal goes by (`runFrameId`) — the pane's
+   * id for a run's pane, and the seat's on a launch's pane, which holds one for every seat it has and
+   * draws the one in front (`../talk/layout`'s `terminalOf`) (`../talk/automationStep`).
    *
    * It is state and not a ref, unlike `startNow` and `startWith`: what is in it decides what the pane
    * draws — which terminal, opened on which text — so a step that arrived without a redraw would be a
@@ -409,8 +431,8 @@ export function WorkspaceFace({
    */
   const [steps, setSteps] = useState<ReadonlyMap<string, StepRun>>(new Map());
   /**
-   * **The built-in each run's pane is showing instead**, by the pane's id (`AMB-D-964`). A pane is on
-   * one or the other: a step arriving takes the card away, and a built-in arriving takes the step.
+   * **The built-in each run is showing instead**, by the same name (`AMB-D-964`). A run is on one or
+   * the other: a step arriving takes the card away, and a built-in arriving takes the step.
    */
   const [builtins, setBuiltins] = useState<ReadonlyMap<string, BuiltinRun>>(new Map());
   /**
@@ -437,8 +459,8 @@ export function WorkspaceFace({
    */
   const sayOf = useCallback((frame: Frame): Say | null => {
     if (frame.run === null) return null;
-    const step = steps.get(frame.id);
-    const builtin = step === undefined ? builtins.get(frame.id) : undefined;
+    const step = steps.get(terminalOf(frame));
+    const builtin = step === undefined ? builtins.get(terminalOf(frame)) : undefined;
     const on = step ?? builtin;
     if (on === undefined) return runSayOf(runCardOf.get(frame.run));
     return {
@@ -661,8 +683,11 @@ export function WorkspaceFace({
     // (`AMB-D-872`), and which one that is only the arrangement knows — read here the way the one
     // below reads it. **A carried name is the one exception**: it came over with the session, so the
     // provider already has it and is left alone (`./TerminalPane`).
+    //
+    // `frame` is the name the pane's terminal goes by, which on a launch's pane is the seat's and not
+    // the pane's id (`../talk/layout`'s `terminalOf`).
     setLayout((was) => {
-      const session = was.frames.find((one) => one.id === frame)?.session ?? null;
+      const session = paneOfTerminal(was, frame)?.session ?? null;
       void nameFrame(frame, name, by, session, !carried).then(setNames).catch(() => {});
       return was;
     });
@@ -725,6 +750,56 @@ export function WorkspaceFace({
    */
   const builtinPanes = useRef(new Map<string, string>());
   const aboutTo = useRef(0);
+  /**
+   * **The terminal each seat of a launch is running now**, by the seat's run, with the launch it is a
+   * seat of (`../talk/layout`'s `Frame.launch`). A launch's pane holds the terminal of the seat in
+   * front; the others' are kept here, for the press that puts another seat in front (`seatedIn`) to
+   * swap in, with the folder and agent it was started with. Its session is null where the seat's
+   * terminal has ended.
+   */
+  const seats = useRef(new Map<number, Seat & { launch: number }>());
+
+  /**
+   * **A step's terminal goes on the pane its run is drawn in** — the run's own pane, or its launch's
+   * (`stoodForLaunch`), which is stood where there is none yet. On a launch's pane it goes on the frame
+   * only where the seat is the one in front; another seat's is kept for when it is put there
+   * (`keepSeat`). `before` is the terminal the run's step before had, which comes off the same way.
+   */
+  const putOn = useCallback((
+    was: Layout,
+    run: number,
+    launch: number | null,
+    project: number,
+    before: string | null,
+    session: string | null,
+    folder: string | null,
+    agent: string | null,
+  ): Layout => {
+    if (launch === null) {
+      const cleared = before === null ? was : closedIn(was, before);
+      const stood = stoodForRun(cleared, project, run).layout;
+      return session === null ? stood : openedIn(stood, runFrameId(run), session, folder, agent);
+    }
+    const stood = stoodForLaunch(was, project, launch, run);
+    if (stood.frame.run !== run) return stood.layout;
+    const cleared = before === null ? stood.layout : closedIn(stood.layout, before);
+    return session === null ? cleared : openedIn(cleared, stood.frame.id, session, folder, agent);
+  }, []);
+
+  /** Keep the terminal a seat of a launch is running now, as it arrives — before the arrangement
+   *  takes it, so a step told right after this one reads it as the one before (`sessionOfRun`). */
+  const keepSeat = (run: number, launch: number | null, seat: Seat) => {
+    if (launch !== null) seats.current.set(run, { launch, ...seat });
+  };
+
+  /** Put the seat `run` in front of the launch's pane `frame`, with the terminal it has now. */
+  const seatFront = (was: Layout, frame: string, run: number): Layout =>
+    seatedIn(was, frame, run, seats.current.get(run) ?? null);
+
+  /** The terminal the run `run` has on the face now: its seat's, or the one on its own pane. */
+  const sessionOfRun = (run: number, launch: number | null): string | null => (launch === null
+    ? standing.current.frames.find((frame) => frame.id === runFrameId(run))?.session ?? null
+    : seats.current.get(run)?.session ?? null);
 
   /**
    * **A built-in is being carried out on a run, or has been** (`AMB-D-964`): stand the run's pane if
@@ -744,6 +819,7 @@ export function WorkspaceFace({
    */
   const builtinArrived = useCallback((
     run: number,
+    launch: number | null,
     project: number,
     builtin: BuiltinRun,
     before: string | null,
@@ -768,14 +844,15 @@ export function WorkspaceFace({
     builtinsNow.current = new Map(builtinsNow.current).set(id, builtin);
     setSteps((had) => droppedFrom(had, id));
     setBuiltins((had) => new Map(had).set(id, builtin));
+    if (session === null || before !== session) keepSeat(run, launch, { session, folder: null, agent: null });
     setLayout((was) => {
       if (session !== null && before === session) return was;
-      const cleared = before === null ? was : closedIn(was, before);
-      const stood = stoodForRun(cleared, project, run).layout;
-      return session === null ? stood : openedIn(stood, id, session, null, null);
+      return putOn(was, run, launch, project, before, session, null, null);
     });
-    if (fresh) landOn(id);
-  }, [landOn]);
+    if (fresh) landOn(paneIdOf(run, launch));
+    // `keepSeat` writes only a ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [landOn, putOn]);
 
   /**
    * **A step of a run is ready**: stand the run's pane if it has none, give up the terminal of the
@@ -799,9 +876,10 @@ export function WorkspaceFace({
    */
   const stepArrived = useCallback((one: StepOpened) => {
     const id = runFrameId(one.run);
-    const before = standing.current.frames.find((frame) => frame.id === id)?.session ?? null;
+    const launch = one.launch ?? null;
+    const before = sessionOfRun(one.run, launch);
     if (one.builtin !== undefined) {
-      builtinArrived(one.run, one.project, one.builtin, before, one.session ?? null);
+      builtinArrived(one.run, launch, one.project, one.builtin, before, one.session ?? null);
       return;
     }
     if (one.step === undefined) return;
@@ -814,13 +892,12 @@ export function WorkspaceFace({
     // `crate::automation::retell_task`). Its terminal is the one on the frame, so nothing comes off
     // or goes on and no ring is drawn: what changed is the row above the pane, which reads the step.
     if (before === step.session) return;
-    setLayout((was) => {
-      const cleared = before === null ? was : closedIn(was, before);
-      const stood = stoodForRun(cleared, one.project, one.run).layout;
-      return openedIn(stood, id, step.session, step.folder ?? null, step.agent);
-    });
-    landOn(id);
-  }, [landOn, builtinArrived]);
+    keepSeat(one.run, launch, { session: step.session, folder: step.folder ?? null, agent: step.agent });
+    setLayout((was) => putOn(was, one.run, launch, one.project, before, step.session, step.folder ?? null, step.agent));
+    landOn(paneIdOf(one.run, launch));
+    // `sessionOfRun` reads only refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [landOn, builtinArrived, putOn]);
 
   useEffect(() => onStep(stepArrived), [stepArrived]);
 
@@ -1051,12 +1128,27 @@ export function WorkspaceFace({
   // it.
   useEffect(() => {
     if (!settled || !openIn) return;
-    const { project, dir, pane, run } = openIn;
+    const { project, dir, pane, run, launch } = openIn;
     // An ask that names a pane is answered here and goes no further: what it is about is a place, and
     // whether that place is on the screen is this layout's answer alone — no folder to check against
     // the project's bindings, because the record it came off holds none (`AMB-D-897`).
     if (pane) {
       setLayout((was) => {
+        // **A launch's place is gone to with the seat asked for in front** (`../talk/layout`'s
+        // `Frame.launch`): the launch has one pane, and the run pressed for is a seat of it. Where
+        // nothing stands for the launch yet, it is stood with that seat in front.
+        if (launch !== undefined && run !== undefined) {
+          const there = paneOfLaunch(was, launch);
+          if (there) return focusOn(seatFront(was, there.id, run), there.id);
+          const stood = stoodForLaunch(was, project, launch, run);
+          const seat = seats.current.get(run);
+          return focusOn(
+            seat?.session == null
+              ? stood.layout
+              : openedIn(stood.layout, stood.frame.id, seat.session, seat.folder, seat.agent),
+            stood.frame.id,
+          );
+        }
         if (was.frames.some((one) => one.id === pane)) return focusOn(was, pane);
         // **A run's place is stood for the run.** The id would be the same either way, and the frame
         // would not: a place stood as an ordinary empty pane knows nothing about the run, so the step
@@ -1734,10 +1826,13 @@ export function WorkspaceFace({
           : (
             <>
               {slots.map(({ frame, across, down }, slot) => {
+                // The name the terminal in this place goes by: the place's own, or on a launch's
+                // pane the seat's in front (`../talk/layout`'s `terminalOf`).
+                const terminal = terminalOf(frame);
                 // The step this place is standing on, where it is a run's (`../talk/automationStep`).
-                const step = steps.get(frame.id);
+                const step = steps.get(terminal);
                 // Or the built-in Amenbo is carrying out there instead (`builtinArrived`).
-                const builtin = step === undefined ? builtins.get(frame.id) : undefined;
+                const builtin = step === undefined ? builtins.get(terminal) : undefined;
                 // Whichever of the two the row above the pane is about.
                 const on = step ?? builtin;
                 // The run's card, where what its last step left to be read goes to this pane
@@ -1756,10 +1851,14 @@ export function WorkspaceFace({
                   // and the steps of one spot follow one another there. Its start and its end are the
                   // same step, so the card is written over, not built again, between them
                   // (`builtinPanes`).
-                  key={step !== undefined
-                    ? `${frame.id}:${step.runStep}`
-                    : builtin !== undefined ? `${frame.id}:builtin:${builtinPanes.current.get(frame.id)}` : frame.id}
+                  //
+                  // A launch's pane is keyed by the seat in front too: another seat put there is
+                  // another terminal in the same place (`seatedIn`).
+                  key={`${frame.id}/${terminal}${step !== undefined
+                    ? `:${step.runStep}`
+                    : builtin !== undefined ? `:builtin:${builtinPanes.current.get(terminal)}` : ""}`}
                   frame={frame.id}
+                  terminal={terminal}
                   // Where this pane sits on the page's grid, worked out from the order rather than
                   // held against the pane (`../talk/layout`).
                   at={gridAt(frame.size, across, down)}
@@ -1769,7 +1868,10 @@ export function WorkspaceFace({
                   project={frame.project}
                   names={names}
                   start={{
-                    frame: frame.id,
+                    // The terminal's own name, which the host keeps a provider's home and the
+                    // frame's name against (`crate::pane_home`) — the seat's run on a launch's pane,
+                    // so no two seats share a home.
+                    frame: terminal,
                     session: frame.session,
                     // A step's terminal was started by the host and is on the frame's session
                     // already (`stepArrived`); what is started here is only what a person opens
@@ -1819,10 +1921,16 @@ export function WorkspaceFace({
                   onGrab={panes.length > 1 ? (e) => grabPane(e, frame.id) : undefined}
                   onStretch={(e) => stretchPane(e, frame.id, { across, down })}
                   size={frame.size}
-                  // A round pressed on the bar over this run's terminal (`./RunPicture`): that run's
-                  // pane is brought up with its page, and a run with no pane yet is stood one, as a
-                  // row of the "running" tab does.
+                  // A round pressed on the bar over this run's terminal (`./RunPicture`). On a launch's
+                  // pane it is another seat of the same launch, put in front in this same place
+                  // (`seatedIn`): one launch is one pane. A run kept from before launches has a pane
+                  // of its own, brought up with its page — or stood, where it has none yet, as a row
+                  // of the "running" tab does.
                   onGoToRun={(run) => {
+                    if (frame.launch !== null) {
+                      setLayout((was) => focusOn(seatFront(was, frame.id, run), frame.id));
+                      return;
+                    }
                     const id = runFrameId(run);
                     setLayout((was) => {
                       if (was.frames.some((one) => one.id === id)) return focusOn(was, id);
@@ -1847,7 +1955,12 @@ export function WorkspaceFace({
                   // A script's terminal stays on the frame once its program has ended: the host keeps
                   // it for the pane to read until the next step takes it away (`crate::pty`).
                   onClosed={(session) => {
-                    if (builtin?.program === undefined) setLayout((was) => closedIn(was, session));
+                    if (builtin?.program !== undefined) return;
+                    // A seat's terminal is gone for when the seat is put in front again, too.
+                    if (frame.launch !== null && frame.run !== null && seats.current.get(frame.run)?.session === session) {
+                      seats.current.set(frame.run, { ...seats.current.get(frame.run)!, session: null });
+                    }
+                    setLayout((was) => closedIn(was, session));
                   }}
                   onDrop={(id) => {
                     setLayout((was) => closedFrame(was, id));
@@ -1855,10 +1968,18 @@ export function WorkspaceFace({
                     startWith.current.delete(id);
                     // A run's pane takes its step with it. Its run is over — the pane cannot be taken
                     // away before (`./TerminalPane`) — and a step left here would put the row back the
-                    // moment a pane of that id stood again.
-                    setSteps((had) => droppedFrom(had, id));
-                    setBuiltins((had) => droppedFrom(had, id));
-                    builtinPanes.current.delete(id);
+                    // moment a pane of that id stood again. A launch's pane takes every seat's with it.
+                    const terminals = frame.launch === null
+                      ? [id]
+                      : [...seats.current].flatMap(([run, seat]) => {
+                        if (seat.launch !== frame.launch) return [];
+                        seats.current.delete(run);
+                        return [runFrameId(run)];
+                      });
+                    if (frame.run !== null && !terminals.includes(terminal)) terminals.push(terminal);
+                    setSteps((had) => terminals.reduce((left, one) => droppedFrom(left, one), had));
+                    setBuiltins((had) => terminals.reduce((left, one) => droppedFrom(left, one), had));
+                    for (const one of terminals) builtinPanes.current.delete(one);
                   }}
                   onName={named}
                   onFocus={(id) => setLayout((was) => focusOn(was, id))}

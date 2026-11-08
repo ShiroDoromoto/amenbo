@@ -938,3 +938,64 @@ describe("a built-in on a run's pane", () => {
     expect(card()).toHaveLength(1);
   });
 });
+
+describe("the pane a launch is drawn in", () => {
+  /** Put a step of the seat `run` of launch 3 through the road the host tells the window on. */
+  async function seat(run: number, session: string) {
+    await arrive({ run, launch: 3, step: step({ runStep: run * 10, session }) });
+  }
+
+  /** Re-render the face asked to go to the seat `run` of launch 3 (`openIn`). */
+  async function goTo(run: number, nth: number) {
+    await act(async () => {
+      root.render(createElement(WorkspaceFace, {
+        onWindow: () => {},
+        note: null,
+        projectId: 1,
+        openIn: { project: 1, pane: "launch-3", run, launch: 3, nth },
+      }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+
+  it("is one pane for every seat of the launch, whose terminals go by their runs", async () => {
+    await mount();
+    await seat(7, "step-7");
+    await seat(8, "step-8");
+
+    expect(panes()).toHaveLength(1);
+    expect(panes()[0]!.getAttribute("data-hand")).toBe("launch-3");
+    // The pane's id is the launch's; the terminal is still named after its run, which is what the
+    // host keeps the agent's home against (`crate::pane_home`).
+    const start = hoisted.opened[hoisted.opened.length - 1]!;
+    expect(start.frame).toBe("run-7");
+    // A step on another seat does not swap the terminal in front of the reader.
+    expect(start.session).toBe("step-7");
+  });
+
+  it("puts the seat gone to in front, in the same place and with that seat's terminal", async () => {
+    await mount();
+    await seat(7, "step-7");
+    await seat(8, "step-8");
+
+    await goTo(8, 1);
+    expect(panes()).toHaveLength(1);
+    expect(worked()).toBe("launch-3");
+    const start = hoisted.opened[hoisted.opened.length - 1]!;
+    expect(start.frame).toBe("run-8");
+    expect(start.session).toBe("step-8");
+    expect(start.runStep).toBe(80);
+  });
+
+  it("stands the launch's pane with the seat gone to in front, where none stands yet", async () => {
+    await mount();
+    await goTo(9, 1);
+    expect(panes()).toHaveLength(1);
+    expect(panes()[0]!.getAttribute("data-hand")).toBe("launch-3");
+
+    // The seat's step lands in that pane rather than in a second one.
+    await seat(9, "step-9");
+    expect(panes()).toHaveLength(1);
+    expect(hoisted.opened[hoisted.opened.length - 1]!.session).toBe("step-9");
+  });
+});

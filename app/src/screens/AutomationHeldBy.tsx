@@ -30,7 +30,7 @@ export function AutomationHeldBy({
    *  one automation. */
   savedVersion?: number;
   /** Go to the pane a run is drawn in. Absent where there is no workspace face to send anybody to. */
-  onGoToRun?: (project: number, run: number) => void;
+  onGoToRun?: (project: number, run: number, launch?: number | null) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
   // One press at a time: a cancel moves the list this band is drawn from.
@@ -74,7 +74,7 @@ export function AutomationHeldBy({
                 )}
               </span>
               {onGoToRun && (
-                <button type="button" className="btn" onClick={() => onGoToRun(run.project, run.run)}>
+                <button type="button" className="btn" onClick={() => onGoToRun(run.project, run.run, run.launch)}>
                   {t("auto.held.openPane")}
                 </button>
               )}

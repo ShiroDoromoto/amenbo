@@ -116,7 +116,7 @@ const pins = new Map<number, ViewPin>();
  * running on the way out — a session whose place has gone is one nobody can reach.
  */
 function Pane({
-  frame, at, hue, project, names, start, autoStart, focused, landed = false, offered = false, written,
+  frame, terminal, at, hue, project, names, start, autoStart, focused, landed = false, offered = false, written,
   inserted = [], composeOpen, held = false, goes = null, run = null, builtin = null, tail = null, tailCode = null, onGrab, onStretch,
   size, onSize,
   on,
@@ -124,6 +124,10 @@ function Pane({
   /** The handlers {@link TerminalPane} was handed on its newest render ({@link Handlers}). */
   on: { readonly current: Handlers };
 }) {
+  // The name this pane's terminal goes by on the host's side, which its name is kept against
+  // (`../talk/frames`): the place's own, except on a launch's pane, where it is the seat's
+  // (`../talk/layout`'s `terminalOf`).
+  const termName = terminal ?? frame;
   const paneRef = useRef<HTMLDivElement>(null);
   /** Whether a press of the close button is still being answered. */
   const dropping = useRef(false);
@@ -493,7 +497,7 @@ function Pane({
     setEnded(false);
     // The line above the pane: what this pane is called, and the lamp that says whether anything is
     // coming out of it (`../talk/plate.ts`).
-    const plate = mountPlate(label, frame, hue, run);
+    const plate = mountPlate(label, termName, hue, run);
     plateRef.current = plate;
     // The row is readable from outside for as long as this pane is drawn, and no longer: a pane on
     // another page is not being measured at all, so a reading kept past this point would be the last
@@ -552,13 +556,13 @@ function Pane({
       // The window's own title is not the pane's to say — a face holds several panes, in either of
       // the windows it is drawn in. The name goes to the store, and what draws it is the line above
       // the pane.
-      name: (text, by) => on.current.onName(frame, text, by),
+      name: (text, by) => on.current.onName(termName, text, by),
       // What the session said while nothing was drawing it. Both halves land where the live ones do
       // — the band's count, and the name on the row — so a pane that was away reads the same as one
       // that was there for all of it (`../talk/terminal`).
       carried: (said, filed) => {
         setMade((was) => filed.reduce(withRecord, was));
-        if (said !== null) on.current.onName(frame, said, "session", true);
+        if (said !== null) on.current.onName(termName, said, "session", true);
       },
     }, start, project)
       .then((take) => {
@@ -602,7 +606,7 @@ function Pane({
   useEffect(() => {
     const label = labelRef.current;
     if (!rowWithout || !label) return;
-    const plate = mountPlate(label, frame, hue, run);
+    const plate = mountPlate(label, termName, hue, run);
     // A row is drawn only on a pane something has run in, and a built-in is that: Amenbo is running
     // it here — as a run's pane is, whatever ran in it last. There is no folder to head the row with,
     // and a run's row is headed with its automation.
@@ -837,7 +841,7 @@ function Pane({
             <input
               ref={nameField}
               className="slot__rename"
-              defaultValue={names.get(frame) ?? ""}
+              defaultValue={names.get(termName) ?? ""}
               autoFocus
               aria-label={t("face.rename")}
               {...asTyped}
@@ -847,7 +851,7 @@ function Pane({
                   const text = e.currentTarget.value.trim();
                   // A person's word is the last one on a frame, and an empty box is not a word: it
                   // would otherwise take the name off a pane the agent had named (`../talk/frames`).
-                  if (text) on.current.onName(frame, text, "person");
+                  if (text) on.current.onName(termName, text, "person");
                   setNaming(false);
                 }
                 if (e.key === "Escape") setNaming(false);
@@ -1235,7 +1239,7 @@ function Pane({
               <Icon name="keyboard" />
             </button>
             <PaneMade made={made} />
-            <PaneModel frame={frame} session={live} agent={inPane} />
+            <PaneModel frame={termName} session={live} agent={inPane} />
           </div>
         )}
         </div>
@@ -1248,6 +1252,10 @@ function Pane({
 type PaneProps = {
   /** Which of the arrangement's places this is (`../talk/layout`). */
   frame: string;
+  /** The name the terminal in it goes by on the host's side, where it is not `frame` — the seat in
+   *  front on a launch's pane (`../talk/layout`'s `terminalOf`). Its name and its model are kept
+   *  against this, and `onName` is told it. */
+  terminal?: string;
   /** Where on the page's grid this pane sits. It is worked out afresh from the order and this pane's
    *  size, and never held against the pane itself (`AMB-D-939`). Left out where this is drawn
    *  outside a page, which is a pane with no place to be given. */
@@ -1344,7 +1352,8 @@ type PaneProps = {
   onDrop: (frame: string) => void;
   /** `carried` says the name came over with the session rather than as it was said — the pane took
    *  up a terminal that had already named itself. It is written down the same way, and the provider
-   *  is not told: it is the one that said it (`../talk/terminal`). */
+   *  is not told: it is the one that said it (`../talk/terminal`). `frame` is the name the terminal
+   *  goes by (`terminal`), not always the place's id. */
   onName: (frame: string, name: string, by: NamedBy, carried?: boolean) => void;
   onFocus: (frame: string) => void;
   /** A way to read this pane's row, handed over while the pane is drawn and taken back when it is
@@ -1379,8 +1388,8 @@ type PaneProps = {
   /** The press on this pane's band, said as the box opens or folds away. What the *next* pane will
    *  start as is a separate answer and is written down here (`../core/composeStartsOpen`). */
   onFold: (frame: string, open: boolean) => void;
-  /** Go to the pane the run `run` is drawn in — a round pressed on the bar over a run's terminal.
-   *  Left out where this is drawn outside the workspace. */
+  /** Go to the run `run` — a round pressed on the bar over a run's terminal: on a launch's pane, that
+   *  seat put in front in this same place. Left out where this is drawn outside the workspace. */
   onGoToRun?: (run: number) => void;
 };
 

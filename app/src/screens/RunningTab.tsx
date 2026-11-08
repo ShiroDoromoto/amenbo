@@ -181,7 +181,7 @@ export function RunningTab({
   projectId: number | null;
   /** Go to the pane this run is drawn in. Absent in the window that has no workspace face to send
    *  anybody to, and then the rows are read rather than pressed. */
-  onGoToRun?: (project: number, run: number) => void;
+  onGoToRun?: (project: number, run: number, launch?: number | null) => void;
 }) {
   // Narrowed here rather than asked for: every row already says its project, and the live list is
   // what is going on this machine now, which is short.
@@ -237,7 +237,7 @@ export function RunningTab({
             <RunLine
               key={run.run}
               run={run}
-              onGo={onGoToRun && (() => onGoToRun(run.project, run.run))}
+              onGo={onGoToRun && (() => onGoToRun(run.project, run.run, run.launch))}
               acts={actsOf(run)}
               withProject={projectId === null}
             />

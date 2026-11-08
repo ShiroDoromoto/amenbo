@@ -5,6 +5,8 @@ import {
   goProject, gridAt, laidOut, landingOn, movedTo, movedWithin, needsNobody, openedFrame, openedIn,
   pageCount, pageOfFrame, paneIn, paneOfRun, panesOf, placing, reordered, resized, restored,
   roomOnPage, runFrameId, runOfFrameId, runsKept, SIZES, slotsOf, stoodForRun, withoutRuns, writing,
+  launchFrameId, launchOfFrameId, launchesKept, paneIdOf, paneOfLaunch, paneOfTerminal, seatedIn, seatedOn,
+  stoodForLaunch, terminalOf,
   folding, type Layout, type Size,
 } from "./layout";
 
@@ -363,6 +365,7 @@ describe("where a pane works", () => {
         inserted: [],
         composeOpen: false,
         run: null,
+        launch: null,
       },
     ] }, "1", "s1", null, "claude");
     // What is running comes off the session as well, and by the same reasoning: a pane that adopted
@@ -1041,5 +1044,121 @@ describe("a run's pane kept between runs of the app", () => {
   it("stays where the arrangement came from the other window, run and all", () => {
     const saved = { frames: [{ id: runFrameId(4), project: 1, run: 4 }] };
     expect(withoutRuns(saved, new Set([4])).frames).toHaveLength(1);
+  });
+});
+
+describe("the pane a launch stands in", () => {
+  it("is one pane for every seat of the launch, named after the launch", () => {
+    const first = stoodForLaunch({ ...EMPTY_LAYOUT, project: 1 }, 1, 3, 7);
+    expect(first.frame.id).toBe(launchFrameId(3));
+    expect(first.frame.launch).toBe(3);
+    expect(first.frame.run).toBe(7);
+    // Another seat of the same launch finds the pane already standing, and does not move what is in
+    // front of it.
+    const again = stoodForLaunch(first.layout, 1, 3, 8);
+    expect(again.layout).toBe(first.layout);
+    expect(again.frame.run).toBe(7);
+    expect(paneOfLaunch(again.layout, 3)?.id).toBe(launchFrameId(3));
+  });
+
+  it("goes at the end of its project's panes and moves neither the page nor the focus", () => {
+    const one = withPanes(1);
+    const { layout } = stoodForLaunch(one, 1, 3, 7);
+    expect(layout.frames.map((frame) => frame.id)).toEqual(["1", launchFrameId(3)]);
+    expect(layout.focus).toBe(one.focus);
+    expect(layout.page).toBe(one.page);
+  });
+
+  it("is where a run of a launch is gone to, and a run kept from before launches has its own", () => {
+    expect(paneIdOf(7, 3)).toBe(launchFrameId(3));
+    expect(paneIdOf(7, null)).toBe(runFrameId(7));
+    expect(paneIdOf(7, undefined)).toBe(runFrameId(7));
+  });
+
+  it("swaps the seat in front in the same place, with that seat's terminal", () => {
+    const { layout } = stoodForLaunch({ ...EMPTY_LAYOUT, project: 1 }, 1, 3, 7);
+    const on = openedIn(layout, launchFrameId(3), "s7", "/w", "claude");
+    const swapped = seatedIn(on, launchFrameId(3), 8, { session: "s8", folder: "/v", agent: "codex" });
+    expect(swapped.frames).toHaveLength(1);
+    expect(swapped.frames[0]!.id).toBe(launchFrameId(3));
+    expect(swapped.frames[0]!.run).toBe(8);
+    expect(swapped.frames[0]!.session).toBe("s8");
+    expect(swapped.frames[0]!.folder).toBe("/v");
+    expect(swapped.frames[0]!.agent).toBe("codex");
+    // A seat with no terminal yet takes nothing of the one that was in front.
+    const bare = seatedIn(on, launchFrameId(3), 9, null).frames[0]!;
+    expect([bare.session, bare.folder, bare.agent]).toEqual([null, null, null]);
+    // The seat already in front is left as it is.
+    expect(seatedIn(on, launchFrameId(3), 7, null)).toBe(on);
+  });
+
+  it("leaves a pane that is not a launch's alone", () => {
+    const { layout } = stoodForRun({ ...EMPTY_LAYOUT, project: 1 }, 1, 7);
+    expect(seatedIn(layout, runFrameId(7), 8, { session: "s8", folder: null, agent: null })).toBe(layout);
+  });
+
+  it("names its terminal after the seat in front, so no two seats share a home", () => {
+    const { layout } = stoodForLaunch({ ...EMPTY_LAYOUT, project: 1 }, 1, 3, 7);
+    expect(terminalOf(layout.frames[0]!)).toBe(runFrameId(7));
+    const swapped = seatedIn(layout, launchFrameId(3), 8, null);
+    expect(terminalOf(swapped.frames[0]!)).toBe(runFrameId(8));
+    expect(paneOfTerminal(swapped, runFrameId(8))?.id).toBe(launchFrameId(3));
+    expect(paneOfTerminal(swapped, runFrameId(7))).toBeNull();
+    // Any other pane's terminal goes by the pane's own id.
+    const run = stoodForRun({ ...EMPTY_LAYOUT, project: 1 }, 1, 9).frame;
+    expect(terminalOf(run)).toBe(runFrameId(9));
+    expect(terminalOf(withPanes(1).frames[0]!)).toBe("1");
+  });
+
+  it("crosses to the other window with its launch and its seat", () => {
+    const { layout } = stoodForLaunch({ ...EMPTY_LAYOUT, project: 1 }, 1, 3, 7);
+    const kept = laidOut(layout);
+    expect(kept.frames[0]).toMatchObject({ id: launchFrameId(3), run: 7, launch: 3 });
+    const back = restored(kept, 1);
+    expect(back.frames[0]!.launch).toBe(3);
+    expect(back.frames[0]!.run).toBe(7);
+    // An ordinary pane carries neither.
+    expect(laidOut(withPanes(1)).frames[0]).not.toHaveProperty("launch");
+  });
+});
+
+describe("a launch's pane kept between runs of the app", () => {
+  it("is told by its id once the store has had it", () => {
+    expect(launchOfFrameId(launchFrameId(12))).toBe(12);
+    expect(launchOfFrameId(runFrameId(12))).toBeNull();
+    expect(runOfFrameId(launchFrameId(12))).toBeNull();
+    expect(launchOfFrameId("launch-")).toBeNull();
+  });
+
+  it("is named only where it came out of the store", () => {
+    const saved = { frames: [
+      { id: "1", project: 1 },
+      { id: launchFrameId(4), project: 1 },
+      { id: launchFrameId(5), project: 1, run: 9, launch: 5 },
+      { id: runFrameId(6), project: 1 },
+    ] };
+    expect(launchesKept(saved)).toEqual([4]);
+    expect(runsKept(saved)).toEqual([6]);
+  });
+
+  it("comes back with the seat it was given in front, and goes where it was given none", () => {
+    const saved = { project: 1, frames: [
+      { id: "1", project: 1 },
+      { id: launchFrameId(4), project: 1 },
+      { id: launchFrameId(5), project: 1 },
+      { id: runFrameId(6), project: 1 },
+    ] };
+    const back = restored(seatedOn(saved, new Map([[4, 21]])), 1);
+    expect(back.frames.map((one) => one.id)).toEqual(["1", launchFrameId(4), runFrameId(6)]);
+    expect(back.frames[1]).toMatchObject({ launch: 4, run: 21 });
+    expect(back.frames[2]).toMatchObject({ launch: null, run: 6 });
+    expect(paneOfLaunch(back, 4)?.id).toBe(launchFrameId(4));
+    // Found again by the launch's next step rather than stood a second time.
+    expect(stoodForLaunch(back, 1, 4, 22).layout.frames).toHaveLength(3);
+  });
+
+  it("stays where the arrangement came from the other window, seat and all", () => {
+    const saved = { frames: [{ id: launchFrameId(4), project: 1, run: 9, launch: 4 }] };
+    expect(seatedOn(saved, new Map()).frames).toHaveLength(1);
   });
 });

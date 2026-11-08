@@ -452,7 +452,7 @@ describe("an action a run is going on (AMB-D-1015)", () => {
     expect(container.querySelector(".autoheld")?.textContent).toContain(tf("auto.held.by", { run: 31 }));
     expect(container.querySelector(".autoheld")?.textContent).toContain("Night round");
     await act(async () => { [...container.querySelectorAll<HTMLButtonElement>(".autoheld .btn")].find((b) => b.textContent === t("auto.held.openPane"))!.click(); });
-    expect(goToRun).toHaveBeenCalledWith(2, 31);
+    expect(goToRun).toHaveBeenCalledWith(2, 31, undefined);
   });
 
   it("opens what it is for and its steps with the fields open", async () => {

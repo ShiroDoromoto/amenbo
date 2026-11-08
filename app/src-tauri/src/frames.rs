@@ -403,8 +403,9 @@ pub fn talk_layout(face: tauri::State<'_, TalkFace>) -> Result<Option<TalkLayout
                     // The store keeps places alone. A run's place is named after its run, and the
                     // window reads the run back off the id (`app/src/talk/layout.ts`, `AMB-T-5635`):
                     // left out here, it tells a place that came from the store from one the other
-                    // window is still drawing.
+                    // window is still drawing. A launch's place is read back off its id the same way.
                     run: None,
+                    launch: None,
                 })
                 .collect(),
             // Which pane was being worked in is this run's: it is where a reader is looking, and the
@@ -573,6 +574,7 @@ mod tests {
             resumes: false,
             compose_open: Some(true),
             run: None,
+            launch: None,
         }
     }
 

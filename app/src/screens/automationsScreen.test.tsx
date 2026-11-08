@@ -621,8 +621,8 @@ describe("the start press on the build screen's head", () => {
     // Every arm core's check can answer with (`amenbo_core::ops::automation_run::Unmet`), so a reason
     // added there without words on this side is caught here rather than on somebody's screen.
     const given = [
-      reason("not_ready_automation_no_entry"),
-      reason("not_ready_automation_entry_takes_no_task", { step: "Read" }),
+      reason("not_ready_automation_role_starts_nowhere", { role: "Reviewer" }),
+      reason("not_ready_automation_role_start_takes_no_task", { role: "Builder", step: "Read" }),
       reason("not_ready_automation_open_exit", { step: "Read", exit: "again" }),
       reason("not_ready_automation_unwired_input", { step: "Write", port: "folder" }),
       reason("not_ready_automation_unanswered_cfg", { step: "Write", cfg: "filter" }),
@@ -634,7 +634,7 @@ describe("the start press on the build screen's head", () => {
     // words, which is the whole reason the check hands over a code (`AMB-T-5287`).
     expect(blocks()).toEqual(given.map((one) => errSentence(one)));
     // Nothing is left standing as a bare code, and nothing falls through to core's English: a reason
-    // nobody wrote a sentence for would ship as `not_ready_automation_no_entry` at the reader.
+    // nobody wrote a sentence for would ship as `not_ready_automation_role_starts_nowhere` at the reader.
     for (const one of given) {
       expect(blocks()).not.toContain(one.code);
       expect(blocks()).not.toContain(one.message_en);
@@ -668,7 +668,7 @@ describe("the start press on the build screen's head", () => {
       ready: false,
       blocks: [
         reason("not_ready_automation_unanswered_cfg", { step: "Read", cfg: "filter", placement: "4" }),
-        reason("not_ready_automation_no_entry"),
+        reason("not_ready_automation_role_starts_nowhere", { role: "Reviewer" }),
       ],
     };
     await render();
@@ -751,10 +751,10 @@ describe("saving on the build screen's head", () => {
   }
   const head = () => container.querySelector(".actsaved")?.textContent;
   const saved = { version: 3, savedAt: "2026-10-01T09:00:00Z" };
-  const noEntry: AutomationLaunchBlockDto = {
-    code: "not_ready_automation_no_entry",
-    message_en: "English for not_ready_automation_no_entry",
-    fields: {},
+  const startsNowhere: AutomationLaunchBlockDto = {
+    code: "not_ready_automation_role_starts_nowhere",
+    message_en: "English for not_ready_automation_role_starts_nowhere",
+    fields: { role: "Reviewer" },
   };
 
   it("says nothing is saved yet, and offers no discard with no version to go back to", async () => {
@@ -790,14 +790,14 @@ describe("saving on the build screen's head", () => {
   });
 
   it("lists why it cannot be saved, shuts the press, and does not say a shared reason twice", async () => {
-    await open({ unsaved: true, saveBlocks: [noEntry] }, { ready: false, blocks: [noEntry] });
+    await open({ unsaved: true, saveBlocks: [startsNowhere] }, { ready: false, blocks: [startsNowhere] });
     expect(container.querySelector(".autolaunch__head")?.textContent).toBe(t("auto.saved.blocked"));
-    expect(blocks()).toEqual([errSentence(noEntry)]);
+    expect(blocks()).toEqual([errSentence(startsNowhere)]);
     expect(button(t("auto.saved.save")).disabled).toBe(true);
   });
 
   it("lists no reasons to save while nothing is unsaved", async () => {
-    await open({ saved, unsaved: false, saveBlocks: [noEntry] });
+    await open({ saved, unsaved: false, saveBlocks: [startsNowhere] });
     expect(container.querySelector(".autolaunch__head")).toBeNull();
   });
 

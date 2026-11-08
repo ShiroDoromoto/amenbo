@@ -2180,9 +2180,9 @@ pub fn placement_add(
 /// **What a built-in answers when it comes to stand first**, before anyone has answered it (`AMB-T-5795`).
 ///
 /// The built-in that files a task leaves it not started unless told otherwise, and a run that starts
-/// there with the task left not started works no task — the launch check refuses exactly that
-/// (`not_ready_automation_entry_takes_no_task`). So standing first, it is answered the one way a run can
-/// start from: take the task it files. The answer is an ordinary one, to be changed like any other.
+/// there with the task left not started works no task. So standing first, it is answered the one way a
+/// run can start from: take the task it files. The answer is an ordinary one, to be changed like any
+/// other.
 fn answer_as_entry(tx: &WriteTx<'_>, placement: &AutomationPlacement, key: Option<&str>) -> Result<()> {
     use crate::ops::automation_builtin_make::{KEY, TAKE_IT, WHAT_THEN};
     if key != Some(KEY) {

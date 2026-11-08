@@ -329,9 +329,8 @@ mod tests {
         automation::set_entry(tx, automation.id, Some(take.id)).expect("entry")
     }
 
-    /// A run that starts at the fetch: what came back is filed as a task and taken, then closed; with
-    /// nothing there the run ends. `straight_to_an_agent` hands what came back to an agent's step
-    /// instead, the picture the launch refuses.
+    /// The fetch standing first: what came back is filed as a task and taken, then closed; with nothing
+    /// there the run ends. `straight_to_an_agent` hands what came back to an agent's step instead.
     fn starting_at_the_fetch(tx: &WriteTx<'_>, project: i64, straight_to_an_agent: bool) -> Automation {
         let automation =
             automation::add(tx, project, NewAutomation { name: "inbox".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
@@ -363,56 +362,25 @@ mod tests {
         automation::set_entry(tx, automation.id, Some(fetch.id)).expect("entry")
     }
 
-    fn entry_refused(tx: &WriteTx<'_>, automation: &Automation) -> bool {
-        let claude = ["claude".to_string()];
-        crate::ops::automation_run::check(tx.conn(), automation.id, Some(&claude), nothing_asked(), None)
-            .expect("check")
-            .iter()
-            .any(|u| matches!(u, crate::ops::automation_run::Unmet::EntryTakesNoTask { .. }))
-    }
-
-    /// **A run can start at the fetch** where what it brings back is filed and taken before any step
-    /// works on it (`AMB-D-970`) — the launch lets it through, and the run files what it fetched.
+    /// **A run does not start at the fetch** (`AMB-D-1123`): a round starts at the built-in that takes a
+    /// task, so the fetch standing first is every role starting nowhere — whether what it brings back is
+    /// filed and taken before any step works on it, or goes straight on to an agent's step.
     #[test]
-    fn a_run_starts_at_the_fetch_where_a_task_is_taken_before_any_step() {
-        with_tx(|tx| {
-            let dir = amenbo_scratch::scratch("builtin-fetch-entry");
-            std::fs::write(dir.join("inbox.md"), "look at the login page").expect("write");
-            let project = mk_project(tx, "amenbo");
-            bind(tx, project, &[&dir]);
-            let automation = starting_at_the_fetch(tx, project, false);
-            assert!(!entry_refused(tx, &automation), "the fetch stands as the entry");
-
-            let claude = ["claude".to_string()];
-            let by = Launcher {
-                default_agent: None,
-                startable: Some(&claude),
-                models: nothing_asked(),
-                workspace_open: Some(true),
-                by: Some(ActorKind::Ai),
-            };
-            let run = crate::ops::automation_run::launch(tx, automation.id, &by).expect("launched");
-            let entry = read::automation_run_defs_of(tx.conn(), run.id)
-                .expect("defs")
-                .into_iter()
-                .find(|d| d.entry)
-                .expect("the entry");
-            let Opened::Carried { next, .. } = open(tx, run.id, entry.id, Some(&claude)).expect("fetch") else {
-                panic!("a built-in is carried out");
-            };
-            assert_eq!(went_to(&next), Some("make_task"), "what came back goes on to be filed");
-        });
-    }
-
-    /// **Going from the fetch straight to an agent's step is still refused**: that step would be about
-    /// no task.
-    #[test]
-    fn a_fetch_that_goes_straight_to_an_agent_is_no_entry() {
-        with_tx(|tx| {
-            let project = mk_project(tx, "amenbo");
-            let automation = starting_at_the_fetch(tx, project, true);
-            assert!(entry_refused(tx, &automation));
-        });
+    fn a_run_does_not_start_at_the_fetch() {
+        for straight_to_an_agent in [false, true] {
+            with_tx(|tx| {
+                let project = mk_project(tx, "amenbo");
+                let automation = starting_at_the_fetch(tx, project, straight_to_an_agent);
+                let claude = ["claude".to_string()];
+                let unmet =
+                    crate::ops::automation_run::check(tx.conn(), automation.id, Some(&claude), nothing_asked(), None)
+                        .expect("check");
+                assert!(
+                    unmet.iter().any(|u| matches!(u, crate::ops::automation_run::Unmet::RoleStartsNowhere { .. })),
+                    "{straight_to_an_agent}: {unmet:?}",
+                );
+            });
+        }
     }
 
     /// Launch, take the task and carry out the fetch. Answers the fetch's execution and where the run

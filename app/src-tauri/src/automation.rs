@@ -2282,10 +2282,10 @@ pub fn automation_step_open(
     let mut store = crate::commands::open_store()?;
     let def_id = match run_def_id {
         Some(id) => id,
-        // Uncoded on purpose. An automation with no entry is refused at the launch check
-        // (`amenbo_core::ops::automation_run::Unmet::NoEntry`), so the only way to reach this is
-        // the entry being taken off while a run of it is under way — which no screen puts in
-        // front of anybody, and a code is split off a family where one does.
+        // Uncoded on purpose. An automation where a run has nowhere to start is refused at the launch
+        // check (`amenbo_core::ops::automation_run::Unmet::RoleStartsNowhere`), so the only way to
+        // reach this is where it starts being taken off while a run of it is under way — which no
+        // screen puts in front of anybody, and a code is split off a family where one does.
         None => {
             automation_run::entry_def(store.read_model().conn(), run_id)?
                 .ok_or_else(|| {

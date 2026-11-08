@@ -1950,14 +1950,18 @@ fn a_step_is_carried_out_by_whoever_is_chosen_where_it_is_placed() {
 fn a_step_nobody_chose_for_is_carried_out_by_its_roles_default() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
-    let (a, placement, step) = a_launchable(&cli);
+    let (a, placement, step, take) = a_picture(&cli, true);
     cli.json(&["automation", "agent-set", &placement, "--step", &step, "--clear", "--json"]);
 
+    // The role's round starts where a task is taken, and it is the only role, so every role has a start
+    // the launch check lets through.
+    let born = id_str(&cli.json(&["automation", "role-list", &a, "--json"])["roles"][0]["id"]);
     let added = cli.json(&[
-        "automation", "role-add", &a, "--name", "実装", "--entry", &placement, "--agent", "codex", "--model",
+        "automation", "role-add", &a, "--name", "実装", "--entry", &take, "--agent", "codex", "--model",
         "gpt-5", "--json",
     ]);
     let role = id_of(&added, "automation_role");
+    cli.json(&["automation", "role-rm", &born, "--yes", "--json"]);
     let (shown, _) = cli.run(&["automation", "show", &a]);
     assert!(shown.contains(&format!("carried out by codex (gpt-5)  — role {role} 実装's default")), "{shown}");
     assert!(!shown.contains("nobody chosen to carry it out"), "{shown}");

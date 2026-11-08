@@ -149,7 +149,7 @@ describe("a test run on the build screen", () => {
   });
 
   it("puts a refusal in core's words and opens no pane", async () => {
-    const refusal = { code: "not_ready_automation_no_entry", message_en: "no entry" };
+    const refusal = { code: "not_ready_automation_role_starts_nowhere", message_en: "no start" };
     hoisted.walk.mockRejectedValue(refusal);
     await walk();
     expect(container.querySelector(".refused")!.textContent).toBe(errText(refusal));

@@ -18,8 +18,8 @@ given:
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the moring sweep" }, as: sweep }
   - { type: action, domain: automation, op: action-add, with: { name: sweep }, as: sweep_action }
   - { type: action, domain: automation, op: step-add, with: { target: sweep_action, name: read, prompt: read what came in overnight }, as: step_read }
-  # A picture starts at a built-in a run can start at, so the action goes on after the one that takes
-  # a task, on the line leaving it by the way out for having taken one.
+  # A role starts only at the built-in that takes a task, so the action goes on after that one,
+  # on the line leaving it by the way out for having taken one.
   - { type: action, domain: automation, op: place-add, with: { target: sweep, builtin: take_task, starts: true }, as: at_take }
   - { type: action, domain: automation, op: place-add, with: { target: sweep, action: sweep_action }, as: at_sweep }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_sweep } }

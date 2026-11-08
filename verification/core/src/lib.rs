@@ -4428,10 +4428,9 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-make", required: &["name"], refs: &[], strings: &["name", "reach"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-rewrite", required: &["step", "prompt"], refs: &[], strings: &["step", "prompt"], binds: false },
     //
-    // The picture. One box, and the marks it may wear: `unfed` is the outline it takes on while a
-    // required input has nothing reaching it, and `entry` the words drawn in the box of the placement
-    // a run opens first. The one is colour and the other the interface's own words, so a road naming
-    // either is asking an eye.
+    // The picture. One box, and the mark it may wear: `unfed` is the outline it takes on while a
+    // required input has nothing reaching it. It is colour, so a road naming it is asking an eye. A
+    // role's picture marks no box as its start, so there is no mark for that.
     //
     // **A box is a fixed size and the name in it is cut at two lines**, so a road gives its actions
     // and steps names short enough to stand whole — what is read here is the shot, and a cut name is
@@ -4507,16 +4506,11 @@ const REGISTRY: &[OpSpec] = &[
     // panel from the steps that leave by that way out.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "fill-output", required: &["output", "from"], refs: &[], strings: &["exit", "output", "from"], binds: false },
     //
-    // **The automation build screen's own three.** An automation's picture has no line until two
-    // placements are joined either, so the first placement comes from the press in the empty picture,
-    // which opens the panel beside it on the built-ins a run can start at and nothing else.
-    // The one picked (`builtin`, by its key) is placed there and is where a run starts. Every later one
-    // goes in on a line (`insert-box`).
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "place-action", required: &["builtin"], refs: &[], strings: &["builtin"], binds: false },
-    // What a run starts at, changed on the start's own panel to another of those built-ins (`builtin`).
-    // The lines out of the start go with the one replaced, so the machine's own question stands between
-    // the pick and the write.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "replace-entry", required: &["builtin"], refs: &[], strings: &["builtin"], binds: false },
+    // **A role that starts nowhere is given its start by the press beside the picture.** Every
+    // automation is born with one role and no start, and the built-in that takes a task is the only
+    // start a role has — so the press puts that one on, makes it the picked role's start, and takes
+    // nothing to choose. Every later box goes in on a line (`insert-box`).
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start-role", required: &[], refs: &[], strings: &[], binds: false },
     // Taking the pressed placement off. It takes the settings answered on it and every line naming
     // it, and leaves the action in the library — so the machine's own question stands between the
     // press and the write, the way it does for deleting a step.

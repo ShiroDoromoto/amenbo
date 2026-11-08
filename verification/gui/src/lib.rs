@@ -1210,10 +1210,7 @@ impl Instructor {
             // colour — an outline round the whole — and a reading answers which words are on a shot,
             // so a step naming it would pass on a build that had lost the mark and kept the name. That
             // is an eye's.
-            //
-            // The entry's mark is words and not colour, but they are the interface's own and in the
-            // machine's language — so it is an eye's for the same reason.
-            (Domain::Automation, "pictured") if with.contains_key("unfed") || with.contains_key("entry") => None,
+            (Domain::Automation, "pictured") if with.contains_key("unfed") => None,
             // A built-in's words are Amenbo's, drawn in the machine's language, and a road names one
             // by its key (`BUILTIN_WORDS`) — so a road has no word of its own on its screen or on its
             // box for a reading to find, and both are an eye's.
@@ -4293,23 +4290,13 @@ impl Instructor {
             // **The one press on the action's step panel that cannot be taken back**, so the machine's
             // own question stands between it and the write, the way it does for deleting an automation.
             (Domain::Automation, "remove-step") => "In the panel showing what the pressed step holds, press the button that deletes this step, and answer the question the machine asks with the answer that goes ahead.".to_string(),
-            // The first action on an automation's picture, which is where a run starts. A picture with
-            // nothing on it has no line to press a `+` on, so the press in the empty picture opens the
-            // panel, which offers the built-ins a run can start at and nothing else —
-            // no library action, no search box and no press that makes one. Each row leads with the
-            // situation it starts from and keeps the built-in's name under it. There is no press for a
-            // second one on its own: a box nothing points at is never reached, so every later one goes
-            // in on a line.
-            (Domain::Automation, "place-action") => format!(
-                "On the automation build screen, whose picture has nothing on it, press the button in the picture that places the first action. Confirm the panel that opens beside the picture lists {} and nothing else — no library action, no search box and no button that makes a new action. Press the row for {} — the row is named by the situation it starts from, with the built-in's own name small under it, both written in the interface's language. Confirm what it does opens under the row, then press the button under it that places it.",
-                entry_builtins_called(),
-                entry_builtin(req(with, "builtin")?)?.called
-            ),
-            // The start's own panel holds a pulldown of what a run starts at, in place of a switch on
-            // every placement. Picking another asks first, since the lines out of the start go with it.
-            (Domain::Automation, "replace-entry") => format!(
-                "In the panel showing what the pressed placement holds, open the pulldown under \"Start\" — its heading is written in the interface's language — and choose {}, whose name is written in the interface's language too. Answer the question the machine asks, which says the lines out of the current start go with it, with the answer that goes ahead.",
-                entry_builtin(req(with, "builtin")?)?.called
+            // A role that starts nowhere — every automation is born with one — is given its start by the
+            // press beside the picture, which puts the built-in that takes a task on and makes it the
+            // role's start. It is the only start a role has, so the press names it and offers nothing
+            // else, and it is drawn only while the role has none. Every later box goes in on a line.
+            (Domain::Automation, "start-role") => format!(
+                "On the automation build screen, whose picked role has no start yet, press the button beside the picture that starts this role with {} — its words, and the built-in's name in them, are written in the interface's language. Confirm that built-in's box is drawn in the picture and the button is gone.",
+                builtin_words("take_task")?.called
             ),
             // **The one press on the placement's panel that cannot be taken back**, which is why the
             // road answers the machine's question and does not stop at the press.
@@ -6630,20 +6617,20 @@ impl Instructor {
                     }
                 )
             }
+            // A role's picture marks no box as its start: its round is drawn from the box its waiting
+            // tasks are taken by. A road asking for the mark is refused rather than told to find it.
+            (Domain::Automation, "pictured") if with.contains_key("entry") => return Err(
+                "a role's picture marks no box as its start — leave `entry` out".to_string(),
+            ),
             // One box, and the mark it may wear. The mark is drawn as colour — an outline round the
             // whole — so a road naming it is asking an eye rather than a reading.
             (Domain::Automation, "pictured") => match present(with) {
                 true => format!(
-                    "In the build screen's picture, confirm {} is drawn{}{}.{}",
+                    "In the build screen's picture, confirm {} is drawn{}.{}",
                     box_named(with, "name", "builtin")?,
                     match step_mark(with, "unfed")? {
                         Some(true) => ", outlined in the colour that says a required input has nothing reaching it, with a warning mark and the count of such inputs beside its name — resting the pointer on the mark names that input",
                         Some(false) => ", and that it is not outlined in the colour that says a required input has nothing reaching it, and wears no warning mark beside its name",
-                        None => "",
-                    },
-                    match step_mark(with, "entry")? {
-                        Some(true) => ", with the mark saying it is the start written in it, above its name",
-                        Some(false) => ", with no mark saying it is the start written in it",
                         None => "",
                     },
                     builtin_note(with, "builtin")
@@ -7234,28 +7221,6 @@ const BUILTIN_WORDS: &[BuiltinWords] = &[
         ],
     },
 ];
-
-/// The built-ins a run can start at, in the order the empty picture offers them — the app's
-/// `ENTRY_BUILTINS`.
-const ENTRY_BUILTINS: &[&str] = &["take_task", "make_task", "fetch"];
-
-/// One of the built-ins a run can start at, by its key, or why it is not one.
-fn entry_builtin(key: &str) -> Result<&'static BuiltinWords, String> {
-    match ENTRY_BUILTINS.contains(&key) {
-        true => builtin_words(key),
-        false => Err(format!(
-            "a run starts only at {} — `{key}` is not one of them",
-            ENTRY_BUILTINS.join(" / ")
-        )),
-    }
-}
-
-/// The three a run can start at, said as what each is.
-fn entry_builtins_called() -> String {
-    let called: Vec<String> =
-        ENTRY_BUILTINS.iter().filter_map(|key| builtin_words(key).ok()).map(|one| one.called.to_string()).collect();
-    listed(&called)
-}
 
 /// The built-in a road names by `key`, or why there is none.
 fn builtin_words(key: &str) -> Result<&'static BuiltinWords, String> {
@@ -10217,11 +10182,9 @@ steps_gui:
         assert!(ins.render(&steps[0]).is_err());
     }
 
-    /// The automation build screen's own: the first action placed from the empty picture, which is
-    /// one of the built-ins a run starts at, the start changed to another of them past the machine's
-    /// question, a box put in on a line leaving a built-in, and a placement taken off past the
-    /// machine's question. The entry's mark is the interface's words, so it is read by an eye and not
-    /// as text.
+    /// The automation build screen's own: a role that starts nowhere given its start by the press
+    /// beside the picture, which is the built-in that takes a task and nothing to choose, a box put
+    /// in on a line leaving that built-in, and a placement taken off past the machine's question.
     #[test]
     fn an_automation_is_built_by_placing_actions_on_its_own_screen() {
         let s = load(r#"
@@ -10232,53 +10195,61 @@ given:
 steps_gui:
   - type: action
     domain: automation
-    op: place-action
-    with: { builtin: take_task }
-  - type: action
-    domain: automation
-    op: replace-entry
-    with: { builtin: make_task }
+    op: start-role
   - type: action
     domain: automation
     op: set-next
-    with: { builtin: make_task, exit: 起票した, ends: done }
+    with: { builtin: take_task, exit: 着手した, ends: done }
   - type: action
     domain: automation
     op: insert-box
-    with: { after_builtin: make_task, exit: 起票した, action: draft }
+    with: { after_builtin: take_task, exit: 着手した, action: draft }
   - type: action
     domain: automation
     op: remove-placement
   - type: assert
     domain: automation
     op: pictured
-    with: { builtin: make_task, entry: true }
+    with: { builtin: take_task }
 "#);
         let mut ins = Instructor::new();
         ins.learn(&s.given);
         let steps = s.steps(Driver::Gui);
         let lines: Vec<String> =
             steps.iter().map(|st| ins.render(st).expect("every step renders")).collect();
-        assert!(lines[0].contains("places the first action") && lines[0].contains("that takes a task"), "{}", lines[0]);
-        assert!(lines[0].contains("files a task") && lines[0].contains("goes and fetches") && lines[0].contains("nothing else"), "{}", lines[0]);
-        assert!(lines[1].contains("\"Start\"") && lines[1].contains("files a task") && lines[1].contains("goes ahead"), "{}", lines[1]);
-        assert!(lines[2].contains("the way out for having filed a task") && !lines[2].contains("起票した"), "{}", lines[2]);
-        assert!(lines[3].contains("the box of the built-in that files a task") && lines[3].contains("\"draft\""), "{}", lines[3]);
-        assert!(lines[3].contains("the way out for having filed a task"), "{}", lines[3]);
-        assert!(lines[4].contains("takes this placement off") && lines[4].contains("goes ahead"), "{}", lines[4]);
-        assert!(lines[5].contains("saying it is the start written in it"), "{}", lines[5]);
-        assert!(ins.expectation(&steps[5]).is_none(), "the entry's mark is an eye's");
+        assert!(lines[0].contains("starts this role with") && lines[0].contains("that takes a task"), "{}", lines[0]);
+        assert!(lines[0].contains("the button is gone"), "{}", lines[0]);
+        assert!(lines[1].contains("the way out for having taken a task") && !lines[1].contains("着手した"), "{}", lines[1]);
+        assert!(lines[2].contains("the box of the built-in that takes a task") && lines[2].contains("\"draft\""), "{}", lines[2]);
+        assert!(lines[3].contains("takes this placement off") && lines[3].contains("goes ahead"), "{}", lines[3]);
+        assert!(ins.expectation(&steps[4]).is_none(), "a built-in's box is an eye's");
     }
 
-    /// A run starts only at one of three built-ins, so a road placing any other first, or changing the
-    /// start to one, is refused rather than told to press a row the panel never draws.
+    /// The empty picture's press that placed the first action off three built-ins, and the start's
+    /// pulldown that changed it, are gone from the screen, so a road naming either is refused as an op
+    /// the driver does not know. A role's picture marks no box as its start, so a road asking for the
+    /// mark is refused rather than told to find what is never drawn.
     #[test]
-    fn a_start_that_is_not_one_of_the_three_is_refused() {
-        let ins = Instructor::new();
-        let with = serde_yaml::from_str::<Args>("{ builtin: close_task }").unwrap();
+    fn a_start_chosen_or_marked_on_the_picture_is_refused() {
         for op in ["place-action", "replace-entry"] {
-            assert!(ins.action(Domain::Automation, op, &with).is_err(), "{op}");
+            let s = amenbo_scenario::load_str(&format!(
+                "id: x\ntitle: y\nsteps_gui:\n  - {{ type: action, domain: automation, op: {op}, with: {{ builtin: take_task }} }}\n"
+            ))
+            .expect("parses");
+            assert!(s.validate().is_err(), "{op}");
         }
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: automation
+    op: pictured
+    with: { builtin: take_task, entry: true }
+"#);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        assert!(ins.render(&steps[0]).is_err(), "a role's picture marks no start");
     }
 
     /// A value the run writes some seconds after the move is waited for, and the line says how long:

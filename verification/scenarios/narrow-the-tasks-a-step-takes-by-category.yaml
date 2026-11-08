@@ -26,8 +26,8 @@ given:
   - { type: action, domain: automation, op: cfg-add, with: { action: take, name: which, kind: taskfilter, required: true } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — tasks by category" }, as: auto }
-  # A picture starts at a built-in a run can start at, so the action answering the filter goes on
-  # after the one that takes a task. That built-in's own filter needs no answer, so the only setting
+  # A role starts only at the built-in that takes a task, so the action answering the filter goes on
+  # after that one. That built-in's own filter needs no answer, so the only setting
   # the launch check names is the action's.
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_start }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }

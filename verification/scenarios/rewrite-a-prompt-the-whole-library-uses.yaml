@@ -17,16 +17,21 @@ given:
   - { type: action, domain: automation, op: step-add, with: { target: library, name: read, prompt: read what was written }, as: read }
   - { type: action, domain: automation, op: action-entry, with: { target: library, step: read } }
 
-  # Each picture starts at a built-in a run can start at, so the action goes on after the one that
-  # takes a task. A built-in is not the library's, so it moves neither the count nor the prompt.
+  # Each role starts at the built-in that takes a task, the only start a role has, and the action
+  # goes on after it on a line — the picture draws only what the role's start reaches, and a box it
+  # does not draw cannot be pressed. A built-in is not the library's, so it moves neither the count
+  # nor the prompt.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the one that reviews twice" }, as: first }
-  - { type: action, domain: automation, op: place-add, with: { target: first, builtin: take_task, starts: true } }
-  - { type: action, domain: automation, op: place-add, with: { target: first, action: library } }
-  - { type: action, domain: automation, op: place-add, with: { target: first, action: library } }
+  - { type: action, domain: automation, op: place-add, with: { target: first, builtin: take_task, starts: true }, as: first_take }
+  - { type: action, domain: automation, op: place-add, with: { target: first, action: library }, as: first_once }
+  - { type: action, domain: automation, op: place-add, with: { target: first, action: library }, as: first_again }
+  - { type: action, domain: automation, op: edge-add, with: { target: first_take, exit: 着手した, to: first_once } }
+  - { type: action, domain: automation, op: edge-add, with: { target: first_once, to: first_again } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — the one that reviews once" }, as: second }
-  - { type: action, domain: automation, op: place-add, with: { target: second, builtin: take_task, starts: true } }
-  - { type: action, domain: automation, op: place-add, with: { target: second, action: library } }
+  - { type: action, domain: automation, op: place-add, with: { target: second, builtin: take_task, starts: true }, as: second_take }
+  - { type: action, domain: automation, op: place-add, with: { target: second, action: library }, as: second_once }
+  - { type: action, domain: automation, op: edge-add, with: { target: second_take, exit: 着手した, to: second_once } }
 
 steps_gui:
   - type: action

@@ -2231,6 +2231,8 @@ button.feed__target:hover { color: var(--c-accent); }
 .trigcard__cond { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--fs-md); }
 .trigcard__cond select { width: auto; }
 .trigcard__cond input[type="number"] { width: 64px; }
+.trigcard__role > .identicon,
+.trigcard__noicon { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
 .trigcard__form { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 8px 12px; font-size: var(--fs-md); }
 .trigcard__lbl { font-size: var(--fs-xs); }
 .trigcard__mach {

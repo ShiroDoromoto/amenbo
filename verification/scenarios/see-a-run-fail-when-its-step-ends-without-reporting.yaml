@@ -12,7 +12,7 @@ id: see-a-run-fail-when-its-step-ends-without-reporting
 title: A run whose step's program ends before the step reports fails there, and its pane and its row say why
 description: >
   Start a run that takes a task with the built-in and then opens one step, and in the pane it is drawn in end the program carrying the step out
-  before it reports. The pane's header and the running tab's row both say the run failed because its
+  before it reports. The run's row in the pane and the running tab's row both say the run failed because its
   step ended without reporting — at once, not on the next startup.
 given:
   # Claude Code is one of the two agents this machine can start — two being the fewest the premise
@@ -79,7 +79,7 @@ steps_gui:
     with:
       target: run
 
-  # The pane outlives the step, and its header says the run is over and how: failed, because the step
+  # The pane outlives the step, and the run's row in it says the run is over and how: failed, because the step
   # ended without reporting, and in which step. Without it the pane would go on naming the step as if
   # the run were still on it, and only the program's last lines would say otherwise.
   - type: assert

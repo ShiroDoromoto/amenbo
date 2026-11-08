@@ -768,6 +768,13 @@ program is a file a `copy-fixture` put in the run's own folder, and it is the ap
 a road with one walks the screen alone and reads where the run went off its pane. Answering a setting is
 not among them, and neither is declaring one: both are moves a reader makes, on the rows the panel
 takes them on or behind the flags the command does.
+**The pane a run is drawn in is its launch's**: one launch, one pane, however many seats its roles
+have. Its header is the launch's (`launch-head`), and so are the moves on it — `press-run` with
+`on: pane` pauses the launch after the current task, picks it up again or stops it — while a run's own
+moves, the pause at the end of the action under way and the cancel among them, are on its row on the
+running tab. The row under the header is the seat in front (`run-pane`). The pane opens on the desks of
+the roles (`run-roles`); a seat pressed turns it to that seat's terminal, and the bar over the
+terminal is the one way back (`press-run` with `press: terminal` / `roles`).
 **What a step of a run types is the screen's too** (`out-in-pane` / `done-in-pane`):
 which step is being answered comes off the environment the window opened that terminal with, so the
 two are refused anywhere else — and a run started at the terminal opens no pane to type them in.

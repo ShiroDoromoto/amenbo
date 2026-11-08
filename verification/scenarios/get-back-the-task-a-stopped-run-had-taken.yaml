@@ -4,11 +4,11 @@
 # task would find it held by a run that no longer exists.
 #
 # The road it is walked by is the pane, because that is where a person watching a run ends it — the
-# stop on the line over the pane, and the handing back happens behind it.
+# stop on the pane's header, and the handing back happens behind it.
 id: get-back-the-task-a-stopped-run-had-taken
 title: Ending a run hands the task it had taken back to the person, and says on the task what happened
 description: >
-  Start a run whose built-in takes a task, then stop the run from the line over its pane. Read the
+  Start a run whose built-in takes a task, then stop it from the header of its pane. Read the
   three things that leaves behind: the task is `todo` again and the person's, its timeline says the
   run was canceled, and the run's row on the history tab says so too. What separates this road from
   close-the-pane-a-run-is-drawn-in is what is read after the stop — that one reads the pane, and the

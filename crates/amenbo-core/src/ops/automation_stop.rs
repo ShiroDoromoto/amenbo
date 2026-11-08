@@ -508,18 +508,19 @@ pub fn pause(tx: &WriteTx<'_>, run_id: i64) -> Result<Paused> {
 }
 
 /// **Ask a run to pause before it takes its next task** (`AMB-D-1019`). It finishes the task it is on
-/// and pauses where it next comes to the built-in that takes one, without taking it.
+/// and pauses where it next comes to the built-in that takes one where the round of its seat's role
+/// starts ([`crate::ops::automation_run::takes_its_task_at`]), without taking it.
 ///
 /// A run standing there before a take that would wait for a task, or waiting for room in the action
 /// that step is the first of, is paused at once ([`Paused::Now`]): it holds no task, and its next look
 /// would only pause it. A run already asked for either pause is answered as it stands, still asked: the
-/// request is not taken back, and one asked to pause at the end of its action stops sooner. A run that
-/// takes no tasks is refused, having no task boundary to stop at.
+/// request is not taken back, and one asked to pause at the end of its action stops sooner. A run
+/// whose round does not start by taking a task is refused, having no task boundary to stop at.
 pub fn pause_run_before_next_task(tx: &WriteTx<'_>, run_id: i64) -> Result<Paused> {
     let before = live_run(tx, run_id)?;
     match before.status {
         AutomationRunStatus::Running => {
-            if !crate::ops::automation_run::current_defs(tx.conn(), run_id)?.iter().any(takes_a_task) {
+            if !crate::ops::automation_run::starts_by_taking_a_task(tx.conn(), run_id)? {
                 return Err(Error::invalid(format!(
                     "run '{run_id}' takes no tasks, so it has no next task to pause before"
                 )));
@@ -564,27 +565,28 @@ pub(crate) fn automation_stopped(conn: &Connection, run: &AutomationRun) -> Resu
     Ok(read::automation(conn, run.automation_id)?.is_some_and(|a| a.stopped))
 }
 
-/// Whether this run stands at the built-in that takes a task — before a take that would wait for one,
-/// or waiting for room in the action it is the first step of.
+/// Whether this run stands where it takes its next task ([`crate::ops::automation_run::takes_its_task_at`])
+/// — before a take that would wait for one, or waiting for room in the action it is the first step of.
 fn waits_to_take_a_task(conn: &Connection, run_id: i64) -> Result<bool> {
-    use crate::ops::automation_run::{is_waiting, next_def, waits_for_room, Waiting};
+    use crate::ops::automation_run::{is_waiting, next_def, takes_its_task_at, waits_for_room, Waiting};
     let Waiting::Step(def) = next_def(conn, run_id)? else { return Ok(false) };
-    Ok(takes_a_task(&def) && (is_waiting(conn, run_id)? || waits_for_room(conn, run_id)?.is_some()))
+    Ok(takes_its_task_at(conn, run_id, &def)?
+        && (is_waiting(conn, run_id)? || waits_for_room(conn, run_id)?.is_some()))
 }
 
 /// **Whether asking a run to pause before its next task would do anything** (`AMB-D-1019`): it is
-/// `running`, it is asked for neither pause yet, and it takes tasks.
+/// `running`, it is asked for neither pause yet, and its round starts by taking a task.
 ///
-/// Whether it takes tasks is read from the steps it copied, the last time it copied them, not the
+/// Where its round starts is read from the steps it copied, the last time it copied them, not the
 /// automation as it stands now (`AMB-D-961`).
 pub fn pauses_before_next_task(conn: &Connection, run: &AutomationRun) -> Result<bool> {
     if run.status != AutomationRunStatus::Running || run.pause_requested || run.pause_before_next_task {
         return Ok(false);
     }
-    Ok(crate::ops::automation_run::current_defs(conn, run.id)?.iter().any(takes_a_task))
+    crate::ops::automation_run::starts_by_taking_a_task(conn, run.id)
 }
 
-/// Whether this step is the built-in that takes a task — where a pause before the next task takes hold.
+/// Whether this step is the built-in that takes a task.
 pub(crate) fn takes_a_task(def: &AutomationRunDef) -> bool {
     def.builtin.as_deref() == Some(crate::ops::automation_builtin_take::TAKE_TASK.key)
 }
@@ -613,7 +615,8 @@ pub fn settle(tx: &WriteTx<'_>, before: AutomationRun, kind: AutomationPauseKind
 /// **Pick a paused run up again** — how depends on which pause it stopped at (`AMB-D-1015`).
 ///
 /// - **Paused before its next task**, it holds no task, so it is copied down afresh from the automation's
-///   newest saved version, as a launch reads it, and starts at the new copy's entry. The new copy is
+///   newest saved version, as a launch reads it, and starts where the round of its seat's role starts on
+///   the new copy. The new copy is
 ///   checked as a launch checks it, with `startable`, `models` and `default_agent` as
 ///   [`crate::ops::automation_run::Launcher`] takes them; one that does not pass is refused, and the run
 ///   stays paused.
@@ -665,9 +668,9 @@ pub fn resume(
 
 /// The step a paused run opens next: the one the last finished step's way out leads to.
 ///
-/// **A run paused before its first step opened starts at its entry.** That is a run whose entry is a
-/// built-in waiting for something to turn up (`AMB-D-969`): waiting writes nothing, so the pause took
-/// hold with no step behind it.
+/// **A run paused before its first step opened starts where its round starts.** That is a run whose
+/// round starts at a built-in waiting for something to turn up (`AMB-D-969`): waiting writes nothing, so
+/// the pause took hold with no step behind it.
 fn next_after_the_pause(
     conn: &Connection,
     run: &AutomationRun,

@@ -1926,13 +1926,14 @@ pub struct Automation {
     pub triggers: Vec<AutomationTrigger>,
     /// **A person stopped this automation**, so it starts no new round: it is not launched, its triggers
     /// file nothing, and a run of it pauses where it finishes a round, or at once where it is waiting
-    /// at its entry for a task to take. A round under way is not cut short. Like `archived`, it is the
+    /// where its round starts for a task to take. A round under way is not cut short. Like `archived`, it is the
     /// automation's, not part of a saved version.
     #[serde(default)]
     pub stopped: bool,
     /// **Since when Amenbo has been waiting for a task to start a run of this automation on**
-    /// (`AMB-D-969`), or `None` where it is not. Set where its entry, the built-in that takes a task set
-    /// to wait, found none to take; cleared once a run is started on one or a person stops the wait
+    /// (`AMB-D-969`), or `None` where it is not. Set where the built-in that takes a task set to wait,
+    /// where a role's round starts, found none to take; cleared once a run is started on one or a person
+    /// stops the wait
     /// ([`crate::ops::automation_run::start_waiting`]). While it waits, no run stands. Like
     /// `archived`, it is the automation's, not part of a saved version.
     #[serde(default)]
@@ -2641,7 +2642,8 @@ pub enum AutomationStoppedReason {
     /// (`AMB-D-967`). The launch check refuses a picture that can do this, so reaching it means the
     /// check missed a line: the machinery's fault, not the author's and not the agent's.
     LeftTaskOpen,
-    /// The run came back to its entry, the automation had been saved since it was copied, and the newer
+    /// The run came back to where its round starts, the automation had been saved since it was copied,
+    /// and the newer
     /// version did not pass the check a launch asks — or starts by filing a task, which only a launch is
     /// handed what to file ([`crate::ops::automation_run::take_up_newer`]). What it did not pass is kept
     /// on the run ([`AutomationRun::stopped_detail`]).
@@ -3032,8 +3034,8 @@ impl AutomationRunStepStatus {
 }
 
 /// **One task a run worked on**, in the order it took them — a stretch of the run rather than a moment
-/// of it, and one round of it: a run goes round once per task, from the entry that takes it to the end
-/// of the picture ([`crate::ops::automation_run::goes_round`]).
+/// of it, and one round of it: a run goes round once per task, from where its round starts, which takes
+/// it, to the end of the picture ([`crate::ops::automation_run::goes_round`]).
 ///
 /// `seq` is 1 for a run that never goes round, and the row is what the per-task edge counts are kept
 /// against. `task_id` is empty until a `task_take` output hands one over, so the row exists before it

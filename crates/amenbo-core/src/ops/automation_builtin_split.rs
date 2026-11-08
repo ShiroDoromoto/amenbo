@@ -505,8 +505,8 @@ mod tests {
     }
 
     /// **A line from a way out of the split to where another role's round starts is a line like any
-    /// other**: the launch check does not refuse it, and a task of the role starting at the split goes
-    /// down it. The way out that takes the task needs no line, since where it goes is the task's role.
+    /// other**: the launch check does not refuse it, and a task of the role whose round goes on to the
+    /// split goes down it.
     #[test]
     fn a_line_to_where_another_role_starts_is_walked_like_any_other() {
         with_tx(|tx| {
@@ -521,11 +521,12 @@ mod tests {
             automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
             let split = automation::placement_add(tx, automation.id, action(tx, role).expect("split").id)
                 .expect("place the split");
+            automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(split.id), None).expect("take → split");
             let close = crate::ops::test_support::mk_closed_after(tx, &automation, split.id, Some("技術"));
             for name in ["デザイン", UNSORTED] {
                 crate::ops::test_support::mk_closed_after(tx, &automation, split.id, Some(name));
             }
-            let sorting = NewRole { name: "仕分け".into(), entry_placement_id: Some(split.id), ..NewRole::default() };
+            let sorting = NewRole { name: "仕分け".into(), entry_placement_id: Some(take.id), ..NewRole::default() };
             let sorting = automation::role_add(tx, automation.id, sorting).expect("a role");
             let closing = NewRole { name: "仕上げ".into(), entry_placement_id: Some(close.id), ..NewRole::default() };
             automation::role_add(tx, automation.id, closing).expect("another role");
@@ -546,7 +547,7 @@ mod tests {
                 .find(|d| d.entry)
                 .expect("the entry");
             let Opened::Carried { next: Next::Step(at_split), .. } = open(tx, run.id, entry.id, None).expect("take") else {
-                panic!("the take goes on to where the task's role starts");
+                panic!("the take goes on down the line drawn from it");
             };
             assert_eq!(at_split.placement_id, Some(split.id));
             let Opened::Carried { next: Next::Step(after), .. } = open(tx, run.id, at_split.id, None).expect("split") else {

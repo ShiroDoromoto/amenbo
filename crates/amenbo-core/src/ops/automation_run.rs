@@ -29,12 +29,13 @@
 //! it — so editing the automation afterwards cannot change what a run already under way is
 //! doing, and a run stays readable months later when the automation it came from has moved on. The
 //! exceptions are a run with no task in hand: one paused before its next task, which picking up copies
-//! the automation down onto again ([`copy_down_again`]), and one standing at its entry, copied down again
-//! where a newer version has been saved ([`take_up_newer`]) (`AMB-D-1015`).
+//! the automation down onto again ([`copy_down_again`]), and one standing where its round starts, copied
+//! down again where a newer version has been saved ([`take_up_newer`]) (`AMB-D-1015`).
 //!
-//! **A launched run goes round once per task.** Each round takes one task at the entry and walks the
-//! picture to its end, and the run then goes round again at its entry ([`goes_round`]), until the entry
-//! finds no task to take. A round is one stretch of the run ([`crate::model::AutomationRunTask`]), and
+//! **A launched run goes round once per task.** A run sits in the seat of one role, and starts where
+//! that role's round starts (`AMB-D-1123`, [`entry_def`]). Each round takes one task there and walks the
+//! picture to its end, and the run then goes round again there ([`goes_round`]), until it finds no task
+//! to take. A round is one stretch of the run ([`crate::model::AutomationRunTask`]), and
 //! a definition saved while one is under way is taken up as the next round starts — never in the middle
 //! of one.
 //!
@@ -1011,7 +1012,7 @@ fn check_picture(
     let by_id: BTreeMap<i64, &AutomationPlacement> = placements.iter().map(|p| (p.id, p)).collect();
     let defs = defs_of(conn, placements)?;
     let live = reachable(entry_id, pic, &by_id, &defs);
-    let routed = !role_entries(pic, &by_id).is_empty();
+    let routed = role_entries(pic, &by_id);
     let roles = roles_by_placement(pic, &by_id, &defs);
 
     for placement in placements {
@@ -1049,8 +1050,9 @@ fn check_picture(
                 continue;
             }
             // A way out that hands on the task taken goes where the task's role starts, in an automation
-            // whose roles say where that is (`by_role`) — no line drawn from it is walked.
-            if routed && goes_by_role(def, exit.id) {
+            // whose roles say where that is (`by_role`) — no line drawn from it is walked, unless the
+            // built-in itself stands where a role starts.
+            if goes_by_role(&routed, placement.id, def, exit.id) {
                 continue;
             }
             if !decided(pic, placement.id, exit.id, &by_id) {
@@ -1273,9 +1275,10 @@ fn leaves_task_open(
         }
         let mut walked = BTreeSet::new();
         while let Some((from, exit)) = lines.pop() {
-            // The way out that hands on the task taken goes on to where each role starts (`by_role`);
-            // any other goes where its line is drawn to.
-            let tos: Vec<&AutomationPlacement> = if !routed.is_empty() && goes_by_role(&defs[&from.id], exit.id) {
+            // The way out that hands on the task taken goes on to where each role starts (`by_role`),
+            // unless the built-in itself stands where a role starts; any other goes where its line is
+            // drawn to.
+            let tos: Vec<&AutomationPlacement> = if goes_by_role(&routed, from.id, &defs[&from.id], exit.id) {
                 routed.iter().filter_map(|id| by_id.get(id).copied()).collect()
             } else {
                 let Some(edge) = pic.edge_for_exit(from.id, exit.id) else {
@@ -1564,11 +1567,11 @@ fn steps_reached(def: &ActionDef, steps: &[AutomationStep], avoiding: Option<i64
     seen
 }
 
-/// The placements a run could actually reach, walked from the entry along the edges that go on to
-/// another placement — and, from a way out that hands on the task taken, on to where each role starts
-/// ([`role_entries`]). A placement nothing reaches is not checked: it cannot stop a run, and refusing to
-/// launch over one would make an automation undeletable-in-practice while its author was still drawing
-/// it.
+/// The placements a run could actually reach, walked from the entry and from where each role starts
+/// ([`role_entries`]) — a run starts where its seat's role does — along the edges that go on to another
+/// placement, and, from a way out that hands on the task taken, on to where each role starts. A
+/// placement nothing reaches is not checked: it cannot stop a run, and refusing to launch over one would
+/// make an automation undeletable-in-practice while its author was still drawing it.
 fn reachable(
     entry_id: i64,
     pic: &Picture,
@@ -1590,12 +1593,13 @@ fn reachable_without(
     let routed = role_entries(pic, by_id);
     let mut seen = BTreeSet::new();
     let mut todo = vec![entry_id];
+    todo.extend(routed.iter().copied());
     while let Some(id) = todo.pop() {
         if Some(id) == avoiding || !by_id.contains_key(&id) || !seen.insert(id) {
             continue;
         }
         for exit in defs[&id].action_exits() {
-            if !routed.is_empty() && goes_by_role(&defs[&id], exit.id) {
+            if goes_by_role(&routed, id, &defs[&id], exit.id) {
                 todo.extend(routed.iter().copied());
                 continue;
             }
@@ -1629,11 +1633,15 @@ fn hands_on_taken(def: &ActionDef, exit_id: i64) -> bool {
 }
 
 /// **Whether this way out goes where the task's role starts** rather than along a line, where the
-/// automation's roles say where that is ([`by_role`]): the way out of the built-in that takes a task
-/// which hands it on. A task the run files itself and takes walks the line drawn, even one a trigger
-/// files under a role.
-fn goes_by_role(def: &ActionDef, exit_id: i64) -> bool {
-    def.steps.iter().any(|s| s.builtin.as_deref() == Some(TAKE_TASK.key)) && hands_on_taken(def, exit_id)
+/// automation's roles say where that is (`routed`, [`role_entries`]; [`by_role`]): the way out of the
+/// built-in that takes a task which hands it on. A task the run files itself and takes walks the line
+/// drawn, even one a trigger files under a role. So does the built-in placed where a role starts: the
+/// round it takes a task for already stands where that task's role starts.
+fn goes_by_role(routed: &[i64], placement_id: i64, def: &ActionDef, exit_id: i64) -> bool {
+    !routed.is_empty()
+        && !routed.contains(&placement_id)
+        && def.steps.iter().any(|s| s.builtin.as_deref() == Some(TAKE_TASK.key))
+        && hands_on_taken(def, exit_id)
 }
 
 /// Whether a way out has something set to happen after it. An edge that goes on to a placement of some
@@ -1840,9 +1848,9 @@ fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> V
 /// The run is born `running`, so a launch never waits (`AMB-D-947`): it is either refused or under
 /// way. `started_at` is the moment of the launch itself.
 ///
-/// It reads the saved definition ([`ReadsFrom::Saved`]). It makes the run even where the entry would
-/// wait for a task, which the run's entry then finds ([`wait_for_a_task`]); a person's start asks
-/// that first and makes no run ([`start`]).
+/// It reads the saved definition ([`ReadsFrom::Saved`]). It makes the run even where its round would
+/// start by waiting for a task, which the run then finds where its round starts ([`wait_for_a_task`]);
+/// a person's start asks that first and makes no run ([`start`]).
 pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result<AutomationRun> {
     launch_handing(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved)
 }
@@ -1852,8 +1860,8 @@ pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result
 pub enum Started {
     /// A run was launched.
     Run(AutomationRun),
-    /// **Its entry would wait for a task with none to take**, so no run was made and the automation
-    /// waits for one instead ([`Automation::waits_for_task_since`]).
+    /// **Every role with a seat open would start its round waiting for a task with none to take**, so
+    /// no run was made and the automation waits for one instead ([`Automation::waits_for_task_since`]).
     Waits(Box<Automation>),
 }
 
@@ -1874,10 +1882,11 @@ impl Started {
 /// over everything a launch is refused over, and in that order. What was handed is filed as a task
 /// first ([`HandedAtLaunch`]), so the run started has it to take.
 ///
-/// **Where the entry would wait for a task and none can be taken now, no run is made**
-/// (`AMB-D-969`): the automation is marked as waiting for one instead ([`Started::Waits`]), and the
-/// app's watch starts a run once one turns up ([`start_waiting`]). A run made then would only stand
-/// at its entry, counted among the runs under way and doing nothing.
+/// **Where every role with a seat open would start its round waiting for a task, and none can be taken
+/// now, no run is made** (`AMB-D-969`): the automation is marked as waiting for one instead
+/// ([`Started::Waits`]), and the app's watch starts a run once one turns up ([`start_waiting`]). A run
+/// made then would only stand where its round starts, counted among the runs under way and doing
+/// nothing.
 pub fn start(
     tx: &WriteTx<'_>,
     automation_id: i64,
@@ -2011,13 +2020,9 @@ fn seats_of(conn: &Connection, automation_id: i64, pic: &Picture) -> Result<Vec<
     Ok(seats)
 }
 
-/// **The roles of these seats, put together**, as the waiting built-ins read them ([`Seats::roles`]).
-fn roles_of(seats: &[&Seats]) -> Vec<i64> {
-    seats.iter().flat_map(|s| s.roles()).collect()
-}
-
 /// **Whether a run in these seats stands about to take a task** — running, its next step the built-in
-/// that takes one. That run would take the task found for the role, so no run is started for it.
+/// that takes one where its round starts ([`takes_its_task_at`]). That run would take the task found
+/// for the role, so no run is started for it.
 fn about_to_take(conn: &Connection, seats: &Seats) -> Result<bool> {
     for &run_id in &seats.under_way {
         let Some(run) = read::automation_run(conn, run_id)? else { continue };
@@ -2025,7 +2030,7 @@ fn about_to_take(conn: &Connection, seats: &Seats) -> Result<bool> {
             continue;
         }
         let Waiting::Step(def) = next_def(conn, run_id)? else { continue };
-        if crate::ops::automation_stop::takes_a_task(&def) {
+        if takes_its_task_at(conn, run_id, &def)? {
             return Ok(true);
         }
     }
@@ -2033,21 +2038,22 @@ fn about_to_take(conn: &Connection, seats: &Seats) -> Result<bool> {
 }
 
 /// **Of these seats, the first with a task to take now** — in the order given, a set with a task of its
-/// role to take at the entry `e`, and no run of it standing about to take one ([`about_to_take`]).
-/// `None` where none has, or where the entry takes no task.
+/// role to take where its round starts on `pic` ([`start_builtin`]), and no run of it standing about to
+/// take one ([`about_to_take`]). `None` where none has, or where none of their starts takes a task.
 fn with_a_task<'s>(
     conn: &Connection,
     project_id: i64,
-    e: &EntryBuiltin,
+    pic: &Picture,
     seats: &[&'s Seats],
 ) -> Result<Option<&'s Seats>> {
     for &s in seats {
+        let Some(start) = start_builtin(conn, pic, s.role_id)? else { continue };
         let there = crate::ops::automation_builtin::there_to_take(
             conn,
             project_id,
             &s.roles(),
-            e.builtin.as_deref(),
-            &e.cfg,
+            start.builtin.as_deref(),
+            &start.cfg,
         )?;
         if there == Some(true) && !about_to_take(conn, s)? {
             return Ok(Some(s));
@@ -2232,21 +2238,42 @@ pub fn fire(
     Ok(Some(run))
 }
 
-/// **The entry of `pic`**: the key of the built-in it stands on (`None` for an agent's step or a
-/// script), with the answers written for it there as a run's copy would keep them — or `None` where
-/// `pic` names no entry.
-fn entry_builtin(conn: &Connection, pic: &Picture) -> Result<Option<EntryBuiltin>> {
-    let Some(entry) = pic.entry_placement_id.and_then(|id| pic.placement(id)) else { return Ok(None) };
-    let cfg = answers(pic, entry, &ActionDef::placed(conn, entry)?).into_iter().map(run_def_cfg).collect();
-    Ok(Some(EntryBuiltin { builtin: action_builtin(conn, entry.action_id)?, cfg, roles: roles_on(pic) }))
+/// **Where a run in the seats of `role_id` starts its rounds on `pic`** (`AMB-D-1123`) — the placement
+/// the role names as where its round starts ([`AutomationRole::entry_placement_id`]), or `None` where it
+/// names none on `pic`.
+///
+/// A run in the seats of no role ([`Seats::role_id`]) — of an automation none of whose roles names where
+/// its round starts — starts at the picture's entry. That is the one place a run still reads the entry,
+/// kept for as long as an automation can be drawn with no role starting anywhere.
+fn start_of(pic: &Picture, role_id: Option<i64>) -> Option<&AutomationPlacement> {
+    let id = match role_id {
+        Some(role) => pic.roles().iter().find(|r| r.id == role).and_then(|r| r.entry_placement_id),
+        None => pic.entry_placement_id,
+    };
+    id.and_then(|id| pic.placement(id))
 }
 
-/// **The entry of a picture as a waiting built-in reads it** ([`entry_builtin`]): the built-in placed
-/// there, the answers written for it, and the roles a run of the picture would start rounds of.
-struct EntryBuiltin {
+/// **Where the seats of `role_id` start, as a waiting built-in reads it** ([`start_of`]): the key of the
+/// built-in placed there (`None` for an agent's step or a script), with the answers written for it there
+/// as a run's copy would keep them — or `None` where they start nowhere on `pic`.
+fn start_builtin(conn: &Connection, pic: &Picture, role_id: Option<i64>) -> Result<Option<StartBuiltin>> {
+    let Some(start) = start_of(pic, role_id) else { return Ok(None) };
+    let cfg = answers(pic, start, &ActionDef::placed(conn, start)?).into_iter().map(run_def_cfg).collect();
+    Ok(Some(StartBuiltin { builtin: action_builtin(conn, start.action_id)?, cfg }))
+}
+
+/// **Where a role's round starts, as a waiting built-in reads it** ([`start_builtin`]): the built-in
+/// placed there, and the answers written for it.
+struct StartBuiltin {
     builtin: Option<String>,
     cfg: Vec<RunDefCfg>,
-    roles: Vec<i64>,
+}
+
+impl StartBuiltin {
+    /// Whether it is the built-in that takes a task.
+    fn takes_a_task(&self) -> bool {
+        self.builtin.as_deref() == Some(TAKE_TASK.key)
+    }
 }
 
 /// **The roles a run launched from `pic` would start rounds of** — the picture's roles that name a
@@ -2260,18 +2287,45 @@ fn roles_on(pic: &Picture) -> Vec<i64> {
         .collect()
 }
 
+/// **The seats a run launched from `pic` may sit in, by role** ([`Seats::role_id`]) — each role of
+/// [`roles_on`], or the seats of no role alone where it is empty.
+fn seat_roles(pic: &Picture) -> Vec<Option<i64>> {
+    match roles_on(pic) {
+        on if on.is_empty() => vec![None],
+        on => on.into_iter().map(Some).collect(),
+    }
+}
+
 /// **The role a run launched from `pic` sits in** ([`AutomationRun::role_id`]) — of the seats it may
-/// take (`open`, in the order the roles are defined in), the first with a task to take at the entry now
-/// ([`with_a_task`]), or the first of them where none has one or the entry takes no task. `None` for the
-/// seats of no role: that run walks its picture as it is drawn. `open` is never empty.
+/// take (`open`, in the order the roles are defined in), the first with a task to take where its round
+/// starts now ([`with_a_task`]), or the first of them where none has one. `None` for the seats of no
+/// role. `open` is never empty.
 fn seat(conn: &Connection, project_id: i64, pic: &Picture, open: &[&Seats]) -> Result<Option<i64>> {
     let Some(first) = open.first() else { return Ok(None) };
-    if let Some(e) = entry_builtin(conn, pic)? {
-        if let Some(s) = with_a_task(conn, project_id, &e, open)? {
-            return Ok(s.role_id);
-        }
+    if let Some(s) = with_a_task(conn, project_id, pic, open)? {
+        return Ok(s.role_id);
     }
     Ok(first.role_id)
+}
+
+/// **Whether every one of these seats would wait for a task where its round starts** (`AMB-D-969`) —
+/// each starts at a built-in set to wait, with nothing of its role turned up yet. A launch then makes no
+/// run ([`start`]). `false` for no seats at all.
+fn waits_at_every_start(conn: &Connection, project_id: i64, pic: &Picture, open: &[&Seats]) -> Result<bool> {
+    for &s in open {
+        let Some(start) = start_builtin(conn, pic, s.role_id)? else { return Ok(false) };
+        let waits = crate::ops::automation_builtin::waits_now(
+            conn,
+            project_id,
+            &s.roles(),
+            start.builtin.as_deref(),
+            &start.cfg,
+        )?;
+        if !waits {
+            return Ok(false);
+        }
+    }
+    Ok(!open.is_empty())
 }
 
 /// **Mark an automation as waiting for a task** ([`Automation::waits_for_task_since`]) — from now, or
@@ -2286,7 +2340,7 @@ fn mark_waiting(tx: &WriteTx<'_>, before: Automation) -> Result<Automation> {
 }
 
 /// **End a run whose built-in would wait for a task, and have its automation wait instead**
-/// (`AMB-D-969`) — where the run came back to its entry with no task to take.
+/// (`AMB-D-969`) — where the run came back to where its round starts with no task to take.
 ///
 /// **The run completes** there, its step never opened: it found nothing to do, as one leaving by the
 /// way out for nothing to take does. It holds no task, so there is none to hand back. **The automation
@@ -2303,8 +2357,8 @@ pub(crate) fn wait_for_a_task(tx: &WriteTx<'_>, run: AutomationRun) -> Result<Au
 }
 
 /// **Which of these waiting automations a run may be started of now** ([`start_waiting`]) — those a
-/// task has turned up for under a role with a free seat ([`seats`]), and those whose newest saved entry
-/// no longer waits for one, whose wait [`start_waiting`] ends.
+/// task has turned up for under a role with a free seat ([`seats`]), and those where, in the newest saved
+/// version, no role waits for one where its round starts any longer, whose wait [`start_waiting`] ends.
 ///
 /// Only whether a task has turned up is asked, one row of the tasks for each role with a free seat,
 /// never a count (`AMB-D-969`). It writes nothing: [`start_waiting`] asks all of it again, in the transaction it
@@ -2327,25 +2381,29 @@ pub fn tasks_turned_up(conn: &Connection, automations: &[i64]) -> Result<Vec<i64
     Ok(due)
 }
 
-/// **Whether a task has turned up for a waiting automation under a role with a free seat** — `None`
-/// where its newest saved entry no longer waits for one, and `Some(false)` where no role has a free seat
+/// **Whether a task has turned up for a waiting automation under a role with a free seat**, where that
+/// role's round starts ([`start_builtin`]) — `None` where, in its newest saved version, no role's round
+/// starts at a built-in set to wait any longer, and `Some(false)` where no role has a free seat
 /// ([`seats`]) or none of those has a task turned up.
 fn turned_up_in_a_free_seat(conn: &Connection, automation: &Automation) -> Result<Option<bool>> {
     let (pic, _) = definition(conn, automation, ReadsFrom::Saved)?;
-    let Some(e) = entry_builtin(conn, &pic)? else { return Ok(None) };
-    let seats = seats_of(conn, automation.id, &pic)?;
-    let free: Vec<&Seats> = seats.iter().filter(|s| s.free()).collect();
-    let turned_up = crate::ops::automation_builtin::turned_up(
-        conn,
-        automation.project_id,
-        &roles_of(&free),
-        e.builtin.as_deref(),
-        &e.cfg,
-    )?;
-    Ok(match turned_up {
-        Some(true) if free.is_empty() => Some(false),
-        turned_up => turned_up,
-    })
+    let mut waits = false;
+    for s in seats_of(conn, automation.id, &pic)? {
+        let Some(start) = start_builtin(conn, &pic, s.role_id)? else { continue };
+        let turned_up = crate::ops::automation_builtin::turned_up(
+            conn,
+            automation.project_id,
+            &s.roles(),
+            start.builtin.as_deref(),
+            &start.cfg,
+        )?;
+        match turned_up {
+            Some(true) if s.free() => return Ok(Some(true)),
+            Some(_) => waits = true,
+            None => {}
+        }
+    }
+    Ok(waits.then_some(false))
 }
 
 /// **Start a run of an automation waiting for a task, now that one has turned up** — `Some(run)` where
@@ -2354,8 +2412,8 @@ fn turned_up_in_a_free_seat(conn: &Connection, automation: &Automation) -> Resul
 /// It starts none where the automation is not waiting, is archived, stopped or kept for export only, has
 /// its launch paused, or no task has turned up after all under a role with a free seat: the wait goes
 /// on, and nothing is written.
-/// Where its newest saved entry no longer waits for a task, the wait ends and no run is made — a run
-/// started then would start for no task.
+/// Where, in its newest saved version, no role's round starts at a built-in set to wait any longer, the
+/// wait ends and no run is made — a run started then would start for no task.
 ///
 /// The run is a launch like any other ([`launch_handing`]) of the newest saved version, with nothing
 /// handed to it, joining the launch standing, and the wait ends in the same transaction. A launch its
@@ -2395,8 +2453,8 @@ pub fn stop_waiting(tx: &WriteTx<'_>, automation_id: i64) -> Result<Automation> 
     Ok(after)
 }
 
-/// **An automation waiting for a task**, as a person reads it: since when, and what its newest saved
-/// entry looks for (`None` where that entry no longer waits for anything).
+/// **An automation waiting for a task**, as a person reads it: since when, and what is looked for where
+/// the rounds of its newest saved version start (`None` where none of them waits for anything).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct TaskWait {
     pub since: Timestamp,
@@ -2408,14 +2466,22 @@ pub fn task_wait(conn: &Connection, automation_id: i64) -> Result<Option<TaskWai
     let automation = read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
     let Some(since) = automation.waits_for_task_since else { return Ok(None) };
     let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
-    let looks_for = entry_builtin(conn, &pic)?
-        .and_then(|e| crate::ops::automation_builtin::looks_for(e.builtin.as_deref(), &e.cfg));
+    let mut looks_for = None;
+    for role_id in seat_roles(&pic) {
+        if let Some(start) = start_builtin(conn, &pic, role_id)? {
+            looks_for = crate::ops::automation_builtin::looks_for(start.builtin.as_deref(), &start.cfg);
+        }
+        if looks_for.is_some() {
+            break;
+        }
+    }
     Ok(Some(TaskWait { since, looks_for }))
 }
 
-/// **What is keeping this automation waiting** (`AMB-D-999`) — the tasks its newest saved entry looks
-/// for that cannot be taken, by what stops them. `None` for an automation that is not waiting. Read
-/// when a person is about to look, never by the watch's look.
+/// **What is keeping this automation waiting** (`AMB-D-999`) — the tasks looked for where the rounds of
+/// its newest saved version start that cannot be taken, by what stops them: of every role starting a
+/// round, as the first start that waits for anything looks for them. `None` for an automation that is
+/// not waiting. Read when a person is about to look, never by the watch's look.
 pub fn task_wait_held_back(
     conn: &Connection,
     automation_id: i64,
@@ -2425,8 +2491,16 @@ pub fn task_wait_held_back(
         return Ok(None);
     }
     let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
-    let Some(e) = entry_builtin(conn, &pic)? else { return Ok(None) };
-    crate::ops::automation_builtin::held_back(conn, automation.project_id, &e.roles, e.builtin.as_deref(), &e.cfg)
+    let roles = roles_on(&pic);
+    for role_id in seat_roles(&pic) {
+        let Some(start) = start_builtin(conn, &pic, role_id)? else { continue };
+        let held =
+            crate::ops::automation_builtin::held_back(conn, automation.project_id, &roles, start.builtin.as_deref(), &start.cfg)?;
+        if held.is_some() {
+            return Ok(held);
+        }
+    }
+    Ok(None)
 }
 
 /// **The launch a run about to be made is started in** — the one standing for the automation, or a new
@@ -2499,10 +2573,10 @@ pub fn launches_to_top_up(conn: &Connection, launches: &[i64]) -> Result<Vec<i64
 
 /// **Whether a launch may be given one more run now.** It is running, and its automation is neither
 /// archived, stopped, kept for export only nor waiting for a task (a run then is [`start_waiting`]'s
-/// to start). The newest saved entry is the built-in that takes a task — any other is never topped up,
-/// its run walking the picture once. And one of the automation's roles has a free seat ([`seats`]), a
-/// task of its own to take at that entry, and no run of it standing about to take one, which would take
-/// the task found here ([`with_a_task`]). The seats are as many as the launch holds for each role
+/// to start). And one of the automation's roles has a free seat ([`seats`]), its round starting, in the
+/// newest saved version, at the built-in that takes a task — a role starting anywhere else is never
+/// topped up, its run walking the picture once — a task of its own to take there, and no run of it
+/// standing about to take one, which would take the task found here ([`with_a_task`]). The seats are as many as the launch holds for each role
 /// ([`seats`]), so a headcount raised on the launch takes hold at once ([`launch_headcount_set`]).
 fn tops_up(conn: &Connection, launch_id: i64) -> Result<bool> {
     let Some(launch) = read::automation_launch(conn, launch_id)? else { return Ok(false) };
@@ -2515,13 +2589,14 @@ fn tops_up(conn: &Connection, launch_id: i64) -> Result<bool> {
         return Ok(false);
     }
     let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
-    let Some(e) = entry_builtin(conn, &pic)? else { return Ok(false) };
-    if e.builtin.as_deref() != Some(TAKE_TASK.key) {
-        return Ok(false);
-    }
     let seats = seats_of(conn, automation.id, &pic)?;
-    let free: Vec<&Seats> = seats.iter().filter(|s| s.free()).collect();
-    Ok(with_a_task(conn, automation.project_id, &e, &free)?.is_some())
+    let mut free: Vec<&Seats> = Vec::new();
+    for s in seats.iter().filter(|s| s.free()) {
+        if start_builtin(conn, &pic, s.role_id)?.is_some_and(|start| start.takes_a_task()) {
+            free.push(s);
+        }
+    }
+    Ok(with_a_task(conn, automation.project_id, &pic, &free)?.is_some())
 }
 
 /// **Start one more run in a running launch**, where a role has a free seat and a task to take
@@ -2634,11 +2709,12 @@ pub struct LaunchRoleState {
     /// The icon it is drawn with, by the name the GUI knows it under. `None` for none chosen.
     pub icon: Option<String>,
     pub headcount: RoleHeadcount,
-    /// **How many of its tasks are waiting to be taken** — the ones a seat of it would take at the
-    /// automation's entry now: not started, ready, and matching the filter the entry's "take a task"
-    /// built-in is answered with. A task a seat has taken is under way, and not among them. None for a
-    /// role no round starts at, and where the entry takes no task. Where no role names where its round
-    /// starts, the tasks of every role the filter matches are read as the first role's, as its seats are.
+    /// **How many of its tasks are waiting to be taken** — the ones a seat of it would take where its
+    /// round starts now ([`start_of`]): not started, ready, and matching the filter the "take a task"
+    /// built-in placed there is answered with. A task a seat has taken is under way, and not among them.
+    /// None for a role no round starts at, and where its round starts at no "take a task". Where no
+    /// role names where its round starts, the seats start at the entry, and the tasks of every role the
+    /// filter matches are read as the first role's, as its seats are.
     pub waiting: usize,
     /// The first [`WAITING_NAMED`] of them, in the order the role takes them in.
     pub first_waiting: Vec<WaitingTask>,
@@ -2664,20 +2740,25 @@ pub fn launch_state(conn: &Connection, launch_id: i64) -> Result<LaunchState> {
     let automation =
         read::automation(conn, launch.automation_id)?.ok_or_else(|| not_found("automation", launch.automation_id))?;
     let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
-    let entry = entry_builtin(conn, &pic)?.filter(|e| e.builtin.as_deref() == Some(TAKE_TASK.key));
+    let on = roles_on(&pic);
     let mut headcounts = launch_headcounts(conn, launch_id)?.into_iter();
     let mut roles = Vec::with_capacity(pic.roles().len());
     for (i, role) in pic.roles().iter().enumerate() {
         let Some(headcount) = headcounts.next() else { break };
-        // The roles a seat of this one takes tasks of, as `Seats::roles` reads them: none for the one
-        // set of seats bound to no role, read as the first role's.
-        let takes = match &entry {
-            Some(e) if e.roles.contains(&role.id) => Some((vec![role.id], Some(role.take_order))),
-            Some(e) if e.roles.is_empty() && i == 0 => Some((Vec::new(), None)),
+        // The seats this role's tasks are read for, and the roles a seat of them takes tasks of, as
+        // `Seats::roles` reads them: none for the one set of seats bound to no role, read as the first
+        // role's.
+        let takes = match () {
+            _ if on.contains(&role.id) => Some((Some(role.id), vec![role.id], Some(role.take_order))),
+            _ if on.is_empty() && i == 0 => Some((None, Vec::new(), None)),
             _ => None,
         };
-        let (waiting, first_waiting) = match (&entry, takes) {
-            (Some(e), Some((of, order))) => {
+        let start = match &takes {
+            Some((seat, _, _)) => start_builtin(conn, &pic, *seat)?.filter(StartBuiltin::takes_a_task),
+            None => None,
+        };
+        let (waiting, first_waiting) = match (&start, takes) {
+            (Some(e), Some((_, of, order))) => {
                 let found = crate::ops::automation_builtin_take::waiting_to_be_taken(
                     conn,
                     launch.project_id,
@@ -3252,15 +3333,17 @@ pub(crate) fn launch_past_the_setting_checks(
 /// the runs under way only where `limited` — and filing what was `handed` as a task before the run is
 /// written ([`file_handed`]).
 ///
-/// Where `may_wait`, an entry that would wait for a task with none to take makes no run, and the
-/// automation waits instead ([`start`]). Asked last, once nothing refuses the launch: an automation
-/// that could not be launched is not one to wait on.
+/// Where `may_wait`, seats that would each start their round waiting for a task with none to take
+/// ([`waits_at_every_start`]) make no run, and the automation waits instead ([`start`]). Asked last,
+/// once nothing refuses the launch: an automation that could not be launched is not one to wait on.
 ///
 /// Where `limited`, the run sits in a free seat ([`seats`]) — refused where no role has one — and joins
 /// the launch standing for the automation, or opens one ([`join_launch`]); a paused launch is refused. A
-/// launch opened for an entry that waits stands with no run, and the run started once a task turns up
+/// launch opened for seats that wait stands with no run, and the run started once a task turns up
 /// joins it. Where not, the run may sit in any seat, free or not. **The run sits in the seat of the role
-/// the task handed was filed under** where that seat may be taken, so it takes that task.
+/// the task handed was filed under** where that seat may be taken, so it takes that task. **It starts
+/// where the round of its seat's role starts** ([`start_of`], `AMB-D-1123`), and is copied down marking
+/// that spot ([`copy_down`]).
 #[allow(clippy::too_many_arguments)]
 fn launch_asking(
     tx: &WriteTx<'_>,
@@ -3337,19 +3420,8 @@ fn launch_asking(
         true => Some(join_launch(tx, &automation, &pic, by.by)?.id),
         false => None,
     };
-    if may_wait {
-        if let Some(e) = entry_builtin(tx.conn(), &pic)? {
-            let waits = crate::ops::automation_builtin::waits_now(
-                tx.conn(),
-                automation.project_id,
-                &roles_of(&open),
-                e.builtin.as_deref(),
-                &e.cfg,
-            )?;
-            if waits {
-                return Ok(Started::Waits(Box::new(mark_waiting(tx, automation)?)));
-            }
-        }
+    if may_wait && waits_at_every_start(tx.conn(), automation.project_id, &pic, &open)? {
+        return Ok(Started::Waits(Box::new(mark_waiting(tx, automation)?)));
     }
     let role_id = match filed_under.and_then(|role| open.iter().find(|s| s.role_id == Some(role))) {
         Some(s) => s.role_id,
@@ -3378,7 +3450,7 @@ fn launch_asking(
         updated_at: now,
     };
     emit_create(tx, record::automation_run(&run))?;
-    copy_down(tx, run.id, &pic, version, by.default_agent, now)?;
+    copy_down(tx, run.id, &pic, version, role_id, by.default_agent, now)?;
     Ok(Started::Run(run))
 }
 
@@ -3472,9 +3544,11 @@ fn file_handed(
 /// **Copy every step of `automation` down onto the run** — [`snapshot`] for each step of each
 /// placement, at launch and again where a run paused before its next task is picked up (`AMB-D-1015`).
 ///
-/// **The entry's copy is written first**, so a run's copies fall into one run of rows per time they
-/// were taken, each starting at its entry ([`current_defs`]). The rows of an earlier copy are kept:
-/// the executions opened from them still point at them.
+/// **The copy of where the run starts is written first, and marked** ([`AutomationRunDef::entry`]) — the
+/// first step of the placement the round of `role_id`, the run's seat, starts at ([`start_of`]). So a
+/// run's copies fall into one run of rows per time they were taken, each starting at the spot the run
+/// starts at ([`current_defs`]). The rows of an earlier copy are kept: the executions opened from them
+/// still point at them.
 ///
 /// What is copied is `pic`, the definition the launch read ([`ReadsFrom`]), and every row of one copy
 /// records the saved version it is — `version`, `None` for the draft. **What is copied of each placement
@@ -3485,17 +3559,19 @@ fn copy_down(
     run_id: i64,
     pic: &Picture,
     version: Option<i64>,
+    role_id: Option<i64>,
     default_agent: Option<&str>,
     now: Timestamp,
 ) -> Result<()> {
     let defs = defs_of(tx.conn(), &pic.placements)?;
     let by_id: BTreeMap<i64, &AutomationPlacement> = pic.placements.iter().map(|p| (p.id, p)).collect();
     let roles = roles_by_placement(pic, &by_id, &defs);
+    let start = start_of(pic, role_id).map(|p| p.id);
     let mut steps = Vec::new();
     for placement in &pic.placements {
         let def = &defs[&placement.id];
         for step in steps_opened_by(def) {
-            let entry = pic.entry_placement_id == Some(placement.id) && def.entry_step_id == Some(step.id);
+            let entry = start == Some(placement.id) && def.entry_step_id == Some(step.id);
             steps.push((placement, step, entry));
         }
     }
@@ -3510,7 +3586,8 @@ fn copy_down(
 }
 
 /// **Copy the automation down onto a run paused before its next task, afresh** (`AMB-D-1015`), and
-/// answer the copy of its entry — where the run picks up.
+/// answer the copy of where the round of its seat's role starts ([`entry_def`]) — where the run picks
+/// up.
 ///
 /// It reads the saved definition, as a launch does ([`ReadsFrom::Saved`]). The new copy is checked
 /// first, as a launch checks it ([`checked_saved`]): an archived automation, a stopped one, or one
@@ -3523,7 +3600,7 @@ pub(crate) fn copy_down_again(
     default_agent: Option<&str>,
 ) -> Result<AutomationRunDef> {
     let (pic, version) = checked_saved(tx.conn(), run, startable, models, default_agent)?;
-    copy_down(tx, run.id, &pic, version, default_agent, Timestamp::now())?;
+    copy_down(tx, run.id, &pic, version, run.role_id, default_agent, Timestamp::now())?;
     entry_def(tx.conn(), run.id)?.ok_or_else(|| {
         Error::invalid(format!("run '{}' was copied down with no step to start at", run.id))
     })
@@ -3531,7 +3608,8 @@ pub(crate) fn copy_down_again(
 
 /// **The automation's newest saved definition, checked as a launch checks it** ([`launch_asking`]) — for
 /// a run about to be copied down afresh. An archived automation, a stopped one, or one [`check`] finds
-/// anything unmet in, is refused.
+/// anything unmet in, is refused, and so is one where the role the run is a seat of no longer starts its
+/// round anywhere ([`start_of`]): the run would have nowhere to start.
 fn checked_saved(
     conn: &Connection,
     run: &AutomationRun,
@@ -3563,31 +3641,40 @@ fn checked_saved(
     if !unmet.is_empty() {
         return Err(not_ready("launch", &automation.name, &unmet));
     }
+    if start_of(&pic, run.role_id).is_none() {
+        return Err(Error::invalid(format!(
+            "automation '{}' no longer says where the round of the role run '{}' sits in starts, so \
+             the run has nowhere to start its next round",
+            automation.name, run.id
+        )));
+    }
     Ok((pic, version))
 }
 
 /// **What [`take_up_newer`] did to a run.**
 #[derive(Clone, Debug)]
 pub enum TakenUp {
-    /// Nothing: the run is not standing at its entry, or nothing newer than its copy has been saved.
+    /// Nothing: the run is not standing where its round starts, or nothing newer than its copy has been
+    /// saved.
     Same,
-    /// The run was copied down afresh from the newer version, and starts at this, the new copy's entry.
-    /// What was waiting to open the old entry is stale.
+    /// The run was copied down afresh from the newer version, and starts at this, the new copy of where
+    /// its round starts. What was waiting to open the old one is stale.
     Copied(Box<AutomationRunDef>),
     /// The newer version did not pass, so the run failed with
     /// [`AutomationStoppedReason::FailedCheck`]; this is the run as it ended.
     Failed(AutomationRun),
 }
 
-/// **Copy a run standing at its entry down afresh, where the automation has been saved since its copy
-/// was taken** (`AMB-D-1015`) — asked before the entry is opened, so a run starting its next round
-/// ([`goes_round`]), one a line brings back to its entry, or one waiting there for a task to turn up,
-/// starts from the newest saved definition.
+/// **Copy a run standing where its round starts down afresh, where the automation has been saved since
+/// its copy was taken** (`AMB-D-1015`) — asked before that step is opened, so a run starting its next
+/// round ([`goes_round`]), one a line brings back to where its round starts, or one waiting there for a
+/// task to turn up, starts from the newest saved definition.
 ///
-/// - **Standing at its entry** is a `running` run with nothing under way whose next step is the copy of
-///   the entry ([`next_def`]). Anywhere else the run may be partway through a task, and is left alone.
-/// - **Newer** is a saved version later than the one its entry's copy was taken from. A copy taken from
-///   the draft (`None`) is older than any saved version.
+/// - **Standing where its round starts** is a `running` run with nothing under way whose next step is
+///   the copy of where the round of its seat's role starts ([`next_def`], [`entry_def`]). Anywhere else
+///   the run may be partway through a task, and is left alone.
+/// - **Newer** is a saved version later than the one that copy was taken from. A copy taken from the
+///   draft (`None`) is older than any saved version.
 /// - **The newer version is checked as a launch checks it** ([`checked_saved`]). A refusal fails the
 ///   run, with what it did not pass kept on it ([`AutomationRun::stopped_detail`]), and nothing is
 ///   copied. The run holds no task here, so there is nothing to hand back (`AMB-D-967`).
@@ -3602,7 +3689,7 @@ pub fn take_up_newer(
 ) -> Result<TakenUp> {
     let run = read::automation_run(tx.conn(), run_id)?.ok_or_else(|| not_found("run", run_id))?;
     let Waiting::Step(standing) = next_def(tx.conn(), run_id)? else { return Ok(TakenUp::Same) };
-    if !standing.entry {
+    if entry_def(tx.conn(), run_id)?.is_none_or(|start| start.id != standing.id) {
         return Ok(TakenUp::Same);
     }
     let Some(saved) = read::automation_version_latest(tx.conn(), run.automation_id)? else {
@@ -3613,7 +3700,7 @@ pub fn take_up_newer(
     }
     let refused = match checked_saved(tx.conn(), &run, startable, models, default_agent) {
         Ok((pic, version)) => {
-            copy_down(tx, run.id, &pic, version, default_agent, Timestamp::now())?;
+            copy_down(tx, run.id, &pic, version, run.role_id, default_agent, Timestamp::now())?;
             let entry = entry_def(tx.conn(), run.id)?.ok_or_else(|| {
                 Error::invalid(format!("run '{}' was copied down with no step to start at", run.id))
             })?;
@@ -3901,10 +3988,12 @@ fn wired_into(
 }
 
 /// **The copies a run reads from now** — the last time the automation was copied down onto it
-/// ([`copy_down`]): from its last entry copy on.
+/// ([`copy_down`]): from the last copy marked as where it starts ([`AutomationRunDef::entry`]) on. The
+/// mark only says where one time it was copied down begins; where the run starts is read off its role
+/// ([`entry_def`]).
 ///
-/// A run carrying a single entry copy reads all of its copies. That is every run copied down once, and
-/// it covers one launched before the entry's copy was written first.
+/// A run carrying a single marked copy reads all of its copies. That is every run copied down once, and
+/// it covers one launched before the marked copy was written first.
 pub(crate) fn current_defs(conn: &Connection, run_id: i64) -> Result<Vec<AutomationRunDef>> {
     let mut defs = read::automation_run_defs_of(conn, run_id)?;
     if defs.iter().filter(|def| def.entry).count() > 1 {
@@ -3927,14 +4016,36 @@ fn copy_of(
         .find(|def| def.placement_id == Some(placement_id) && def.step_id == Some(step_id)))
 }
 
-/// **The spot a run starts at** — the copy marked as the step the automation's entry placement opened
-/// first ([`AutomationRunDef::entry`]), the last time it was copied down, or `None` where the run
-/// carries no such copy.
+/// **The spot a run starts its rounds at** (`AMB-D-1123`), the last time it was copied down — the copy
+/// of the step the round of its seat's role starts at ([`AutomationRun::role_id`],
+/// [`AutomationRunDef::roles`]), or `None` where the run carries no such copy.
+///
+/// A run in the seats of no role starts where its copy was marked to ([`AutomationRunDef::entry`]): the
+/// picture's entry ([`start_of`]).
 pub fn entry_def(conn: &Connection, run_id: i64) -> Result<Option<AutomationRunDef>> {
-    if read::automation_run(conn, run_id)?.is_none() {
-        return Err(not_found("run", run_id));
+    let run = read::automation_run(conn, run_id)?.ok_or_else(|| not_found("run", run_id))?;
+    let defs = current_defs(conn, run_id)?;
+    Ok(match run.role_id {
+        Some(role) => defs.into_iter().find(|def| def.role_ids().contains(&role)),
+        None => defs.into_iter().find(|def| def.entry),
+    })
+}
+
+/// **Whether a run starts its rounds by taking a task** — where its round starts ([`entry_def`]) is the
+/// built-in that takes one. Only such a run has a next task to pause before (`AMB-D-1019`), and goes
+/// round ([`goes_round`]).
+pub(crate) fn starts_by_taking_a_task(conn: &Connection, run_id: i64) -> Result<bool> {
+    Ok(entry_def(conn, run_id)?.is_some_and(|start| crate::ops::automation_stop::takes_a_task(&start)))
+}
+
+/// **Whether `def` is where this run takes its next task** — the copy of where its round starts
+/// ([`entry_def`]), being the built-in that takes one. Where a pause before the next task takes hold
+/// (`AMB-D-1019`), and where a seat still to go is let go.
+pub(crate) fn takes_its_task_at(conn: &Connection, run_id: i64, def: &AutomationRunDef) -> Result<bool> {
+    if !crate::ops::automation_stop::takes_a_task(def) {
+        return Ok(false);
     }
-    Ok(current_defs(conn, run_id)?.into_iter().find(|def| def.entry))
+    Ok(entry_def(conn, run_id)?.is_some_and(|start| start.id == def.id))
 }
 
 /// **What follows one way out of one step**, as the step's copy says ([`RunDefExit::then`]) — resolved
@@ -3989,8 +4100,9 @@ pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64
 
 /// **Where the built-in that takes a task goes once it has taken one, in a run whose copies start roles'
 /// rounds** — on to the copy the round's role starts at ([`AutomationRunDef::roles`]), whatever line is
-/// drawn from it. `None` for any other way out, and for every way out of a run whose automation defines
-/// no role that names where its round starts: that run walks its picture as it is drawn.
+/// drawn from it. `None` for any other way out, for every way out of a run whose automation defines no
+/// role that names where its round starts, and where the built-in is itself where the round's role
+/// starts (`AMB-D-1123`): those walk the picture as it is drawn.
 ///
 /// The role is the one the round was taken under ([`crate::model::AutomationRunTask::role_id`]), which is
 /// the run's own: only a task of that role is taken ([`roles_started`]). A round with none has nowhere to
@@ -4016,6 +4128,9 @@ fn by_role(conn: &Connection, def: &AutomationRunDef, taken: &RunDefExit) -> Res
     let Some(next) = role.and_then(|role| defs.into_iter().find(|d| d.role_ids().contains(&role))) else {
         return Ok(Some(Onward::Nowhere));
     };
+    if next.id == def.id {
+        return Ok(None);
+    }
     let line = RunDefLine {
         edge_id: 0,
         picture: AutomationPictureOwner::Automation,
@@ -4107,9 +4222,9 @@ pub enum Waiting {
 /// A run that is `running` is either carrying a step out or standing between two of them, and only the
 /// second is anybody's to act on. So this answers a step in exactly two cases — a run that has just
 /// been launched and has no execution yet, or was copied down again as it was picked up and has none
-/// from the new copy, where the answer is the entry ([`entry_def`]); and a run whose last execution has
-/// reported, where the answer is read off the way out it took — the entry again where that way out
-/// ended one round ([`goes_round`]).
+/// from the new copy, where the answer is where its round starts ([`entry_def`]); and a run whose last
+/// execution has reported, where the answer is read off the way out it took — where its round starts
+/// again where that way out ended one round ([`goes_round`]).
 ///
 /// **It derives rather than remembers**, because the report already wrote down everything it takes:
 /// the execution carries the way out, and the step's copy says what follows one
@@ -4135,7 +4250,7 @@ pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
         return Ok(Waiting::Nothing);
     }
     // A step opened from an earlier copy is behind a run copied down again as it was picked up
-    // (`AMB-D-1015`), which starts afresh at the new copy's entry.
+    // (`AMB-D-1015`), which starts afresh where its round starts on the new copy.
     if current_defs(conn, run_id)?.first().is_some_and(|first| last.run_def_id < first.id) {
         return Ok(entry_def(conn, run_id)?
             .map_or(Waiting::NoWayOn, |def| Waiting::Step(Box::new(def))));
@@ -4148,8 +4263,8 @@ pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
     };
     Ok(match onward(conn, &from, last.exit_id)? {
         Onward::Go { def, .. } => Waiting::Step(def),
-        // A round that came to the end of the picture is over, and the run goes round again at its
-        // entry (`goes_round`) — the report that took the way out left it `running` for that.
+        // A round that came to the end of the picture is over, and the run goes round again where its
+        // round starts (`goes_round`) — the report that took the way out left it `running` for that.
         Onward::Done if goes_round(conn, run_id, &last)? => {
             entry_def(conn, run_id)?.map_or(Waiting::NoWayOn, |def| Waiting::Step(Box::new(def)))
         }
@@ -4158,17 +4273,18 @@ pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
 }
 
 /// **Whether the end of the picture is the end of one round rather than of the run** — one task a
-/// round, each round walking the picture from its entry to its end.
+/// round, each round walking the picture from where the round of the run's seat starts to its end.
 ///
-/// It is, where the run's entry, as its newest copy marks it, is the built-in that takes a task, and
-/// the step that came to the end belongs to a stretch that held one ([`AutomationRunTask`]): the entry
-/// then takes the next task, and the round after starts there. **A round never goes without a task.**
-/// A step that went looking for one and found none keeps no stretch, so a run whose entry finds nothing
-/// to take comes to its end; and a run whose entry files a task, or is anything else, walks the picture
-/// once — what it was handed at launch is one task's (`AMB-D-971`).
+/// It is, where the run's round, as its newest copy holds it, starts at the built-in that takes a task
+/// ([`starts_by_taking_a_task`]), and the step that came to the end belongs to a stretch that held one
+/// ([`AutomationRunTask`]): that built-in then takes the next task, and the round after starts there.
+/// **A round never goes without a task.** A step that went looking for one and found none keeps no
+/// stretch, so a run that finds nothing to take where its round starts comes to its end; and a run
+/// whose round starts by filing a task, or with anything else, walks the picture once — what it was
+/// handed at launch is one task's (`AMB-D-971`).
 ///
 /// **Only a round whose task was closed goes round.** A task put off or handed back is `todo` again,
-/// and the entry could take the very same one straight back, round after round; so a round that let
+/// and the start could take the very same one straight back, round after round; so a round that let
 /// its task go without closing it ends the run at the end of the picture, as before.
 ///
 /// [`AutomationRunTask`]: crate::model::AutomationRunTask
@@ -4184,7 +4300,7 @@ pub(crate) fn goes_round(
     if !read::task_status(conn, task_id)?.is_some_and(|s| s.is_closed()) {
         return Ok(false);
     }
-    Ok(entry_def(conn, run_id)?.is_some_and(|entry| crate::ops::automation_stop::takes_a_task(&entry)))
+    starts_by_taking_a_task(conn, run_id)
 }
 
 /// **Whether this run stands before a built-in that would wait** for something to turn up
@@ -4239,7 +4355,7 @@ pub fn waits_for_room(conn: &Connection, run_id: i64) -> Result<Option<ForRoom>>
 /// already inside. Nothing is remembered for it. **Who is inside** is read off each other run's last
 /// step: one under way in the action, or one that left by a line that stays inside it. A run paused
 /// there still holds the action, since picking it up goes on inside; one paused before its next task
-/// does not, since picking it up starts afresh at its entry. Whether that other run's copy takes one
+/// does not, since picking it up starts afresh where its round starts. Whether that other run's copy takes one
 /// run at a time does not matter: it is in the same action.
 ///
 /// **Arrival order** is when each run came to stand before the action ([`arrived`]). A run waiting on
@@ -4294,7 +4410,7 @@ pub(crate) fn room_for(conn: &Connection, run: &AutomationRun, def: &AutomationR
 /// **The copy of the step whose action this run is inside**, or `None` where it stands between two
 /// actions. Inside is its last step still under way, or left by a line that stays inside the action
 /// — the run is going on to another of the action's steps. A step from before the run was copied down
-/// again is behind it: the run starts afresh at its entry.
+/// again is behind it: the run starts afresh where its round starts.
 fn action_held_by(conn: &Connection, run_id: i64) -> Result<Option<AutomationRunDef>> {
     let Some(last) = read::automation_run_steps_of(conn, run_id)?.pop() else { return Ok(None) };
     if current_defs(conn, run_id)?.first().is_some_and(|first| last.run_def_id < first.id) {

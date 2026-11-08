@@ -528,8 +528,9 @@ fn whats_next(
 ///   picking it up copies the automation down afresh ([`automation_stop::resume`]). So does a person
 ///   having stopped the automation ([`crate::model::Automation::stopped`]): the next round is not
 ///   started.
-/// - **Otherwise the next step is the entry, as the run's newest copy marks it.** Nothing is copied
-///   down here: what has been saved since is taken up as the entry is about to be opened
+/// - **Otherwise the next step is where the round of the run's seat starts, on its newest copy**
+///   ([`automation_run::entry_def`]). Nothing is copied down here: what has been saved since is taken
+///   up as that step is about to be opened
 ///   ([`automation_run::take_up_newer`]), so a newer definition starts with the next round and never
 ///   in the middle of one (`AMB-D-1015`).
 fn round_over(tx: &WriteTx<'_>, run: AutomationRun) -> Result<Next> {

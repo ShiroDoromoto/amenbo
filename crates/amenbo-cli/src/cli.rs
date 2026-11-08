@@ -2632,8 +2632,8 @@ pub enum AutomationCmd {
         #[arg(long = "dim", value_name = "AXIS=VALUE")]
         dim: Vec<String>,
     },
-    /// Stop an automation waiting for a task: the app no longer starts a run of it once a task its
-    /// take_task entry looks for turns up. One that is not waiting is answered as it stands
+    /// Stop an automation waiting for a task: the app no longer starts a run of it once a task the
+    /// take_task where a role's round starts looks for turns up. One that is not waiting is answered as it stands
     StopWaiting {
         /// automation id
         id: i64,
@@ -2674,7 +2674,7 @@ pub enum AutomationCmd {
     /// Pick a paused run up again. One paused at the end of an action goes on from the copy it
     /// launched with, from the way out the step before it left through; one paused with
     /// `pause --before-next-task` takes the automation's newest saved version (the draft, for one never
-    /// saved) and starts over from its entry, refused if `start` would refuse it
+    /// saved) and starts over where the round of its role starts, refused if `start` would refuse it
     Resume {
         /// run id
         run: i64,

@@ -369,23 +369,10 @@ mod tests {
         (automation, spot)
     }
 
-    /// Launch it and open the entry step, which the built-in carries out on the spot.
+    /// Launch it and open the step it starts at, which the built-in carries out on the spot.
     fn carried(tx: &WriteTx<'_>, automation: &Automation) -> (AutomationRun, i64, Next) {
-        let claude = ["claude".to_string()];
-        let by = Launcher {
-            default_agent: None,
-            startable: Some(&claude),
-            models: nothing_asked(),
-            workspace_open: Some(true),
-            by: Some(ActorKind::Ai),
-        };
-        let run = launch(tx, automation.id, &by).expect("launch");
-        let entry = read::automation_run_defs_of(tx.conn(), run.id)
-            .expect("defs")
-            .into_iter()
-            .find(|d| d.builtin.as_deref() == Some("take_task"))
-            .expect("the built-in's copy");
-        match open(tx, run.id, entry.id, Some(&[])).expect("open") {
+        let run = launched(tx, automation);
+        match open_entry(tx, &run) {
             Opened::Carried { run_step_id, next } => (run, run_step_id, next),
             other => panic!("a built-in is carried out, not {other:?}"),
         }
@@ -1280,25 +1267,30 @@ mod tests {
         );
     }
 
-    /// An automation with two roles, each starting its round at an agent's step that goes on to closing
-    /// the task. Nothing is drawn from the way out that takes a task: where it goes is the task's role.
+    /// An automation with two roles, each starting its round at a built-in that takes a task of its own
+    /// (`AMB-D-1123`), which goes on to an agent's step that goes on to closing the task. Answers each
+    /// role with the agent's step its round goes on to.
     fn by_role(tx: &WriteTx<'_>, project: i64) -> (Automation, [(i64, AutomationPlacement); 2]) {
         let automation =
             automation::add(tx, project, NewAutomation { name: "roles".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("automation");
         let written = action(tx, "take_task").expect("the built-in's action");
-        let spot = automation::placement_add(tx, automation.id, written.id).expect("place it");
         let on = AutomationPictureOwner::Automation;
-        automation::edge_add(tx, on, spot.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("closes");
         let mut roles = Vec::new();
+        let mut first = None;
         for name in ["実装", "レビュー"] {
+            let take = automation::placement_add(tx, automation.id, written.id).expect("place it");
+            first.get_or_insert(take.id);
+            automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("closes");
             let (_, work) = mk_placed(tx, &automation, name, "work on it", "claude");
+            automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("onward");
             crate::ops::test_support::mk_closed_after(tx, &automation, work.id, None);
-            let new = NewRole { name: name.into(), entry_placement_id: Some(work.id), ..NewRole::default() };
+            let new = NewRole { name: name.into(), entry_placement_id: Some(take.id), ..NewRole::default() };
             let role = automation::role_add(tx, automation.id, new).expect("a role");
             roles.push((role.id, work));
         }
-        let automation = automation::set_entry(tx, automation.id, Some(spot.id)).expect("entry");
+        // The launch check still asks for an entry; a run starts where its role's round does all the same.
+        let automation = automation::set_entry(tx, automation.id, first).expect("entry");
         let reviewer = roles.pop().expect("the reviewer");
         let builder = roles.pop().expect("the builder");
         (automation, [builder, reviewer])
@@ -1308,16 +1300,17 @@ mod tests {
         task::update(tx, task, TaskPatch { role_id: Some(role), ..Default::default() }).expect("the role");
     }
 
-    /// **A round goes on to where its task's role starts**, with no line drawn from the way out that took
-    /// it, and is worked under that role. A task with no role is not taken, however high it stands.
+    /// **A round starts where its seat's role starts its round**, takes a task of that role there, and goes
+    /// on down the line drawn from it (`AMB-D-1123`). A task with no role is not taken, however high it
+    /// stands.
     #[test]
-    fn a_round_goes_on_to_where_its_tasks_role_starts() {
+    fn a_round_starts_by_taking_a_task_where_its_role_starts() {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let (automation, [_, (reviewer, review)]) = by_role(tx, project);
             let claude = ["claude".to_string()];
             let unmet = check(tx.conn(), automation.id, Some(&claude), nothing_asked(), None).expect("check");
-            assert!(unmet.is_empty(), "the way out that takes a task needs no line: {unmet:?}");
+            assert!(unmet.is_empty(), "{unmet:?}");
 
             let roleless = for_ai(tx, "no role", project, Some(Priority::High));
             let reviewed = for_ai(tx, "to review", project, None);
@@ -1348,7 +1341,7 @@ mod tests {
     }
 
     /// **Where a role starts is checked before a launch**, as a placement a line reaches is: nothing
-    /// draws a line to it, and the way out that takes a task leads there all the same.
+    /// draws a line to it, and a run of the role starts there all the same.
     #[test]
     fn where_a_role_starts_is_checked_as_a_placement_a_run_reaches() {
         with_tx(|tx| {

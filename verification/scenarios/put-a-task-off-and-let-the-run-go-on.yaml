@@ -4,13 +4,16 @@
 #
 # The built-in that puts the task off is the fourth way. The task goes back to `todo` on whoever it was
 # on — the AI here — with the step's report on it, and the run goes on to whatever the picture draws
-# next: here, the end of the run.
+# next: here, the end of the run. The role's seat does not stop there: it goes round again, and its
+# next run's take finds the same task first, since nothing here makes it wait for another. Keeping it
+# from being taken again is a dependency's job, not the put-off's.
 id: put-a-task-off-and-let-the-run-go-on
-title: A run puts its task off, still on the AI, and goes on without stopping
+title: A run puts its task off, still on the AI, and the seat's next round takes it again
 description: >
   Start a run whose built-in takes a task, and report the step after it done into the built-in that
-  puts the task off, which ends the run. The task is `todo` again, still assigned to the AI, with the
-  step's report on its timeline, and the run has not failed: it is on the history tab as completed.
+  puts the task off, which ends the run. The run has not failed: it is on the history tab as completed.
+  The task stays on the AI with the step's report on its timeline, and since nothing makes it wait,
+  the seat's next round takes it again, so it is in progress once more.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
 
@@ -19,8 +22,8 @@ given:
   - { type: action, domain: task, op: finish-creating, with: { target: seed } }
 
   # The same one-step action as hand-a-task-back-to-a-person-and-let-the-run-go-on, after the built-in
-  # that takes the task. What follows it is the put-off, which ends the run: going round to the take would
-  # take the same task again, since nothing here makes it wait for another.
+  # that takes the task. What follows it is the put-off, which ends the run. The seat then starts its
+  # next round at the take, which takes the same task again, since nothing here makes it wait for another.
   - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
   - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: work the task the run took }, as: claim }
   - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
@@ -82,14 +85,15 @@ steps_gui:
       exit: got one
       report: this task waits for the fix on main
 
-  # Back to `todo`, and still on the AI, so a run takes it again once nothing holds it back.
+  # Put back on the AI, and taken again at once: the seat's next round finds it first, since nothing
+  # makes it wait for another.
   - type: assert
     domain: task
     op: field
     with:
       target: seed
       field: status
-      equals: todo
+      equals: in_progress
 
   - type: assert
     domain: task

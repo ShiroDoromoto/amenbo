@@ -1,16 +1,15 @@
 # Pausing one run waits for the action under way to end, and an action can be half of one task. The
 # other pause stops a run at the seam between tasks: it goes on until it next comes to the built-in
-# that takes one, and pauses there with no task in hand. A run that takes no task has no such seam, so
-# asking it is refused and it goes on to its end.
+# that takes one, and pauses there with no task in hand. Every role starts its round at that built-in,
+# so every run has the seam.
 #
 # A run started at a terminal opens no step, so neither pause settles here: the run stays `running`
-# with the request on it. What the road reads is which run carries it.
+# with the request on it. What the road reads is that the run carries it.
 id: ask-a-run-to-pause-before-its-next-task
-title: A run that takes tasks is asked to pause before its next task, and one that takes none is refused
+title: A run that takes tasks is asked to pause before its next task, and carries the request
 description: >
-  Start two runs, one of an automation that takes tasks and one of an automation that does not. Ask
-  each to pause before its next task. The run that takes tasks carries the request and is still
-  running; asking the other is refused, and it carries none.
+  Start a run of an automation that takes tasks and ask it to pause before its next task. The run
+  carries the request and is still running.
 given:
   # Two rather than one for `hold-a-run-and-let-it-go-again`'s reason: the premise cannot stand up a
   # row shorter than two.
@@ -25,22 +24,11 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
 
-  # The automation that takes none: a fetch, and the end whatever it brings back. What it looks at is
-  # answered on the road: answering is a move a road makes.
-  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that takes none" }, as: plain }
-  - { type: action, domain: automation, op: place-add, with: { target: plain, builtin: fetch }, as: at_fetch }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_fetch, exit: 取ってきた } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_fetch, exit: 見つからない } }
-
 steps_cli:
   # A run's steps are opened by the app, so a run is started with one up on the store.
   - { type: action, domain: store, op: app-up }
-
-  - { type: action, domain: automation, op: cfg-set, with: { target: at_fetch, name: 形式, choice: コマンド } }
-  - { type: action, domain: automation, op: cfg-set, with: { target: at_fetch, name: 見に行く先, text: "echo nothing to see" } }
   # A run starts from the newest saved version, so it is saved first.
   - { type: action, domain: automation, op: save, with: { target: taking } }
-  - { type: action, domain: automation, op: save, with: { target: plain } }
 
   - type: action
     domain: automation
@@ -48,13 +36,6 @@ steps_cli:
     with:
       target: taking
     as: taking_run
-
-  - type: action
-    domain: automation
-    op: start
-    with:
-      target: plain
-    as: plain_run
 
   - type: assert
     domain: automation
@@ -79,20 +60,4 @@ steps_cli:
       target: taking_run
       status: running
       pause_before_next_task: true
-      pause_requested: false
-
-  - type: action
-    domain: automation
-    op: pause-before-next-task
-    with:
-      target: plain_run
-      refused: invalid_value
-
-  - type: assert
-    domain: automation
-    op: run
-    with:
-      target: plain_run
-      status: running
-      pause_before_next_task: false
       pause_requested: false

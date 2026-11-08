@@ -130,6 +130,7 @@ import {
   discardAutomation,
   exportAutomation,
   saveAutomation,
+  startAutomationRoleAtTakeTask,
   useAutomation,
   useLaunchCheck,
 } from "../core/automations";
@@ -140,14 +141,13 @@ import { builtinWord } from "../core/builtinWords";
 import { Icon } from "../components/Icon";
 import type { AutomationDetailDto, AutomationLaunchBlockDto } from "../bindings/bindings";
 
-/** Where the library's pick will go: after which way out of which box, or first of all. */
+/** Where the library's pick will go: after which way out of which box. */
 function whereTo(automation: AutomationDetailDto | null, target: PlaceTarget): WhereTo {
   if ("fromId" in target) {
     const from = automation?.placements.find((one) => one.id === target.fromId);
     const box = from === undefined ? "" : builtinWord(from.builtin, from.name);
     return { box, exit: target.exitName, builtin: from?.builtin };
   }
-  if (!("edgeId" in target)) return null;
   const edge = automation?.edges.find((one) => one.id === target.edgeId);
   const from = automation?.placements.find((one) => one.id === edge?.fromId);
   const to = automation?.placements.find((one) => one.id === edge?.toId);
@@ -253,10 +253,7 @@ export function AutomationBuildScreen({
   );
   // Where the dialog that makes an action on the spot is about to put it, while it is open.
   // The dialog's target, and the name the library's search box held when it was pressed.
-  const [making, setMaking] = useState<{
-    target: Exclude<PlaceTarget, { automationId: number }>;
-    name: string;
-  } | null>(null);
+  const [making, setMaking] = useState<{ target: PlaceTarget; name: string } | null>(null);
   // The action standing over the picture, while one does, and the step inside it to open pressed.
   const [over, setOver] = useState<number | null>(null);
   const [overStep, setOverStep] = useState<number | undefined>(undefined);
@@ -265,8 +262,8 @@ export function AutomationBuildScreen({
     setOver(actionId);
   };
   // What core put on for the reader while this screen was open — the built-in that closes a filed
-  // task, after the first action (`AMB-T-5797`) — marked on the picture so it is not taken for the
-  // reader's own.
+  // task, after the first action (`AMB-T-5797`), and the built-in that takes a task, put on as a
+  // role's start (`AMB-D-1123`) — marked on the picture so it is not taken for the reader's own.
   const [forYou, setForYou] = useState<ReadonlySet<number>>(new Set());
   const putForYou = (placed: number[]) => {
     if (placed.length > 0) setForYou((was) => new Set([...was, ...placed]));
@@ -318,6 +315,17 @@ export function AutomationBuildScreen({
       ? automation?.placements.find((one) => one.id === showing.id) ?? null
       : null;
   const close = () => setShowing(null);
+  // A role that starts nowhere is given its start with one press (`AMB-D-1123`): each role takes from
+  // its own waiting tasks, so the built-in that takes a task is the only start there is to pick. What
+  // core refused is kept with the role it was pressed for, and goes once another role is picked.
+  const [startRefused, setStartRefused] = useState<{ role: number; text: string } | null>(null);
+  const startRole = (roleId: number) => {
+    setStartRefused(null);
+    startAutomationRoleAtTakeTask(roleId).then(
+      putForYou,
+      (e: unknown) => setStartRefused({ role: roleId, text: errText(e) }),
+    );
+  };
   const saved = useSaved(
     automation === null ? null : { saved: automation.saved, unsaved: automation.unsaved },
   );
@@ -563,14 +571,13 @@ export function AutomationBuildScreen({
                     onInsert={(edgeId) => setShowing({ kind: "library", target: { edgeId } })}
                     onOpenExit={({ boxId, exitName }) => setShowing({ kind: "library", target: { fromId: boxId, exitName } })}
                   />
-                  {automation !== null && automation.placements.length === 0 && (
-                    <button
-                      type="button"
-                      className="btn btn--primary"
-                      onClick={() => setShowing({ kind: "library", target: { automationId: automation.id } })}
-                    >
-                      {t("auto.pic.first")}
+                  {role !== undefined && role.entryPlacementId === undefined && (
+                    <button type="button" className="btn btn--primary" onClick={() => startRole(role.id)}>
+                      {tf("auto.pic.roleStart", { name: t("auto.bi.takeTask.name") })}
                     </button>
+                  )}
+                  {role !== undefined && startRefused?.role === role.id && (
+                    <span className="actpanel__refused" role="alert">{startRefused.text}</span>
                   )}
                 </div>
                 {automation !== null && role !== undefined && (
@@ -616,12 +623,7 @@ export function AutomationBuildScreen({
               putForYou(placed);
               close();
             }}
-            onMake={(name) => {
-              // The library offers making one only after a box: a picture with nothing on it takes
-              // one of the built-ins a run starts at (`AMB-D-977`).
-              const target = showing.target;
-              if (!("automationId" in target)) setMaking({ target, name });
-            }}
+            onMake={(name) => setMaking({ target: showing.target, name })}
           />
         </Panel>
       )}

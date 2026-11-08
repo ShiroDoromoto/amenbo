@@ -1,5 +1,5 @@
-// **The library, opened in the build screen's panel** — what the `+` on a line, and the press on an
-// empty picture, put in front of the reader (`AMB-T-5360`).
+// **The library, opened in the build screen's panel** — what the `+` on a line, and on a way out that
+// says nothing yet, put in front of the reader (`AMB-T-5360`).
 //
 // **It is a panel and not a dialog**, because picking an action is done while looking at where it
 // goes: a dialog over the picture would hide the very line it is about to be put on. The one thing
@@ -14,8 +14,8 @@
 // **The built-ins come third, under their own head** (`AMB-D-964`): Amenbo's own actions, listed from
 // the code's definition, since a built-in's library action is only written the first time one is
 // placed. Picking one is named by its key, and its library action is written on the way
-// (`placeAutomationBuiltin`, `insertAutomationBuiltin`). The head is left out while the build carries
-// none.
+// (`insertAutomationBuiltin`, `insertAutomationBuiltinAtExit`). The head is left out while the build
+// carries none.
 //
 // **A row opens in place, with the button that places it.** What a reader weighs before placing is
 // what the action takes in and how it leaves, and that is read right under the row pressed rather
@@ -40,23 +40,14 @@
 // (`AMB-T-5797`): core puts it on after the action's done way out, and the placements it put on come
 // back through `onPlaced` for the picture to mark.
 //
-// **On an empty picture only the built-ins a run starts at are offered** (`AMB-D-977`): the first
-// placement is where a run begins, and core refuses anything else there. So the panel holds the three
-// of them in the order core offers them, and nothing else — no actions of one's own, no search, and no
-// row that makes a new action.
-//
-// **There, a row is named by the reader's situation, and the built-in's own name sits under it**
-// (`AMB-T-5794`): "take a task", "file a task" and "fetch" say what the built-in does, not which of
-// them is the one that starts from something typed at launch. The built-in's name stays, small, since
-// it is what the picture calls the placement once it is there.
+// **A role's start is not picked here** (`AMB-D-1123`): each role takes from its own waiting tasks, so
+// the built-in that takes a task is its only start, and the build screen puts it on with one press.
 import { useState } from "react";
 import {
-  ENTRY_BUILTINS,
   insertAutomationAction,
   insertAutomationActionAtExit,
   insertAutomationBuiltin,
   insertAutomationBuiltinAtExit,
-  placeAutomationBuiltin,
   useAutomationAction,
   useAutomationActions,
   useAutomationBuiltins,
@@ -79,14 +70,6 @@ import type {
 
 /** The built-in that splits by an axis (`amenbo_core::ops::automation_builtin_split::SPLIT_BY_DIM`). */
 const SPLIT_BY_DIM = "split_by_dim";
-
-/** What an entry built-in is picked for, in the reader's words — the row's name on an empty picture. */
-function situation(key: string): string | undefined {
-  if (key === "take_task") return t("auto.lib.entry.takeTask");
-  if (key === "make_task") return t("auto.lib.entry.makeTask");
-  if (key === "fetch") return t("auto.lib.entry.fetch");
-  return undefined;
-}
 
 /**
  * **Which axis the built-in that splits by one splits by** — a pulldown of the axes a task holds one
@@ -121,20 +104,13 @@ function SplitAxis({
   );
 }
 
-/**
- * Where the picked action goes: onto a line, after a way out that says nothing yet, or onto a picture
- * with no line yet.
- */
-export type PlaceTarget =
-  | { edgeId: number }
-  | { fromId: number; exitName: string }
-  | { automationId: number };
+/** Where the picked action goes: onto a line, or after a way out that says nothing yet. */
+export type PlaceTarget = { edgeId: number } | { fromId: number; exitName: string };
 
 /** One target as a key, so that a panel opened on another spot is another panel. */
 export function placeKey(target: PlaceTarget): string {
   if ("edgeId" in target) return `e${target.edgeId}`;
-  if ("fromId" in target) return `x${target.fromId}:${target.exitName}`;
-  return "first";
+  return `x${target.fromId}:${target.exitName}`;
 }
 
 /**
@@ -210,7 +186,7 @@ export function AutomationLibraryPanel({
   target: PlaceTarget;
   /** Whose library is reached — this project's own and the device's. */
   projectId: number | null;
-  /** Where the placement will go: after which way out of which box, or first of all. */
+  /** Where the placement will go: after which way out of which box. */
   where: WhereTo;
   /** The action is on the picture; the panel has nothing left to show. `placed` is what core put on
    *  beside it for the reader. */
@@ -231,13 +207,9 @@ export function AutomationLibraryPanel({
   );
   const splitAxis = axes.find((dim) => dim.id === axis);
 
-  // The first placement is where a run begins, and only an entry built-in can stand there.
-  const first = "automationId" in target;
-
   // Core refuses an action another project's library holds, and a line that went away underneath;
   // the sentence it writes is what the panel draws, over the list the reader picked from.
   const place = (actionId: number) => {
-    if ("automationId" in target) return;
     setRefused(null);
     const write =
       "edgeId" in target
@@ -251,9 +223,7 @@ export function AutomationLibraryPanel({
     const write =
       "edgeId" in target
         ? insertAutomationBuiltin(target.edgeId, key, on)
-        : "fromId" in target
-          ? insertAutomationBuiltinAtExit({ boxId: target.fromId, exitName: target.exitName }, key, on)
-          : placeAutomationBuiltin(target.automationId, key, on);
+        : insertAutomationBuiltinAtExit({ boxId: target.fromId, exitName: target.exitName }, key, on);
     void write.then(() => onPlaced([]), (e: unknown) => setRefused(errText(e)));
   };
 
@@ -264,10 +234,7 @@ export function AutomationLibraryPanel({
         one.global === global && (w === "" || `${one.name} ${one.note}`.toLowerCase().includes(w)),
     );
   // Searched in the words the reader sees, which are the screen's language and not the store's.
-  const offered = first
-    ? ENTRY_BUILTINS.flatMap((key) => builtins.filter((one) => one.key === key))
-    : builtins;
-  const shownBuiltins = offered
+  const shownBuiltins = builtins
     .map(builtinShown)
     .filter((one: AutomationBuiltinDto) => w === "" || `${one.name} ${one.does}`.toLowerCase().includes(w));
 
@@ -301,14 +268,7 @@ export function AutomationLibraryPanel({
           aria-expanded={picked === one.key}
           onClick={() => setPicked(picked === one.key ? null : one.key)}
         >
-          {first && situation(one.key) !== undefined ? (
-            <span className="autolib__name">
-              {situation(one.key)}
-              <span className="autolib__sub">{one.name}</span>
-            </span>
-          ) : (
-            <span className="autolib__name">{one.name}</span>
-          )}
+          <span className="autolib__name">{one.name}</span>
           <span className="autolib__meta">
             {usedCount(one.usedBy)}
           </span>
@@ -342,24 +302,22 @@ export function AutomationLibraryPanel({
       </div>
     ));
 
-  const mine = first || projectId === null ? [] : own(false);
-  const shared = first ? [] : own(true);
+  const mine = projectId === null ? [] : own(false);
+  const shared = own(true);
   const typed = words.trim();
 
   return (
     <>
       {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
       <WhereMark where={where} />
-      {!first && (
-        <input
-          {...asTyped}
-          type="search"
-          aria-label={t("auto.actions.search")}
-          placeholder={t("auto.actions.search")}
-          value={words}
-          onChange={(e) => setWords(e.target.value)}
-        />
-      )}
+      <input
+        {...asTyped}
+        type="search"
+        aria-label={t("auto.actions.search")}
+        placeholder={t("auto.actions.search")}
+        value={words}
+        onChange={(e) => setWords(e.target.value)}
+      />
       {mine.length > 0 && (
         <div className="autolib__group">
           <div className="autolib__head">
@@ -384,11 +342,9 @@ export function AutomationLibraryPanel({
           {builtinRows()}
         </div>
       )}
-      {!first && (
-        <button type="button" className="autolib__make" onClick={() => onMake(typed)}>
-          {typed === "" ? t("auto.lib.makeNew") : tf("auto.lib.makeNamed", { name: typed })}
-        </button>
-      )}
+      <button type="button" className="autolib__make" onClick={() => onMake(typed)}>
+        {typed === "" ? t("auto.lib.makeNew") : tf("auto.lib.makeNamed", { name: typed })}
+      </button>
     </>
   );
 }

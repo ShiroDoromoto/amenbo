@@ -13,12 +13,9 @@
 // And the built-ins (`AMB-D-964`): **they come third under their own head, and not at all while the
 // build carries none**; **a picked one shows what it does, and declares it the way an action of one's
 // own does**; and **placing one names it by
-// its key** through the built-in's own doors, on a line or on an empty picture; **the one that splits by
+// its key** through the built-in's own doors, on a line or after a way out; **the one that splits by
 // an axis asks which first**, offering only an axis a task holds one value of, opens with that axis's
 // values as its ways out, and is not placed until one is picked.
-//
-// And the empty picture (`AMB-D-977`): **it offers the built-ins a run starts at and nothing else**, in
-// the order core offers them — no action of one's own, no search box, no row that makes one.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -32,12 +29,10 @@ const hoisted = vi.hoisted(() => ({
   insertBuiltin: vi.fn((..._args: unknown[]) => Promise.resolve()),
   insertAtExit: vi.fn((..._args: unknown[]) => Promise.resolve([] as number[])),
   insertBuiltinAtExit: vi.fn((..._args: unknown[]) => Promise.resolve()),
-  placeBuiltin: vi.fn((..._args: unknown[]) => Promise.resolve()),
   dimensions: [] as DimensionDto[],
 }));
 
 vi.mock("../core/automations", () => ({
-  ENTRY_BUILTINS: ["take_task", "make_task", "fetch"],
   useAutomationActions: () => hoisted.actions,
   // What an opened row reads.
   useAutomationAction: () => hoisted.detail,
@@ -46,7 +41,6 @@ vi.mock("../core/automations", () => ({
   insertAutomationBuiltin: hoisted.insertBuiltin,
   insertAutomationActionAtExit: hoisted.insertAtExit,
   insertAutomationBuiltinAtExit: hoisted.insertBuiltinAtExit,
-  placeAutomationBuiltin: hoisted.placeBuiltin,
 }));
 // The project's axes are what the built-in that splits by one offers; nothing else here reads the snapshot.
 vi.mock("../core/snapshot", () => ({
@@ -258,7 +252,6 @@ describe("the built-ins in the panel", () => {
   beforeEach(() => {
     hoisted.builtins = [take];
     hoisted.insertBuiltin.mockClear();
-    hoisted.placeBuiltin.mockClear();
   });
   afterEach(() => {
     hoisted.builtins = [];
@@ -308,69 +301,6 @@ describe("the built-ins in the panel", () => {
     await act(async () => { button(t("auto.pic.placeDo")).click(); });
     expect(hoisted.insertBuiltinAtExit).toHaveBeenCalledWith({ boxId: 3, exitName: "taken" }, "task_take", null);
     expect(hoisted.insertBuiltin).not.toHaveBeenCalled();
-  });
-
-  it("place one on its own where the picture has no line yet", async () => {
-    hoisted.builtins = [{ ...take, key: "take_task" }];
-    await render({ automationId: 7 });
-    await act(async () => { button("Take a task").click(); });
-    await act(async () => { button(t("auto.pic.placeDo")).click(); });
-    expect(hoisted.placeBuiltin).toHaveBeenCalledWith(7, "take_task", null);
-    expect(hoisted.insert).not.toHaveBeenCalled();
-  });
-});
-
-describe("the empty picture", () => {
-  const builtin = (key: string, name: string): AutomationBuiltinDto => ({
-    key,
-    name,
-    does: "",
-    steps: [],
-    halts: [],
-    settings: [],
-    inputs: [],
-    exits: [],
-    usedBy: 0,
-  });
-
-  beforeEach(() => {
-    hoisted.builtins = [
-      builtin("fetch", "Fetch"),
-      builtin("close_task", "Close the task"),
-      builtin("make_task", "File a task"),
-      builtin("take_task", "Take a task"),
-    ];
-  });
-  afterEach(() => {
-    hoisted.builtins = [];
-  });
-
-  it("offers the built-ins a run starts at, in core's order, and nothing else", async () => {
-    await render({ automationId: 7 });
-    expect(rows()).toEqual([
-      expect.stringContaining("Take a task"),
-      expect.stringContaining("File a task"),
-      expect.stringContaining("Fetch"),
-    ]);
-    const heads = [...container.querySelectorAll(".autolib__head")].map((one) => one.textContent);
-    expect(heads).toEqual([t("auto.actions.reachBuiltin")]);
-    expect(container.querySelector("input[type=search]")).toBeNull();
-    expect(container.querySelector(".autolib__make")).toBeNull();
-  });
-
-  it("names each row by the reader's situation, with the built-in's own name under it", async () => {
-    await render({ automationId: 7 });
-    const names = [...container.querySelectorAll(".autolib__row .autolib__name")];
-    expect(names.map((one) => one.firstChild?.textContent)).toEqual([
-      t("auto.lib.entry.takeTask"),
-      t("auto.lib.entry.makeTask"),
-      t("auto.lib.entry.fetch"),
-    ]);
-    expect(names.map((one) => one.querySelector(".autolib__sub")?.textContent)).toEqual([
-      "Take a task",
-      "File a task",
-      "Fetch",
-    ]);
   });
 });
 

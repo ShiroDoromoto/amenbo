@@ -4264,6 +4264,37 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "stop", required: &[], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "cancel", required: &[], refs: &["target"], strings: &[], binds: false },
     //
+    // **One role of a launch, changed for that launch alone.** `target` is a run of the launch, and
+    // `role` the role's name — the one its desk carries on the pane, which for the role an automation
+    // is born with is the automation's name with core's suffix for it (`born_role`), not the bare
+    // automation name. The definition is left as it is: once the launch ends, the next one copies it
+    // again.
+    //
+    // How many are in the role for this launch (`headcount`), 1 to 10. Raised, the new seats are free
+    // at once and a task waiting is taken into one; lowered, no task under way is cut off, and the
+    // seats past the headcount go as their runs finish a task. None and past ten are refused
+    // (`invalid`) at the terminal; the screen's stepper stops at 1 and 10, so a screen road names
+    // neither. On the screen it is the stepper in the menu the desk's "⋯" opens.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "launch-headcount-set", required: &["role", "headcount"], refs: &["target"], strings: &["role"], binds: false },
+    // Back to the definition's headcount — the button the menu carries only while the two differ.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "launch-headcount-reset", required: &["role"], refs: &["target"], strings: &["role"], binds: false },
+    // **Stopping the role once its task is done**, and taking it up again. Each run of the role
+    // finishes the task it is on and takes no new one; the headcount stays as it was, and taken up
+    // again the role fills its seats back up to it. This is the role's, apart from the header's pause
+    // after the current task, which is the whole launch's — and while the launch is paused as a whole
+    // both are refused (`invalid`): on the screen the menu's item is shut, saying why. No terminal
+    // pauses a launch as a whole, so that refusal is a screen road's alone.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "launch-role-hold", required: &["role"], refs: &["target"], strings: &["role"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "launch-role-release", required: &["role"], refs: &["target"], strings: &["role"], binds: false },
+    // What the launch holds for that role, read beside its definition: `headcount` (this launch's),
+    // `defined` (what the next launch copies), `under_way` (its runs running or paused), `to_let_go`
+    // (the seats still to go after the headcount was lowered) and `held` (stopped once its task is
+    // done). The terminal reads them off `launch-show`; the screen off the role's desk — the count of
+    // seats working out of the headcount, the note saying the headcount is this launch's alone while
+    // it differs from the definition, the note counting the seats still to go, and the tag saying the
+    // role stops after the task. A road names what it is sure of and leaves the rest out.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "launch-role", required: &["role"], refs: &["target"], strings: &["role"], binds: false },
+    //
     // Asserts. What a run is doing, read the way a person reads it back — from the run itself.
     // `stopped_reason` is asked only of a run that is stopped, and a road that names it is saying
     // which kind of stop this was.
@@ -5280,8 +5311,9 @@ impl Scenario {
             // wire is drawn inside an action rather than on an automation, and `task_notes`,
             // `task_decisions`, `task_comments` and `history` whether a step is handed each part of the
             // task the run is on and the run's story so far, `executable` whether a fixture's copy
-            // may be run as a program, and `saved` whether a definition is read off its newest saved
-            // version rather than off the draft.
+            // may be run as a program, `saved` whether a definition is read off its newest saved
+            // version rather than off the draft, and `held` whether a role of a launch is stopped once
+            // its task is done.
             // The query, in whichever of its two spellings — one of them, never both and never
             // neither. `spelled` belongs to the number alone: a word is typed as it is written, so a
             // step naming a shape for one is a step that means a number and left the record out.
@@ -5397,6 +5429,7 @@ impl Scenario {
                 "pressable",
                 "executable",
                 "saved",
+                "held",
             ] {
                 if let Some(v) = step.with().get(key) {
                     if v.as_bool().is_none() {

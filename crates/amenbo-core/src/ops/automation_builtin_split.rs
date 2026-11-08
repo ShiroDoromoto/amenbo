@@ -228,7 +228,7 @@ mod tests {
     use crate::ops::automation_run::{check, launch, nothing_asked, Launcher, Unmet};
     use crate::ops::automation_step::Opened;
     use crate::ops::dimension::{self, NewDimension};
-    use crate::ops::test_support::{mk_project, mk_task_in, open, with_tx};
+    use crate::ops::test_support::{give_to, mk_project, mk_task_in, open, start_at, with_tx};
 
     fn axis(tx: &WriteTx<'_>, project: i64, name: &str, values: &[&str]) -> i64 {
         let axis = dimension::add(
@@ -365,6 +365,8 @@ mod tests {
         project: i64,
         role: i64,
         split: AutomationPlacement,
+        /// The automation's role whose round starts at the take.
+        taker: i64,
     }
 
     /// Take a task, split it by the axis of roles, and close the run from every way out of the split.
@@ -384,8 +386,8 @@ mod tests {
         for name in ["技術", "デザイン", UNSORTED] {
             crate::ops::test_support::mk_closed_after(tx, &automation, split.id, Some(name));
         }
-        let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
-        Picture { automation, project, role, split }
+        let taker = start_at(tx, automation.id, take.id);
+        Picture { automation, project, role, split, taker }
     }
 
     fn launched(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
@@ -418,6 +420,7 @@ mod tests {
     fn for_ai(tx: &WriteTx<'_>, p: &Picture) -> i64 {
         let id = mk_task_in(tx, "やること", Some(p.project));
         crate::ops::task::set_assignee(tx, id, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
+        give_to(tx, id, p.taker);
         id
     }
 
@@ -532,7 +535,6 @@ mod tests {
             let closing = NewRole { name: "仕上げ".into(), entry_placement_id: Some(close.id), ..NewRole::default() };
             automation::role_add(tx, automation.id, closing).expect("another role");
             automation::role_delete(tx, born.id).expect("the role it was born with");
-            let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
 
             let unmet = check(tx.conn(), automation.id, None, nothing_asked(), None).expect("check");
             assert!(

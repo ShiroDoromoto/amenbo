@@ -1170,7 +1170,7 @@ mod tests {
             .expect("back");
         }
         automation::edge_add(tx, on, second.id, None, EdgeTarget::Done, None).expect("closes");
-        let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
+        crate::ops::test_support::start_at(tx, automation.id, first.id);
         Picture { automation, project, first, second }
     }
 
@@ -1819,7 +1819,7 @@ mod tests {
                 .expect("onward");
             automation::edge_add(tx, on, second.id, None, EdgeTarget::Go(first.id), None)
                 .expect("round again");
-            let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
+            crate::ops::test_support::start_at(tx, automation.id, first.id);
 
             let run = a_run(tx, &automation);
             let step = opened(tx, &run, &first);
@@ -1866,7 +1866,7 @@ mod tests {
             automation::edge_add(tx, on, first.id, None, EdgeTarget::Go(back.id), None).expect("→ back");
             automation::edge_add(tx, on, back.id, None, EdgeTarget::Go(second.id), None).expect("→ second");
             automation::edge_add(tx, on, second.id, None, EdgeTarget::Done, None).expect("closes");
-            let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
+            crate::ops::test_support::start_at(tx, automation.id, first.id);
 
             let run = a_run(tx, &automation);
             let step = opened(tx, &run, &first);
@@ -2199,7 +2199,7 @@ mod tests {
             automation::edge_add(tx, Action, review.id, Some("again"), EdgeTarget::Go(review.id), Some(1))
                 .expect("back");
         }
-        let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
+        crate::ops::test_support::start_at(tx, automation.id, first.id);
         Inside { automation, project, first, second, write, review }
     }
 
@@ -2296,7 +2296,7 @@ mod tests {
             automation::edge_add(tx, on, first.id, None, EdgeTarget::Go(second.id), None)
                 .expect("onward");
             automation::edge_add(tx, on, second.id, None, EdgeTarget::Done, None).expect("closes");
-            let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
+            crate::ops::test_support::start_at(tx, automation.id, first.id);
 
             let run = a_run(tx, &automation);
             let looked = opened(tx, &run, &first);

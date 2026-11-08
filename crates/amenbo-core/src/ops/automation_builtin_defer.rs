@@ -80,13 +80,15 @@ mod tests {
     use crate::ops::test_support::open;
     use crate::lifecycle::name::{COMMENT_ADDED, TASK_STATUS_CHANGED};
     use crate::ops::test_support::{by_ai, events_after, outbox_head};
-    use crate::ops::test_support::{mk_placed, mk_project, mk_task_in, with_tx};
+    use crate::ops::test_support::{give_to, mk_placed, mk_project, mk_task_in, start_at, with_tx};
     use crate::store_engine::WriteTx;
 
     /// Take a task, look at it, and put it off — then take the next one.
     struct Picture {
         automation: Automation,
         take: AutomationPlacement,
+        /// The role whose round starts at the take.
+        role: i64,
     }
 
     fn picture(tx: &WriteTx<'_>, project: i64) -> Picture {
@@ -103,8 +105,8 @@ mod tests {
         automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
         automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(later.id), None).expect("work → defer");
         automation::edge_add(tx, on, later.id, None, EdgeTarget::Go(take.id), None).expect("defer → take");
-        let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
-        Picture { automation, take }
+        let role = start_at(tx, automation.id, take.id);
+        Picture { automation, take, role }
     }
 
     fn comments(tx: &WriteTx<'_>, task: i64) -> Vec<String> {
@@ -127,6 +129,7 @@ mod tests {
             let p = picture(tx, project);
             let task = mk_task_in(tx, "main の赤で落ちたもの", Some(project));
             crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Ai).expect("to the AI");
+            give_to(tx, task, p.role);
             let claude = ["claude".to_string()];
             let by = Launcher {
                 default_agent: None,
@@ -218,9 +221,10 @@ mod tests {
             automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(later.id), None).expect("take → defer");
             automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
             automation::edge_add(tx, on, later.id, None, EdgeTarget::Done, None).expect("defer → done");
-            let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
+            let role = start_at(tx, automation.id, take.id);
             let task = mk_task_in(tx, "main の赤で落ちたもの", Some(project));
             crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Ai).expect("to the AI");
+            give_to(tx, task, role);
             let claude = ["claude".to_string()];
             let by = Launcher {
                 default_agent: None,

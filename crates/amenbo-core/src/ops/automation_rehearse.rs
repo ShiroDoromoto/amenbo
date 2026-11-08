@@ -336,13 +336,15 @@ fn made_up(tx: &WriteTx<'_>, project_id: i64, role_id: Option<i64>) -> Result<i6
 mod tests {
     use super::*;
     use crate::model::{Automation, AutomationPictureOwner, DONE_EXIT};
-    use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewRole, NewScript, RoleChange};
+    use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewRole, NewScript};
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_builtin_close::COMMIT;
     use crate::ops::automation_builtin_make::{MADE_AND_TAKEN, TAKE_IT, WHAT_THEN};
     use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
     use crate::ops::automation_run::nothing_asked;
-    use crate::ops::test_support::{mk_closed_after, mk_out, mk_placed, mk_project, mk_task_in, only_step, with_tx};
+    use crate::ops::test_support::{
+        mk_closed_after, mk_out, mk_placed, mk_project, mk_task_in, only_step, start_at, with_tx,
+    };
 
     fn walk(tx: &WriteTx<'_>, automation: &Automation, handed: &HandedAtLaunch) -> Rehearsal {
         let claude = ["claude".to_string()];
@@ -358,13 +360,6 @@ mod tests {
 
     fn walked(rehearsal: &Rehearsal) -> Vec<(&str, &str)> {
         rehearsal.steps.iter().map(|s| (s.name.as_str(), s.exit.as_str())).collect()
-    }
-
-    /// Have the role the automation was made with start its round at `placement`.
-    fn start_at(tx: &WriteTx<'_>, automation: &Automation, placement: i64) -> i64 {
-        let born = read::automation_roles_of(tx.conn(), automation.id).expect("roles").remove(0);
-        let change = RoleChange { entry_placement_id: Some(Some(placement)), ..Default::default() };
-        automation::role_update(tx, born.id, change).expect("where the role starts").id
     }
 
     /// A take that goes on to an agent's step named `name`, then closes the task and goes round to the
@@ -407,7 +402,7 @@ mod tests {
             automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(close.id), None).expect("work → close");
             automation::edge_add(tx, on, close.id, None, EdgeTarget::Go(take.id), None).expect("close → take");
             automation::wire_add(tx, on, work.id, None, COMMIT, close.id, COMMIT).expect("wire the commit");
-            start_at(tx, &automation, take.id);
+            start_at(tx, automation.id, take.id);
 
             let rehearsal = walk(tx, &automation, &HandedAtLaunch::default());
             assert_eq!(
@@ -449,7 +444,7 @@ mod tests {
             automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
             automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(back.id), None).expect("work → back");
             automation::edge_add(tx, on, back.id, None, EdgeTarget::Go(take.id), None).expect("back → take");
-            start_at(tx, &automation, take.id);
+            start_at(tx, automation.id, take.id);
 
             let rehearsal = walk(tx, &automation, &HandedAtLaunch::default());
             assert_eq!(
@@ -497,7 +492,7 @@ mod tests {
                 .expect("onward");
             automation::wire_add(tx, on, write.id, None, "title", make.id, TITLE).expect("wire the title");
             mk_closed_after(tx, &automation, work.id, None);
-            start_at(tx, &automation, take.id);
+            start_at(tx, automation.id, take.id);
 
             let rehearsal = walk(tx, &automation, &HandedAtLaunch::default());
             let exits: Vec<&str> = rehearsal.steps.iter().map(|s| s.exit.as_str()).collect();
@@ -534,7 +529,7 @@ mod tests {
             automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(plan.id), None).expect("take → plan");
             automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
             mk_closed_after(tx, &automation, plan.id, None);
-            start_at(tx, &automation, take.id);
+            start_at(tx, automation.id, take.id);
 
             let handed = HandedAtLaunch { title: Some("梅雨どきの家事の記事".into()), ..Default::default() };
             let rehearsal = walk(tx, &automation, &handed);
@@ -557,7 +552,7 @@ mod tests {
                     .expect("automation");
             let first = mk_round(tx, &automation, "draft");
             let second = mk_round(tx, &automation, "finish");
-            let drafting = start_at(tx, &automation, first);
+            let drafting = start_at(tx, automation.id, first);
             let finishing = NewRole { name: "仕上げ".into(), entry_placement_id: Some(second), ..NewRole::default() };
             let finishing = automation::role_add(tx, automation.id, finishing).expect("another role").id;
 
@@ -606,7 +601,7 @@ mod tests {
             automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
             automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
             mk_closed_after(tx, &automation, work.id, None);
-            start_at(tx, &automation, take.id);
+            start_at(tx, automation.id, take.id);
 
             let claude = ["claude".to_string()];
             let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };

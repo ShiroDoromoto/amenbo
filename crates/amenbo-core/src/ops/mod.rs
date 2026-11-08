@@ -246,6 +246,24 @@ pub(crate) mod test_support {
         }
     }
 
+    /// **Have the role an automation was born with start its round at `placement`** (`AMB-D-1123`), and
+    /// answer that role's id. A test that needs a run to start somewhere names it this way.
+    pub(crate) fn start_at(tx: &WriteTx<'_>, automation_id: i64, placement: i64) -> i64 {
+        use crate::ops::automation::{role_update, RoleChange};
+        let born = crate::store_engine::read::automation_roles_of(tx.conn(), automation_id)
+            .expect("read roles")
+            .remove(0);
+        let change = RoleChange { entry_placement_id: Some(Some(placement)), ..RoleChange::default() };
+        role_update(tx, born.id, change).expect("where the role starts").id
+    }
+
+    /// **Give a task to a role** — the built-in that takes a task, in a run in that role's seats, takes
+    /// only a task of it.
+    pub(crate) fn give_to(tx: &WriteTx<'_>, task: i64, role: i64) {
+        let patch = super::task::TaskPatch { role_id: Some(role), ..Default::default() };
+        super::task::update(tx, task, patch).expect("give the task to the role");
+    }
+
     /// An empty in-memory engine (`let tx = &e.write().unwrap();` opens a write transaction).
     pub(crate) fn new_engine() -> StoreEngine {
         StoreEngine::open_in_memory().expect("in-memory engine")

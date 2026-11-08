@@ -1142,8 +1142,7 @@ mod tests {
             .expect("second closes");
         automation::edge_add(tx, on, second.id, Some(ERROR_EXIT), EdgeTarget::Halt, None)
             .expect("second error");
-        let automation =
-            automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
+        crate::ops::test_support::start_at(tx, automation.id, first.id);
         Picture { automation, first_action, first, second_action, second }
     }
 
@@ -1677,7 +1676,7 @@ mod tests {
             let def = def_of(tx, &run, &p.first);
             let first = ready(open(tx, run.id, def.id, None).expect("open"));
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
-            automation::set_entry(tx, p.automation.id, Some(p.second.id)).expect("start elsewhere");
+            crate::ops::test_support::start_at(tx, p.automation.id, p.second.id);
             automation::placement_delete(tx, p.first.id).expect("the definition moves on");
 
             let copy = read::automation_run_def(tx.conn(), def.id).expect("read").expect("the copy");

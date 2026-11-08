@@ -100,7 +100,7 @@ mod tests {
     use crate::ops::automation_run::{launch_past_the_task_checks as launch, nothing_asked, Launcher};
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
-    use crate::ops::test_support::{mk_project, mk_task_in, with_tx};
+    use crate::ops::test_support::{give_to, mk_project, mk_task_in, start_at, with_tx};
     use crate::store_engine::{read, record, WriteTx};
     use crate::time::Timestamp;
 
@@ -130,8 +130,9 @@ mod tests {
     }
 
     /// Take a task, wait, and close it — the round ends on the done way out of the close, and the run
-    /// where there was nothing to take.
-    fn picture(tx: &WriteTx<'_>, project: i64) -> (Automation, i64) {
+    /// where there was nothing to take. Answers the automation, the wait and the role whose round starts
+    /// at the take.
+    fn picture(tx: &WriteTx<'_>, project: i64) -> (Automation, i64, i64) {
         let automation =
             automation::add(tx, project, NewAutomation { name: "wait".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("automation");
@@ -144,8 +145,8 @@ mod tests {
         automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("closes");
         automation::edge_add(tx, on, wait.id, None, EdgeTarget::Go(close.id), None).expect("on");
         automation::edge_add(tx, on, close.id, None, EdgeTarget::Done, None).expect("closes");
-        automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
-        (automation, wait.id)
+        let role = start_at(tx, automation.id, take.id);
+        (automation, wait.id, role)
     }
 
     fn launched(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
@@ -158,7 +159,8 @@ mod tests {
         let project = mk_project(tx, "amenbo");
         let task = mk_task_in(tx, "one", Some(project));
         crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Ai).expect("the AI's");
-        let (automation, wait) = picture(tx, project);
+        let (automation, wait, role) = picture(tx, project);
+        give_to(tx, task, role);
         automation::cfg_set(tx, wait, SECONDS, Some(seconds)).expect("answer");
         let run = launched(tx, &automation);
         let entry = read::automation_run_defs_of(tx.conn(), run.id)
@@ -249,7 +251,8 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             let task = mk_task_in(tx, "one", Some(project));
             crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Ai).expect("the AI's");
-            let (automation, wait) = picture(tx, project);
+            let (automation, wait, role) = picture(tx, project);
+            give_to(tx, task, role);
             for wrong in ["\"soon\"", "-5", "1.5"] {
                 let refused = automation::cfg_set(tx, wait, SECONDS, Some(wrong));
                 assert!(refused.is_err(), "{wrong} is not a number of seconds to wait");

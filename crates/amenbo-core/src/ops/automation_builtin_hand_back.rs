@@ -105,7 +105,7 @@ mod tests {
     use crate::ops::test_support::open;
     use crate::lifecycle::name::{COMMENT_ADDED, TASK_ASSIGNED, TASK_STATUS_CHANGED};
     use crate::ops::test_support::{by_ai, events_after, outbox_head};
-    use crate::ops::test_support::{mk_placed, mk_project, mk_task_in, with_tx};
+    use crate::ops::test_support::{give_to, mk_placed, mk_project, mk_task_in, start_at, with_tx};
     use crate::store_engine::WriteTx;
 
     /// Take a task, look at it, and hand it back — then take the next one: the loop a run goes round when
@@ -114,6 +114,8 @@ mod tests {
         automation: Automation,
         take: AutomationPlacement,
         work: AutomationPlacement,
+        /// The role whose round starts at the take.
+        role: i64,
     }
 
     /// `waits` sets the take to wait for a task rather than end the run where there is none.
@@ -135,13 +137,14 @@ mod tests {
         }
         automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(back.id), None).expect("work → back");
         automation::edge_add(tx, on, back.id, None, EdgeTarget::Go(take.id), None).expect("back → take");
-        let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
-        Picture { automation, take, work }
+        let role = start_at(tx, automation.id, take.id);
+        Picture { automation, take, work, role }
     }
 
-    fn for_ai(tx: &WriteTx<'_>, project: i64, title: &str) -> i64 {
+    fn for_ai(tx: &WriteTx<'_>, p: &Picture, project: i64, title: &str) -> i64 {
         let id = mk_task_in(tx, title, Some(project));
         crate::ops::task::set_assignee(tx, id, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
+        give_to(tx, id, p.role);
         id
     }
 
@@ -162,7 +165,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let p = picture(tx, project, false);
-            let first = for_ai(tx, project, "外のもの");
+            let first = for_ai(tx, &p, project, "外のもの");
             let claude = ["claude".to_string()];
             let by = Launcher {
                 default_agent: None,
@@ -194,7 +197,7 @@ mod tests {
             else {
                 panic!("the work goes on to the hand back");
             };
-            let second = for_ai(tx, project, "中のもの");
+            let second = for_ai(tx, &p, project, "中のもの");
             let head = outbox_head(tx);
             let Opened::Carried { next: Next::Step(take), .. } =
                 open(tx, run.id, back.id, Some(&claude)).expect("hand back")
@@ -289,7 +292,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             let p = picture(tx, project, false);
             crate::ops::test_support::room_for_runs(tx, p.automation.id);
-            let task = for_ai(tx, project, "外のもの");
+            let task = for_ai(tx, &p, project, "外のもの");
             let (a, take) = handed_back(tx, &p);
 
             crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Human).expect("to the AI");
@@ -322,7 +325,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let p = picture(tx, project, true);
-            let task = for_ai(tx, project, "外のもの");
+            let task = for_ai(tx, &p, project, "外のもの");
             let (run, take) = handed_back(tx, &p);
 
             crate::ops::task::set_status(tx, task, TaskStatus::InProgress, ActorKind::Human)

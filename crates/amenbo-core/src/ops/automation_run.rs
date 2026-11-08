@@ -4661,7 +4661,9 @@ mod tests {
     use crate::model::{AutomationAction, AutomationEdge, AutomationPlacement};
     use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep};
     use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
-    use crate::ops::test_support::{exit_id, mk_exit, mk_in, mk_out, mk_placed, mk_project, only_step, with_tx};
+    use crate::ops::test_support::{
+        exit_id, give_to, mk_exit, mk_in, mk_out, mk_placed, mk_project, only_step, start_at, with_tx,
+    };
 
     fn mk_automation(tx: &WriteTx<'_>, name: &str) -> Automation {
         let project = mk_project(tx, "amenbo");
@@ -4669,10 +4671,11 @@ mod tests {
             .expect("add automation")
     }
 
-    /// What every test here starts from: one automation whose entry is the built-in that takes a task,
-    /// one action of one step that works on it, the built-in that closes it, and the end of the run —
-    /// every way out decided. It launches as it stands, so each test can take one thing back off and
-    /// watch the check find it. What is handed back is the action that works, and its placement.
+    /// What every test here starts from: one automation whose role starts its round at the built-in that
+    /// takes a task (`AMB-D-1123`), one action of one step that works on it, the built-in that closes it,
+    /// and the end of the run — every way out decided. It launches as it stands, so each test can take one
+    /// thing back off and watch the check find it. What is handed back is the action that works, and its
+    /// placement.
     fn launchable(tx: &WriteTx<'_>) -> (Automation, AutomationAction, AutomationPlacement) {
         let automation = mk_automation(tx, "1件やりきる");
         let taking = takes_first(tx, &automation);
@@ -4690,8 +4693,7 @@ mod tests {
         // Nothing is written for the error way out: it is carried from birth and halts unless
         // somebody says otherwise, which is what `an_error_way_out_nobody_answered_for_is_not_open`
         // holds this to.
-        let automation =
-            automation::set_entry(tx, automation.id, Some(taking.id)).expect("entry");
+        start_at(tx, automation.id, taking.id);
         (automation, action, placement)
     }
 
@@ -4779,14 +4781,23 @@ mod tests {
         });
     }
 
-    /// **With nowhere for a run to start, every role starting nowhere is all that is said** — no role
-    /// names a start and there is no entry, so nothing is reachable and every other check is asked of
-    /// nothing.
+    /// **With no role naming where its round starts, every role starting nowhere is what is said**
+    /// (`AMB-D-1123`) — a role's round starts only where it names, and the first thing placed, an agent's
+    /// step here, is no start for one.
     #[test]
     fn an_automation_with_nowhere_to_start_says_only_that() {
         with_tx(|tx| {
-            let (automation, _, _) = launchable(tx);
-            automation::set_entry(tx, automation.id, None).expect("clear entry");
+            let automation = mk_automation(tx, "1件やりきる");
+            let (_, placement) = mk_placed(tx, &automation, "取る", "take one", "claude");
+            automation::edge_add(
+                tx,
+                AutomationPictureOwner::Automation,
+                placement.id,
+                None,
+                EdgeTarget::Done,
+                None,
+            )
+            .expect("edge");
             let nowhere = Unmet::RoleStartsNowhere { role: "1件やりきるの係".into() };
             assert_eq!(checked(tx, &automation), vec![nowhere.clone()]);
             assert_eq!(nowhere.placement(), None);
@@ -4800,12 +4811,6 @@ mod tests {
     /// The one role an automation is born with ([`automation::born_role`]).
     fn born(tx: &WriteTx<'_>, automation: &Automation) -> crate::model::AutomationRole {
         read::automation_roles_of(tx.conn(), automation.id).expect("roles").remove(0)
-    }
-
-    /// Name `at` as where `role`'s round starts.
-    fn starts_at(tx: &WriteTx<'_>, role: i64, at: i64) {
-        let change = automation::RoleChange { entry_placement_id: Some(Some(at)), ..automation::RoleChange::default() };
-        automation::role_update(tx, role, change).expect("where the role starts");
     }
 
     /// **Nobody chosen to file a failed round to is refused** — by the check, by a launch and by a save —
@@ -4838,10 +4843,11 @@ mod tests {
             assert_eq!(Unmet::NoFailuresTo.placement(), None);
             assert_eq!(Unmet::NoFailuresTo.code(), ErrorCode::NotReadyAutomationNoFailuresTo);
 
+            let start = born(tx, &automation).entry_placement_id;
             let role = automation::role_add(
                 tx,
                 automation.id,
-                automation::NewRole { name: "見る".into(), ..Default::default() },
+                automation::NewRole { name: "見る".into(), entry_placement_id: start, ..Default::default() },
             )
             .expect("a role");
             let to_role = Some(Some(FailuresTo::Role { role_id: role.id }));
@@ -4920,35 +4926,12 @@ mod tests {
         });
     }
 
-    /// **Where no role names a start, the entry is let through only as the built-in that takes a task**
-    /// (`AMB-D-1123`). Anything else standing there is every role starting nowhere.
-    #[test]
-    fn where_no_role_starts_an_entry_that_takes_no_task_is_refused() {
-        with_tx(|tx| {
-            let automation = mk_automation(tx, "1件やりきる");
-            let (_, placement) = mk_placed(tx, &automation, "取る", "take one", "claude");
-            automation::edge_add(
-                tx,
-                AutomationPictureOwner::Automation,
-                placement.id,
-                None,
-                EdgeTarget::Done,
-                None,
-            )
-            .expect("edge");
-            let automation = automation::set_entry(tx, automation.id, Some(placement.id)).expect("entry");
-            assert_eq!(checked(tx, &automation), vec![Unmet::RoleStartsNowhere { role: "1件やりきるの係".into() }]);
-        });
-    }
-
     /// **A role that names no start is refused once another role names one** (`AMB-D-1123`): its seats
     /// would have nowhere to start a round. The entry no longer stands in for it.
     #[test]
     fn a_role_that_starts_nowhere_is_refused() {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
-            let entry = automation.entry_placement_id.expect("an entry");
-            starts_at(tx, born(tx, &automation).id, entry);
             assert_eq!(checked(tx, &automation), vec![], "the one role starts where the task is taken");
 
             automation::role_add(tx, automation.id, NewRole { name: "見る".into(), ..NewRole::default() })
@@ -4966,8 +4949,8 @@ mod tests {
     fn a_role_that_starts_at_what_takes_no_task_is_refused() {
         with_tx(|tx| {
             let (automation, _, placement) = launchable(tx);
+            start_at(tx, automation.id, placement.id);
             let role = born(tx, &automation);
-            starts_at(tx, role.id, placement.id);
             let refused = Unmet::RoleStartTakesNoTask {
                 role: role.name.clone(),
                 step: "直す".into(),
@@ -4990,7 +4973,6 @@ mod tests {
     fn a_line_back_to_where_the_role_starts_with_the_task_open_is_refused() {
         with_tx(|tx| {
             let (automation, taking, _, working) = taken_then_worked(tx);
-            starts_at(tx, born(tx, &automation).id, taking.id);
             let on = AutomationPictureOwner::Automation;
             automation::edge_add(tx, on, working.id, None, EdgeTarget::Go(taking.id), None).expect("back to the start");
             let unmet = checked(tx, &automation);
@@ -5013,7 +4995,7 @@ mod tests {
         let (work, working) = mk_placed(tx, &automation, "直す", "fix it", "claude");
         let on = AutomationPictureOwner::Automation;
         automation::edge_add(tx, on, taking.id, Some(TAKEN), EdgeTarget::Go(working.id), None).expect("take → work");
-        let automation = automation::set_entry(tx, automation.id, Some(taking.id)).expect("entry");
+        start_at(tx, automation.id, taking.id);
         (automation, taking, work, working)
     }
 
@@ -5101,10 +5083,10 @@ mod tests {
         });
     }
 
-    /// **An entry that files a task has nothing reaching its title** (`AMB-D-1123`): what a launch is
-    /// handed is filed as a task before the run starts, so nothing is handed to the entry.
+    /// **A start that files a task has nothing reaching its title** (`AMB-D-1123`): what a launch is
+    /// handed is filed as a task before the run starts, so nothing is handed to where a round starts.
     #[test]
-    fn an_entry_that_files_a_task_has_nothing_reaching_its_title() {
+    fn a_start_that_files_a_task_has_nothing_reaching_its_title() {
         with_tx(|tx| {
             use crate::ops::automation_builtin_make::{MADE_AND_TAKEN, TAKE_IT, TITLE, WHAT_THEN};
             let automation = mk_automation(tx, "起票してやりきる");
@@ -5117,7 +5099,7 @@ mod tests {
             automation::edge_add(tx, on, making.id, Some(MADE_AND_TAKEN), EdgeTarget::Go(working.id), None)
                 .expect("file → work");
             crate::ops::test_support::mk_closed_after(tx, &automation, working.id, None);
-            let automation = automation::set_entry(tx, automation.id, Some(making.id)).expect("entry");
+            start_at(tx, automation.id, making.id);
             let unmet = checked(tx, &automation);
             assert!(
                 unmet.iter().any(|u| matches!(
@@ -5158,15 +5140,20 @@ mod tests {
             let (action, placement) = mk_placed(tx, &automation, "取る", "take one", "claude");
             takes_task_on(tx, &action, None);
             crate::ops::test_support::mk_closed_after(tx, &automation, placement.id, None);
-            let automation = automation::set_entry(tx, automation.id, Some(placement.id)).expect("entry");
+            start_at(tx, automation.id, placement.id);
             let refused = Unmet::HandsOnTaskTaken {
                 step: "取る".into(),
                 exit: crate::model::DONE_EXIT.into(),
                 placement: placement.id,
             };
-            // Standing first, it is no start for a round either (`AMB-D-1123`).
-            let nowhere = Unmet::RoleStartsNowhere { role: "自分で取るの係".into() };
-            assert_eq!(checked(tx, &automation), vec![nowhere, refused.clone()]);
+            // Where the role starts, it is no built-in that takes a task either (`AMB-D-1123`).
+            let elsewhere = Unmet::RoleStartTakesNoTask {
+                role: "自分で取るの係".into(),
+                step: "取る".into(),
+                builtin: None,
+                placement: placement.id,
+            };
+            assert_eq!(checked(tx, &automation), vec![elsewhere, refused.clone()]);
             assert!(refused.say().contains("take_task"), "{}", refused.say());
 
             let err = launch(tx, automation.id, &here(&claude())).expect_err("refused");
@@ -5174,7 +5161,7 @@ mod tests {
             assert_eq!(
                 msg.parts().iter().map(|p| p.code()).collect::<Vec<_>>(),
                 vec![
-                    Some(ErrorCode::NotReadyAutomationRoleStartsNowhere),
+                    Some(ErrorCode::NotReadyAutomationRoleStartTakesNoTask),
                     Some(ErrorCode::NotReadyAutomationHandsOnTaskTaken),
                 ],
             );
@@ -5573,8 +5560,8 @@ mod tests {
             );
 
             // The role starts where the task is taken, as every role does, and its round reaches the step.
-            let entry = automation.entry_placement_id.expect("an entry");
             let born = born(tx, &automation);
+            let entry = born.entry_placement_id.expect("where the role starts");
             let role = role_at(tx, &automation, "実装", entry, Some("claude"), Some("opus"));
             automation::role_delete(tx, born.id).expect("the one it was born with goes");
             assert_eq!(
@@ -5631,10 +5618,10 @@ mod tests {
             let (automation, action, placement) = launchable(tx);
             let step = only_step(tx, &action);
             automation::placement_step_clear(tx, placement.id, step.id).expect("take the choice back");
-            let entry = automation.entry_placement_id.expect("an entry");
+            let entry = born(tx, &automation).entry_placement_id.expect("where the role starts");
 
-            // Defined first, and starting at the automation's entry — but the work placement is where
-            // another role's round begins, so this round stops short of it.
+            // The first naming an agent, and starting where the task is taken — but the work placement
+            // is where another role's round begins, so this round stops short of it.
             role_at(tx, &automation, "受付", entry, Some("codex"), None);
             role_at(tx, &automation, "名無し", placement.id, None, None);
             let first = role_at(tx, &automation, "実装", placement.id, Some("claude"), None);
@@ -5653,9 +5640,12 @@ mod tests {
     fn a_placement_is_in_the_round_of_the_first_role_reaching_it_with_or_without_an_agent() {
         with_tx(|tx| {
             let (automation, _, placement) = launchable(tx);
-            let entry = automation.entry_placement_id.expect("an entry");
+            let born = born(tx, &automation);
+            let entry = born.entry_placement_id.expect("where the role starts");
+            let nowhere = automation::RoleChange { entry_placement_id: Some(None), ..automation::RoleChange::default() };
+            automation::role_update(tx, born.id, nowhere).expect("the role it was born with starts nowhere");
             let rounds = || rounds_by_placement(tx.conn(), automation.id, ReadsFrom::Draft).expect("rounds");
-            assert_eq!(rounds(), BTreeMap::new(), "no role, no round");
+            assert_eq!(rounds(), BTreeMap::new(), "no role starting anywhere, no round");
 
             let reception = role_at(tx, &automation, "受付", entry, Some("codex"), None);
             let unnamed = role_at(tx, &automation, "名無し", placement.id, None, None);
@@ -6253,10 +6243,10 @@ mod tests {
                 .expect("test run");
             assert_eq!(copied(tx, &tried), ("codex".to_string(), None), "the draft");
 
-            automation::set_entry(tx, automation.id, None).expect("no entry in the draft");
-            launch(tx, automation.id, &here(&startable)).expect("the saved version still has its entry");
+            start_at(tx, automation.id, placement.id);
+            launch(tx, automation.id, &here(&startable)).expect("the saved version still starts by taking a task");
             let err = launch_handing(tx, automation.id, &here(&startable), &HandedAtLaunch::default(), ReadsFrom::Draft)
-                .expect_err("the draft has none");
+                .expect_err("the draft starts where no task is taken");
             assert!(matches!(err, Error::NotReady(_)), "{err:?}");
         });
     }
@@ -6288,6 +6278,7 @@ mod tests {
         with_tx(|tx| {
             let (automation, _, placement) = launchable(tx);
             let task = crate::ops::test_support::mk_task_in(tx, "一件", Some(automation.project_id));
+            give_to(tx, task, born(tx, &automation).id);
             crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
             let run = launch(tx, automation.id, &here(&claude())).expect("launch");
 
@@ -6369,10 +6360,13 @@ mod tests {
             let Waiting::Step(entry) = next_def(tx.conn(), run.id).expect("next") else {
                 panic!("the entry is what a fresh run waits for")
             };
-            assert!(entry.entry, "the copy it starts at is marked at launch");
+            assert!(run.role_id.is_some(), "it sits in the seat of the role that starts there");
+            assert!(!entry.role_ids().is_empty(), "the copy its role starts at is marked at launch");
 
+            // A run in a role's seat reads where it starts off the roles its copies name, not the entry.
             let mut unmarked = (*entry).clone();
             unmarked.entry = false;
+            unmarked.roles = "[]".to_string();
             crate::ops::emit_update(tx, record::automation_run_def(&entry), record::automation_run_def(&unmarked))
                 .expect("unmark it");
 
@@ -6385,10 +6379,10 @@ mod tests {
         });
     }
 
-    /// A picture with somewhere to stand towards: the entry takes a task and leaves through its
-    /// done way out into a second placement, which closes the run. What the tests about a run
-    /// standing between two spots start from — [`launchable`]'s single placement closes the run on the
-    /// spot and never stands anywhere.
+    /// A picture with somewhere to stand towards: where the role starts, a task is taken and it leaves
+    /// through its done way out into a second placement, which closes the run. What the tests about a
+    /// run standing between two spots start from — [`launchable`]'s single placement closes the run on
+    /// the spot and never stands anywhere.
     fn two_spots(tx: &WriteTx<'_>) -> (Automation, AutomationPlacement, AutomationEdge) {
         let automation = mk_automation(tx, "取って読む");
         let (first_action, first) = mk_placed(tx, &automation, "取る", "take one", "claude");
@@ -6412,7 +6406,7 @@ mod tests {
             None,
         )
         .expect("edge");
-        automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
+        start_at(tx, automation.id, first.id);
         (automation, first, onward)
     }
 
@@ -6582,7 +6576,7 @@ mod tests {
 
             let waiting = trail(tx.conn(), run.id).expect("trail");
             assert!(waiting.passed.is_empty());
-            assert_eq!(waiting.at, automation.entry_placement_id);
+            assert_eq!(waiting.at, born(tx, &automation).entry_placement_id);
             assert!(waiting.steps.is_empty());
             assert!(entry.step_id.is_some());
             assert_eq!(waiting.step, entry.step_id);
@@ -6970,7 +6964,7 @@ mod tests {
                 None,
             )
             .expect("on to the second placement");
-            let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
+            start_at(tx, automation.id, first.id);
             let unmet = check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check");
             let about = |at: i64| Unmet::OpenExit {
                 step: "見直す".into(),

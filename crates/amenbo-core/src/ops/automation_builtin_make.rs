@@ -849,12 +849,14 @@ mod tests {
     use crate::ops::automation_step::Opened;
     use crate::lifecycle::name::{TASK_ASSIGNED, TASK_CREATED, TASK_DONE, TASK_STATUS_CHANGED};
     use crate::ops::test_support::{by_ai, events_after, outbox_head};
-    use crate::ops::test_support::{mk_out, mk_placed, mk_project, open, way_out, with_tx};
+    use crate::ops::test_support::{mk_out, mk_placed, mk_project, open, start_at, way_out, with_tx};
     use crate::store_engine::WriteTx;
 
     /// An agent's step that takes a task and hands on a title and notes, the built-in after it, and an
-    /// agent's step after that on either way out. Nothing on the picture closes the first step's task —
-    /// each test closes it by hand where it has to be — so it is launched past that check.
+    /// agent's step after that on either way out. The role the automation was born with starts its round
+    /// at the agent's step. Nothing on the picture closes the first step's task — each test closes it by
+    /// hand where it has to be — so it is launched past that check, and past the role's starting at what
+    /// takes no task.
     struct Picture {
         automation: Automation,
         project: i64,
@@ -886,7 +888,7 @@ mod tests {
             automation::edge_add(tx, on, make.id, Some(exit), EdgeTarget::Go(work.id), None).expect("onward");
         }
         crate::ops::test_support::mk_closed_after(tx, &automation, work.id, None);
-        let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
+        start_at(tx, automation.id, first.id);
         Picture { automation, project, first, make }
     }
 
@@ -1330,6 +1332,7 @@ mod tests {
         use crate::ops::automation_run::{passes_by_role, RolePass};
         with_tx(|tx| {
             let p = picture(tx);
+            let born = read::automation_roles_of(tx.conn(), p.automation.id).expect("roles").remove(0);
             let starting = |name: &str, at: Option<i64>| automation::NewRole {
                 name: name.into(),
                 entry_placement_id: at,
@@ -1337,6 +1340,8 @@ mod tests {
             };
             let alice = automation::role_add(tx, p.automation.id, starting("Alice", Some(p.first.id))).expect("Alice");
             let bob = automation::role_add(tx, p.automation.id, starting("Bob", None)).expect("Bob");
+            // Alice's round is the one that starts at the first step.
+            automation::role_delete(tx, born.id).expect("the role it was born with");
             let passes = || passes_by_role(tx.conn(), p.automation.id, ReadsFrom::Draft).expect("passes");
             assert!(passes().is_empty(), "left unanswered, it passes nothing");
 
@@ -1577,10 +1582,10 @@ mod tests {
         });
     }
 
-    /// **The launch check reads the setting**: the way out it will not leave by needs no line. Standing
-    /// first it is no start, set to take the task it files or not — a round starts at the built-in that
-    /// takes a task (`AMB-D-1123`) — and nothing is handed to it at launch any more, so nothing reaches
-    /// its title.
+    /// **The launch check reads the setting**: the way out it will not leave by needs no line. A role
+    /// starting its round at it is refused, set to take the task it files or not — a round starts at the
+    /// built-in that takes a task (`AMB-D-1123`) — and nothing is handed to it at launch any more, so
+    /// nothing reaches its title.
     #[test]
     fn the_launch_check_asks_only_the_way_out_it_is_set_to_leave_by() {
         with_tx(|tx| {
@@ -1597,18 +1602,19 @@ mod tests {
             automation::edge_add(tx, on, make.id, Some(MADE_AND_TAKEN), EdgeTarget::Go(work.id), None)
                 .expect("onward");
             crate::ops::test_support::mk_closed_after(tx, &automation, work.id, None);
-            let automation = automation::set_entry(tx, automation.id, Some(make.id)).expect("entry");
+            start_at(tx, automation.id, make.id);
             let startable = ["claude".to_string()];
             let unmet = |tx: &WriteTx<'_>| check(tx.conn(), automation.id, Some(&startable), nothing_asked(), None).expect("check");
 
             let left = unmet(tx);
-            assert!(left.iter().any(|u| matches!(u, Unmet::RoleStartsNowhere { .. })), "{left:?}");
+            let starts_at_make = |u: &Unmet| matches!(u, Unmet::RoleStartTakesNoTask { placement, .. } if *placement == make.id);
+            assert!(left.iter().any(starts_at_make), "{left:?}");
             assert!(left.iter().any(|u| matches!(u, Unmet::OpenExit { exit, .. } if exit == MADE)), "{left:?}");
 
             automation::cfg_set(tx, make.id, WHAT_THEN, Some(&serde_json::to_string(TAKE_IT).expect("json")))
                 .expect("take it");
             let taken = unmet(tx);
-            assert!(taken.iter().any(|u| matches!(u, Unmet::RoleStartsNowhere { .. })), "{taken:?}");
+            assert!(taken.iter().any(starts_at_make), "{taken:?}");
             assert!(!taken.iter().any(|u| matches!(u, Unmet::OpenExit { .. })), "{taken:?}");
             assert!(
                 taken.iter().any(|u| matches!(u, Unmet::UnwiredInput { port, .. } if port == TITLE)),
@@ -1617,8 +1623,9 @@ mod tests {
         });
     }
 
-    /// The built-in that takes a task placed as the entry, a step after it and the built-in that closes
-    /// the task, the run ending where there is none to take — what a task filed at launch is worked by.
+    /// The built-in that takes a task, where the role the automation was born with starts its round, a
+    /// step after it and the built-in that closes the task, the run ending where there is none to take —
+    /// what a task filed at launch is worked by.
     fn entry(tx: &WriteTx<'_>) -> (Automation, AutomationPlacement, i64) {
         use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
         let project = mk_project(tx, "amenbo");
@@ -1632,7 +1639,7 @@ mod tests {
         automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
         automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
         crate::ops::test_support::mk_closed_after(tx, &automation, work.id, None);
-        let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
+        start_at(tx, automation.id, take.id);
         (automation, take, project)
     }
 
@@ -1827,7 +1834,10 @@ mod tests {
         with_tx(|tx| {
             let (automation, take, project) = entry(tx);
             let new_role = |name: &str| automation::NewRole { name: name.into(), ..Default::default() };
-            let role = automation::role_add(tx, automation.id, new_role("さくら")).expect("a role");
+            // This role's round starts at the take too, so a run sits in its seat to take what is filed
+            // under it.
+            let sakura = automation::NewRole { entry_placement_id: Some(take.id), ..new_role("さくら") };
+            let role = automation::role_add(tx, automation.id, sakura).expect("a role");
             let trigger = |role_id: Option<i64>| automation::NewTrigger {
                 name: "  毎時の見回り  ".into(),
                 role_id,

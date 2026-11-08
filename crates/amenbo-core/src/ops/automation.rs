@@ -1664,29 +1664,6 @@ pub fn move_to(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<Automation> {
     Ok(after)
 }
 
-/// **Name any placement as the entry**, whatever stands on it. No op a person presses does this: the
-/// entry is the first thing put on a picture, one of the built-ins a run can start at, and it is changed
-/// by [`entry_replace`] (`AMB-D-977`). A store written before that rule can name any placement, a shape
-/// the run side goes on answering for and its tests draw this way.
-#[cfg(test)]
-pub(crate) fn set_entry(
-    tx: &WriteTx<'_>,
-    automation_id: i64,
-    placement_id: Option<i64>,
-) -> Result<Automation> {
-    rewritable(tx, Def::Automation(automation_id))?;
-    if let Some(placement_id) = placement_id {
-        let placement = live_placement(tx, placement_id)?;
-        if placement.automation_id != automation_id {
-            return Err(Error::invalid(format!(
-                "placement '{placement_id}' belongs to another automation, so it cannot be this one's \
-                 entry"
-            )));
-        }
-    }
-    name_entry(tx, automation_id, placement_id)
-}
-
 /// Write which placement a run opens first, `None` for none. What may be named is the callers' to ask.
 fn name_entry(tx: &WriteTx<'_>, automation_id: i64, placement_id: Option<i64>) -> Result<Automation> {
     let before = live_automation(tx, automation_id)?;
@@ -4482,7 +4459,8 @@ mod tests {
             kept(placement_delete(tx, second.id));
             kept(role_add(tx, automation.id, NewRole { name: "山田".into(), ..Default::default() }).map(|_| ()));
             kept(role_delete(tx, role.id));
-            kept(set_entry(tx, automation.id, Some(second.id)).map(|_| ()));
+            let start = RoleChange { entry_placement_id: Some(Some(second.id)), ..RoleChange::default() };
+            kept(role_update(tx, role.id, start).map(|_| ()));
             kept(version_add(tx, automation.id).map(|_| ()));
             assert_eq!(read::automation_placement_ids(tx.conn(), automation.id).expect("read").len(), 2);
 
@@ -7373,7 +7351,7 @@ mod tests {
             let automation = mk_automation(tx);
             let (action, one) = mk_placed(tx, &automation, "取る");
             let (_, two) = mk_placed(tx, &automation, "実装する");
-            set_entry(tx, automation.id, Some(one.id)).expect("name the entry");
+            crate::ops::test_support::start_at(tx, automation.id, one.id);
             edge_add(
                 tx,
                 AutomationPictureOwner::Automation,
@@ -7665,20 +7643,20 @@ mod tests {
     }
 
     /// **Discarding puts the automation back as it was saved** — a placement added since goes, one
-    /// deleted since comes back under its own id, and so does the placement it opens first.
+    /// deleted since comes back under its own id, and so does where its role starts its round.
     #[test]
     fn an_automation_discard_goes_back_to_the_saved_version() {
         with_tx(|tx| {
             let automation = mk_automation(tx);
             let (action, here) = mk_placed(tx, &automation, "点検");
-            set_entry(tx, automation.id, Some(here.id)).expect("start there");
+            let role = crate::ops::test_support::start_at(tx, automation.id, here.id);
             assert!(discard(tx, automation.id).is_err(), "nothing saved to go back to");
             let first = version_add(tx, automation.id).expect("save");
             assert_eq!(discard(tx, automation.id).expect("nothing to discard").id, first.id);
 
             placement_delete(tx, here.id).expect("delete the placement");
             let (_, there) = mk_placed(tx, &automation, "直す");
-            set_entry(tx, automation.id, Some(there.id)).expect("start at the new one");
+            crate::ops::test_support::start_at(tx, automation.id, there.id);
             assert!(unsaved(tx.conn(), automation.id).expect("unsaved"));
 
             let back = discard(tx, automation.id).expect("discard");
@@ -7686,7 +7664,7 @@ mod tests {
             assert!(!unsaved(tx.conn(), automation.id).expect("unsaved"));
             assert!(read::automation_placement(tx.conn(), there.id).expect("read").is_none());
             assert_eq!(live_placement(tx, here.id).expect("read").action_id, action.id);
-            assert_eq!(live_automation(tx, automation.id).expect("read").entry_placement_id, Some(here.id));
+            assert_eq!(live_role(tx, role).expect("read").entry_placement_id, Some(here.id));
 
             placement_delete(tx, here.id).expect("delete the placement");
             action_delete(tx, action.id).expect("delete the action placed nowhere now");
@@ -8000,7 +7978,7 @@ mod rewritten_under_a_run {
         mk_out(tx, &first_action, Some("found"), "note", AutomationPortKind::Value, false);
         let (second_action, second) = mk_placed(tx, &automation, "直す", "fix it", "claude");
         mk_in(tx, &second_action, "note", AutomationPortKind::Value, false);
-        // An entry has to take a task for the run to launch, and either action may be the entry.
+        // Where the role starts has to take a task for the run to launch, and either action may be it.
         mk_out(tx, &first_action, Some("found"), "task", AutomationPortKind::TaskTake, true);
         mk_out(tx, &second_action, None, "task", AutomationPortKind::TaskTake, false);
         let on = AutomationPictureOwner::Automation;
@@ -8012,7 +7990,7 @@ mod rewritten_under_a_run {
         let cfg = cfg_add(tx, first_action.id, "depth", AutomationCfgKind::Text, false, None)
             .expect("setting");
         cfg_set(tx, first.id, "depth", Some("\"shallow\"")).expect("answer");
-        set_entry(tx, automation.id, Some(first.id)).expect("entry");
+        crate::ops::test_support::start_at(tx, automation.id, first.id);
         Picture { automation, first_action, first, second_action, onward, wire, cfg }
     }
 

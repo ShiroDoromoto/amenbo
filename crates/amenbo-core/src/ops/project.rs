@@ -370,7 +370,7 @@ mod tests {
             let (action, placement) =
                 crate::ops::test_support::mk_placed(tx, &automation, "点検する", "look at it", "claude");
             let step = action.entry_step_id.expect("an entry step");
-            crate::ops::automation::set_entry(tx, automation.id, Some(placement.id)).unwrap();
+            crate::ops::test_support::start_at(tx, automation.id, placement.id);
             mk_run(tx, automation.id, p);
 
             delete(tx, p, crate::model::ActorKind::Ai).unwrap();

@@ -116,7 +116,7 @@ const pins = new Map<number, ViewPin>();
  * running on the way out — a session whose place has gone is one nobody can reach.
  */
 function Pane({
-  frame, terminal, at, hue, project, names, start, autoStart, focused, landed = false, offered = false, written,
+  frame, terminal, launch = null, at, hue, project, names, start, autoStart, focused, landed = false, offered = false, written,
   inserted = [], composeOpen, held = false, goes = null, run = null, builtin = null, tail = null, tailCode = null, onGrab, onStretch,
   size, onSize,
   on,
@@ -229,8 +229,8 @@ function Pane({
     setFace(to);
     setByStep(false);
   };
-  // A press elsewhere turning this run to its terminal (`./runFaces`): a round on the bar over another
-  // run's terminal, or the task this run's failed round was filed as.
+  // A press elsewhere turning this run to its terminal (`./runFaces`): its seat pressed among the roles
+  // of its launch's pane, or the task this run's failed round was filed as.
   useEffect(() => {
     if (runId === null) return;
     return onTerminalShown((one) => {
@@ -891,23 +891,6 @@ function Pane({
               ))}
             </span>
           )}
-          {/* **The roles or the terminal** (`./RunPicture`), on a run's pane only. Two presses, one
-              pressed, rather than one that flips: what the reader needs to see is which face is up. */}
-          {run !== null && (
-            <span className="slot__faces" role="group">
-              {(["roles", "terminal"] as const).map((one) => (
-                <button
-                  key={one}
-                  type="button"
-                  className={`slot__face${face === one ? " slot__face--on" : ""}`}
-                  aria-pressed={face === one}
-                  onClick={() => turn(one)}
-                >
-                  {t(one === "roles" ? "auto.run.faceRoles" : "auto.run.faceTerminal")}
-                </button>
-              ))}
-            </span>
-          )}
           {runLive && run !== null && (
             <span className="slot__runacts">
               <RunActs
@@ -1085,17 +1068,28 @@ function Pane({
             away would be ending what draws it. The roles are drawn over it, so it keeps its size when
             the face is turned (`../talk/terminal`). */}
         <div className="slot__body">
-        {/* **The bar over a run's terminal** (`./RunPicture`): the way back to the roles, whose round
-            this is, the other rounds of the same automation and, where a step turned the pane, why.
+        {/* **The bar over a run's terminal** (`./RunPicture`): the way back to the roles — the only
+            way, the row above has no other — whose round this is and, where a step turned the pane, why.
             It stands in the layout under the roles as the terminal does, so turning the face does not
             refit the terminal. */}
         {run !== null && (
           <RunTermBar
             run={run}
             project={project}
+            launch={launch}
             byStep={byStep && face === "terminal"}
             onBack={() => turn("roles")}
-            onGoTo={(other) => {
+          />
+        )}
+        {run !== null && face === "roles" && (
+          <RunRoles
+            run={run}
+            project={project}
+            launch={launch}
+            pin={pin}
+            // A seat pressed: the one in front turns this pane to its terminal, and another is put in
+            // front in this same place, on its terminal (`onGoToRun`).
+            onOpen={(other) => {
               if (other === run.run) {
                 turn("terminal");
                 return;
@@ -1103,14 +1097,6 @@ function Pane({
               showTerminalOf(other);
               on.current.onGoToRun?.(other);
             }}
-          />
-        )}
-        {run !== null && face === "roles" && (
-          <RunRoles
-            run={run}
-            project={project}
-            pin={pin}
-            onOpen={() => turn("terminal")}
             lastOutput={() => plateRef.current?.lastOutput() ?? null}
           />
         )}
@@ -1256,6 +1242,9 @@ type PaneProps = {
    *  front on a launch's pane (`../talk/layout`'s `terminalOf`). Its name and its model are kept
    *  against this, and `onName` is told it. */
   terminal?: string;
+  /** The launch this pane draws (`../talk/layout`'s `Frame.launch`), whose seats the roles list; null
+   *  on an ordinary pane and on a run kept from before launches were. */
+  launch?: number | null;
   /** Where on the page's grid this pane sits. It is worked out afresh from the order and this pane's
    *  size, and never held against the pane itself (`AMB-D-939`). Left out where this is drawn
    *  outside a page, which is a pane with no place to be given. */
@@ -1388,8 +1377,8 @@ type PaneProps = {
   /** The press on this pane's band, said as the box opens or folds away. What the *next* pane will
    *  start as is a separate answer and is written down here (`../core/composeStartsOpen`). */
   onFold: (frame: string, open: boolean) => void;
-  /** Go to the run `run` — a round pressed on the bar over a run's terminal: on a launch's pane, that
-   *  seat put in front in this same place. Left out where this is drawn outside the workspace. */
+  /** Go to the run `run` — a seat pressed among the roles of a launch's pane: that seat put in front
+   *  in this same place. Left out where this is drawn outside the workspace. */
   onGoToRun?: (run: number) => void;
 };
 

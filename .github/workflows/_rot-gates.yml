@@ -104,6 +104,11 @@ jobs:
       - name: Lint every tracked shell script and every embedded workflow step
         run: make shell-gate
 
+      # watch-ci.sh is what every CI wait in the dev loop hangs on, and a misread of GitHub's answer
+      # there holds a step open with nothing said. Its cases run against a stand-in `gh`.
+      - name: Test watch-ci.sh
+        run: scripts/watch-ci.test.sh
+
   cargo-audit:
     name: cargo audit (RustSec)
     runs-on: ubuntu-latest

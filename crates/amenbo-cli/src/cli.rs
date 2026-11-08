@@ -2639,9 +2639,10 @@ pub enum AutomationCmd {
         id: i64,
     },
 
-    /// Walk an automation's draft, unsaved changes included, from its entry to its end without running
-    /// anything — saving is not needed, unlike `automation start`: the launch check, what
-    /// each step is handed and the whole prompt each agent would be started on — with no agent started,
+    /// Walk an automation's draft, unsaved changes included, role by role in the order the roles are
+    /// defined in, each from where it starts to its end (from the entry where no role says where it
+    /// starts), without running anything — saving is not needed, unlike `automation start`: the launch
+    /// check, what each step is handed and the whole prompt each agent would be started on — with no agent started,
     /// no built-in carried out and nothing kept. Each step leaves by its first way out, and by the next
     /// one each time it is reached again; what it would have handed on is a placeholder. Takes what
     /// `automation start` takes, bar the files

@@ -183,16 +183,6 @@ pub fn take(tx: &WriteTx<'_>, run_step_id: i64, task_id: i64) -> Result<Task> {
     Ok(task)
 }
 
-/// **Put the round this execution belongs to under a role** — the role a test run's made-up task stands
-/// in for, as it names none of its own ([`crate::ops::automation_rehearse`]).
-pub(crate) fn put_under(tx: &WriteTx<'_>, run_step_id: i64, role_id: i64) -> Result<()> {
-    let run_step = live_execution(tx, run_step_id)?;
-    let Some(stretch_id) = run_step.run_task_id else { return Ok(()) };
-    let Some(before) = read::automation_run_task(tx.conn(), stretch_id)? else { return Ok(()) };
-    let after = AutomationRunTask { role_id: Some(role_id), updated_at: Timestamp::now(), ..before.clone() };
-    crate::ops::emit_update(tx, record::automation_run_task(&before), record::automation_run_task(&after))
-}
-
 // ───────────────────────── out ─────────────────────────
 
 /// **Put down one thing this step produced**, on the output its id names — which is also the way out

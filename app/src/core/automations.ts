@@ -194,6 +194,40 @@ export async function setAutomationTriggerEnabled(triggerId: number, enabled: bo
 }
 
 /**
+ * **How many tasks a trigger's condition counts now, as it is typed** — the automation's project's
+ * tasks matching `filter` and, where `roleId` is given, worked under that role. Nothing is saved: it
+ * is what the trigger's card says beside the condition before the save. Core refuses what writing the
+ * condition would refuse, and that refusal reaches the caller as it is.
+ */
+export async function fetchTriggerCount(
+  automationId: number,
+  filter: string,
+  roleId: number | null,
+): Promise<number | null> {
+  if (!inTauri()) return null;
+  // How few it waits for is not part of the count; core reads a condition whole, so one is sent.
+  const condition = { filter, roleId: roleId ?? undefined, below: 1 };
+  return invoke<number>("automation_trigger_count", { automationId, condition });
+}
+
+/**
+ * Subscribing read of {@link fetchTriggerCount} — read again whenever what is typed changes, and
+ * whenever the tasks or the automation change under it (`core/query`'s `automationTriggerCount`).
+ * `count` is null until an answer lands, and outside the app; `error` is core's refusal.
+ */
+export function useTriggerCount(
+  automationId: number,
+  filter: string,
+  roleId: number | null,
+): { count: number | null; error: unknown } {
+  const { data, error } = useQuery<number | null>(
+    ["automationTriggerCount", automationId, filter, roleId],
+    () => fetchTriggerCount(automationId, filter, roleId),
+  );
+  return { count: error === undefined ? (data ?? null) : null, error };
+}
+
+/**
  * **Delete an automation and everything built into it** — its steps with their declarations and
  * the lines between them.
  *

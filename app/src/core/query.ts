@@ -176,6 +176,9 @@ export const SCOPE_WATCHERS: Readonly<Record<string, readonly string[]>> = {
   automations: ["automations"],
   automation: ["automations"],
   automationLaunchCheck: ["automations"],
+  // How many tasks a trigger's condition counts as it is typed: the tasks move it, and so does a
+  // role of the automation going away.
+  automationTriggerCount: ["tasks", "automations"],
   // What a launch asks for: the entry's settings, and the project's axes and their values.
   automationLaunchAsks: ["automations", "tasks"],
 };

@@ -25,6 +25,15 @@
 // match" is the condition with nothing else, and "when a script says so" the script with nothing else,
 // so there each cannot be switched off.
 //
+// **The condition is picked, not written**: the status of the tasks it counts, the role they are
+// worked under — one of this automation's own — and how few it waits for, read as one sentence. The
+// status is written into the filter as `status:`, and the role travels beside it as the condition's
+// own. A filter written elsewhere may say more than the two boxes can show — several statuses, or
+// other keys such as `dim:`; several statuses are offered as one more choice, and the rest is kept as
+// it was written and said so under the sentence, so opening and saving a trigger never rewrites what
+// it counts. Under it stands how many tasks match now, read from core as it is typed and again when the
+// tasks move, and what that means for the next look.
+//
 // **What core refuses** — a wait under a minute, a task with no title, a filter that does not read —
 // comes back as core's own sentence, drawn at the top, and the card stays open with what was typed.
 // The form does not check its own boxes (`noValidate`), so core's sentence is the only one drawn.
@@ -38,10 +47,12 @@ import {
   removeAutomationTrigger,
   setAutomationTriggerEnabled,
   updateAutomationTrigger,
+  useTriggerCount,
 } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
 import { dueLabel, errText, t, tf } from "../core/i18n";
 import { asTyped } from "../core/keys";
+import { STATUS_ALL } from "../core/status";
 import { ErrorNote } from "../components/ErrorNote";
 import { filterValueLabel } from "./automationParts";
 import type {
@@ -81,7 +92,13 @@ export type TriggerForm = {
   minutes: string;
   /** Whether a condition goes with an answer to 1 other than "tasks", which always has one. */
   counted: boolean;
-  filter: string;
+  /** The status the condition counts, its values as the filter writes them (`todo`, or
+   *  `todo,in_progress` read from a filter written elsewhere), or `""` for any. */
+  status: string;
+  /** The role the counted tasks are worked under, or `null` for any. */
+  countedRoleId: number | null;
+  /** What the filter says besides its status, which no box shows: kept as it was written. */
+  filterRest: string;
   below: string;
   /** Whether a script is asked with an answer to 1 other than "script", which always asks one. */
   asked: boolean;
@@ -102,15 +119,43 @@ function boxesOf(script: AutomationStepScriptDto | undefined): ScriptBoxes {
   return { program: script.program, args: script.args.join("\n"), minutes: String(script.timeoutMinutes) };
 }
 
-/** The form a trigger opens with: the one written, or a new one that files every hour. */
+/**
+ * A condition's filter as the card holds it: the values of its first `status:` — `""` where it has
+ * none — and every other part, as it was written.
+ */
+export function splitFilter(filter: string): { status: string; rest: string } {
+  let status: string | null = null;
+  const rest: string[] = [];
+  for (const part of filter.split(/\s+/)) {
+    if (part === "") continue;
+    if (status === null && part.startsWith("status:") && part.length > "status:".length) {
+      status = part.slice("status:".length);
+    } else {
+      rest.push(part);
+    }
+  }
+  return { status: status ?? "", rest: rest.join(" ") };
+}
+
+/** The filter the card's condition sends: its status, then what it kept. */
+export function joinFilter(status: string, rest: string): string {
+  return [status === "" ? "" : `status:${status}`, rest.trim()].filter((one) => one !== "").join(" ");
+}
+
+/** The form a trigger opens with: the one written, or a new one that files every hour. A condition
+ *  not yet written starts counting the tasks still to do, worked under any role. */
 export function formOf(trigger: AutomationTriggerDto | undefined): TriggerForm {
+  const condition = trigger?.condition;
+  const filter = condition === undefined ? { status: "todo", rest: "" } : splitFilter(condition.filter);
   return {
     name: trigger?.name ?? "",
     when: trigger?.when.kind ?? "every",
     minutes: trigger?.when.kind === "every" ? String(trigger.when.minutes) : "60",
-    counted: trigger?.condition !== undefined,
-    filter: trigger?.condition?.filter ?? "",
-    below: trigger?.condition === undefined ? "1" : String(trigger.condition.below),
+    counted: condition !== undefined,
+    status: filter.status,
+    countedRoleId: condition?.roleId ?? null,
+    filterRest: filter.rest,
+    below: condition === undefined ? "1" : String(condition.below),
     asked: trigger?.script !== undefined,
     judge: boxesOf(trigger?.script),
     task: trigger?.task.kind ?? "fixed",
@@ -148,7 +193,11 @@ export function inputOf(form: TriggerForm): AutomationTriggerInputDto {
     when,
     condition:
       form.when === "tasks" || form.counted
-        ? { filter: form.filter.trim(), below: Number(form.below) }
+        ? {
+            filter: joinFilter(form.status, form.filterRest),
+            roleId: form.countedRoleId ?? undefined,
+            below: Number(form.below),
+          }
         : undefined,
     script: form.when === "script" || form.asked ? scriptOf(form.judge) : undefined,
     task,
@@ -398,6 +447,129 @@ function Preview({ automation, form }: { automation: AutomationDetailDto; form: 
   );
 }
 
+/**
+ * **Part 1's condition, as one sentence**: "status is [ ], role is [ ], fewer than [ ] tasks → file
+ * one". A status or role the boxes do not offer — several statuses, or a role no longer listed — is
+ * offered as one more choice, so what was written stays picked; what the filter says besides is named
+ * under the sentence, kept as it is.
+ */
+function Condition({
+  automation,
+  form,
+  put,
+}: {
+  automation: AutomationDetailDto;
+  form: TriggerForm;
+  put: (patch: Partial<TriggerForm>) => void;
+}) {
+  const statuses: { value: string; label: string }[] = STATUS_ALL.map((one) => ({
+    value: one,
+    label: filterValueLabel("status", one),
+  }));
+  if (form.status !== "" && !statuses.some((one) => one.value === form.status)) {
+    const values = form.status.split(",").filter((one) => one !== "");
+    statuses.push({ value: form.status, label: values.map((one) => filterValueLabel("status", one)).join("/") });
+  }
+  statuses.push({ value: "", label: t("auto.trigger.anyStatus") });
+
+  const roles: { value: string; label: string }[] = automation.roles.map((one) => ({
+    value: String(one.id),
+    label: one.name,
+  }));
+  if (form.countedRoleId !== null && !automation.roles.some((one) => one.id === form.countedRoleId)) {
+    roles.push({ value: String(form.countedRoleId), label: String(form.countedRoleId) });
+  }
+  roles.push({ value: "", label: t("auto.trigger.anyRole") });
+
+  return (
+    <>
+      <div className="trigcard__cond">
+        <span>{t("auto.trigger.condStatus")}</span>
+        <select
+          aria-label={t("auto.trigger.condStatusPick")}
+          value={form.status}
+          onChange={(e) => put({ status: e.target.value })}
+        >
+          {statuses.map((one) => (
+            <option key={one.value} value={one.value}>
+              {one.label}
+            </option>
+          ))}
+        </select>
+        <span>{t("auto.trigger.condRole")}</span>
+        <select
+          aria-label={t("auto.trigger.condRolePick")}
+          value={form.countedRoleId === null ? "" : String(form.countedRoleId)}
+          onChange={(e) => put({ countedRoleId: e.target.value === "" ? null : Number(e.target.value) })}
+        >
+          {roles.map((one) => (
+            <option key={one.value} value={one.value}>
+              {one.label}
+            </option>
+          ))}
+        </select>
+        <span>{t("auto.trigger.condBelow")}</span>
+        <input
+          type="number"
+          min={1}
+          aria-label={t("auto.trigger.below")}
+          value={form.below}
+          onChange={(e) => put({ below: e.target.value })}
+        />
+        <span>{t("auto.trigger.belowUnit")}</span>
+      </div>
+      {form.filterRest.trim() !== "" && (
+        <span className="autostep__hint" data-cond="kept">
+          {tf("auto.trigger.condKept", { rest: form.filterRest.trim() })}
+        </span>
+      )}
+    </>
+  );
+}
+
+/** What the next look does, given `count` tasks match now — in the order core weighs it: a trigger
+ *  switched off files nothing, nor does one whose condition does not hold, and otherwise it files at
+ *  the next look its answer to 1 waits for. */
+export function nowThen(form: TriggerForm, enabled: boolean, count: number): string {
+  const below = Number(form.below);
+  if (!Number.isInteger(below) || below < 1) return t("auto.trigger.nowNoBelow");
+  if (!enabled) return t("auto.trigger.nowOff");
+  if (count >= below) return tf("auto.trigger.nowFull", { below });
+  if (form.when === "script" || form.asked) return t("auto.trigger.nowScript");
+  if (form.when === "every") return t("auto.trigger.nowEvery");
+  if (form.when === "idle") return t("auto.trigger.nowIdle");
+  return t("auto.trigger.nowTasks");
+}
+
+/** "Now: N match → …" — how many tasks the condition, as typed, counts now, and what follows. */
+function NowLine({
+  automation,
+  trigger,
+  form,
+}: {
+  automation: AutomationDetailDto;
+  trigger: AutomationTriggerDto | undefined;
+  form: TriggerForm;
+}) {
+  const { count, error } = useTriggerCount(
+    automation.id,
+    joinFilter(form.status, form.filterRest),
+    form.countedRoleId,
+  );
+  const line =
+    error !== undefined
+      ? tf("auto.trigger.nowRefused", { why: errText(error) })
+      : count === null
+        ? null
+        : tf("auto.trigger.now", { count, then: nowThen(form, trigger?.enabled ?? true, count) });
+  if (line === null) return null;
+  return (
+    <span className="autostep__hint" data-cond="now">
+      {line}
+    </span>
+  );
+}
+
 export function AutomationTrigger({
   automation,
   trigger,
@@ -514,6 +686,22 @@ export function AutomationTrigger({
                 </span>
               )}
               {form.when === "idle" && <span className="autostep__hint">{t("auto.trigger.idleHint")}</span>}
+              {form.when !== "tasks" && (
+                <label className="buttonrow">
+                  <input
+                    type="checkbox"
+                    checked={form.counted}
+                    onChange={(e) => put({ counted: e.target.checked })}
+                  />
+                  {t("auto.trigger.counted")}
+                </label>
+              )}
+              {(form.when === "tasks" || form.counted) && (
+                <>
+                  <Condition automation={automation} form={form} put={put} />
+                  <NowLine automation={automation} trigger={trigger} form={form} />
+                </>
+              )}
               {form.when !== "script" && (
                 <label className="buttonrow">
                   <input
@@ -528,43 +716,6 @@ export function AutomationTrigger({
                 <>
                   <span className="autostep__hint">{t("auto.trigger.judgeHint")}</span>
                   <ScriptBoxesField boxes={form.judge} onChange={(judge) => put({ judge })} />
-                </>
-              )}
-              {form.when !== "tasks" && (
-                <label className="buttonrow">
-                  <input
-                    type="checkbox"
-                    checked={form.counted}
-                    onChange={(e) => put({ counted: e.target.checked })}
-                  />
-                  {t("auto.trigger.counted")}
-                </label>
-              )}
-              {(form.when === "tasks" || form.counted) && (
-                <>
-                  <div className="autostep__pair autostep__pair--top">
-                    <span className="autostep__label">{t("auto.trigger.filter")}</span>
-                    <div className="autostep__field">
-                      <input
-                        {...asTyped}
-                        className="autostep__mono"
-                        aria-label={t("auto.trigger.filter")}
-                        value={form.filter}
-                        onChange={(e) => put({ filter: e.target.value })}
-                      />
-                      <span className="autostep__hint">{t("auto.trigger.filterHint")}</span>
-                    </div>
-                  </div>
-                  <span className="autostep__limit">
-                    <input
-                      type="number"
-                      min={1}
-                      aria-label={t("auto.trigger.below")}
-                      value={form.below}
-                      onChange={(e) => put({ below: e.target.value })}
-                    />
-                    {t("auto.trigger.belowUnit")}
-                  </span>
                 </>
               )}
             </div>

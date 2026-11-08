@@ -2864,6 +2864,37 @@ fn condition_count(
     Ok(Some(ConditionCount { matched, below: condition.below }))
 }
 
+/// **Count the tasks a condition not yet written would look at** — `condition` as a person setting up
+/// a trigger of `automation_id` has it typed, before it is saved: how many of the automation's
+/// project's tasks match its filter and, where it names a role, are worked under it. What is refused
+/// is what writing it refuses ([`crate::ops::automation::trigger_add`]): a role of another automation,
+/// and a filter that does not read or names a `project:`. It writes nothing.
+pub fn condition_count_of(
+    conn: &Connection,
+    automation_id: i64,
+    condition: &crate::model::TriggerCondition,
+) -> Result<ConditionCount> {
+    let automation = read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    if let Some(role_id) = condition.role_id {
+        let role = read::automation_role(conn, role_id)?.ok_or_else(|| not_found("role", role_id))?;
+        if role.automation_id != automation.id {
+            return Err(Error::invalid(format!(
+                "role '{role_id}' belongs to another automation, so this one's trigger cannot count the tasks \
+                 worked under it"
+            )));
+        }
+    }
+    let filter = condition.filter.trim();
+    if crate::query::Filter::parse(filter, crate::time::today())?.project_ref.is_some() {
+        return Err(Error::invalid(
+            "a trigger's condition counts the tasks of its own automation's project, so it names no `project:`",
+        ));
+    }
+    let roles: Vec<i64> = condition.role_id.into_iter().collect();
+    let matched = crate::query::count(conn, crate::reach::Reach::binding(automation.project_id), filter, &roles)?;
+    Ok(ConditionCount { matched, below: condition.below })
+}
+
 /// **Whether a trigger would file a task now, and what holds it back** ([`trigger_check`]) — what a
 /// person setting one up reads beside it: how many tasks its condition counts, and why it waits.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]

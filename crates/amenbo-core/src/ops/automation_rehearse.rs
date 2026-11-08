@@ -19,8 +19,9 @@
 //! under the first of them, and the walk goes on where it starts.
 //!
 //! **Nothing it writes is kept.** The whole walk is one write transaction that is never committed
-//! ([`crate::store::Store::automation_rehearse`]): the run, its steps, the placeholder tasks and the
-//! lines a run leaves on its task are all gone the moment it returns, and nobody watching the store sees
+//! ([`crate::store::Store::automation_rehearse`]): the run, its steps, the task filed from what was
+//! handed over ([`HandedAtLaunch`]), the placeholder tasks and the lines a run leaves on its task are all
+//! gone the moment it returns, and nobody watching the store sees
 //! any of them. What survives is the account handed back ([`Rehearsal`]).
 //!
 //! **Which way out a step takes is chosen here**, since nobody is doing the work that would decide it.
@@ -43,7 +44,7 @@ use crate::ops::automation_builtin_close;
 use crate::ops::automation_builtin_defer;
 use crate::ops::automation_builtin_hand_back;
 use crate::ops::automation_report::{self, Next, Produced};
-use crate::ops::automation_run::{self, HandedAtLaunch, HandedTask, Launcher, ReadsFrom, Waiting};
+use crate::ops::automation_run::{self, HandedAtLaunch, Launcher, ReadsFrom, Waiting};
 use crate::ops::automation_step::{self, Opened};
 use crate::ops::task::{self, NewTask};
 use crate::store_engine::{read, WriteTx};
@@ -224,7 +225,7 @@ fn stand_in(
                 automation_report::out(tx, run_step_id, port.id, Produced::File(file.id))?;
             }
             AutomationPortKind::TaskTake => {
-                let task = made_up(tx, run, def)?;
+                let task = made_up(tx)?;
                 automation_report::take(tx, run_step_id, task)?;
                 // A made-up task names no role, so its round is put under the role the run is a seat of,
                 // and the walk goes on where that role starts.
@@ -233,7 +234,7 @@ fn stand_in(
                 }
             }
             AutomationPortKind::TaskMake => {
-                let task = made_up(tx, run, def)?;
+                let task = made_up(tx)?;
                 automation_report::out(tx, run_step_id, port.id, Produced::Task(task))?;
             }
         }
@@ -258,31 +259,19 @@ fn stand_in(
     Ok(())
 }
 
-/// **A task made up for a step to hand on.** The built-in that files a task files it from what was
-/// handed over at launch, so a placeholder filed in its place carries that title and those notes, and
-/// the prompts after it read what the person typed; every other one is named as a test run's.
+/// **A task made up for a step to hand on**, named as a test run's.
 ///
 /// It is filed in no project, so no axis the project requires holds its creation.
-fn made_up(tx: &WriteTx<'_>, run: &crate::model::AutomationRun, def: &AutomationRunDef) -> Result<i64> {
-    let handed = match def.builtin.as_deref() {
-        Some(crate::ops::automation_builtin_make::KEY) => HandedTask::of(run)?,
-        _ => None,
-    };
-    let title = handed
-        .as_ref()
-        .map(|h| h.title.clone())
-        .filter(|t| !t.trim().is_empty())
-        .unwrap_or_else(|| crate::run_wording::rehearsal(tx.language(), "task", &[]));
-    let notes = handed.and_then(|h| h.notes).unwrap_or_default();
+fn made_up(tx: &WriteTx<'_>) -> Result<i64> {
     let filed = task::add(
         tx,
         NewTask {
-            title,
+            title: crate::run_wording::rehearsal(tx.language(), "task", &[]),
             project_id: None,
             due: None,
             start: None,
             priority: None,
-            notes,
+            notes: String::new(),
             created_by_kind: Some(ActorKind::Ai),
             at_binding_id: None,
             role_id: None,
@@ -404,30 +393,46 @@ mod tests {
         });
     }
 
-    /// **An entry that files a task files a made-up one from what was handed**, and leaves by the way out
-    /// its answers choose rather than the first it declares.
+    /// **A built-in that files a task leaves by the way out its answers choose** rather than the first it
+    /// declares — here set to take the task it files, after the round before it closed its own. Each
+    /// closed round goes round to the take at the entry, which finds nothing the second time.
     #[test]
-    fn an_entry_that_files_a_task_leaves_by_the_way_out_its_answers_choose() {
+    fn a_built_in_that_files_a_task_leaves_by_the_way_out_its_answers_choose() {
         with_tx(|tx| {
+            use crate::ops::automation_builtin_make::TITLE;
             let project = mk_project(tx, "amenbo");
             let automation =
-                automation::add(tx, project, NewAutomation { name: "entry".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
+                automation::add(tx, project, NewAutomation { name: "file".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                     .expect("automation");
+            let on = AutomationPictureOwner::Automation;
+            let take = automation::placement_add(tx, automation.id, action(tx, "take_task").expect("take").id)
+                .expect("place take");
+            let (write_action, write) = mk_placed(tx, &automation, "write", "write the next one", "claude");
+            mk_out(tx, &write_action, None, "title", AutomationPortKind::Value, true);
+            let close = automation::placement_add(tx, automation.id, action(tx, "close_task").expect("close").id)
+                .expect("place close");
             let make = automation::placement_add(tx, automation.id, action(tx, "make_task").expect("make").id)
-                .expect("place it");
+                .expect("place make");
             automation::cfg_set(tx, make.id, WHAT_THEN, Some(&serde_json::to_string(TAKE_IT).expect("json")))
                 .expect("take it");
             let (_, work) = mk_placed(tx, &automation, "work", "write it", "claude");
-            let on = AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(write.id), None).expect("take → write");
+            automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
+            automation::edge_add(tx, on, write.id, None, EdgeTarget::Go(close.id), None).expect("write → close");
+            automation::edge_add(tx, on, close.id, None, EdgeTarget::Go(make.id), None).expect("close → make");
             automation::edge_add(tx, on, make.id, Some(MADE_AND_TAKEN), EdgeTarget::Go(work.id), None)
                 .expect("onward");
+            automation::wire_add(tx, on, write.id, None, "title", make.id, TITLE).expect("wire the title");
             mk_closed_after(tx, &automation, work.id, None);
-            let automation = automation::set_entry(tx, automation.id, Some(make.id)).expect("entry");
+            let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
 
-            let handed = HandedAtLaunch { title: Some("梅雨どきの家事の記事".into()), ..Default::default() };
-            let rehearsal = walk(tx, &automation, &handed);
+            let rehearsal = walk(tx, &automation, &HandedAtLaunch::default());
             let exits: Vec<&str> = rehearsal.steps.iter().map(|s| s.exit.as_str()).collect();
-            assert_eq!(exits, vec![MADE_AND_TAKEN, DONE_EXIT, DONE_EXIT], "{rehearsal:?}");
+            assert_eq!(
+                exits,
+                vec![TAKEN, DONE_EXIT, DONE_EXIT, MADE_AND_TAKEN, DONE_EXIT, DONE_EXIT, NONE_TO_TAKE],
+                "{rehearsal:?}",
+            );
             assert_eq!(rehearsal.status, AutomationRunStatus::Completed);
             let filed = read::task_ids_in_project(tx.conn(), project).expect("tasks");
             assert!(filed.is_empty(), "nothing is filed in the project: {filed:?}");
@@ -435,7 +440,9 @@ mod tests {
     }
 
     /// **A way out that hands on a file is walked through** — the placeholder file is put down as a row
-    /// the schema holds, and the walk goes on to the end.
+    /// the schema holds, and the walk goes on to the end. What was handed is filed as a task before the
+    /// walk, as a launch files it, and the take takes a made-up one in its place. The closed round goes
+    /// round to the take, which finds nothing the second time.
     #[test]
     fn a_way_out_that_hands_on_a_file_is_walked_through() {
         with_tx(|tx| {
@@ -443,22 +450,20 @@ mod tests {
             let automation =
                 automation::add(tx, project, NewAutomation { name: "file".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                     .expect("automation");
-            let make = automation::placement_add(tx, automation.id, action(tx, "make_task").expect("make").id)
-                .expect("place it");
-            automation::cfg_set(tx, make.id, WHAT_THEN, Some(&serde_json::to_string(TAKE_IT).expect("json")))
-                .expect("take it");
+            let take = automation::placement_add(tx, automation.id, action(tx, "take_task").expect("take").id)
+                .expect("place take");
             let (plan_action, plan) = mk_placed(tx, &automation, "plan", "write the plan", "claude");
             mk_out(tx, &plan_action, None, "plan", AutomationPortKind::File, true);
             let on = AutomationPictureOwner::Automation;
-            automation::edge_add(tx, on, make.id, Some(MADE_AND_TAKEN), EdgeTarget::Go(plan.id), None)
-                .expect("onward");
+            automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(plan.id), None).expect("take → plan");
+            automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
             mk_closed_after(tx, &automation, plan.id, None);
-            let automation = automation::set_entry(tx, automation.id, Some(make.id)).expect("entry");
+            let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
 
             let handed = HandedAtLaunch { title: Some("梅雨どきの家事の記事".into()), ..Default::default() };
             let rehearsal = walk(tx, &automation, &handed);
             let exits: Vec<&str> = rehearsal.steps.iter().map(|s| s.exit.as_str()).collect();
-            assert_eq!(exits, vec![MADE_AND_TAKEN, DONE_EXIT, DONE_EXIT], "{rehearsal:?}");
+            assert_eq!(exits, vec![TAKEN, DONE_EXIT, DONE_EXIT, NONE_TO_TAKE], "{rehearsal:?}");
             assert_eq!(rehearsal.steps[1].name, "plan", "{rehearsal:?}");
             assert_eq!(rehearsal.status, AutomationRunStatus::Completed, "{rehearsal:?}");
             assert_eq!(rehearsal.cut, None);

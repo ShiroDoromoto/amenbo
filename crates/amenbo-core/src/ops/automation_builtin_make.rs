@@ -21,14 +21,10 @@
 //! placed, and the step before it cannot change it: an axis already answered in [`CLASSIFY`] is not
 //! one it may choose on.
 //!
-//! **Placed as the entry, it is handed its title, notes and classification at launch** (`AMB-D-970`) —
-//! there is no step before it to hand them on, so the person launching the run does ([`read_at_launch`]).
-//! The files handed along with them hang off the run until it files the task, and are moved on to that
-//! task then (`AMB-D-981`), so what comes after reads them as the task's attachments.
-//! That person chooses on the axes the step before it would have, and also gives a value on every axis
-//! the project requires and [`CLASSIFY`] does not fix: nobody else is there to. The time axis is the one
-//! exception — it is filled from the period that contains today, as `task add` fills it ([`with_time_axis`]). The launch checks all of
-//! it before a run is made ([`handed_at_launch`]).
+//! **It reads nothing handed over at launch** (`AMB-D-1123`): what a person or a trigger hands a run is
+//! filed as a task with a role before the run starts ([`crate::ops::automation_run::HandedAtLaunch`]),
+//! classified as [`launch_values`] reads it, so its title, notes and classification come to it along a
+//! wire like any other step's.
 //!
 //! **It can file the task under another role** ([`ROLE`]), by the name of one of the automation's roles.
 //! Where the round it runs in is worked under a role and files the task under a different one, that is
@@ -45,7 +41,7 @@
 //! required axis left empty, a task to depend on that would keep the new one from being taken.
 
 use crate::error::{Error, ErrorCode, Msg, Result};
-use crate::model::{ActorKind, AttachmentTarget, AutomationCfgKind, AutomationPortKind, Priority};
+use crate::model::{ActorKind, AutomationCfgKind, AutomationPortKind, Priority};
 use crate::ops::automation_builtin::{
     Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry, Chooses, Work,
 };
@@ -190,34 +186,19 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
     depends_on.extend(named(carry, DEPENDS_ON_TASKS, TypedKind::Task)?);
     let decisions = named(carry, DECISIONS, TypedKind::Decision)?;
     let at_binding_id = folder(carry)?;
-    let named_role = role(carry)?;
+    let role_id = role(carry)?;
     let conn = carry.tx.conn();
     let project_id = carry.run.project_id;
     let mut values = fixed(conn, project_id, choice(carry, CLASSIFY)?.as_deref())?;
-    let at_launch = at_launch(carry)?;
-    // A trigger hands the role the task is worked under and its own name with the task it files.
-    let handed = match at_launch {
-        true => crate::ops::automation_run::HandedTask::of(carry.run)?,
-        false => None,
-    };
-    let role_id = handed.as_ref().and_then(|h| h.role_id).or(named_role);
     if let Some(written) = carry.input(CHOSEN).filter(|w| !w.trim().is_empty()) {
         let ai_axes = choice(carry, AI_AXES)?;
-        let by = match at_launch {
-            true => Chooser::Launcher,
-            false => Chooser::StepBefore,
-        };
-        values.extend(chosen(conn, project_id, ai_axes.as_deref(), written, &values, by)?);
+        values.extend(chosen(conn, project_id, ai_axes.as_deref(), written, &values)?);
     }
     with_time_axis(conn, project_id, &mut values)?;
     refusal(carry, &values, if takes { &depends_on } else { &[] })?;
-    // A task a trigger files is one nobody asked for by hand, worked in a round of this automation, so
-    // it is the AI's where the setting gives it to nobody.
-    let by_trigger = handed.as_ref().is_some_and(|h| h.trigger.is_some());
     let assignee = match choice(carry, ASSIGNEE)?.as_deref() {
         Some(HUMAN) => Some(ActorKind::Human),
         Some(AI) => Some(ActorKind::Ai),
-        _ if by_trigger => Some(ActorKind::Ai),
         _ => None,
     };
     let priority = match choice(carry, PRIORITY)?.as_deref() {
@@ -244,9 +225,6 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
             made_in_run_step_id: Some(carry.run_step.id),
         },
     )?;
-    if let Some(trigger) = handed.as_ref().and_then(|h| h.trigger.as_deref()) {
-        task::record_filed_by_trigger(tx, &filed, trigger)?;
-    }
     for (_, value) in values {
         crate::ops::dimension::set(tx, filed.id, value)?;
     }
@@ -258,9 +236,6 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
     }
     for decision in decisions {
         crate::ops::decision::link(tx, decision, filed.id)?;
-    }
-    if at_launch {
-        attach_handed(carry, filed.id)?;
     }
     let filed = task::finish_creating(tx, filed.id, ActorKind::Ai)?;
     if let (Some(to_role_id), false) = (role_id, takes) {
@@ -281,30 +256,6 @@ fn make(carry: &Carry<'_, '_>) -> Result<Carried> {
     carry.put(MADE, TASK, Produced::Task(filed.id))?;
     let task = format!("AMB-T-{}", filed.id);
     Ok(Carried { exit: MADE, report: say(tx.language(), "filed", &[("task", &task), ("title", &filed.title)]) })
-}
-
-/// **The files handed over at launch, moved from the run on to the task it filed** (`AMB-D-981`), in the
-/// order they were handed and each still saying who handed it. Moved rather than copied: the run was
-/// only holding them until there was a task, and nothing reads them off the run.
-fn attach_handed(carry: &Carry<'_, '_>, task_id: i64) -> Result<()> {
-    let tx = carry.tx;
-    let held = read::attachments_for_target(tx.conn(), AttachmentTarget::AutomationRun, carry.run.id)?;
-    for row in held {
-        let Some(file) = read::attachment(tx.conn(), row.id)? else { continue };
-        let (Some(hash), Some(who)) = (file.blob_hash.as_deref(), file.created_by_kind) else { continue };
-        crate::ops::attachment::add_blob(
-            tx,
-            AttachmentTarget::Task,
-            task_id,
-            hash,
-            file.filename.as_deref().unwrap_or_default(),
-            file.mime.as_deref(),
-            file.size_bytes.unwrap_or_default(),
-            who,
-        )?;
-        crate::ops::attachment::remove(tx, file.id)?;
-    }
-    Ok(())
 }
 
 /// **The role [`ROLE`] names**, by its name among the roles of the run's automation, or `None` where it is
@@ -654,57 +605,24 @@ pub(crate) fn ai_axes(conn: &rusqlite::Connection, project_id: i64, written: &st
     Ok(axes)
 }
 
-/// **Who chose the values handed in through [`CHOSEN`]** — which says what they may choose on.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Chooser {
-    /// The step before it, on the axes [`AI_AXES`] names.
-    StepBefore,
-    /// The person launching a run whose entry this is: on those axes too, and on every axis the project
-    /// requires that [`CLASSIFY`] leaves open — there is nobody else to give it a value.
-    Launcher,
-}
-
-impl Chooser {
-    fn what(self) -> String {
-        match self {
-            Chooser::StepBefore => format!("'{CHOSEN}'"),
-            Chooser::Launcher => "the classification handed over at launch".to_string(),
-        }
-    }
-}
-
-/// **The values chosen** (`written`, one `axis=value` a line), as (axis, value), refused where they step
-/// off what was offered: an axis nobody offered `by` ([`Chooser`]), an axis already fixed where the
-/// built-in is placed (`fixed`), a value that axis does not have, and more than one value on one axis —
-/// one was asked for.
+/// **The values the step before it chose** (`written`, one `axis=value` a line), as (axis, value),
+/// refused where they step off what was offered: an axis [`AI_AXES`] does not offer, an axis already
+/// fixed where the built-in is placed (`fixed`), a value that axis does not have, and more than one
+/// value on one axis — one was asked for. The refusal is left on the task in the reader's language.
 fn chosen(
     conn: &rusqlite::Connection,
     project_id: i64,
     ai_axes_written: Option<&str>,
     written: &str,
     fixed: &[(i64, i64)],
-    by: Chooser,
 ) -> Result<Vec<(i64, i64)>> {
-    let mut offered = match ai_axes_written {
+    let offered = match ai_axes_written {
         Some(axes) => ai_axes(conn, project_id, axes)?,
         None => Vec::new(),
     };
-    if by == Chooser::Launcher {
-        offered.extend(
-            read::required_dimensions(conn, project_id, crate::model::ClassifiedSide::Task)?
-                .into_iter()
-                .map(|(axis_id, _)| axis_id),
-        );
-    }
-    let what = by.what();
-    // Only the step before it is turned away while a run is under way, where the refusal is left on the
-    // task in the reader's language; the one launching is turned away at the launch, in the CLI's.
+    let what = format!("'{CHOSEN}'");
     let said = |code: ErrorCode, en: String, field: (&'static str, &str)| {
-        let msg = Msg::new(en);
-        Error::Invalid(match by {
-            Chooser::StepBefore => msg.coded(code).with(field.0, field.1),
-            Chooser::Launcher => msg,
-        })
+        Error::Invalid(Msg::new(en).coded(code).with(field.0, field.1))
     };
     let mut values: Vec<(i64, i64)> = Vec::new();
     for line in written.lines().map(str::trim).filter(|line| !line.is_empty()) {
@@ -719,15 +637,12 @@ fn chosen(
         let axis_id = read::resolve_dimension_in(conn, Some(project_id), axis)?
             .into_iter()
             .find(|id| offered.contains(id))
-            .ok_or_else(|| match by {
-                Chooser::StepBefore => said(
+            .ok_or_else(|| {
+                said(
                     ErrorCode::InvalidMakeTaskAxisNotOffered,
                     format!("{what} names the axis '{axis}', which '{AI_AXES}' does not offer"),
                     ("axis", axis),
-                ),
-                Chooser::Launcher => Error::invalid(format!(
-                    "{what} names the axis '{axis}', which '{AI_AXES}' does not offer and this project does not require"
-                )),
+                )
             })?;
         if fixed.iter().any(|(on, _)| *on == axis_id) {
             return Err(said(
@@ -751,43 +666,39 @@ fn chosen(
     Ok(values)
 }
 
-/// **Whether it reads what was handed over at launch**, placed as the entry — `builtin` being the key
-/// of the built-in placed there, if one is. It is handed it only the first time a run opens it, so the
-/// launch check refuses a line back to it ([`crate::ops::automation_run::Unmet::BackToEntry`]).
-pub fn reads_at_launch(builtin: Option<&str>) -> bool {
-    builtin == Some(KEY)
-}
-
-/// **The inputs it reads from what was handed over at launch**, placed as the entry — `builtin` being
-/// the key of the built-in placed there, if one is.
-pub fn read_at_launch(builtin: Option<&str>, port: &str) -> bool {
-    reads_at_launch(builtin) && [TITLE, NOTES, CHOSEN].contains(&port)
-}
-
-/// **The classification a person handed over to launch a run whose entry this is**, checked the way it
-/// will be when the task is filed — so a launch that would only fall over at its first step is refused
-/// before a run is made — and written as [`CHOSEN`] reads it. `None` where nothing was handed.
-///
-/// Asked of the settings where it is placed as the entry (`settings`), since the axes offered and the
-/// axes fixed are answered there. The title is the caller's to ask for.
-pub(crate) fn handed_at_launch(
+/// **The classification handed over with a task filed at launch** ([`crate::ops::automation_run::HandedAtLaunch`]),
+/// as (axis, value) by name, looked up among `project_id`'s axes — with the time-axis value the task
+/// gets without anyone naming it ([`with_time_axis`]). Refused the way the built-in refuses what it
+/// files: an axis or a value the project does not have, more than one value on one axis, a closed
+/// value, and an axis the project requires left without one ([`unfilable`]). Asked before the task is
+/// filed, so a launch it refuses files nothing.
+pub(crate) fn launch_values(
     conn: &rusqlite::Connection,
-    settings: &[crate::model::AutomationCfg],
     project_id: i64,
     classification: &[(String, String)],
-) -> Result<Option<String>> {
-    let answer = |name: &str| answered(settings, name);
-    let mut values = fixed(conn, project_id, answer(CLASSIFY)?.as_deref())?;
-    let written = (!classification.is_empty()).then(|| {
-        classification.iter().map(|(axis, value)| format!("{axis}={value}")).collect::<Vec<_>>().join("\n")
-    });
-    if let Some(written) = &written {
-        let ai_axes = answer(AI_AXES)?;
-        values.extend(chosen(conn, project_id, ai_axes.as_deref(), written, &values, Chooser::Launcher)?);
+) -> Result<Vec<(i64, i64)>> {
+    let mut values: Vec<(i64, i64)> = Vec::new();
+    for (axis, value) in classification {
+        let (axis_id, value_id) = fixed_one(conn, project_id, &format!("{axis}={value}"))?;
+        if values.iter().any(|(on, _)| *on == axis_id) {
+            return Err(Error::invalid(format!(
+                "the classification handed over at launch names more than one value on the axis '{axis}'"
+            )));
+        }
+        values.push((axis_id, value_id));
     }
     with_time_axis(conn, project_id, &mut values)?;
     unfilable(conn, project_id, &values)?;
-    Ok(written)
+    Ok(values)
+}
+
+/// **The folder a task filed at launch is worked in** — `project_id`'s one linked folder, or none where
+/// it has none or several: there is nowhere it was filed from to choose by (`AMB-D-1012`).
+pub(crate) fn sole_folder(conn: &rusqlite::Connection, project_id: i64) -> Result<Option<i64>> {
+    Ok(match linked_folders(conn, project_id)?.as_slice() {
+        [one] => Some(one.id),
+        _ => None,
+    })
 }
 
 /// **The lines of its settings that name what `project_id` does not have**, as they are answered where
@@ -890,57 +801,6 @@ fn answered(settings: &[crate::model::AutomationCfg], name: &str) -> Result<Opti
         .transpose()
 }
 
-/// **An axis the person launching a run whose entry this is gives a value on**, with the values open
-/// on it in the order the axis lists them. `required` is the project's: a launch that leaves it
-/// without a value is refused ([`handed_at_launch`]). A required time axis is not, while a period
-/// contains today — that period fills it ([`with_time_axis`]).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct LaunchAxis {
-    pub name: String,
-    pub values: Vec<String>,
-    pub required: bool,
-}
-
-/// **The axes a person launching a run whose entry this is may give a value on** — the ones
-/// [`handed_at_launch`] accepts: those [`AI_AXES`] names, then those the project requires, each once,
-/// less those [`CLASSIFY`] already fixes where it is placed (`entry`).
-///
-/// A line on either setting that names no axis is left out rather than refused: this is what a launch
-/// dialog draws, and the launch itself refuses what it cannot file from, in its own words.
-pub(crate) fn launch_axes(
-    conn: &rusqlite::Connection,
-    entry: &crate::model::AutomationPlacement,
-    project_id: i64,
-) -> Result<Vec<LaunchAxis>> {
-    let settings = crate::ops::automation_run::settings_of(conn, entry)?;
-    let fixed = fixed(conn, project_id, answered(&settings, CLASSIFY)?.as_deref()).unwrap_or_default();
-    let mut filled = fixed.clone();
-    with_time_axis(conn, project_id, &mut filled)?;
-    let required: Vec<i64> = read::required_dimensions(conn, project_id, crate::model::ClassifiedSide::Task)?
-        .into_iter()
-        .map(|(axis_id, _)| axis_id)
-        .collect();
-    let written = answered(&settings, AI_AXES)?.unwrap_or_default();
-    let named = written.lines().filter_map(|line| ai_axes(conn, project_id, line).ok()).flatten();
-    let mut offered: Vec<i64> = Vec::new();
-    for axis_id in named.chain(required.iter().copied()) {
-        if !offered.contains(&axis_id) && !fixed.iter().any(|(on, _)| *on == axis_id) {
-            offered.push(axis_id);
-        }
-    }
-    let mut axes = Vec::new();
-    for axis_id in offered {
-        let Some(dimension) = read::dimension(conn, axis_id)? else { continue };
-        axes.push(LaunchAxis {
-            name: dimension.name,
-            values: open_values(conn, axis_id)?,
-            // A required time axis the period containing today fills is offered, not demanded.
-            required: required.contains(&axis_id) && !filled.iter().any(|(on, _)| *on == axis_id),
-        });
-    }
-    Ok(axes)
-}
-
 /// The names of the values open on an axis, in the order the axis lists them.
 fn open_values(conn: &rusqlite::Connection, axis_id: i64) -> Result<Vec<String>> {
     let mut values = Vec::new();
@@ -951,16 +811,6 @@ fn open_values(conn: &rusqlite::Connection, axis_id: i64) -> Result<Vec<String>>
     }
     values.sort_by(|a, b| a.order_key.cmp(&b.order_key).then(a.id.cmp(&b.id)));
     Ok(values.into_iter().map(|v| v.name).collect())
-}
-
-/// **Whether this execution is the entry, handed its inputs at launch** — the first step of a run that
-/// was handed a task to file ([`crate::ops::automation_run::HandedTask`]).
-fn at_launch(carry: &Carry<'_, '_>) -> Result<bool> {
-    if carry.run.handed_task.is_none() {
-        return Ok(false);
-    }
-    let first = read::automation_run_steps_of(carry.tx.conn(), carry.run.id)?.into_iter().next();
-    Ok(first.is_some_and(|step| step.id == carry.run_step.id))
 }
 
 /// **What the step before it may choose**, as the lines its prompt shows: for each axis [`AI_AXES`]
@@ -1725,7 +1575,8 @@ mod tests {
     }
 
     /// **The launch check reads the setting**: the way out it will not leave by needs no line, and only
-    /// set to take the task it files can it be the entry.
+    /// set to take the task it files can it be the entry. Nothing is handed to it at launch any more
+    /// (`AMB-D-1123`), so as the entry nothing reaches its title.
     #[test]
     fn the_launch_check_asks_only_the_way_out_it_is_set_to_leave_by() {
         with_tx(|tx| {
@@ -1752,30 +1603,33 @@ mod tests {
 
             automation::cfg_set(tx, make.id, WHAT_THEN, Some(&serde_json::to_string(TAKE_IT).expect("json")))
                 .expect("take it");
-            // Nothing is wired into the title: as the entry, it is handed one at launch.
             let taken = unmet(tx);
-            assert!(taken.is_empty(), "{taken:?}");
+            assert!(!taken.iter().any(|u| matches!(u, Unmet::EntryTakesNoTask { .. })), "{taken:?}");
+            assert!(!taken.iter().any(|u| matches!(u, Unmet::OpenExit { .. })), "{taken:?}");
+            assert!(
+                taken.iter().any(|u| matches!(u, Unmet::UnwiredInput { port, .. } if port == TITLE)),
+                "nothing reaches the title: {taken:?}",
+            );
         });
     }
 
-    /// The built-in placed as the entry, set to take what it files, with a step after it that closes
-    /// the task — launched with what a person hands over.
+    /// The built-in that takes a task placed as the entry, a step after it and the built-in that closes
+    /// the task, the run ending where there is none to take — what a task filed at launch is worked by.
     fn entry(tx: &WriteTx<'_>) -> (Automation, AutomationPlacement, i64) {
+        use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
         let project = mk_project(tx, "amenbo");
         let automation =
             automation::add(tx, project, NewAutomation { name: "entry".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("automation");
-        let written = action(tx, "make_task").expect("the built-in's action");
-        let make = automation::placement_add(tx, automation.id, written.id).expect("place it");
-        automation::cfg_set(tx, make.id, WHAT_THEN, Some(&serde_json::to_string(TAKE_IT).expect("json")))
-            .expect("take it");
+        let take = automation::placement_add(tx, automation.id, action(tx, "take_task").expect("take").id)
+            .expect("place it");
         let (_, work) = mk_placed(tx, &automation, "work", "work on it", "claude");
         let on = AutomationPictureOwner::Automation;
-        automation::edge_add(tx, on, make.id, Some(MADE_AND_TAKEN), EdgeTarget::Go(work.id), None)
-            .expect("onward");
+        automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
+        automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
         crate::ops::test_support::mk_closed_after(tx, &automation, work.id, None);
-        let automation = automation::set_entry(tx, automation.id, Some(make.id)).expect("entry");
-        (automation, make, project)
+        let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
+        (automation, take, project)
     }
 
     fn launch_with(tx: &WriteTx<'_>, automation: &Automation, handed: &HandedAtLaunch) -> Result<AutomationRun> {
@@ -1801,62 +1655,63 @@ mod tests {
         }
     }
 
-    /// Open the run's first step, which is the built-in, and say what it filed and took.
-    fn filed_first(tx: &WriteTx<'_>, run: &AutomationRun, make: &AutomationPlacement) -> crate::model::Task {
+    /// Open the run's first step, the built-in that takes a task, and say which task it took.
+    fn taken_first(tx: &WriteTx<'_>, run: &AutomationRun, take: &AutomationPlacement) -> crate::model::Task {
         let def = read::automation_run_defs_of(tx.conn(), run.id)
             .expect("defs")
             .into_iter()
-            .find(|d| d.placement_id == Some(make.id))
+            .find(|d| d.placement_id == Some(take.id))
             .expect("the entry's copy");
         let claude = ["claude".to_string()];
         match open(tx, run.id, def.id, Some(&claude)).expect("open") {
-            Opened::Carried { run_step_id, next } => {
-                assert!(matches!(next, Next::Step(_)), "the run goes on: {next:?}");
-                let (filed, exit) = handed(tx, run_step_id);
-                assert_eq!(exit, way_out(tx, run_step_id, MADE_AND_TAKEN));
-                assert_eq!(filed.made_in_run_step_id, Some(run_step_id), "the task says which step filed it");
-                filed
-            }
+            Opened::Carried { next, .. } => assert!(matches!(next, Next::Step(_)), "the run goes on: {next:?}"),
             other => panic!("the entry is carried out, not {other:?}"),
         }
+        let stretch = read::automation_run_task_last(tx.conn(), run.id).expect("read").expect("stretch");
+        let taken = stretch.task_id.expect("a task taken");
+        read::task(tx.conn(), taken).expect("read").expect("the task")
     }
 
-    /// **Placed as the entry, it files the task from what was handed over at launch** — the title, the
-    /// notes and a value on an offered axis — and the run works that task (`AMB-D-970`).
+    /// **What a launch is handed is filed as a task, and the run takes it** (`AMB-D-1123`) — the title,
+    /// the notes and a value on an axis, filed before the run starts and given to the AI.
     #[test]
-    fn as_the_entry_it_files_what_the_launch_handed_over() {
+    fn a_launch_files_what_it_was_handed_and_the_run_takes_it() {
         with_tx(|tx| {
-            let (automation, make, project) = entry(tx);
-            let p = Picture { automation: automation.clone(), project, first: make.clone(), make: make.clone() };
-            let (_, build) = trades(tx, &p);
-            answer(tx, &p, AI_AXES, "職能");
+            let (automation, take, project) = entry(tx);
+            let axis = crate::ops::dimension::add(
+                tx,
+                project,
+                crate::ops::dimension::NewDimension { name: "職能".into(), ..Default::default() },
+            )
+            .expect("axis");
+            let build = crate::ops::dimension::value_add(tx, axis.id, "実装", None).expect("value");
             let handed = HandedAtLaunch {
                 notes: Some("what to do".into()),
                 ..with_values("  an issue  ", &[("職能", "実装")])
             };
             let run = launch_with(tx, &automation, &handed).expect("launch");
 
-            let filed = filed_first(tx, &run, &make);
+            let filed = taken_first(tx, &run, &take);
             assert_eq!(filed.title, "an issue");
             assert_eq!(filed.notes, "what to do");
             assert_eq!(filed.status, TaskStatus::InProgress);
-            assert!(read::assignment_id(tx.conn(), filed.id, build).expect("read").is_some());
-            let stretch = read::automation_run_task_last(tx.conn(), run.id).expect("read").expect("stretch");
-            assert_eq!(stretch.task_id, Some(filed.id));
+            assert_eq!(filed.assignee_kind, Some(ActorKind::Ai));
+            assert_eq!(filed.created_by_kind, Some(ActorKind::Human), "filed by whoever launched");
+            assert!(read::assignment_id(tx.conn(), filed.id, build.id).expect("read").is_some());
         });
     }
 
     /// **A trigger files its task and starts a run on it once it is due** — the title and notes written
-    /// on it, filed by the entry as a person's would be. Before it is due, and while the automation
-    /// already has its most runs under way, it decides not to, and leaves nothing behind: no run, and
-    /// the time it is next asked where it was.
+    /// on it, filed before the run as a person's would be, and taken by it. Before it is due, and while
+    /// every seat of its role is taken, it decides not to, and leaves nothing behind: no run, and the
+    /// time it is next asked where it was.
     #[test]
     fn a_trigger_files_its_task_and_starts_a_run_once_due() {
         use crate::model::TriggerWhen;
         use crate::ops::automation_run::{fire, triggers_due, TriggersDue};
         use crate::time::Timestamp;
         with_tx(|tx| {
-            let (automation, make, _) = entry(tx);
+            let (automation, take, _) = entry(tx);
             let every = TriggerWhen::Every { minutes: 60 };
             let trigger = automation::NewTrigger {
                 name: String::new(),
@@ -1884,7 +1739,7 @@ mod tests {
             assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![trigger_id]);
             let run = fire(tx, trigger_id, &by, due, None).expect("fire").expect("a run");
             assert_eq!(run.started_by_kind, None, "nobody pressed start");
-            let filed = filed_first(tx, &run, &make);
+            let filed = taken_first(tx, &run, &take);
             assert_eq!(filed.title, "受信箱を見る");
             assert_eq!(filed.notes, "what to do");
             let then = every.after(due);
@@ -1892,7 +1747,7 @@ mod tests {
             let filed_at = read::automation_trigger(tx.conn(), trigger_id).expect("read").expect("there").last_filed_at;
             assert_eq!(filed_at, Some(due), "and it keeps when it filed");
 
-            // The run is still under way, and the most is one.
+            // The run is still under way, in the role's one seat.
             assert!(triggers_due(tx.conn(), then).expect("ask").due.is_empty(), "not due while it is full");
             assert!(fire(tx, trigger_id, &by, then, None).expect("fire").is_none(), "no task with no run to go to");
             assert_eq!(under_way(tx), vec![run.id]);
@@ -1966,7 +1821,7 @@ mod tests {
         use crate::ops::automation_run::fire;
         use crate::time::Timestamp;
         with_tx(|tx| {
-            let (automation, make, project) = entry(tx);
+            let (automation, take, project) = entry(tx);
             let new_role = |name: &str| automation::NewRole { name: name.into(), ..Default::default() };
             let role = automation::role_add(tx, automation.id, new_role("さくら")).expect("a role");
             let trigger = |role_id: Option<i64>| automation::NewTrigger {
@@ -2004,9 +1859,9 @@ mod tests {
             assert!(named(tx).is_empty(), "a time it decides no leaves no line");
 
             let run = fire(tx, trigger_id, &by, kept.next_at, None).expect("fire").expect("a run");
-            let filed = filed_first(tx, &run, &make);
+            let filed = taken_first(tx, &run, &take);
             assert_eq!(filed.role_id, Some(role.id), "filed under the trigger's role");
-            assert_eq!(filed.assignee_kind, Some(ActorKind::Ai), "the AI's, the entry giving it to nobody");
+            assert_eq!(filed.assignee_kind, Some(ActorKind::Ai), "the AI's");
             let lines = named(tx);
             assert_eq!(lines.len(), 1, "one line: {lines:?}");
             assert_eq!(lines[0].task, Some(filed.id));
@@ -2019,8 +1874,8 @@ mod tests {
         });
     }
 
-    /// **An idle trigger files only once none of the automation's runs is under way** — even with room
-    /// for more beside it — and a minute after the task it last filed at the soonest. A time it says no
+    /// **An idle trigger files only once no seat of its role is taken** — even with room for more beside
+    /// it — and a minute after the task it last filed at the soonest. A time it says no
     /// leaves `next_at` where it was.
     #[test]
     fn an_idle_trigger_files_once_no_run_is_under_way() {
@@ -2029,7 +1884,7 @@ mod tests {
         use crate::ops::automation_stop::{stop, Ending};
         use crate::time::Timestamp;
         with_tx(|tx| {
-            let (automation, make, _) = entry(tx);
+            let (automation, take, _) = entry(tx);
             crate::ops::test_support::room_for(tx, automation.id, 2);
             let trigger = automation::NewTrigger {
                 name: String::new(),
@@ -2059,7 +1914,7 @@ mod tests {
 
             assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![trigger_id], "idle and due");
             let run = fire(tx, trigger_id, &by, due, None).expect("fire").expect("a run");
-            assert_eq!(filed_first(tx, &run, &make).title, "手が空いたら見る");
+            assert_eq!(taken_first(tx, &run, &take).title, "手が空いたら見る");
             let then = TriggerWhen::Idle.after(due);
             assert_eq!(next_at(tx), then, "a minute on from when it filed");
 
@@ -2245,17 +2100,17 @@ mod tests {
             assert!(read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read").is_empty(), "no run");
 
             assert_eq!(check(tx, written.next_at).held, None, "due, with no run under way");
-            let run = launch_with(tx, &automation, &titled("人が渡した")).expect("a run");
+            let run = launch_with(tx, &automation, &HandedAtLaunch::default()).expect("a run");
             assert_eq!(
                 check(tx, written.next_at).held,
                 Some(TriggerHeld::NoRoom { under_way: 1, max: 1 }),
-                "an idle waits for no run to be under way",
+                "an idle waits for no seat of its role to be taken",
             );
             assert_eq!(read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read"), vec![run.id]);
 
             mk_task_in(tx, "もう一つ", Some(project));
             let full = check(tx, written.next_at);
-            assert_eq!(full.condition.map(|c| c.holds()), Some(false), "two todo, not below 2 — the run's own task is in progress");
+            assert_eq!(full.condition.map(|c| c.holds()), Some(false), "two todo, not below 2");
             assert_eq!(full.held, Some(TriggerHeld::Condition), "the condition before the room");
             assert_eq!(trigger_try(&written, &full, || false), TriggerTried::Condition);
 
@@ -2326,7 +2181,7 @@ mod tests {
         use crate::model::TriggerWhen;
         use crate::ops::automation_run::{fire, triggers_due};
         with_tx(|tx| {
-            let (automation, make, _) = entry(tx);
+            let (automation, take, _) = entry(tx);
             let dir = std::env::temp_dir().join(format!("amenbo-trigger-file-{}", std::process::id()));
             std::fs::create_dir_all(&dir).expect("dir");
             let path = dir.join("task.md");
@@ -2353,7 +2208,7 @@ mod tests {
 
             std::fs::write(&path, "ファイルで起こす\n\n本文").expect("write");
             let run = fire(tx, trigger_id, &by, due, None).expect("fire").expect("a run");
-            let filed = filed_first(tx, &run, &make);
+            let filed = taken_first(tx, &run, &take);
             assert_eq!(filed.title, "ファイルで起こす");
             assert_eq!(filed.notes, "本文");
             std::fs::remove_dir_all(&dir).ok();
@@ -2368,7 +2223,7 @@ mod tests {
         use crate::model::{StepScript, TriggerWhen};
         use crate::ops::automation_run::{fire, triggers_due, ScriptsSaid, TriggerScripts};
         with_tx(|tx| {
-            let (automation, make, _) = entry(tx);
+            let (automation, take, _) = entry(tx);
             // Named by its full path, as a program is written; it is never run here.
             let writer = std::env::temp_dir().join("write-task").to_string_lossy().into_owned();
             let trigger = automation::NewTrigger {
@@ -2410,7 +2265,7 @@ mod tests {
 
             let said = ScriptsSaid { scripts, wrote };
             let run = fire(tx, trigger_id, &by, due, Some(&said)).expect("fire").expect("a run");
-            let filed = filed_first(tx, &run, &make);
+            let filed = taken_first(tx, &run, &take);
             assert_eq!(filed.title, "書いてもらう");
             assert_eq!(filed.notes, "本文");
             assert_eq!(next_at(tx), TriggerWhen::Idle.after(due));
@@ -2465,9 +2320,7 @@ mod tests {
         use crate::model::TriggerWhen;
         use crate::ops::automation_run::fire;
         with_tx(|tx| {
-            let (automation, make, _) = entry(tx);
-            // Left unanswered, it does not take what it files — which the launch check refuses at the entry.
-            automation::cfg_set(tx, make.id, WHAT_THEN, None).expect("leave it unanswered");
+            let (automation, _, project) = entry(tx);
             let trigger = automation::NewTrigger {
                 name: String::new(),
                 role_id: None,
@@ -2479,24 +2332,27 @@ mod tests {
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
             let before = read::automation(tx.conn(), automation.id).expect("read").expect("there");
             let due = before.triggers[0].next_at;
-            let claude = ["claude".to_string()];
-            let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+            // Nobody here can start the agent its step names, which the launch check refuses.
+            let nothing: [String; 0] = [];
+            let by = Launcher { default_agent: None, startable: Some(&nothing), models: nothing_asked(), workspace_open: None, by: None };
 
             assert!(fire(tx, trigger_id, &by, due, None).is_err(), "the launch check refuses it");
             let after = read::automation(tx.conn(), automation.id).expect("read").expect("there");
             assert_eq!(after.triggers, before.triggers, "next_at is where it was");
             assert_eq!(after.updated_at, before.updated_at);
             assert!(read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read").is_empty());
+            assert!(read::task_ids_in_project(tx.conn(), project).expect("tasks").is_empty(), "no task left behind");
         });
     }
 
-    /// **The files handed over at launch are moved on to the task it files** (`AMB-D-981`) — in the order
-    /// they were handed, each still saying who handed it, and none left on the run.
+    /// **The files handed over at launch are attached to the task filed** (`AMB-D-981`) — in the order
+    /// they were handed, each saying who handed it, and none on the run.
     #[test]
-    fn as_the_entry_it_attaches_the_files_handed_over_to_the_task_it_files() {
+    fn a_launch_attaches_the_files_handed_over_to_the_task_it_files() {
+        use crate::model::AttachmentTarget;
         use crate::ops::automation_run::HandedFile;
         with_tx(|tx| {
-            let (automation, make, _) = entry(tx);
+            let (automation, take, _) = entry(tx);
             let file = |name: &str| HandedFile {
                 blob_hash: "a".repeat(64),
                 filename: name.to_string(),
@@ -2512,26 +2368,23 @@ mod tests {
             assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
 
             let run = launch_with(tx, &automation, &handed).expect("launch");
-            let on_the_run = |tx: &WriteTx<'_>| {
-                read::attachments_for_target(tx.conn(), AttachmentTarget::AutomationRun, run.id).expect("files")
-            };
-            assert_eq!(on_the_run(tx).len(), 2, "held on the run until there is a task");
+            let on_the_run = read::attachments_for_target(tx.conn(), AttachmentTarget::AutomationRun, run.id).expect("files");
+            assert!(on_the_run.is_empty(), "nothing is held on the run");
 
-            let filed = filed_first(tx, &run, &make);
+            let filed = taken_first(tx, &run, &take);
             let files = read::attachments_for_target(tx.conn(), AttachmentTarget::Task, filed.id).expect("files");
             let names: Vec<_> = files.iter().map(|a| a.filename.clone().unwrap_or_default()).collect();
             assert_eq!(names, ["issue.md", "log.txt"]);
             assert!(files.iter().all(|a| a.created_by_kind.as_deref() == Some("human")));
-            assert!(on_the_run(tx).is_empty(), "moved, not copied");
         });
     }
 
-    /// **The person launching gives a value on every axis the project requires** and where it is placed
-    /// leaves open, offered or not — nobody else is there to. Left out, the launch is refused.
+    /// **The person launching gives a value on every axis the project requires** — nobody else is there
+    /// to. Left out, the launch is refused and nothing is filed.
     #[test]
     fn a_required_axis_left_open_is_the_launchers_to_answer() {
         with_tx(|tx| {
-            let (automation, make, project) = entry(tx);
+            let (automation, take, project) = entry(tx);
             let axis = crate::ops::dimension::add(
                 tx,
                 project,
@@ -2548,18 +2401,17 @@ mod tests {
             assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
 
             let run = launch_with(tx, &automation, &with_values("an issue", &[("職能", "実装")])).expect("launch");
-            let filed = filed_first(tx, &run, &make);
+            let filed = taken_first(tx, &run, &take);
             assert!(read::assignment_id(tx.conn(), filed.id, build.id).expect("read").is_some());
         });
     }
 
     /// **A required time axis is filled, not demanded** (`AMB-D-147`): the period that contains today goes
-    /// on the task it files, as `task add` puts it on, and the launch offers the axis without requiring it.
+    /// on the task filed at launch, as `task add` puts it on.
     #[test]
     fn a_required_time_axis_is_filled_from_the_period_containing_today() {
-        use crate::ops::automation_run::{launch_asks, LaunchAsks};
         with_tx(|tx| {
-            let (automation, make, project) = entry(tx);
+            let (automation, take, project) = entry(tx);
             let era = crate::ops::dimension::add(
                 tx,
                 project,
@@ -2576,16 +2428,8 @@ mod tests {
             crate::ops::dimension::update(tx, era.id, None, None, None, None, None, None, Some(true), None, None, None)
                 .expect("required");
 
-            let LaunchAsks::Task { axes } = launch_asks(tx.conn(), automation.id).expect("asks") else {
-                panic!("the entry files a task");
-            };
-            assert_eq!(
-                axes,
-                vec![LaunchAxis { name: "フェーズ".into(), values: vec!["運用期".into()], required: false }]
-            );
-
             let run = launch_with(tx, &automation, &titled("an issue")).expect("launch");
-            let filed = filed_first(tx, &run, &make);
+            let filed = taken_first(tx, &run, &take);
             assert!(read::assignment_id(tx.conn(), filed.id, now.id).expect("read").is_some());
 
             // Narrowed off tasks, the axis gives a task nothing (`AMB-D-789`).
@@ -2596,80 +2440,29 @@ mod tests {
         });
     }
 
-    /// **What the entry cannot file from is refused before a run is made**: no title, an axis nobody
-    /// offered, one fixed where it is placed, a value the axis does not have.
+    /// **What a task cannot be filed from is refused before a run is made**: no title, an axis or a
+    /// value the project does not have, more than one value on one axis.
     #[test]
     fn a_launch_it_could_not_file_from_makes_no_run() {
         with_tx(|tx| {
-            let (automation, make, project) = entry(tx);
-            let p = Picture { automation: automation.clone(), project, first: make.clone(), make: make.clone() };
-            trades(tx, &p);
+            let (automation, _, project) = entry(tx);
+            let axis = crate::ops::dimension::add(
+                tx,
+                project,
+                crate::ops::dimension::NewDimension { name: "職能".into(), ..Default::default() },
+            )
+            .expect("axis");
+            crate::ops::dimension::value_add(tx, axis.id, "実装", None).expect("value");
+            crate::ops::dimension::value_add(tx, axis.id, "設計", None).expect("value");
             let refused = |tx: &WriteTx<'_>, handed: HandedAtLaunch, what: &str| {
                 let err = launch_with(tx, &automation, &handed).expect_err(what);
                 assert!(err.to_string().contains(what), "{err}");
                 assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
+                assert!(read::task_ids_in_project(tx.conn(), project).expect("tasks").is_empty());
             };
-            refused(tx, HandedAtLaunch::default(), "no title");
-            refused(tx, titled("  "), "no title");
-            refused(tx, with_values("an issue", &[("職能", "実装")]), AI_AXES);
-            answer(tx, &p, AI_AXES, "職能");
+            refused(tx, HandedAtLaunch { notes: Some("what to do".into()), ..Default::default() }, "needs a title");
             refused(tx, with_values("an issue", &[("職能", "営業")]), "職能=営業");
-            answer(tx, &p, CLASSIFY, "職能=設計");
-            refused(tx, with_values("an issue", &[("職能", "実装")]), "already fixes");
-        });
-    }
-
-    /// **A launch asks for the axes it accepts a value on** — those offered to choose on, then those the
-    /// project requires, less those fixed where it is placed — each with its open values; any other
-    /// entry, an agent's step or a built-in that takes a task, asks for nothing (`AMB-D-981`).
-    #[test]
-    fn a_launch_asks_for_the_axes_it_accepts_a_value_on() {
-        use crate::ops::automation_run::{launch_asks, LaunchAsks};
-        with_tx(|tx| {
-            let (automation, make, project) = entry(tx);
-            let p = Picture { automation: automation.clone(), project, first: make.clone(), make: make.clone() };
-            let asked = |tx: &WriteTx<'_>| match launch_asks(tx.conn(), automation.id).expect("asks") {
-                LaunchAsks::Task { axes } => axes,
-                other => panic!("the entry files a task: {other:?}"),
-            };
-            assert_eq!(asked(tx), Vec::new());
-
-            trades(tx, &p);
-            answer(tx, &p, AI_AXES, "職能\nどこにも無い軸");
-            let kind = crate::ops::dimension::add(
-                tx,
-                project,
-                crate::ops::dimension::NewDimension { name: "種別".into(), ..Default::default() },
-            )
-            .expect("axis");
-            crate::ops::dimension::value_add(tx, kind.id, "不具合", None).expect("value");
-            crate::ops::dimension::update(tx, kind.id, None, None, None, None, None, None, Some(true), None, None, None)
-                .expect("required");
-            let axis = |name: &str, values: &[&str], required: bool| LaunchAxis {
-                name: name.into(),
-                values: values.iter().map(|v| v.to_string()).collect(),
-                required,
-            };
-            assert_eq!(asked(tx), vec![axis("職能", &["実装", "設計"], false), axis("種別", &["不具合"], true)]);
-
-            answer(tx, &p, CLASSIFY, "職能=設計");
-            assert_eq!(asked(tx), vec![axis("種別", &["不具合"], true)]);
-
-            let another = |tx: &WriteTx<'_>, name: &str| {
-                automation::add(tx, project, NewAutomation { name: name.into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
-                    .expect("automation")
-            };
-            let agent = another(tx, "agent");
-            let (_, work) = mk_placed(tx, &agent, "work", "work on it", "claude");
-            automation::set_entry(tx, agent.id, Some(work.id)).expect("entry");
-            assert_eq!(launch_asks(tx.conn(), agent.id).expect("asks"), LaunchAsks::Nothing);
-
-            let take = another(tx, "take");
-            let placed = automation::placement_add(tx, take.id, action(tx, "take_task").expect("action").id)
-                .expect("place it");
-            assert_eq!(launch_asks(tx.conn(), take.id).expect("asks"), LaunchAsks::Nothing);
-            automation::set_entry(tx, take.id, Some(placed.id)).expect("entry");
-            assert_eq!(launch_asks(tx.conn(), take.id).expect("asks"), LaunchAsks::Nothing);
+            refused(tx, with_values("an issue", &[("職能", "実装"), ("職能", "設計")]), "more than one value");
         });
     }
 

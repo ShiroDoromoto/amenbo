@@ -59,7 +59,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::Connection;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
@@ -127,20 +127,6 @@ pub enum Unmet {
     /// The entry declares no `task_take` output, so no step of the run would ever come to hold a task
     /// and every step after it would be about nothing.
     EntryTakesNoTask { step: String, builtin: Option<String>, placement: i64 },
-    /// A line a run could walk back to an entry that reads what was handed over at launch — the
-    /// built-in that files a task ([`crate::ops::automation_builtin_make::reads_at_launch`]). It is
-    /// handed the title only the first time a run opens it, so coming back to it the run would fail
-    /// there on no input.
-    ///
-    /// `step` and `exit` name the way out the line leaves by, and `to` the entry it goes back to.
-    BackToEntry {
-        step: String,
-        exit: String,
-        to: String,
-        builtin: Option<String>,
-        to_builtin: Option<String>,
-        placement: i64,
-    },
     /// A way out with nothing set to happen after it. The run would reach it and stop. The error way
     /// out is not one of these — it is carried from birth and halts unless somebody says otherwise.
     ///
@@ -274,13 +260,6 @@ impl Unmet {
                      or change what a run starts at with `automation entry-replace`"
                 )
             }
-            Unmet::BackToEntry { step, exit, to, .. } => {
-                format!(
-                    "{} of '{step}' goes back to the entry '{to}', which is handed what to file only when a \
-                     run starts — end the run there, or go on to a step that takes the next task",
-                    named(exit)
-                )
-            }
             Unmet::OpenExit { step, exit, .. } => {
                 format!("nothing is set to happen after {} of '{step}'", named(exit))
             }
@@ -371,7 +350,6 @@ impl Unmet {
             Unmet::ActionEmpty { placement: None, .. } => ErrorCode::NotReadyActionSaveEmpty,
             Unmet::ActionDraft { .. } => ErrorCode::NotReadyAutomationActionDraft,
             Unmet::EntryTakesNoTask { .. } => ErrorCode::NotReadyAutomationEntryTakesNoTask,
-            Unmet::BackToEntry { .. } => ErrorCode::NotReadyAutomationBackToEntry,
             Unmet::OpenExit { .. } => ErrorCode::NotReadyAutomationOpenExit,
             Unmet::UnwiredInput { .. } => ErrorCode::NotReadyAutomationUnwiredInput,
             Unmet::UnansweredCfg { .. } => ErrorCode::NotReadyAutomationUnansweredCfg,
@@ -415,13 +393,6 @@ impl Unmet {
             Unmet::ExportOnly | Unmet::NoSteps | Unmet::NoEntry | Unmet::NoFailuresTo => msg,
             Unmet::ActionEmpty { action, .. } | Unmet::ActionDraft { action, .. } => msg.with("action", action),
             Unmet::EntryTakesNoTask { step, .. } => msg.with("step", step),
-            Unmet::BackToEntry { step, exit, to, to_builtin, .. } => {
-                let msg = msg.with("step", step).with("exit", exit).with("to", to);
-                match to_builtin {
-                    Some(key) => msg.with("to_builtin", key),
-                    None => msg,
-                }
-            }
             Unmet::OpenExit { step, exit, .. } => msg.with("step", step).with("exit", exit),
             Unmet::UnwiredInput { step, port, .. } => msg.with("step", step).with("port", port),
             Unmet::UnansweredCfg { step, cfg, .. } | Unmet::MisansweredCfg { step, cfg, .. } => {
@@ -465,7 +436,6 @@ impl Unmet {
             | Unmet::UnwiredInput { placement, .. } => *placement,
             Unmet::ActionDraft { placement, .. }
             | Unmet::EntryTakesNoTask { placement, .. }
-            | Unmet::BackToEntry { placement, .. }
             | Unmet::UnansweredCfg { placement, .. }
             | Unmet::MisansweredCfg { placement, .. }
             | Unmet::CfgNotFound { placement, .. }
@@ -497,7 +467,6 @@ impl Unmet {
     fn builtin(&self) -> Option<&str> {
         match self {
             Unmet::EntryTakesNoTask { builtin, .. }
-            | Unmet::BackToEntry { builtin, .. }
             | Unmet::OpenExit { builtin, .. }
             | Unmet::UnwiredInput { builtin, .. }
             | Unmet::UnansweredCfg { builtin, .. }
@@ -550,33 +519,34 @@ pub struct Launcher<'a> {
     pub by: Option<ActorKind>,
 }
 
-/// **What a person hands over when launching a run** — the entrance where a person hands something
-/// over (`AMB-D-970`). The first step the run opens is told it ([`crate::ops::automation_step`]).
+/// **What a person hands over when launching a run** — a task, **filed before the run starts** under a
+/// role of the automation, rather than handed to its entry (`AMB-D-1123`): work is handed to an
+/// automation as a task with a role, and each role starts from the tasks of its own waiting to be taken.
+/// The run is then started like any other, in a free seat — the seat of that role where it has one free
+/// ([`file_handed`]).
 ///
-/// **Only the built-in that files a task reads anything** (`AMB-D-981`): the title, the notes and the
-/// classification of the task it files, and the files, which it attaches to that task. A launch handing
-/// what its entry does not read is refused rather than left lying on the run where nothing reads it
-/// ([`entry_reads`]).
+/// The title, the notes and the classification are the task's, and the files are attached to it
+/// (`AMB-D-981`). Anything handed for a task with no title is refused: a task cannot be filed without
+/// one.
 ///
 /// A trigger hands its task over the same way, as the title and notes it says, with the role the task is
 /// worked under and its own name for the line the task's timeline gets ([`fire`]).
 ///
-/// Nothing handed is the default, and a launch that hands nothing starts as it always has.
+/// Nothing handed is the default, and a launch that hands nothing files nothing.
 #[derive(Clone, Debug, Default)]
 pub struct HandedAtLaunch {
     /// The files, already ingested into the blob store by the caller ([`crate::blob::BlobStore`]), in
-    /// the order they were handed over. Each is attached to the run in the launch's own transaction,
-    /// and moved from there on to the task the entry files
-    /// ([`crate::ops::automation_builtin_make`]).
+    /// the order they were handed over. Each is attached to the task filed, in the launch's own
+    /// transaction.
     pub files: Vec<HandedFile>,
-    /// The title of the task an entry that files one files. Blank is the same as none.
+    /// The title of the task filed. Blank is the same as none.
     pub title: Option<String>,
     /// Its notes. Blank is the same as none.
     pub notes: Option<String>,
     /// Its classification, as (axis, value) by name, in the order handed.
     pub classification: Vec<(String, String)>,
     /// The role it is worked under, one of the automation's own — handed by a trigger
-    /// ([`crate::model::AutomationTrigger::role_id`]). `None` for none.
+    /// ([`crate::model::AutomationTrigger::role_id`]). `None` files it under the automation's first role.
     pub role_id: Option<i64>,
     /// The name of the trigger that hands it, which the task's timeline names it by once it is filed
     /// ([`crate::activity_log::event::task_filed_by_trigger`]). `None` where a person launched the run.
@@ -595,33 +565,6 @@ impl HandedAtLaunch {
     /// What was handed for a task to be filed from: a title, notes, a classification or a file.
     fn for_a_task(&self) -> bool {
         self.title().is_some() || self.notes().is_some() || !self.classification.is_empty() || !self.files.is_empty()
-    }
-}
-
-/// **The task a run starts by filing, as handed over at launch** — kept on the run as JSON
-/// (`automation_run.handed_task`) and read by the built-in that files it, as the inputs it would
-/// otherwise be wired
-/// ([`crate::ops::automation_builtin_make`]).
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HandedTask {
-    pub title: String,
-    #[serde(default)]
-    pub notes: Option<String>,
-    /// One `axis=value` a line — the shape the built-in's input for a chosen classification reads.
-    #[serde(default)]
-    pub classification: Option<String>,
-    /// The role the task is worked under ([`HandedAtLaunch::role_id`]).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub role_id: Option<i64>,
-    /// The name of the trigger that handed it ([`HandedAtLaunch::trigger`]), or `None` for a person.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub trigger: Option<String>,
-}
-
-impl HandedTask {
-    /// The one kept on `run`, or `None` where it was handed none.
-    pub fn of(run: &AutomationRun) -> Result<Option<HandedTask>> {
-        run.handed_task.as_deref().map(|json| serde_json::from_str(json).map_err(Error::from)).transpose()
     }
 }
 
@@ -1084,7 +1027,6 @@ fn check_picture(
                 placement: entry.id,
             });
         }
-        unmet.extend(back_to_entry(conn, pic, entry, &live, &defs)?);
     }
     for placement in placements.iter().filter(|p| live.contains(&p.id)) {
         let def = &defs[&placement.id];
@@ -1122,7 +1064,7 @@ fn check_picture(
             }
         }
         for port in def.action_inputs() {
-            if port.required && !fed(conn, pic, placement, port.id, entry_id, &live, &by_id, &defs)? {
+            if port.required && !fed(pic, placement, port.id, entry_id, &live, &by_id, &defs)? {
                 unmet.push(Unmet::UnwiredInput {
                     step: name.clone(),
                     port: port.name,
@@ -1201,7 +1143,7 @@ fn check_picture(
             unmet.push(Unmet::ActionEmpty { action: name.clone(), placement: Some(placement.id) });
             continue;
         }
-        let fed_here = |port| fed(conn, pic, placement, port, entry_id, &live, &by_id, &defs);
+        let fed_here = |port| fed(pic, placement, port, entry_id, &live, &by_id, &defs);
         push_new(&mut unmet, inside(def, Some(placement.id), &steps, fed_here)?);
         // A built-in names no agent and no model: Amenbo carries it out itself (`AMB-D-964`).
         for step in steps.iter().filter(|step| step.builtin.is_none()) {
@@ -1694,44 +1636,6 @@ fn goes_by_role(def: &ActionDef, exit_id: i64) -> bool {
     def.steps.iter().any(|s| s.builtin.as_deref() == Some(TAKE_TASK.key)) && hands_on_taken(def, exit_id)
 }
 
-/// **The lines a run could walk back to an entry that reads what was handed over at launch**
-/// ([`Unmet::BackToEntry`]) — one for each way out of a placement in `live` that goes to `entry`, the
-/// entry's own included. A way out its setting says it never leaves by is not asked about.
-fn back_to_entry(
-    conn: &Connection,
-    pic: &Picture,
-    entry: &AutomationPlacement,
-    live: &BTreeSet<i64>,
-    defs: &Defs,
-) -> Result<Vec<Unmet>> {
-    let to_builtin = action_builtin(conn, entry.action_id)?;
-    if !crate::ops::automation_builtin_make::reads_at_launch(to_builtin.as_deref()) {
-        return Ok(Vec::new());
-    }
-    let to = action_name(conn, entry.action_id)?;
-    let mut found = Vec::new();
-    for placement in pic.placements.iter().filter(|p| live.contains(&p.id)) {
-        let def = &defs[&placement.id];
-        let never = never_taken(conn, pic, placement, def)?;
-        for exit in def.action_exits() {
-            if Some(exit.name.as_str()) == never {
-                continue;
-            }
-            if pic.edge_for_exit(placement.id, exit.id).and_then(|e| e.to_id) == Some(entry.id) {
-                found.push(Unmet::BackToEntry {
-                    step: action_name(conn, placement.action_id)?,
-                    exit: exit.name,
-                    to: to.clone(),
-                    builtin: action_builtin(conn, placement.action_id)?,
-                    to_builtin: to_builtin.clone(),
-                    placement: placement.id,
-                });
-            }
-        }
-    }
-    Ok(found)
-}
-
 /// Whether a way out has something set to happen after it. An edge that goes on to a placement of some
 /// other automation — or to none — decides nothing, so it counts as undecided rather than as an edge.
 fn decided(pic: &Picture, placement_id: i64, exit_id: i64, by_id: &BTreeMap<i64, &AutomationPlacement>) -> bool {
@@ -1820,14 +1724,10 @@ fn takes_one_first(
 /// this placement's own way out, or from a placement only reached after it, carries nothing the first
 /// time a run arrives — either way it feeds no input.
 ///
-/// **An input the entry reads at launch is fed there** (`entry_id`): the built-in that files a task,
-/// placed as the entry, is handed its title, notes and classification by the person launching the run
-/// ([`crate::ops::automation_builtin_make::read_at_launch`]), and the launch refuses one that hands no
-/// title. That holds only the first time a run opens it, and a line back to it is refused on its own
-/// ([`Unmet::BackToEntry`]).
-#[allow(clippy::too_many_arguments)]
+/// Nothing feeds the entry at launch: what a launch is handed is filed as a task before the run starts
+/// ([`HandedAtLaunch`]), so the built-in that files a task placed as the entry has nothing reaching its
+/// title.
 fn fed(
-    conn: &Connection,
     pic: &Picture,
     placement: &AutomationPlacement,
     port_id: i64,
@@ -1836,15 +1736,6 @@ fn fed(
     by_id: &BTreeMap<i64, &AutomationPlacement>,
     defs: &Defs,
 ) -> Result<bool> {
-    if placement.id == entry_id {
-        let builtin = action_builtin(conn, placement.action_id)?;
-        let port = defs[&placement.id].action_inputs().into_iter().find(|p| p.id == port_id);
-        if port.is_some_and(|p| {
-            crate::ops::automation_builtin_make::read_at_launch(builtin.as_deref(), &p.name)
-        }) {
-            return Ok(true);
-        }
-    }
     let mut before = None;
     for wire in pic.wires_to_port(placement.id, port_id) {
         if !live.contains(&wire.from_id) {
@@ -1888,16 +1779,10 @@ fn never_taken(
     }))
 }
 
-/// One placement's settings, **declaration and answer together**. Public because the build screen draws
-/// the same pair and must not put them back together a second way. The action declares and carries no
-/// answer; the placement answers on a row of its own under the same name
-/// ([`crate::ops::automation::cfg_set`]), so the two have to be put back together here. What is declared
-/// is read off the version the placement stands on ([`ActionDef::placed`]).
-pub fn settings_of(conn: &Connection, placement: &AutomationPlacement) -> Result<Vec<AutomationCfg>> {
-    answered(conn, placement, &ActionDef::placed(conn, placement)?)
-}
-
-/// [`settings_of`], with the action the placement stands on already read.
+/// One placement's settings, **declaration and answer together**, with the action the placement stands
+/// on already read. The action declares and carries no answer; the placement answers on a row of its own
+/// under the same name ([`crate::ops::automation::cfg_set`]), so the two have to be put back together
+/// here. What is declared is read off the version the placement stands on ([`ActionDef::placed`]).
 pub(crate) fn answered(
     conn: &Connection,
     placement: &AutomationPlacement,
@@ -1948,9 +1833,9 @@ fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> V
 ///   that and then tell them the automation was never going to run.
 /// - **No free seat.** A launch is refused once every role of the picture launched has as many of its
 ///   runs `running` or `paused` as its headcount ([`seats`]) — one set of seats as many as its
-///   [`headcount`], where no role names where its round starts. A paused one can be picked up again, so
-///   it holds its seat as much as a running one. They are counted in the same transaction the run is
-///   written in. Last, since it is the only one that goes away by waiting.
+///   roles' headcount added up, where no role names where its round starts. A paused one can be picked
+///   up again, so it holds its seat as much as a running one. They are counted in the same transaction
+///   the run is written in. Last, since it is the only one that goes away by waiting.
 ///
 /// The run is born `running`, so a launch never waits (`AMB-D-947`): it is either refused or under
 /// way. `started_at` is the moment of the launch itself.
@@ -1986,7 +1871,8 @@ impl Started {
 }
 
 /// **Start an automation as a person does** — [`launch_handing`] of the newest saved version, refused
-/// over everything a launch is refused over, and in that order.
+/// over everything a launch is refused over, and in that order. What was handed is filed as a task
+/// first ([`HandedAtLaunch`]), so the run started has it to take.
 ///
 /// **Where the entry would wait for a task and none can be taken now, no run is made**
 /// (`AMB-D-969`): the automation is marked as waiting for one instead ([`Started::Waits`]), and the
@@ -1998,7 +1884,7 @@ pub fn start(
     by: &Launcher<'_>,
     handed: &HandedAtLaunch,
 ) -> Result<Started> {
-    hand(tx, automation_id, by, handed, ReadsFrom::Saved, true, true)
+    launch_asking(tx, automation_id, by, handed, ReadsFrom::Saved, true, true, |_| true)
 }
 
 /// **Which definition of an automation a launch reads** — what is checked and copied down onto the run.
@@ -2013,17 +1899,9 @@ pub enum ReadsFrom {
     Draft,
 }
 
-/// **How many runs of an automation its roles hold between them** — the headcount of the roles its
-/// newest saved version holds, added up, and the draft's where nothing is saved yet; each role at the
-/// headcount the launch standing holds for it ([`in_launch`]). One where it holds no role. What a
-/// trigger weighs its room against; a run is started only into a role's free seat ([`seats`]).
-pub fn headcount(conn: &Connection, automation: &Automation) -> Result<u32> {
-    let (pic, _) = definition(conn, automation, ReadsFrom::Saved)?;
-    Ok(headcount_of(&pic, &in_launch(conn, automation.id)?))
-}
-
-/// [`headcount`] of a picture already read, with the launch standing's rows (`counts`): its roles'
-/// headcount added up, or one where it has none.
+/// **How many runs of a picture its roles hold between them** — its roles' headcount added up, each at
+/// the headcount the launch standing holds for it (`counts`, [`in_launch`]), or one where it has none.
+/// The seats of an automation none of whose roles names where its round starts ([`seats`]).
 fn headcount_of(pic: &Picture, counts: &BTreeMap<i64, AutomationLaunchRole>) -> u32 {
     match pic.roles() {
         [] => 1,
@@ -2064,7 +1942,7 @@ fn launch_roles(conn: &Connection, launch_id: i64) -> Result<BTreeMap<i64, Autom
 pub struct Seats {
     /// The role ([`AutomationRun::role_id`]). `None` for an automation none of whose roles names where
     /// its round starts: its runs walk the picture as it is drawn, and sit in one set of seats as many as
-    /// its [`headcount`].
+    /// its roles' headcount added up.
     pub role_id: Option<i64>,
     /// How many seats it has — the role's headcount for the launch standing ([`in_launch`]), its
     /// definition's where no launch holds one for it.
@@ -2101,8 +1979,8 @@ impl Seats {
 /// **The seats of each role of an automation** ([`Seats`]), in the order its roles are defined in — of
 /// the roles its newest saved version names where their round starts, each as many as the launch
 /// standing holds for it ([`in_launch`]). A headcount saved while a launch runs takes hold from the next
-/// launch. One set, as many as its [`headcount`], where none names one. A role stopped taking tasks for
-/// the launch has no free seat ([`Seats::held`]).
+/// launch. One set, as many as its roles' headcount added up, where none names one. A role stopped
+/// taking tasks for the launch has no free seat ([`Seats::held`]).
 pub fn seats(conn: &Connection, automation: &Automation) -> Result<Vec<Seats>> {
     let (pic, _) = definition(conn, automation, ReadsFrom::Saved)?;
     seats_of(conn, automation.id, &pic)
@@ -2191,8 +2069,8 @@ fn definition(conn: &Connection, automation: &Automation, reads: ReadsFrom) -> R
 }
 
 /// [`launch`], with what a person handed over along with it ([`HandedAtLaunch`]), reading the definition
-/// `reads` names. The task to file is kept on the run and the files hang off it, both written before any
-/// step is opened.
+/// `reads` names. What was handed is filed as a task, its files attached to it, before the run is
+/// written ([`file_handed`]).
 ///
 /// **A file needs somebody who handed it over.** An attachment says who put it there, and a launch
 /// whose caller says nothing about itself has no one to name, so it is refused rather than guessed at.
@@ -2203,7 +2081,7 @@ pub fn launch_handing(
     handed: &HandedAtLaunch,
     reads: ReadsFrom,
 ) -> Result<AutomationRun> {
-    hand(tx, automation_id, by, handed, reads, true, false)?.run()
+    launch_asking(tx, automation_id, by, handed, reads, true, false, |_| true)?.run()
 }
 
 /// [`launch_handing`], not refused where no role has a free seat. For a test run, whose run
@@ -2215,7 +2093,7 @@ pub fn launch_handing_past_the_limit(
     handed: &HandedAtLaunch,
     reads: ReadsFrom,
 ) -> Result<AutomationRun> {
-    hand(tx, automation_id, by, handed, reads, false, false)?.run()
+    launch_asking(tx, automation_id, by, handed, reads, false, false, |_| true)?.run()
 }
 
 /// **What the triggers say on one look** ([`triggers_due`]): the triggers due now, the ones due but for
@@ -2236,26 +2114,25 @@ pub struct TriggersDue {
 
 /// **Which triggers are due at `now`** — the first part of each, asked of every enabled trigger of an
 /// automation that may be started by one ([`read::automations_triggered`]), which leaves out a stopped
-/// one. One held back ([`TriggerHeld`]) — by its automation's runs under way, or by its condition — is
-/// not due: it would decide not to file a task, so a look need not open a write to hear it say so. One
-/// with a script — one that asks whether to file a task, or one that writes what it says — is put in
-/// `ask` rather than `due`: its program may run for hours, so it is not run here. It writes nothing:
+/// one. One held back ([`TriggerHeld`]) — by the runs under way in its role's seats, or by its
+/// condition — is not due: it would decide not to file a task, so a look need not open a write to hear
+/// it say so. One with a script — one that asks whether to file a task, or one that writes what it says
+/// — is put in `ask` rather than `due`: its program may run for hours, so it is not run here. It writes
+/// nothing:
 /// [`fire`] asks all of it again, in the transaction it writes in.
 pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
     let mut found = TriggersDue::default();
     for automation in read::automations_triggered(conn)? {
         let enabled = || automation.triggers.iter().filter(|t| t.enabled);
-        let (under_way, max, paused) = if enabled().any(|t| t.next_at <= now) {
-            (
-                read::automation_run_ids_under_way(conn, automation.id)?.len(),
-                headcount(conn, &automation)?,
-                launch_paused(conn, automation.id)?,
-            )
+        let (seats, paused) = if enabled().any(|t| t.next_at <= now) {
+            let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+            (Some((seats_of(conn, automation.id, &pic)?, pic)), launch_paused(conn, automation.id)?)
         } else {
-            (0, 1, false)
+            (None, false)
         };
         for trigger in enabled() {
-            if trigger.next_at <= now {
+            if let (true, Some((seats, pic))) = (trigger.next_at <= now, &seats) {
+                let (under_way, max) = room_of(seats, trigger_role(pic, trigger));
                 // Its tasks are counted only once nothing else holds it back. A condition that no longer
                 // reads (an axis it names gone since) is left for `fire` to refuse, as a launch refused
                 // is, rather than stopping every other trigger on this look.
@@ -2283,10 +2160,10 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 /// and start a run of the automation on it — `Some(run)` when it did, `None` when it decided not to.
 ///
 /// 1. **Whether to file one.** Not while anything holds it back ([`TriggerHeld`]): not before the
-///    trigger's `next_at`, not while the launch standing is paused, and not while the automation's runs
-///    under way say no: an `every` or a `tasks` waits while the automation has its most runs under way
-///    ([`headcount`]), where a task filed would have no run to go to, and an `idle` waits until
-///    it has none at all. Nor while its condition does not hold. One with a script files one only where
+///    trigger's `next_at`, not while the launch standing is paused, and not while the seats of its role
+///    say no (`AMB-D-1123`, [`room_of`]): an `every` or a `tasks` waits while every seat of the role is
+///    taken, where a task filed would have no run to go to, and an `idle` waits until none of them is.
+///    Nor while its condition does not hold. One with a script files one only where
 ///    `said` was heard from those very scripts — the ones [`ask_trigger`] ran outside this write — so one
 ///    rewritten since they were asked files nothing. A trigger not enabled files none, nor does one of an
 ///    archived automation, a stopped one or one kept for export only, nor one taken away since it was
@@ -2294,11 +2171,12 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 /// 2. **What it says** ([`crate::model::TriggerTask`]): the title and notes written on the trigger, the
 ///    ones read from its file now ([`task_from_file`]), or the ones its program wrote in `said`. A file
 ///    that says nothing it can file is an error, as a launch refused is.
-/// 3. **The run.** A launch like any other ([`launch_handing`]), joining the launch standing, of the
-///    newest saved version, the task handed to its entry as a person's would be — so it is the entry,
-///    the built-in that files a task, that files it. What `by` says is passed on as it stands. The task
-///    is handed with the trigger's role and name too: the entry files it under that role, and leaves a
-///    line in its timeline naming the trigger ([`crate::activity_log::event::task_filed_by_trigger`]).
+/// 3. **The task, then the run.** The task is filed before the run, waiting under the trigger's role
+///    to be taken — the automation's first role where the trigger names none — and given to the AI, with
+///    a line in its timeline naming the trigger ([`crate::activity_log::event::task_filed_by_trigger`]).
+///    The run is a launch like any other ([`launch_handing`]), joining the launch standing, of the newest
+///    saved version, sitting in the seat of the task's role ([`file_handed`]). What `by` says is passed
+///    on as it stands.
 ///
 /// **A time it decides no leaves nothing**: no task, no run, and `next_at` where it was, so the next
 /// look asks again. A launch refused by its checks is an error, and the transaction it is written in
@@ -2317,8 +2195,7 @@ pub fn fire(
     let automation_id = trigger.automation_id;
     let automation =
         read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
-    let under_way = read::automation_run_ids_under_way(tx.conn(), automation_id)?.len();
-    let max = headcount(tx.conn(), &automation)?;
+    let (under_way, max) = trigger_room(tx.conn(), &automation, &trigger)?;
     let paused = launch_paused(tx.conn(), automation_id)?;
     if held(&automation, &trigger, under_way, max, paused, None, now).is_some() {
         return Ok(None);
@@ -2868,17 +2745,45 @@ pub(crate) fn role_held(conn: &Connection, run: &AutomationRun) -> Result<bool> 
     Ok(seats.iter().any(|s| s.under_way.contains(&run.id) && s.held))
 }
 
-/// **Whether the runs under way leave a trigger room to file a task** — `under_way` being the
-/// automation's runs `running` or `paused`, and `max` its [`headcount`]. An `every`, a `tasks`
-/// or a `script` files one while there is room for one more run; an `idle` only once there is none
-/// under way.
+/// **Whether the seats of a trigger's role leave it room to file a task** ([`room_of`]) — `under_way`
+/// being the runs `running` or `paused` in them, and `max` how many there are. An `every`, a `tasks`
+/// or a `script` files one while a seat is free; an `idle` only once none of them is taken. With no
+/// seat at all, none files one: no run would take the task.
 fn has_room(when: &crate::model::TriggerWhen, under_way: usize, max: u32) -> bool {
     match when {
         crate::model::TriggerWhen::Every { .. }
         | crate::model::TriggerWhen::Tasks
         | crate::model::TriggerWhen::Script => under_way < max as usize,
-        crate::model::TriggerWhen::Idle => under_way == 0,
+        crate::model::TriggerWhen::Idle => under_way == 0 && max > 0,
     }
+}
+
+/// **The seats a trigger's task goes to, as (runs under way in them, how many there are)** — those of
+/// `role`, the role it files its task under (`AMB-D-1123`, [`trigger_role`]). Where no role names where
+/// its round starts, the one set of seats of the automation ([`seats_of`]); where `role` names none
+/// while others do, no seat, `(0, 0)`.
+fn room_of(seats: &[Seats], role: Option<i64>) -> (usize, u32) {
+    seats
+        .iter()
+        .find(|s| s.role_id.is_some() && s.role_id == role)
+        .or_else(|| seats.iter().find(|s| s.role_id.is_none()))
+        .map_or((0, 0), |s| (s.under_way.len(), s.headcount))
+}
+
+/// **The role a trigger files its task under** — its own, or the first of `pic` where it names none,
+/// as [`file_handed`] files it.
+fn trigger_role(pic: &Picture, trigger: &crate::model::AutomationTrigger) -> Option<i64> {
+    trigger.role_id.or_else(|| pic.roles().first().map(|r| r.id))
+}
+
+/// [`room_of`], reading the automation's newest saved version and its seats as they stand.
+fn trigger_room(
+    conn: &Connection,
+    automation: &Automation,
+    trigger: &crate::model::AutomationTrigger,
+) -> Result<(usize, u32)> {
+    let (pic, _) = definition(conn, automation, ReadsFrom::Saved)?;
+    Ok(room_of(&seats_of(conn, automation.id, &pic)?, trigger_role(&pic, trigger)))
 }
 
 /// **The tasks a trigger's condition counts, as they stand now** ([`crate::model::TriggerCondition`]):
@@ -2916,13 +2821,14 @@ pub enum TriggerHeld {
     /// It is not asked again before `next_at` — a minute after it was written or last filed one, or
     /// for an `every`, its minutes.
     NotYet { next_at: Timestamp },
-    /// The automation's runs under way leave it no room ([`has_room`]): an `idle` waits until none is,
-    /// the others while `under_way` is as many as `max`.
+    /// The seats of its role leave it no room ([`has_room`]): an `idle` waits until none is taken, the
+    /// others while `under_way`, the runs in them, is as many as `max`, how many seats there are.
     NoRoom { under_way: usize, max: u32 },
 }
 
 /// **The first thing that holds `trigger` back at `now`** ([`TriggerHeld`]), or `None` where nothing
-/// does — `under_way` being its automation's runs under way, `max` its [`headcount`], and `paused`
+/// does — `under_way` being the runs under way in its role's seats, `max` how many there are
+/// ([`room_of`]), and `paused`
 /// whether its launch standing is paused. Its condition is weighed only where it is handed counted:
 /// `None` leaves it out, for a reader that counts the tasks only once nothing cheaper has said no.
 fn held(
@@ -2981,13 +2887,12 @@ pub struct TriggerCheck {
 /// **Ask one trigger whether it would file a task at `now`, writing nothing** — every part [`fire`]
 /// asks but its programs: whether it is enabled, whether its automation starts a run, whether the
 /// launch standing is paused, how many tasks its condition counts, whether it is due, and whether the
-/// runs under way leave it room. Its programs may run for hours, so they are left to [`trigger_try`].
+/// seats of its role leave it room. Its programs may run for hours, so they are left to [`trigger_try`].
 pub fn trigger_check(conn: &Connection, trigger_id: i64, now: Timestamp) -> Result<TriggerCheck> {
     let trigger = read::automation_trigger(conn, trigger_id)?.ok_or_else(|| not_found("automation trigger", trigger_id))?;
     let automation =
         read::automation(conn, trigger.automation_id)?.ok_or_else(|| not_found("automation", trigger.automation_id))?;
-    let under_way = read::automation_run_ids_under_way(conn, automation.id)?.len();
-    let max = headcount(conn, &automation)?;
+    let (under_way, max) = trigger_room(conn, &automation, &trigger)?;
     let paused = launch_paused(conn, automation.id)?;
     let condition = condition_count(conn, automation.project_id, &trigger)?;
     Ok(TriggerCheck {
@@ -3196,47 +3101,6 @@ pub fn task_from_file(path: &str) -> std::result::Result<(String, String), Strin
     Ok((title.trim().to_string(), notes.trim_end().to_string()))
 }
 
-/// [`launch_handing`], refused where no role has a free seat only where `limited`, and making no run where the
-/// entry would wait for a task only where `may_wait` ([`start`]).
-fn hand(
-    tx: &WriteTx<'_>,
-    automation_id: i64,
-    by: &Launcher<'_>,
-    handed: &HandedAtLaunch,
-    reads: ReadsFrom,
-    limited: bool,
-    may_wait: bool,
-) -> Result<Started> {
-    let who = match (handed.files.is_empty(), by.by) {
-        (true, _) => None,
-        (false, Some(who)) => Some(who),
-        (false, None) => {
-            return Err(Error::invalid(
-                "a file handed over at launch needs the launcher to say who it is — pass who is launching",
-            ))
-        }
-    };
-    let run = match launch_asking(tx, automation_id, by, handed, reads, limited, may_wait, |_| true)? {
-        Started::Run(run) => run,
-        waits @ Started::Waits(_) => return Ok(waits),
-    };
-    if let Some(who) = who {
-        for file in &handed.files {
-            crate::ops::attachment::add_blob(
-                tx,
-                AttachmentTarget::AutomationRun,
-                run.id,
-                &file.blob_hash,
-                &file.filename,
-                file.mime.as_deref(),
-                file.size_bytes,
-                who,
-            )?;
-        }
-    }
-    Ok(Started::Run(run))
-}
-
 /// [`launch`], with the check's two reasons about how a task is held let through — the lines that
 /// leave a taken task open, and a person's own action handing one on. For a test of how a run walks,
 /// opens, reports or stops, where the picture's shape is not the subject, and for a test of the safety
@@ -3280,8 +3144,8 @@ pub(crate) fn launch_past_the_setting_checks(
 }
 
 /// [`launch`] of the definition `reads` names, refusing only over what `counts` says counts — and over
-/// the runs under way only where `limited` — and keeping what was `handed` on the run. The files are the
-/// caller's to attach once the run exists.
+/// the runs under way only where `limited` — and filing what was `handed` as a task before the run is
+/// written ([`file_handed`]).
 ///
 /// Where `may_wait`, an entry that would wait for a task with none to take makes no run, and the
 /// automation waits instead ([`start`]). Asked last, once nothing refuses the launch: an automation
@@ -3290,7 +3154,8 @@ pub(crate) fn launch_past_the_setting_checks(
 /// Where `limited`, the run sits in a free seat ([`seats`]) — refused where no role has one — and joins
 /// the launch standing for the automation, or opens one ([`join_launch`]); a paused launch is refused. A
 /// launch opened for an entry that waits stands with no run, and the run started once a task turns up
-/// joins it. Where not, the run may sit in any seat, free or not.
+/// joins it. Where not, the run may sit in any seat, free or not. **The run sits in the seat of the role
+/// the task handed was filed under** where that seat may be taken, so it takes that task.
 #[allow(clippy::too_many_arguments)]
 fn launch_asking(
     tx: &WriteTx<'_>,
@@ -3338,11 +3203,10 @@ fn launch_asking(
             .coded(ErrorCode::InvalidAutomationWorkspaceClosed),
         ));
     }
-    // What was handed is checked before the room left: a launch handed the wrong thing would not go
-    // through with room to spare either, and what to fix is the person's to see first.
-    let handed_task = entry_reads(tx.conn(), &automation, &pic, handed)?
-        .map(|task| serde_json::to_string(&task).map_err(Error::from))
-        .transpose()?;
+    // What was handed is filed before the room left is asked: a launch handed the wrong thing would not
+    // go through with room to spare either, and what to fix is the person's to see first. A launch
+    // refused after it takes the task with it, in the same transaction.
+    let filed_under = file_handed(tx, &automation, &pic, by, handed)?;
     // A test run sits in no seat: it may take any of them, free or not.
     let seats = seats_of(tx.conn(), automation_id, &pic)?;
     let open: Vec<&Seats> = seats.iter().filter(|s| !limited || s.free()).collect();
@@ -3382,7 +3246,10 @@ fn launch_asking(
             }
         }
     }
-    let role_id = seat(tx.conn(), automation.project_id, &pic, &open)?;
+    let role_id = match filed_under.and_then(|role| open.iter().find(|s| s.role_id == Some(role))) {
+        Some(s) => s.role_id,
+        None => seat(tx.conn(), automation.project_id, &pic, &open)?,
+    };
     let now = Timestamp::now();
     let run = AutomationRun {
         id: read::next_id(tx.conn(), "automation_run")?,
@@ -3398,7 +3265,7 @@ fn launch_asking(
         started_at: Some(now),
         ended_at: None,
         acknowledged_at: None,
-        handed_task,
+        handed_task: None,
         acknowledged_by_kind: None,
         stopped_detail: None,
         role_id,
@@ -3408,6 +3275,93 @@ fn launch_asking(
     emit_create(tx, record::automation_run(&run))?;
     copy_down(tx, run.id, &pic, version, by.default_agent, now)?;
     Ok(Started::Run(run))
+}
+
+/// **File what was handed over at launch as a task, before the run** ([`HandedAtLaunch`],
+/// `AMB-D-1123`) — answering the role it was filed under, or `None` where nothing was handed for a task.
+///
+/// The task is filed in the automation's project, under the role handed — the automation's first role
+/// where none was — and worked in the project's one linked folder where it has exactly one. It is given
+/// to the AI, since it is handed to the automation to be worked, and the built-in that takes a task
+/// looks for the AI's by default. Its classification is checked as the built-in that files a task
+/// checks it ([`crate::ops::automation_builtin_make::launch_values`]), and its files are attached to it.
+/// A trigger's name goes on a line in its timeline
+/// ([`crate::activity_log::event::task_filed_by_trigger`]). Its creation is finished here, so it can be
+/// taken at once.
+///
+/// Refused where something was handed for a task with no title, and where files were handed by a
+/// launcher that says nothing about itself: an attachment says who put it there.
+fn file_handed(
+    tx: &WriteTx<'_>,
+    automation: &Automation,
+    pic: &Picture,
+    by: &Launcher<'_>,
+    handed: &HandedAtLaunch,
+) -> Result<Option<i64>> {
+    if !handed.for_a_task() {
+        return Ok(None);
+    }
+    let Some(title) = handed.title() else {
+        return Err(Error::invalid(
+            "a task handed over at launch needs a title — nothing can be filed without one",
+        ));
+    };
+    let who = match (handed.files.is_empty(), by.by) {
+        (true, _) => None,
+        (false, Some(who)) => Some(who),
+        (false, None) => {
+            return Err(Error::invalid(
+                "a file handed over at launch needs the launcher to say who it is — pass who is launching",
+            ))
+        }
+    };
+    let conn = tx.conn();
+    let project_id = automation.project_id;
+    let values = crate::ops::automation_builtin_make::launch_values(conn, project_id, &handed.classification)?;
+    let role_id = handed.role_id.or_else(|| pic.roles().first().map(|r| r.id));
+    let filed_by = match handed.trigger {
+        Some(_) => ActorKind::Ai,
+        None => by.by.unwrap_or(ActorKind::Ai),
+    };
+    let filed = crate::ops::task::add(
+        tx,
+        crate::ops::task::NewTask {
+            title: title.to_string(),
+            project_id: Some(project_id),
+            due: None,
+            start: None,
+            priority: None,
+            notes: handed.notes().unwrap_or_default().to_string(),
+            created_by_kind: Some(filed_by),
+            at_binding_id: crate::ops::automation_builtin_make::sole_folder(conn, project_id)?,
+            made_in: None,
+            role_id,
+            made_in_run_step_id: None,
+        },
+    )?;
+    if let Some(trigger) = handed.trigger.as_deref() {
+        crate::ops::task::record_filed_by_trigger(tx, &filed, trigger)?;
+    }
+    for (_, value) in values {
+        crate::ops::dimension::set(tx, filed.id, value)?;
+    }
+    crate::ops::task::set_assignee(tx, filed.id, Some(ActorKind::Ai), filed_by)?;
+    if let Some(who) = who {
+        for file in &handed.files {
+            crate::ops::attachment::add_blob(
+                tx,
+                AttachmentTarget::Task,
+                filed.id,
+                &file.blob_hash,
+                &file.filename,
+                file.mime.as_deref(),
+                file.size_bytes,
+                who,
+            )?;
+        }
+    }
+    crate::ops::task::finish_creating(tx, filed.id, filed_by)?;
+    Ok(role_id)
 }
 
 /// **Copy every step of `automation` down onto the run** — [`snapshot`] for each step of each
@@ -3529,8 +3483,7 @@ pub enum TakenUp {
 ///   the entry ([`next_def`]). Anywhere else the run may be partway through a task, and is left alone.
 /// - **Newer** is a saved version later than the one its entry's copy was taken from. A copy taken from
 ///   the draft (`None`) is older than any saved version.
-/// - **The newer version is checked as a launch checks it** ([`checked_saved`]), and it may not start
-///   by filing a task: only a launch is handed what to file ([`entry_reads`]). Either refusal fails the
+/// - **The newer version is checked as a launch checks it** ([`checked_saved`]). A refusal fails the
 ///   run, with what it did not pass kept on it ([`AutomationRun::stopped_detail`]), and nothing is
 ///   copied. The run holds no task here, so there is nothing to hand back (`AMB-D-967`).
 ///
@@ -3554,20 +3507,13 @@ pub fn take_up_newer(
         return Ok(TakenUp::Same);
     }
     let refused = match checked_saved(tx.conn(), &run, startable, models, default_agent) {
-        Ok((pic, version)) => match files_a_task(tx.conn(), &pic)? {
-            Some(step) => format!(
-                "cannot pick up run '{}' at version {}: the entry '{step}' files a task, and only a launch \
-                 is handed what to file",
-                run.id, saved.version
-            ),
-            None => {
-                copy_down(tx, run.id, &pic, version, default_agent, Timestamp::now())?;
-                let entry = entry_def(tx.conn(), run.id)?.ok_or_else(|| {
-                    Error::invalid(format!("run '{}' was copied down with no step to start at", run.id))
-                })?;
-                return Ok(TakenUp::Copied(Box::new(entry)));
-            }
-        },
+        Ok((pic, version)) => {
+            copy_down(tx, run.id, &pic, version, default_agent, Timestamp::now())?;
+            let entry = entry_def(tx.conn(), run.id)?.ok_or_else(|| {
+                Error::invalid(format!("run '{}' was copied down with no step to start at", run.id))
+            })?;
+            return Ok(TakenUp::Copied(Box::new(entry)));
+        }
         Err(refusal @ (Error::Invalid(_) | Error::NotReady(_))) => refusal.to_string(),
         Err(other) => return Err(other),
     };
@@ -3580,111 +3526,6 @@ pub fn take_up_newer(
         crate::ops::automation_stop::Ending::Failed(AutomationStoppedReason::FailedCheck),
     )?;
     Ok(TakenUp::Failed(ended.run))
-}
-
-/// The name of the entry's action where it is the built-in that files a task, `None` where it is not.
-fn files_a_task(conn: &Connection, pic: &Picture) -> Result<Option<String>> {
-    let Some(entry) = pic.entry_placement_id.and_then(|id| pic.placement(id)) else { return Ok(None) };
-    Ok(match action_builtin(conn, entry.action_id)?.as_deref() {
-        Some(crate::ops::automation_builtin_make::KEY) => Some(action_name(conn, entry.action_id)?),
-        _ => None,
-    })
-}
-
-/// **Whether the entry reads what was handed over at launch**, and the task to file where it files one.
-///
-/// Asked after the check, so the entry is there to be asked of (`AMB-D-981`):
-///
-/// - **The built-in that files a task** reads a title — required, since a task cannot be filed without
-///   one — the notes, a classification and files. The classification is checked here the way the
-///   built-in checks it when it files the task
-///   ([`crate::ops::automation_builtin_make::handed_at_launch`]), so a launch that would only fall over
-///   at its first step is refused before a run is made.
-/// - **Any other entry** reads nothing: a built-in takes a task or fetches from what it was set with,
-///   and an agent's step, which a new picture can no longer start at (`AMB-D-977`), is handed nothing
-///   at launch either.
-///
-/// Something handed that the entry does not read is refused: nothing would ever read it, and the
-/// person handing it would believe it went somewhere.
-fn entry_reads(
-    conn: &Connection,
-    automation: &Automation,
-    pic: &Picture,
-    handed: &HandedAtLaunch,
-) -> Result<Option<HandedTask>> {
-    let Some(entry) = pic.entry_placement_id.and_then(|id| pic.placement(id)) else {
-        return Ok(None);
-    };
-    let step = action_name(conn, entry.action_id)?;
-    let builtin = action_builtin(conn, entry.action_id)?;
-    let files_a_task = builtin.as_deref() == Some(crate::ops::automation_builtin_make::KEY);
-    let refused = |what: &str, reads: &str| {
-        Err(Error::invalid(format!(
-            "the entry '{step}' {reads}, and {what} was handed over at launch — it would never be read"
-        )))
-    };
-    match files_a_task {
-        true => {
-            let Some(title) = handed.title() else {
-                return Err(Error::invalid(format!(
-                    "the entry '{step}' files a task, and no title for it was handed over at launch"
-                )));
-            };
-            let settings = answers(pic, entry, &ActionDef::placed(conn, entry)?);
-            let classification = crate::ops::automation_builtin_make::handed_at_launch(
-                conn,
-                &settings,
-                automation.project_id,
-                &handed.classification,
-            )?;
-            Ok(Some(HandedTask {
-                title: title.to_string(),
-                notes: handed.notes().map(str::to_string),
-                classification,
-                role_id: handed.role_id,
-                trigger: handed.trigger.clone(),
-            }))
-        }
-        false if handed.for_a_task() => {
-            refused("something", "reads nothing handed over at launch")
-        }
-        false => Ok(None),
-    }
-}
-
-/// The placement a run of `automation` opens first, where one is named.
-fn entry_of(conn: &Connection, automation: &Automation) -> Result<Option<AutomationPlacement>> {
-    match automation.entry_placement_id {
-        Some(id) => Ok(read::automation_placement(conn, id)?),
-        None => Ok(None),
-    }
-}
-
-/// **What the entry asks the person launching a run for** (`AMB-D-970`) — the same split
-/// [`entry_reads`] refuses by, answered before the press so a launch dialog asks for what the entry
-/// reads and nothing else.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum LaunchAsks {
-    /// The built-in that files a task: its title and notes, a value on each of these axes, and files to
-    /// attach to it.
-    Task { axes: Vec<crate::ops::automation_builtin_make::LaunchAxis> },
-    /// Any other entry, or no entry yet: nothing is handed over.
-    Nothing,
-}
-
-/// **What a launch of this automation asks for** ([`LaunchAsks`]).
-pub fn launch_asks(conn: &Connection, automation_id: i64) -> Result<LaunchAsks> {
-    let automation: Automation =
-        read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
-    let Some(entry) = entry_of(conn, &automation)? else {
-        return Ok(LaunchAsks::Nothing);
-    };
-    Ok(match action_builtin(conn, entry.action_id)?.as_deref() {
-        Some(crate::ops::automation_builtin_make::KEY) => LaunchAsks::Task {
-            axes: crate::ops::automation_builtin_make::launch_axes(conn, &entry, automation.project_id)?,
-        },
-        _ => LaunchAsks::Nothing,
-    })
 }
 
 /// Build the body of the `not_ready` refusal: one refusal over a list of reasons whose length is only
@@ -4108,7 +3949,7 @@ pub(crate) fn roles_started(conn: &Connection, run_id: i64) -> Result<Vec<i64>> 
 
 /// **The order a run takes its tasks in** — that of the one role it takes tasks of ([`roles_started`]), as
 /// the automation's newest saved version holds the role, and the draft's where nothing is saved yet or the
-/// version does not hold it. Read as it stands each time it is asked, as [`headcount`] is, so an order
+/// version does not hold it. Read as it stands each time it is asked, as [`seats`] are, so an order
 /// saved while a run goes on takes hold from its next task.
 ///
 /// `None` where the run takes tasks of no role, or of more than one — a run launched before runs were
@@ -4870,12 +4711,12 @@ mod tests {
         });
     }
 
-    /// **A line back to the entry that files a task is refused**, even closed on the way: it is handed
-    /// its title only when a run starts, so coming back to it the run would fail there on no input.
+    /// **An entry that files a task has nothing reaching its title** (`AMB-D-1123`): what a launch is
+    /// handed is filed as a task before the run starts, so nothing is handed to the entry.
     #[test]
-    fn a_line_back_to_the_entry_that_files_a_task_is_refused() {
+    fn an_entry_that_files_a_task_has_nothing_reaching_its_title() {
         with_tx(|tx| {
-            use crate::ops::automation_builtin_make::{MADE_AND_TAKEN, TAKE_IT, WHAT_THEN};
+            use crate::ops::automation_builtin_make::{MADE_AND_TAKEN, TAKE_IT, TITLE, WHAT_THEN};
             let automation = mk_automation(tx, "起票してやりきる");
             let make = crate::ops::automation_builtin::action(tx, "make_task").expect("the built-in's action");
             let making = automation::placement_add(tx, automation.id, make.id).expect("place it");
@@ -4885,31 +4726,15 @@ mod tests {
             let on = AutomationPictureOwner::Automation;
             automation::edge_add(tx, on, making.id, Some(MADE_AND_TAKEN), EdgeTarget::Go(working.id), None)
                 .expect("file → work");
-            let close = crate::ops::test_support::mk_closed_after(tx, &automation, working.id, None);
+            crate::ops::test_support::mk_closed_after(tx, &automation, working.id, None);
             let automation = automation::set_entry(tx, automation.id, Some(making.id)).expect("entry");
-            assert_eq!(checked(tx, &automation), vec![]);
-
-            let closed = read::automation_edge_for_exit(
-                tx.conn(),
-                on,
-                close.id,
-                exit_id(tx, AutomationOwner::Action, close.action_id, None),
-            )
-            .expect("read")
-            .expect("the close's line");
-            automation::edge_delete(tx, closed.id).expect("unhook the end");
-            automation::edge_add(tx, on, close.id, None, EdgeTarget::Go(making.id), None).expect("close → file");
-            let closing = read::automation_action(tx.conn(), close.action_id).expect("read").expect("the close");
-            assert_eq!(
-                checked(tx, &automation),
-                vec![Unmet::BackToEntry {
-                    step: closing.name,
-                    exit: crate::model::DONE_EXIT.into(),
-                    to: make.name,
-                    builtin: Some("close_task".into()),
-                    to_builtin: Some("make_task".into()),
-                    placement: close.id,
-                }],
+            let unmet = checked(tx, &automation);
+            assert!(
+                unmet.iter().any(|u| matches!(
+                    u,
+                    Unmet::UnwiredInput { port, placement, .. } if port == TITLE && *placement == Some(making.id)
+                )),
+                "{unmet:?}",
             );
         });
     }
@@ -5790,11 +5615,12 @@ mod tests {
         });
     }
 
-    /// **An entry refuses what it does not read** (`AMB-D-981`): only the built-in that files a task
-    /// reads anything, so an agent's step and a built-in that takes a task are handed nothing — a file,
-    /// or the title or classification of a task to file. Refused before any run is made.
+    /// **What is handed at launch is filed as a task before the run** (`AMB-D-1123`) — under the
+    /// automation's first role, given to the AI, its files attached to it — and the run takes it. Nothing
+    /// is kept on the run. Handed for a task with no title, or files with nobody to say who handed them,
+    /// the launch is refused and nothing is filed.
     #[test]
-    fn an_entry_refuses_what_it_does_not_read() {
+    fn what_is_handed_is_filed_as_a_task_before_the_run() {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
             let startable = claude();
@@ -5804,30 +5630,45 @@ mod tests {
                 mime: Some("text/markdown".to_string()),
                 size_bytes: 12,
             };
-            for handed in [
-                HandedAtLaunch { files: vec![file], ..Default::default() },
-                HandedAtLaunch { title: Some("an issue".into()), ..Default::default() },
-                HandedAtLaunch { classification: vec![("職能".into(), "実装".into())], ..Default::default() },
+            let tasks = |tx: &WriteTx<'_>| read::task_ids_in_project(tx.conn(), automation.project_id).expect("tasks");
+            for (handed, by, why) in [
+                (HandedAtLaunch { notes: Some("what to do".into()), ..Default::default() }, here(&startable), "needs a title"),
+                (
+                    HandedAtLaunch { classification: vec![("職能".into(), "実装".into())], ..Default::default() },
+                    here(&startable),
+                    "needs a title",
+                ),
+                (
+                    HandedAtLaunch { title: Some("an issue".into()), files: vec![file.clone()], ..Default::default() },
+                    Launcher { by: None, ..here(&startable) },
+                    "say who it is",
+                ),
             ] {
-                let err = launch_handing(tx, automation.id, &here(&startable), &handed, ReadsFrom::Saved)
-                    .expect_err("not read");
-                assert!(err.to_string().contains("reads nothing handed over at launch"), "{err}");
+                let err = launch_handing(tx, automation.id, &by, &handed, ReadsFrom::Saved).expect_err(why);
+                assert!(err.to_string().contains(why), "{err}");
             }
             assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
+            assert!(tasks(tx).is_empty(), "nothing filed");
 
-            let take = mk_automation(tx, "取るだけ");
-            let placed = crate::ops::automation::placement_add(
-                tx,
-                take.id,
-                crate::ops::automation_builtin::action(tx, "take_task").expect("the built-in's action").id,
-            )
-            .expect("place it");
-            let take = automation::set_entry(tx, take.id, Some(placed.id)).expect("entry");
-            let titled = HandedAtLaunch { title: Some("an issue".into()), ..Default::default() };
-            let pic = Picture::read(tx.conn(), &take).expect("the picture");
-            let err = entry_reads(tx.conn(), &take, &pic, &titled).expect_err("reads nothing");
-            assert!(err.to_string().contains("reads nothing handed over at launch"), "{err}");
-            assert_eq!(entry_reads(tx.conn(), &take, &pic, &HandedAtLaunch::default()).expect("nothing"), None);
+            let handed = HandedAtLaunch {
+                title: Some("  an issue  ".into()),
+                notes: Some("what to do".into()),
+                files: vec![file],
+                ..Default::default()
+            };
+            let run = launch_handing(tx, automation.id, &here(&startable), &handed, ReadsFrom::Saved).expect("launch");
+            assert_eq!(run.handed_task, None, "nothing is kept on the run");
+            let filed = tasks(tx);
+            assert_eq!(filed.len(), 1, "{filed:?}");
+            let filed = read::task(tx.conn(), filed[0]).expect("read").expect("the task");
+            assert_eq!((filed.title.as_str(), filed.notes.as_str()), ("an issue", "what to do"));
+            let first_role = read::automation_roles_of(tx.conn(), automation.id).expect("roles")[0].id;
+            assert_eq!(filed.role_id, Some(first_role), "under the first role");
+            assert_eq!(filed.assignee_kind, Some(ActorKind::Ai));
+            assert_eq!(filed.status, crate::model::TaskStatus::Todo, "waiting to be taken");
+            let files = read::attachments_for_target(tx.conn(), AttachmentTarget::Task, filed.id).expect("files");
+            assert_eq!(files.len(), 1, "the file is the task's");
+            assert!(read::attachments_for_target(tx.conn(), AttachmentTarget::AutomationRun, run.id).expect("files").is_empty());
         });
     }
 
@@ -6481,10 +6322,10 @@ mod tests {
             crate::ops::test_support::room_for(tx, automation.id, 1);
             let startable = claude();
             launch(tx, automation.id, &here(&startable)).expect("the first reaches the most");
-            let titled = HandedAtLaunch { title: Some("an issue".into()), ..Default::default() };
-            let err = launch_handing(tx, automation.id, &here(&startable), &titled, ReadsFrom::Saved)
-                .expect_err("handed what the entry does not read");
-            assert!(err.to_string().contains("reads nothing handed over at launch"), "{err}");
+            let untitled = HandedAtLaunch { notes: Some("what to do".into()), ..Default::default() };
+            let err = launch_handing(tx, automation.id, &here(&startable), &untitled, ReadsFrom::Saved)
+                .expect_err("handed a task with no title");
+            assert!(err.to_string().contains("needs a title"), "{err}");
         });
     }
 
@@ -6887,5 +6728,36 @@ mod tests {
         let gone = dir.join("gone.md").to_string_lossy().into_owned();
         assert!(task_from_file(&gone).is_err_and(|why| why.contains("could not be read")));
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// **A trigger's room is counted in the seats of its own role** (`AMB-D-1123`): another role's seats
+    /// all taken leave it room, its own all taken leave it none, and an `idle` files only while none of
+    /// its own is taken. Where no role names where its round starts, the one set of seats counts; where
+    /// its role has no seat while others do, nothing files.
+    #[test]
+    fn a_trigger_weighs_its_room_in_the_seats_of_its_own_role() {
+        use crate::model::TriggerWhen;
+        let seat = |role_id, headcount, under_way: &[i64]| Seats { role_id, headcount, under_way: under_way.to_vec(), held: false };
+        let by_role = [seat(Some(1), 2, &[10, 11]), seat(Some(2), 2, &[12])];
+        let tasks = TriggerWhen::Tasks;
+        let idle = TriggerWhen::Idle;
+
+        assert_eq!(room_of(&by_role, Some(1)), (2, 2));
+        assert!(!has_room(&tasks, 2, 2), "its own seats are all taken");
+        assert_eq!(room_of(&by_role, Some(2)), (1, 2));
+        assert!(has_room(&tasks, 1, 2), "a seat of its own is free, whatever the other role's");
+        assert!(!has_room(&idle, 1, 2), "an idle waits until none of its own is taken");
+
+        let idle_role = [seat(Some(1), 2, &[10, 11]), seat(Some(2), 1, &[])];
+        let (under_way, max) = room_of(&idle_role, Some(2));
+        assert!(has_room(&idle, under_way, max), "the other role's runs do not hold an idle back");
+
+        let (under_way, max) = room_of(&by_role, Some(3));
+        assert_eq!((under_way, max), (0, 0), "a role with no seat");
+        assert!(!has_room(&tasks, under_way, max) && !has_room(&idle, under_way, max), "nothing would take it");
+
+        let one_set = [seat(None, 3, &[10])];
+        assert_eq!(room_of(&one_set, Some(1)), (1, 3), "no role names a start: the one set counts");
+        assert_eq!(room_of(&one_set, None), (1, 3));
     }
 }

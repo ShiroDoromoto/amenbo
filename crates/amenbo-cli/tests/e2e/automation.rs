@@ -636,7 +636,7 @@ fn triggers_are_added_and_shown() {
     let idle = cli.json(&["automation", "trigger", &a, "--when-idle", "--title", "Look over the inbox", "--json"]);
     assert_eq!(idle["automation_trigger"]["when"], serde_json::json!({ "kind": "idle" }), "{idle}");
     let (text, _) = cli.run(&["automation", "show", &a]);
-    assert!(text.contains("whenever none of its runs is under way, filing \"Look over the inbox\" — not before"), "{text}");
+    assert!(text.contains("whenever no seat of its role is taken, filing \"Look over the inbox\" — not before"), "{text}");
 
     let counted = cli.json(&[
         "automation", "trigger", &a, "--when-idle", "--if-tasks", "status:todo", "--fewer-than", "3", "--title", "Look over the inbox", "--json",
@@ -645,7 +645,7 @@ fn triggers_are_added_and_shown() {
     assert_eq!(trigger["when"], serde_json::json!({ "kind": "idle" }), "{counted}");
     assert_eq!(trigger["condition"], serde_json::json!({ "filter": "status:todo", "below": 3 }), "{counted}");
     let (text, _) = cli.run(&["automation", "show", &a]);
-    assert!(text.contains("whenever none of its runs is under way while fewer than 3 task(s) match \"status:todo\""), "{text}");
+    assert!(text.contains("whenever no seat of its role is taken while fewer than 3 task(s) match \"status:todo\""), "{text}");
 
     let alone = cli.json(&["automation", "trigger", &a, "--if-tasks", "status:todo", "--fewer-than", "1", "--title", "x", "--json"]);
     assert_eq!(alone["automation_trigger"]["when"], serde_json::json!({ "kind": "tasks" }), "{alone}");
@@ -751,7 +751,7 @@ fn one_trigger_is_rewritten_switched_and_taken_away_by_its_id() {
 
     let (text, _) = cli.run(&["automation", "show", &a]);
     let first_line = format!("trigger {one} on: starts a run on its own as \"Inbox\" every 60 minute(s), filing \"Look over the inbox\" — next at");
-    let second_line = format!("trigger {two} on: starts a run on its own as \"Check\" whenever none of its runs is under way, filing \"Check daily\" — not before");
+    let second_line = format!("trigger {two} on: starts a run on its own as \"Check\" whenever no seat of its role is taken, filing \"Check daily\" — not before");
     let (at_first, at_second) = (text.find(&first_line), text.find(&second_line));
     assert!(at_first.is_some() && at_second.is_some(), "both are listed: {text}");
     assert!(at_first < at_second, "in the order they were added: {text}");
@@ -771,7 +771,7 @@ fn one_trigger_is_rewritten_switched_and_taken_away_by_its_id() {
     assert_eq!(off["automation_trigger"]["next_at"], second["automation_trigger"]["next_at"], "its next time stays where it was: {off}");
     let (text, _) = cli.run(&["automation", "show", &a]);
     assert!(
-        text.contains(&format!("trigger {two} off: starts a run on its own as \"Check\" whenever none of its runs is under way, filing \"Check daily\" — asked no more until --on; has filed none yet")),
+        text.contains(&format!("trigger {two} off: starts a run on its own as \"Check\" whenever no seat of its role is taken, filing \"Check daily\" — asked no more until --on; has filed none yet")),
         "{text}"
     );
     assert!(text.contains(&format!("trigger {one} on:")), "{text}");
@@ -857,7 +857,7 @@ fn a_trigger_is_named_and_files_under_a_role_of_its_own() {
     assert_eq!(condition["below"], serde_json::json!(3), "{counted}");
     let (text, _) = cli.run(&["automation", "show", &a]);
     assert!(
-        text.contains(&format!("whenever none of its runs is under way while fewer than 3 task(s) under role {role} match \"status:todo\"")),
+        text.contains(&format!("whenever no seat of its role is taken while fewer than 3 task(s) under role {role} match \"status:todo\"")),
         "{text}"
     );
     let (err, code) = cli.run_err(&[
@@ -1764,28 +1764,15 @@ fn run_show_names_the_versions_a_run_was_copied_from() {
     cli.json(&["automation", "cancel", &run, "--force", "--json"]);
 }
 
-/// **What a person hands over comes in on the launch itself** (`AMB-D-981`): for a run that starts by
-/// filing a task, its title, its notes and the files to attach to it. A file that cannot be read is
-/// refused before anything is started, so no run is left holding half of what it was handed, and a
-/// text on its own is not a thing the launch takes at all.
+/// **What a person hands over comes in on the launch itself** (`AMB-D-981`): the title, the notes and
+/// the files of a task, filed under the automation's first role before the run starts (`AMB-D-1123`).
+/// A file that cannot be read is refused before anything is started, so nothing is left holding half of
+/// what it was handed, and a text on its own is not a thing the launch takes at all.
 #[test]
-fn a_launch_takes_what_its_entry_reads_and_refuses_the_rest() {
+fn a_launch_files_what_it_is_handed_and_refuses_the_rest() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
-    let p = cli.a_project();
-    let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "File one", "--failures-to", "human", "--json"]), "automation");
-    let make = an_entry(&cli, &a, "make_task");
-    cli.json(&[
-        "automation", "cfg-set", &make, "--name", "起票したタスク",
-        "--choice", "進行中にして、出口「起票して着手した」へ進む", "--json",
-    ]);
-    let close = id_of(
-        &cli.json(&["automation", "place-add", &a, "--builtin", "close_task", "--json"]),
-        "automation_placement",
-    );
-    cli.json(&["automation", "edge-add", "--from", &format!("{make}:起票して着手した"), "--to", &close, "--json"]);
-    cli.json(&["automation", "edge-add", "--from", &format!("{close}:"), "--done", "--json"]);
-    saved(&cli, &a);
+    let (a, _, _) = a_saved_launchable(&cli);
 
     let brief = cli.home.join("brief.md");
     std::fs::write(&brief, "the login page loses the password field\n").expect("write the brief");

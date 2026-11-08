@@ -1669,7 +1669,6 @@ button.feed__target:hover { color: var(--c-accent); }
 /* One input, and what fills it. */
 .autostep__wire { display: flex; flex-direction: column; gap: var(--s-1); padding-block: var(--s-1); }
 /* Where the input is handed over in the start dialog instead: said, not chosen. */
-.autostep__atlaunch { color: var(--c-text-muted); font-size: var(--fs-md); }
 /* A required input nothing reaches the first time a run comes — the mark the picture puts on its box. */
 .autostep__unfed { display: inline-flex; align-items: center; gap: var(--s-1); color: var(--c-heed); font-size: var(--fs-md); }
 /* What an input just declared was joined to, with the press that takes it back (`AMB-T-5799`). */
@@ -2581,6 +2580,8 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .autolib__picked .actdecl__rows { margin-block-start: 0; }
 .autolib__note { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: pre-wrap; }
+/* The axis the built-in that splits by one splits by: the word, then the pulldown, on one line. */
+.autolib__axis { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
 /* The row at the foot that makes a new action, under the name typed in the search box: read as the
    list's last row, in the accent, rather than as a button with a sentence over it. */
 .autolib__make {

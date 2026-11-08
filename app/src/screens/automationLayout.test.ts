@@ -12,6 +12,7 @@ import {
   automationGraph,
   edgeWord,
   layOut,
+  marksW,
   openWord,
   stepKind,
   stepKindWord,
@@ -2481,6 +2482,41 @@ describe("one role's round, as the build screen draws it", () => {
       expect(node.h).toBeLessThan(140);
       expect(node.h % 2).toBe(0);
     }
+  });
+
+  it("makes room in an action's box for the marks after its name, so the name is not cut", () => {
+    // One action alone on its role's round, its name long enough that the box is wider than the least.
+    const widthOf = (over: Partial<AutomationPlacementDto>) => {
+      const alone: AutomationDetailDto = {
+        ...automation,
+        roles: [{ id: 20, name: "Design", headcount: 1, entryPlacementId: 1, passes: [] }],
+        placements: [
+          step({
+            id: 1,
+            name: "Write the design notes",
+            roleId: 20,
+            steps: [{ stepId: 1, name: "a", interactive: false, script: false, builtin: false, carrier: byRole }],
+            ...over,
+          }),
+        ],
+        edges: [],
+        wires: [],
+      };
+      return at(layOut(automationGraph(alone, 20)), 1).w;
+    };
+    const plain = widthOf({});
+    expect(plain).toBeGreaterThan(132);
+    // Each mark takes its words and the head's gap before them.
+    expect(widthOf({ steps: [] }) - plain).toBe(4 + wordW(t("auto.pic.emptyMark")));
+    expect(widthOf({ draft: true }) - plain).toBe(4 + wordW(t("chip.draft")));
+    expect(widthOf({ version: 1, latestVersion: 2 }) - plain).toBe(4 + wordW(tf("auto.pic.behindMark", { version: 1 })));
+    // The warning takes its icon and the count of what the box is missing. A role's round does not
+    // warn yet, so it is measured on its own.
+    expect(marksW({ empty: false, draft: false, behind: undefined, unfed: ["notes", "plan"] })).toBe(4 + 18 + wordW("2"));
+    // Two marks take the room of both.
+    expect(widthOf({ steps: [], version: 1, latestVersion: 2 }) - plain).toBe(
+      8 + wordW(t("auto.pic.emptyMark")) + wordW(tf("auto.pic.behindMark", { version: 1 })),
+    );
   });
 
   it("stands the boxes the round branches to one under another in the same column", () => {

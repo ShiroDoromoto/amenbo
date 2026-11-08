@@ -2474,13 +2474,14 @@ fn open_one(
         about_to = None;
     }
     if let Some(def) = about_to {
-        let (project, builtin) = builtin_about_to(store, run_id, &def)?;
+        let (run, builtin) = builtin_about_to(store, run_id, &def)?;
         // The card takes the pane over from the step before, whose program would otherwise go on with
         // no pane left to draw it.
         crate::pty::end_steps_of(app, run_id);
         tell(app, AutomationStepOpenDto {
             run: run_id,
-            project,
+            project: run.project_id,
+            launch: run.launch_id,
             step: None,
             builtin: Some(builtin),
             session: None,
@@ -2490,7 +2491,7 @@ fn open_one(
     let opened = store.automation_step_open(run_id, def_id, startable.as_deref())?;
     let mut script_to_run = None;
     let mut session = None;
-    let (project, step, builtin, missing) = match opened {
+    let (run, step, builtin, missing) = match opened {
         Opened::Ready(ready) => {
             let def = &ready.run_def;
             let run = read::automation_run(store.read_model().conn(), run_id)?
@@ -2509,13 +2510,14 @@ fn open_one(
                 def.model.clone(),
                 ready.text.clone(),
             )?;
+            let automation = run.automation_id;
             (
-                run.project_id,
+                run,
                 Some(AutomationStepRunDto {
                     run_step: ready.run_step.id,
-                    automation: run.automation_id,
+                    automation,
                     placement: def.placement_id,
-                    automation_name: automation_name(store, run.automation_id)?,
+                    automation_name: automation_name(store, automation)?,
                     name: def.name.clone(),
                     action_name: placed_action_name(store, def.placement_id)?,
                     task: worked_task(store, ready.run_step.run_task_id)?,
@@ -2533,36 +2535,36 @@ fn open_one(
         }
         // What a step's pane is told about is its own step. No other run is in the event and none is
         // opened here: what the watch looks for is a run `running` with nothing open (`AMB-D-945`).
-        Opened::Stopped { run, missing, .. } => (run.project_id, None, None, missing),
+        Opened::Stopped { run, missing, .. } => (run, None, None, missing),
         // Nothing is named in the event for this one. `missing` is about inputs, and what a reader is
         // owed here is on the run's own row — the running tab says which ending it was, and the line
         // core left on the task says how far it got (`amenbo_core::ops::automation_stop`).
         Opened::NoAgent { run, agent } => {
             log::info!("run {run_id} asked for {agent}, which this machine cannot start");
-            (run.project_id, None, None, Vec::new())
+            (run, None, None, Vec::new())
         }
         // Nothing to name here either: the run failed before this step opened, and its row says why
         // (`AMB-D-967`). The task before is back in `todo`, with the line core left on it.
         Opened::LeftTaskOpen { run } => {
             log::warn!("run {run_id} went for its next task with the last one still in progress");
-            (run.project_id, None, None, Vec::new())
+            (run, None, None, Vec::new())
         }
         // The run was paused before this step, which was not opened: before its next task
         // (`AMB-D-1009`), or where a pause asked for met a built-in that would wait. The paused run has
         // no pane to stand on until it is picked up again.
-        Opened::Waiting { run } => (run.project_id, None, None, Vec::new()),
+        Opened::Waiting { run } => (run, None, None, Vec::new()),
         // A built-in set to wait found nothing to act on (`AMB-D-969`): the run ended there with
         // nothing written, and its automation waits for a task in its place. Its pane is taken down.
         Opened::LeftToWait { run } => {
             log::info!("run {run_id} found no task to take, and its automation waits for one");
-            (run.project_id, None, None, Vec::new())
+            (run, None, None, Vec::new())
         }
         // The run's seat was one still to go — the headcount of its role lowered on the launch, or the
         // role stopped taking tasks for it — so it ended where it came to take its next task, with none
         // taken. Its pane is taken down.
         Opened::LetGo { run } => {
             log::info!("run {run_id} let its seat go before taking its next task");
-            (run.project_id, None, None, Vec::new())
+            (run, None, None, Vec::new())
         }
         // The action this step goes into takes one run at a time, and another run is in it or came to
         // it first. Nothing was written and nothing moved, so the pane is left as it stands and the
@@ -2573,21 +2575,22 @@ fn open_one(
                 return Ok(AutomationStepOpenDto {
                     run: run_id,
                     project: run.project_id,
+                    launch: run.launch_id,
                     step: None,
                     builtin: None,
                     session: None,
                     missing: Vec::new(),
                 });
             }
-            _ => (run.project_id, None, None, Vec::new()),
+            _ => (run, None, None, Vec::new()),
         },
         // A built-in that holds its step open — the one that waits (`AMB-D-983`). Nothing was carried
         // out and no terminal is opened: the step stands under way until its time has come, and the
         // pane stands on its card, saying when that is.
         Opened::Holding { run_step_id } => {
             log::info!("run {run_id} holds built-in step {run_step_id} open");
-            let (project, builtin) = builtin_of_step(store, run_id, run_step_id)?;
-            (project, None, Some(builtin), Vec::new())
+            let (run, builtin) = builtin_of_step(store, run_id, run_step_id)?;
+            (run, None, Some(builtin), Vec::new())
         }
         // A built-in has already been carried out and has reported (`AMB-D-964`), so there is no
         // terminal to stand a pane on. The run is now standing between two steps — or has ended — and
@@ -2595,8 +2598,8 @@ fn open_one(
         // told is the same card, now carried out, with the task it may have taken.
         Opened::Carried { run_step_id, .. } => {
             log::info!("run {run_id} carried out built-in step {run_step_id}");
-            let (project, builtin) = builtin_of_step(store, run_id, run_step_id)?;
-            (project, None, Some(builtin), Vec::new())
+            let (run, builtin) = builtin_of_step(store, run_id, run_step_id)?;
+            (run, None, Some(builtin), Vec::new())
         }
         // A script step (`AMB-D-1016`): its execution stands under way, and its program is started
         // here on a terminal nobody writes into, whose session goes out with the step for the pane to
@@ -2605,20 +2608,28 @@ fn open_one(
         Opened::Script(script) => {
             let run_step_id = script.run_step.id;
             log::info!("run {run_id} opened script step {run_step_id} ({})", script.script.program);
-            let (project, builtin) = builtin_of_step(store, run_id, run_step_id)?;
+            let (run, builtin) = builtin_of_step(store, run_id, run_step_id)?;
             // The script takes the pane over from the step before, as a built-in's card does.
             crate::pty::end_steps_of(app, run_id);
             let started = start_script(app, store, run_id, &script);
             session = started.as_ref().ok().map(|started| started.terminal.session.clone());
             script_to_run = Some((run_step_id, started));
-            (project, None, Some(builtin), Vec::new())
+            (run, None, Some(builtin), Vec::new())
         }
     };
     // The run has just moved, so the thread that keeps it going looks again now rather than sleeping
     // out the interval it was on (`crate::automation_watch`). Called from the watch's own path too,
     // where it costs nothing: that loop is about to come round anyway.
     crate::automation_watch::wake();
-    let dto = AutomationStepOpenDto { run: run_id, project, step, builtin, session, missing };
+    let dto = AutomationStepOpenDto {
+        run: run_id,
+        project: run.project_id,
+        launch: run.launch_id,
+        step,
+        builtin,
+        session,
+        missing,
+    };
     tell(app, dto.clone());
     // Waited for only once its card has been told under way, so a program that ends at once is not
     // told ended before it.
@@ -2693,6 +2704,7 @@ pub(crate) fn take_up_newer(
             tell(app, AutomationStepOpenDto {
                 run: run_id,
                 project: run.project_id,
+                launch: run.launch_id,
                 step: None,
                 builtin: None,
                 session: None,
@@ -2703,8 +2715,8 @@ pub(crate) fn take_up_newer(
     }
 }
 
-/// **A built-in about to be carried out**, as its pane is told before Amenbo starts on it — and which
-/// project's pane that is.
+/// **A built-in about to be carried out**, as its pane is told before Amenbo starts on it — with the
+/// run, whose project and launch say which pane that is.
 ///
 /// Nothing is written for it yet, so the task is the one the stretch under way is on. A built-in that takes a task opens a stretch of its
 /// own (`amenbo_core::ops::automation_step::open`), so it is on none until it has taken one.
@@ -2712,7 +2724,7 @@ fn builtin_about_to(
     store: &amenbo_core::Store,
     run_id: i64,
     def: &amenbo_core::model::AutomationRunDef,
-) -> Result<(i64, AutomationBuiltinRunDto), CmdError> {
+) -> Result<(amenbo_core::model::AutomationRun, AutomationBuiltinRunDto), CmdError> {
     let conn = store.read_model().conn();
     let run = read::automation_run(conn, run_id)?.ok_or_else(|| {
         CmdError::from(amenbo_core::error::Error::not_found(format!("run '{run_id}' not found")))
@@ -2724,7 +2736,7 @@ fn builtin_about_to(
         true => None,
         false => read::automation_run_task_last(conn, run_id)?.map(|s| s.id),
     };
-    Ok((run.project_id, AutomationBuiltinRunDto {
+    let builtin = AutomationBuiltinRunDto {
         automation: run.automation_id,
         run_step: None,
         placement: def.placement_id,
@@ -2742,7 +2754,8 @@ fn builtin_about_to(
         args: def.script.as_ref().map(|s| s.args.clone()),
         expected_minutes: def.script.as_ref().map(|_| def.expected_minutes_or_default()),
         started_at: None,
-    }))
+    };
+    Ok((run, builtin))
 }
 
 /// **A built-in's step as its card draws it**, read off the execution — carried out, or held open
@@ -2753,7 +2766,7 @@ fn builtin_of_step(
     store: &amenbo_core::Store,
     run_id: i64,
     run_step_id: i64,
-) -> Result<(i64, AutomationBuiltinRunDto), CmdError> {
+) -> Result<(amenbo_core::model::AutomationRun, AutomationBuiltinRunDto), CmdError> {
     let conn = store.read_model().conn();
     let run = read::automation_run(conn, run_id)?
         .ok_or_else(|| CmdError::from(amenbo_core::error::Error::not_found(
@@ -2774,7 +2787,7 @@ fn builtin_of_step(
         true => automation_builtin::held_until(conn, &run_step)?.map(|at| at.to_rfc3339_z()),
         false => None,
     };
-    Ok((run.project_id, AutomationBuiltinRunDto {
+    let builtin = AutomationBuiltinRunDto {
         automation: run.automation_id,
         run_step: Some(run_step_id),
         placement: def.placement_id,
@@ -2792,7 +2805,8 @@ fn builtin_of_step(
         args: def.script.as_ref().map(|s| s.args.clone()),
         expected_minutes: def.script.as_ref().map(|_| def.expected_minutes_or_default()),
         started_at: run_step.started_at.map(|at| at.to_rfc3339_z()),
-    }))
+    };
+    Ok((run, builtin))
 }
 
 /// The automation a run was launched from, by the name it holds now — empty where it has gone.
@@ -2857,10 +2871,11 @@ pub(crate) fn time_up(app: &tauri::AppHandle, run_id: i64) -> Result<bool, CmdEr
     let mut store = crate::commands::open_store()?;
     store.automation_time_up(run_step_id)?;
     log::info!("run {run_id} waited out built-in step {run_step_id}");
-    let (project, builtin) = builtin_of_step(&store, run_id, run_step_id)?;
+    let (run, builtin) = builtin_of_step(&store, run_id, run_step_id)?;
     tell(app, AutomationStepOpenDto {
         run: run_id,
-        project,
+        project: run.project_id,
+        launch: run.launch_id,
         step: None,
         builtin: Some(builtin),
         session: None,
@@ -2957,11 +2972,12 @@ fn run_script(
         builtin_of_step(&store, run_id, run_step_id)
     });
     match told {
-        Ok((project, builtin)) => {
+        Ok((run, builtin)) => {
             log::info!("run {run_id} ran script step {run_step_id}");
             tell(app, AutomationStepOpenDto {
                 run: run_id,
-                project,
+                project: run.project_id,
+                launch: run.launch_id,
                 step: None,
                 builtin: Some(builtin),
                 session,
@@ -3599,6 +3615,28 @@ mod tests {
         let live = runs_still_standing(1..=6, |run| Ok(statuses.get(&run).copied()))
             .expect("nothing to fail");
         assert_eq!(live, HashSet::from([1, 2]));
+    }
+
+    /// **A step's event names the launch its run belongs to**, for the window to find that launch's
+    /// pane by it. A run that belongs to none — written before launches were kept — leaves it out.
+    #[test]
+    fn a_step_event_names_the_launch_of_its_run() {
+        let json = |launch: Option<i64>| {
+            let run =
+                amenbo_core::model::AutomationRun { id: 7, project_id: 1, launch_id: launch, ..Default::default() };
+            let dto = AutomationStepOpenDto {
+                run: run.id,
+                project: run.project_id,
+                launch: run.launch_id,
+                step: None,
+                builtin: None,
+                session: None,
+                missing: Vec::new(),
+            };
+            serde_json::to_value(dto).expect("json")
+        };
+        assert_eq!(json(Some(3)), serde_json::json!({ "run": 7, "project": 1, "launch": 3, "missing": [] }));
+        assert_eq!(json(None), serde_json::json!({ "run": 7, "project": 1, "missing": [] }));
     }
 
     /// **Where a step's agent was chosen goes out as a bare value** (`AMB-D-396`): its kind, and the

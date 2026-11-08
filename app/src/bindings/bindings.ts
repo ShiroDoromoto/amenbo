@@ -1393,6 +1393,11 @@ export type AutomationStepOpenDto = { run: number,
  */
 project: number, 
 /**
+ * **The launch the run belongs to** ([`amenbo_core::model::AutomationLaunch`]) — which launch's
+ * pane draws it again. Absent for a run written before launches were kept.
+ */
+launch?: number, 
+/**
  * The step to open a terminal on, or absent where the run was stopped instead.
  */
 step?: AutomationStepRunDto, 

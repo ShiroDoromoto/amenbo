@@ -49,11 +49,13 @@
 // when the room scrolls or changes size, so a notice does not come and go under the reader's eye.
 //
 // **A round whose terminal has gone quiet is marked, in two stages**, and only by what was measured:
-// how long it has been since anything came out of its terminal (`../talk/moving`). It is read of the
-// seat in front — the pane's own run — whose terminal the pane holds. Past five minutes the seat says
-// so with a clock in place of its time and takes the heed colour; past twice the time its step is
-// expected to take, it takes the stop colour. Nothing is done about it — no round is stopped or turned
-// for a silence (`AMB-D-748`). A paused or failed round is not measured.
+// how long it has been since anything came out of its terminal (`../talk/moving`). Every seat at work
+// is measured, in sight or not: the seat in front by the terminal the pane draws, the rest by what Rust
+// holds of their terminals (`../talk/runOutputs`), read only while such a seat is at work. Past five
+// minutes the seat says so — "no output 12 min" in place of its time — and takes the heed colour, its
+// desk's border with it; past twice the time its own step is expected to take, it takes the stop
+// colour. Nothing is done about it — no round is stopped or turned for a silence (`AMB-D-748`). A
+// paused or failed round is not measured.
 //
 // **The only thing that moves is a small dot on a seat at work**: it fades in and out, slowly, so the
 // eye finds which seat is working without the pane moving at the edge of sight all day. A seat that
@@ -77,6 +79,8 @@ import { Icon } from "../components/Icon";
 import { RoleIcon } from "../screens/AutomationRoles";
 import { clockOf, type Say } from "../talk/nameplate";
 import { quietAt, type Quiet } from "../talk/moving";
+import { runFrameId } from "../talk/layout";
+import { useRunOutputs } from "../talk/runOutputs";
 import type { AutomationLaunchStateDto, AutomationRunCardDto, TaskRoleDto } from "../bindings/bindings";
 
 /** How the run in a seat stands, as its row says it. */
@@ -446,12 +450,13 @@ function SeatChip({ state, silence }: { state: SeatState; silence: Silence }) {
   return (
     <span className="runseat__chip" data-quiet={silence.stage} data-attn={attn ?? undefined}>
       <Icon name="clock" />
-      {tf("auto.run.roles.quiet", { time: clockOf(silence.for) })}
+      {tf("auto.run.roles.quiet", { time: minutesOf(silence.for) })}
     </span>
   );
 }
 
-/** How long a seat's round has run, in whole minutes, the way the locale writes a number of minutes. */
+/** How long a seat's round has run, or its terminal has been quiet, in whole minutes, the way the
+ *  locale writes a number of minutes. */
 export function minutesOf(ms: number): string {
   return formatNumber(Math.max(0, Math.floor(ms / 60_000)), { style: "unit", unit: "minute", unitDisplay: "narrow" });
 }
@@ -637,12 +642,15 @@ function DeskView({ desk, front, now, silenceAt, onOpen }: {
  * draw of the workspace, and drawing every pane's desks again on each of those would slow the typing
  * in the panes around it.
  *
- * `lastOutput` reads when the run's terminal last printed (`../talk/plate`). It is read at each tick
+ * `lastOutput` reads when the terminal in front last printed (`../talk/plate`). It is read at each tick
  * rather than handed in as a value, because the terminal prints far more often than the desks are
- * drawn.
+ * drawn. The seats out of sight are read off Rust's terminals (`../talk/runOutputs`).
+ *
+ * `expected` is how long each run's step is expected to take, in minutes, by the name its terminal
+ * goes by (`runFrameId`), as the step was told to the face.
  */
 export const RunRoles = memo(
-  function RunRoles({ run, project, launch = null, onOpen, lastOutput }: {
+  function RunRoles({ run, project, launch = null, onOpen, lastOutput, expected }: {
     run: Say;
     project: number;
     /** The launch the pane draws; null for a run kept from before launches were, which sits in no seat. */
@@ -650,6 +658,7 @@ export const RunRoles = memo(
     /** Turn the pane to the terminal of the run `run` — its own, or another seat's of its launch. */
     onOpen?: (run: number) => void;
     lastOutput?: () => number | null;
+    expected?: ReadonlyMap<string, number>;
   }) {
     const roles = useProjectRoles(project);
     const launchState = useLaunchState(launch);
@@ -665,13 +674,16 @@ export const RunRoles = memo(
     const jump = (up: boolean) => {
       if (room.current !== null) scrollToUnseen(room.current, up);
     };
-    // The clock ticks while a seat is at work: for its time, and for how long the terminal in front
-    // has been quiet, which is measured whether or not the round's start was read.
+    // The clock ticks while a seat is at work: for its time, and for how long its terminal has been
+    // quiet, which is measured whether or not the round's start was read.
     const now = useNow(desks.some((desk) => desk.seats.some((seat) => underWay(seat.state))));
+    // The terminals out of sight are read only while a seat out of sight is at work.
+    const outputs = useRunOutputs(desks.some((desk) => desk.seats.some((seat) => seat.run !== run.run && underWay(seat.state))));
     const last = lastOutput?.() ?? null;
-    const expected = run.expectedMinutes ?? null;
-    // Only the terminal in front is the pane's to hear; another seat's silence is not measured here.
-    const silenceAt = (seat: Seat) => (seat.run === run.run ? silenceOf(seat.state, last, now, expected) : UNMEASURED);
+    // The terminal in front is the pane's own, and newer than the last reading; the rest are Rust's.
+    const silenceAt = (seat: Seat) => seat.run === run.run
+      ? silenceOf(seat.state, last ?? outputs.get(seat.run) ?? null, now, run.expectedMinutes ?? expected?.get(runFrameId(seat.run)) ?? null)
+      : silenceOf(seat.state, outputs.get(seat.run) ?? null, now, expected?.get(runFrameId(seat.run)) ?? null);
     return (
       <div className="runroles" aria-label={t("auto.run.faceRoles")} role="region">
         <div className="runroles__view">
@@ -731,6 +743,7 @@ export const RunRoles = memo(
     before.run.step === after.run.step &&
     before.run.interactive === after.run.interactive &&
     before.run.expectedMinutes === after.run.expectedMinutes &&
+    before.expected === after.expected &&
     before.run.task?.ref === after.run.task?.ref &&
     before.run.task?.title === after.run.task?.title &&
     before.run.round?.role === after.run.round?.role &&

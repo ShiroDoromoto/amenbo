@@ -50,6 +50,17 @@ vi.mock("../talk/plate", () => ({
   }),
 }));
 
+/** When each run's terminal last printed, as Rust's terminals are read (`../talk/runOutputs`), and
+ *  whether the pane last asked for them to be read. */
+let outputs: ReadonlyMap<number, number> = new Map();
+let hearing = false;
+vi.mock("../talk/runOutputs", () => ({
+  useRunOutputs: (hear: boolean) => {
+    hearing = hear;
+    return outputs;
+  },
+}));
+
 /** The project's roles, as the pane reads them (`../core/projectRoles`). */
 let roles: TaskRoleDto[] = [];
 vi.mock("../core/projectRoles", () => ({ useProjectRoles: () => roles }));
@@ -95,6 +106,8 @@ let root: Root;
 beforeEach(() => {
   roles = [];
   launched = null;
+  outputs = new Map();
+  hearing = false;
   window.innerWidth = 1600;
   container = document.createElement("div");
   document.body.append(container);
@@ -109,8 +122,9 @@ afterEach(() => {
 /** A pane, on a run or on none — with a terminal put up where `autoStart`, or a built-in in its place. */
 async function pane(
   run: Say | null,
-  { autoStart = false, builtin = null, launch = null, onGoToRun }: {
+  { autoStart = false, builtin = null, launch = null, onGoToRun, expected }: {
     autoStart?: boolean; builtin?: BuiltinRun | null; launch?: number | null; onGoToRun?: (run: number) => void;
+    expected?: ReadonlyMap<string, number>;
   } = {},
 ): Promise<void> {
   await act(async () => {
@@ -124,6 +138,7 @@ async function pane(
       autoStart,
       focused: true,
       run,
+      expected,
       builtin,
       onOpened: () => {},
       onSaid: () => {},
@@ -812,5 +827,50 @@ describe("the seats of a launch", () => {
     expect(seatStateOf(liveRun(6, { waitsForRoom: true }), FRONT)).toBe("waiting");
     expect(seatStateOf(liveRun(6, { status: "paused" }), FRONT)).toBe("paused");
     expect(seatStateOf(liveRun(6, { status: "failed" }), FRONT)).toBe("failed");
+  });
+});
+
+describe("the silence of each seat", () => {
+  const min = 60_000;
+  const FRONT: Say = { ...FAILED, run: 81, state: { ...FAILED.state!, status: "running", word: "Running" } };
+  const seat = (run: number) => container.querySelector<HTMLElement>(`.runseat[data-run="${run}"]`)!;
+
+  it("marks a seat out of sight by when its own terminal last printed, its desk and square with it", async () => {
+    roles = [role(12, "Bob"), role(14, "Carol")];
+    launched = launchOf([
+      launchRole(12, "Bob", [liveRun(81, { role: 12 })]),
+      launchRole(14, "Carol", [liveRun(82, { role: 14 }), liveRun(83, { role: 14 })]),
+    ]);
+    outputs = new Map([[82, Date.now() - 12 * min - 10_000], [83, Date.now() - 30_000]]);
+    await pane(FRONT, { launch: 5 });
+    expect(hearing, "the terminals out of sight are not read while seats out of sight are at work").toBe(true);
+    expect(seat(82).dataset.quiet).toBe("1");
+    expect(seat(82).querySelector(".runseat__chip")?.textContent)
+      .toBe(tf("auto.run.roles.quiet", { time: minutesOf(12 * min) }));
+    expect(seat(82).querySelector(".runseat__time"), "a quiet seat says its time as well").toBeNull();
+    expect(seat(83).dataset.quiet, "a seat that printed a moment ago is marked").toBeUndefined();
+    const [bob, carol] = desks();
+    expect(carol!.dataset.state).toBe("stall");
+    expect(bob!.dataset.state, "the desk of a seat that is not quiet is marked").toBeUndefined();
+    expect([...carol!.querySelectorAll<HTMLElement>(".runroles__squares > i")].map((one) => one.dataset.state))
+      .toEqual(["stall", "on"]);
+  });
+
+  it("measures the second stage against each seat's own step", async () => {
+    roles = [role(14, "Carol")];
+    launched = launchOf([launchRole(14, "Carol", [liveRun(81, { role: 14 }), liveRun(82, { role: 14 }), liveRun(83, { role: 14 })])]);
+    outputs = new Map([[82, Date.now() - 25 * min], [83, Date.now() - 25 * min]]);
+    await pane(FRONT, { launch: 5, expected: new Map([["run-82", 10], ["run-83", 30]]) });
+    expect(seat(82).dataset.quiet, "past twice its 10 minutes").toBe("2");
+    expect(seat(83).dataset.quiet, "short of twice its 30 minutes").toBe("1");
+  });
+
+  it("reads nothing while no seat out of sight is at work", async () => {
+    roles = [role(12, "Bob")];
+    launched = launchOf([launchRole(12, "Bob", [liveRun(81, { role: 12 }), liveRun(82, { role: 12, status: "paused" })])]);
+    outputs = new Map([[82, Date.now() - 60 * min]]);
+    await pane(FRONT, { launch: 5 });
+    expect(hearing).toBe(false);
+    expect(seat(82).dataset.quiet, "a paused round is measured").toBeUndefined();
   });
 });

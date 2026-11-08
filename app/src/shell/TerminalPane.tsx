@@ -112,7 +112,7 @@ async function handOver(session: string, paths: string[]) {
  */
 function Pane({
   frame, terminal, launch = null, at, hue, project, names, start, autoStart, focused, landed = false, offered = false, written,
-  inserted = [], composeOpen, held = false, goes = null, run = null, builtin = null, tail = null, tailCode = null, onGrab, onStretch,
+  inserted = [], composeOpen, held = false, goes = null, run = null, expected, builtin = null, tail = null, tailCode = null, onGrab, onStretch,
   size, onSize,
   on,
 }: PaneProps & {
@@ -1075,6 +1075,7 @@ function Pane({
               on.current.onGoToRun?.(other);
             }}
             lastOutput={() => plateRef.current?.lastOutput() ?? null}
+            expected={expected}
           />
         )}
         {/* **A run over, with no terminal up, says how it ended** (`./RunBody`) — in place of the card
@@ -1245,6 +1246,12 @@ type PaneProps = {
    * run's pane is stopping the run** (`drop`).
    */
   run?: Say | null;
+  /**
+   * **How long each run's step is expected to take**, in minutes, by the name its terminal goes by
+   * (`runFrameId`) — what a quiet terminal of each seat on a launch's pane is measured against
+   * (`./RunPicture`). The face hands a new one only when a step arrives.
+   */
+  expected?: ReadonlyMap<string, number>;
   /**
    * The built-in Amenbo is carrying out on this run's pane, or null (`./BuiltinCard`). While there is
    * one, it stands where the terminal would, and nothing is started here.

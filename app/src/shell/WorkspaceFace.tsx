@@ -508,6 +508,18 @@ export function WorkspaceFace({
     };
   }, [steps, builtins, runCardOf]);
   /**
+   * **How long each run's step is expected to take**, in minutes, by the name its terminal goes by —
+   * the same as `steps` — for the seats of a launch's pane that are out of sight, whose silences are
+   * measured against their own step's time (`./RunPicture`). An agent's step and a script step have
+   * one; a built-in has no terminal to be quiet.
+   */
+  const expected = useMemo(() => {
+    const out = new Map<string, number>();
+    for (const [id, one] of builtins) if (one.expectedMinutes != null) out.set(id, one.expectedMinutes);
+    for (const [id, one] of steps) out.set(id, one.expectedMinutes);
+    return out;
+  }, [steps, builtins]);
+  /**
    * The arrangement as it stands, read by what arrives from outside a render.
    *
    * A step of a run is told to the window as an event, and what hears it has to know what is already
@@ -1897,6 +1909,7 @@ export function WorkspaceFace({
                     readOnly: builtin?.program !== undefined,
                   }}
                   run={sayOf(frame)}
+                  expected={expected}
                   builtin={builtin ?? null}
                   // What the run's last step left to be read — a script's output (`AMB-D-1016`), or
                   // the screen of an agent's step that failed the run — kept on the run, for a pane

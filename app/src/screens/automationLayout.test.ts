@@ -2366,11 +2366,38 @@ describe("one role's round, as the build screen draws it", () => {
   it("says where the round receives its task from, and whom it hands on to", () => {
     expect(automationGraph(automation, 20)!.round).toMatchObject({
       receives: { failures: false, triggers: [], roles: ["Research"] },
-      handsTo: ["Build"],
+      passes: [{ role: { id: 30, name: "Build" }, depends: false }],
     });
+    // A line out to another role's box files no task, so it names none.
+    expect(automationGraph(automation, 20)!.round!.passes[0]!.task).toBeUndefined();
     // Nothing but a person hands Research its task, and no role comes after the last.
     expect(automationGraph(automation, 10)!.round).toMatchObject({ receives: { failures: false, triggers: [], roles: [] } });
-    expect(automationGraph(automation, 30)!.round).toMatchObject({ handsTo: [] });
+    expect(automationGraph(automation, 30)!.round).toMatchObject({ passes: [] });
+  });
+
+  it("hands on each task the round files for another role, by its title or the action that files it", () => {
+    const filing: AutomationDetailDto = {
+      ...automation,
+      roles: automation.roles.map((one) =>
+        one.id === 20
+          ? {
+              ...one,
+              passes: [
+                { toRole: 40, placement: 4, name: "Report", depends: false },
+                { toRole: 30, placement: 4, name: "File the build", depends: true, taskRef: "T-9", taskTitle: "Add the tests" },
+                { toRole: 99, placement: 4, name: "To a role that is gone", depends: false },
+              ],
+            }
+          : one,
+      ),
+    };
+    // The tasks it files first, in their order; the line out to Build adds nothing, as a task already
+    // names Build; a role that is gone is left out.
+    const passes = automationGraph(filing, 20)!.round!.passes;
+    expect(passes.map((one) => [one.role.name, one.task, one.depends])).toEqual([
+      ["Upkeep", "Report", false],
+      ["Build", "Add the tests", true],
+    ]);
   });
 
   it("says the round receives a failed round's incident and the tasks its triggers file", () => {

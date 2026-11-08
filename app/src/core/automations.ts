@@ -1493,3 +1493,75 @@ export async function resumeRun(run: number): Promise<void> {
   if (!inTauri()) return;
   return invoke<void>("automation_run_resume", { runId: run });
 }
+
+/**
+ * **Pause a launch before each of its runs takes its next task** — the pane header's press
+ * (`AMB-D-1019`). Every role stops alike; a task under way is finished first
+ * (`amenbo_core::ops::automation_stop::pause_launch_before_next_task`). Not a `WriteAck` write, for
+ * `forceCancelRun`'s reason.
+ */
+export async function pauseLaunchBeforeNextTask(launch: number): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_launch_pause_before_next_task", { launchId: launch });
+}
+
+/**
+ * **Pick a paused launch up again** — every run of it is picked up as `resumeRun` picks one up
+ * (`amenbo_core::ops::automation_stop::resume_launch`). A role stopped on its own stays stopped.
+ */
+export async function resumeLaunch(launch: number): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_launch_resume", { launchId: launch });
+}
+
+/**
+ * **Stop a launch now** — the force-cancel of every run of it still going
+ * (`amenbo_core::ops::automation_stop::stop_launch`). It asks nothing here: whether the press asks first,
+ * as `forceCancelRun` does, is the pane header's to decide.
+ */
+export async function stopLaunch(launch: number): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_launch_stop", { launchId: launch });
+}
+
+/**
+ * **Change how many are in one role for this launch alone** — the stepper in the role's menu
+ * (`AMB-D-1123`). The definition is left as it is, and the launch goes back to it when it ends. A raise
+ * is taken up at once; a cut lets seats go as their tasks end, and a raise while a cut is still to come
+ * calls the cut off (`amenbo_core::ops::automation_run::launch_headcount_set`). Core refuses a headcount
+ * outside 1 to the cap (`AMB-D-1124`), the cap being the launch state's `max_headcount`.
+ */
+export async function setLaunchHeadcount(launch: number, role: number, headcount: number): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_launch_headcount_set", { launchId: launch, roleId: role, headcount });
+}
+
+/**
+ * **Put one role of this launch back at its definition's headcount**
+ * (`amenbo_core::ops::automation_run::launch_headcount_reset`). The menu offers it only where the two
+ * differ.
+ */
+export async function resetLaunchHeadcount(launch: number, role: number): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_launch_headcount_reset", { launchId: launch, roleId: role });
+}
+
+/**
+ * **Stop one role of a launch once its tasks under way are done** — the role menu's press. Its runs
+ * finish the task they are on and take no new one; one waiting to take a task ends at once
+ * (`amenbo_core::ops::automation_stop::hold_launch_role`). It is apart from the whole launch's pause
+ * (`AMB-D-1019`), and refused while the launch is paused as a whole.
+ */
+export async function holdLaunchRole(launch: number, role: number): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_launch_role_hold", { launchId: launch, roleId: role });
+}
+
+/**
+ * **Take one stopped role of a launch up again** — its empty seats start taking tasks waiting for it
+ * (`amenbo_core::ops::automation_stop::release_launch_role`). Refused as `holdLaunchRole` is.
+ */
+export async function releaseLaunchRole(launch: number, role: number): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_launch_role_release", { launchId: launch, roleId: role });
+}

@@ -3195,6 +3195,55 @@ pub fn automation_launch_stop(launch_id: i64) -> Result<(), CmdError> {
     Ok(())
 }
 
+/// **Change how many are in one role for this launch alone**
+/// ([`amenbo_core::ops::automation_run::launch_headcount_set`], `AMB-D-1123`). The definition is left
+/// as it is. Core refuses a headcount outside 1 to the cap (`AMB-D-1124`) and a role the launch's
+/// definition does not have. A raise is taken up by the watch's top-up, so the press wakes it; a cut
+/// lets seats go as their tasks end. Not a `WriteAck` write, for the reason [`automation_run_pause`]
+/// is not.
+#[tauri::command]
+pub fn automation_launch_headcount_set(launch_id: i64, role_id: i64, headcount: u32) -> Result<(), CmdError> {
+    let mut store = crate::commands::open_store()?;
+    store.automation_launch_headcount_set(launch_id, role_id, headcount)?;
+    crate::automation_watch::wake();
+    Ok(())
+}
+
+/// **Put one role of this launch back at its definition's headcount**
+/// ([`amenbo_core::ops::automation_run::launch_headcount_reset`]). The watch is woken for the seats a
+/// return to a larger headcount opens.
+#[tauri::command]
+pub fn automation_launch_headcount_reset(launch_id: i64, role_id: i64) -> Result<(), CmdError> {
+    let mut store = crate::commands::open_store()?;
+    store.automation_launch_headcount_reset(launch_id, role_id)?;
+    crate::automation_watch::wake();
+    Ok(())
+}
+
+/// **Stop one role of a launch taking tasks once the task under way is done**
+/// ([`amenbo_core::ops::automation_stop::hold_launch_role`]). Its runs waiting to take a task end on the
+/// spot; the watch is woken to settle them. A role is held apart from the whole launch's pause before
+/// the next task (`AMB-D-1019`), so core refuses it while the whole launch is paused, and for a launch
+/// that has ended.
+#[tauri::command]
+pub fn automation_launch_role_hold(launch_id: i64, role_id: i64) -> Result<(), CmdError> {
+    let mut store = crate::commands::open_store()?;
+    store.automation_launch_role_hold(launch_id, role_id)?;
+    crate::automation_watch::wake();
+    Ok(())
+}
+
+/// **Take one held role of a launch up again** ([`amenbo_core::ops::automation_stop::release_launch_role`]).
+/// Its empty seats are filled by the watch's top-up, so the press wakes it. Refused as
+/// [`automation_launch_role_hold`] is.
+#[tauri::command]
+pub fn automation_launch_role_release(launch_id: i64, role_id: i64) -> Result<(), CmdError> {
+    let mut store = crate::commands::open_store()?;
+    store.automation_launch_role_release(launch_id, role_id)?;
+    crate::automation_watch::wake();
+    Ok(())
+}
+
 /// The half of the stop that has no window in it: stop the run where it is still going, and answer
 /// `None` where there was nothing to stop. Split out so the "already over" arm can be tested without
 /// an app to hand ([`automation_run_stop`] is the whole of it).

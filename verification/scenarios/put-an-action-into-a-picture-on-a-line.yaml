@@ -8,15 +8,17 @@
 # What stands on an automation's picture is always a placement of a library action. One made on the
 # line is asked a name and a library and nothing else: it is born empty, placed where it was asked
 # for, and its own build screen opens for its steps. It is the arm of the `+` that makes the most — an
-# action and a placement, and a line spliced — which is why it is the one walked here, and why the
-# launch place is read after it: an empty action is one a run cannot start.
+# action and a placement, and a line spliced — which is why it is the one walked here. Finishing it is
+# its first save, and an action with no step is refused that save, so a step goes in before the
+# finish; the launch place read after it no longer names the new action as one with nothing in it.
 id: put-an-action-into-a-picture-on-a-line
-title: An action made on a line takes over where that line went, and is named empty until it is built
+title: An action made on a line takes over where that line went once a step is put in it
 description: >
   Stand a definition of one placed action after the built-in that takes a task up from the
-  terminal, make a second action on the line that closes the task, and read both halves of what that press did: the pressed way out now points
-  at the new placement, and the new placement now closes the task. The launch place then says an
-  action placed on it has nothing in it. Last, on the first action's own screen, declare what its
+  terminal, make a second action on the line that closes the task, write a step inside it that ends
+  the action, and finish creating it. Read both halves of what the press on the line did: the pressed
+  way out now points at the new placement, and the new placement now closes the task. The launch
+  place then names no action placed on it as one with nothing in it. Last, on the first action's own screen, declare what its
   other way out hands on, and read the one thing that dialog does for a reader — the name starts on the way out's own,
   that way out having handed on nothing yet.
 given:
@@ -74,6 +76,27 @@ steps_gui:
       name: work
 
   # Made on the spot, it is still being made, over the automation, until it is said to be finished.
+  # Finishing is its first save, and an empty action is refused it: a step that ends the action goes
+  # in first.
+  - type: action
+    domain: automation
+    op: add-step
+    with:
+      name: write
+      prompt: write the draft
+
+  - type: action
+    domain: automation
+    op: pick-box
+    with:
+      name: write
+
+  - type: action
+    domain: automation
+    op: set-next
+    with:
+      ends: exit
+
   - type: action
     domain: automation
     op: action-finish-creating
@@ -103,7 +126,10 @@ steps_gui:
       from: work
       to_builtin: close_task
 
-  # Placed but empty: the launch place names it, rather than letting a run start into nothing.
+  # Placed with a step in it, so the launch place does not name it as one with nothing to start at.
+  # The run still cannot start: nothing is set to happen after the first action's other way out,
+  # `drafted` (the one the last half of this road declares an output on), so only the absence of this
+  # reason is read, not a launch that is ready.
   - type: assert
     domain: automation
     op: launch
@@ -111,7 +137,7 @@ steps_gui:
       ready: false
       reason: action_empty
       box: work
-      present: true
+      present: false
 
   # And a way out that hands nothing on yet, with a control for saying what leaving by it hands on —
   # on the first action's own output, where its ways out are declared. The name the box starts on is

@@ -282,7 +282,7 @@ export const hi: Translation = {
     "detail.notFound": "काम नहीं मिला",
     "detail.unassign": "ज़िम्मेदारी हटाएँ", "detail.assignAi": "AI को सौंपें",
     "detail.assignee": "ज़िम्मेदार", "detail.unassigned": "किसी को नहीं सौंपा",
-    "detail.role": "भूमिका", "detail.roleNone": "कोई भूमिका नहीं (सत्र में संभाली जाए)", "detail.rolePick": "एक चुनें…",
+    "detail.role": "भूमिका", "detail.roleNone": "कोई भूमिका नहीं (सत्र में संभाली जाए)", "detail.roleRequiredMark": "आवश्यक", "detail.roleFrom": "{name} की भूमिकाओं में से चुनें",
     "detail.roleRequired": "कोई भूमिका चुनें। अगर कोई ऑटोमेशन चक्र इसे न संभाले, तो “कोई भूमिका नहीं” चुनें।",
     "detail.project": "प्रोजेक्ट", "detail.none": "कोई नहीं",
     "detail.blockedBy": "इसकी प्रतीक्षा", "detail.blockedByHint": "रुका हुआ (निर्भरता)",

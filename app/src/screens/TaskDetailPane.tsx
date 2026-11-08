@@ -321,13 +321,11 @@ export function TaskDetailPane({
           {task.assignee?.kind === "ai" && roles.length > 0 && (
             <div className="detail__field">
               <span className="detail__flabel">{t("detail.role")}</span>
-              <span>
-                <RoleField
-                  roles={roles}
-                  value={task.roleId ? String(task.roleId) : ROLE_NONE}
-                  onChange={(v) => store.setRole(taskId, v === ROLE_NONE ? null : Number(v))}
-                />
-              </span>
+              <RoleField
+                roles={roles}
+                value={task.roleId ? String(task.roleId) : ROLE_NONE}
+                onChange={(v) => store.setRole(taskId, v === ROLE_NONE ? null : Number(v))}
+              />
             </div>
           )}
           <div className="detail__field">

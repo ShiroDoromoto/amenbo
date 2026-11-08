@@ -33,8 +33,9 @@ export function roleStepCount(automation: AutomationDetailDto, roleId: number): 
     .reduce((sum, one) => sum + one.steps.length, 0);
 }
 
-/** A role's picture, drawn from its icon seed, or from what the role is called until one is written. */
-export function RoleIcon({ role, size }: { role: AutomationRoleDto; size: number }) {
+/** A role's picture, drawn from its icon seed, or from what the role is called until one is written.
+ *  It takes any shape that carries the two, so a task's role is drawn by the same rule. */
+export function RoleIcon({ role, size }: { role: { icon?: string | null; name: string }; size: number }) {
   return <Identicon seed={role.icon ?? role.name} size={size} />;
 }
 

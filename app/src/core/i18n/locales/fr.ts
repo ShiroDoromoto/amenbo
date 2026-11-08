@@ -286,7 +286,7 @@ export const fr: Translation = {
     "detail.notFound": "Tâche introuvable",
     "detail.unassign": "Retirer le responsable", "detail.assignAi": "Déléguer à l'IA",
     "detail.assignee": "Responsable", "detail.unassigned": "Sans responsable",
-    "detail.role": "Rôle", "detail.roleNone": "Aucun rôle (traitée dans une session)", "detail.rolePick": "Choisissez-en un…",
+    "detail.role": "Rôle", "detail.roleNone": "Aucun rôle (traitée dans une session)", "detail.roleRequiredMark": "Obligatoire", "detail.roleFrom": "Choisissez parmi les rôles de {name}",
     "detail.roleRequired": "Choisissez un rôle. Si aucun tour d'automatisation ne doit la prendre, choisissez « Aucun rôle ».",
     "detail.project": "Projet", "detail.none": "Aucun",
     "detail.blockedBy": "En attente de", "detail.blockedByHint": "bloquée (dépendance)",

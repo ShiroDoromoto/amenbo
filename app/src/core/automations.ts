@@ -495,9 +495,9 @@ export async function removeAutomationPlacement(id: number): Promise<void> {
 }
 
 /**
- * **The built-ins a run can start at**, in the order a picture with nothing on it offers them
- * (`amenbo_core::ops::automation_builtin::ENTRIES`, `AMB-D-977`): the one that takes a task, the one a
- * person hands one to, and the one that fetches.
+ * **The built-ins a picture with nothing on it offers**, in this order (`AMB-D-977`): the one that
+ * takes a task, the one a person hands one to, and the one that fetches. The core no longer holds the
+ * first placement to them; the build screen still offers them until it draws each role's start.
  */
 export const ENTRY_BUILTINS: readonly string[] = ["take_task", "make_task", "fetch"];
 

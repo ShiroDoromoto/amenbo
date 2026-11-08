@@ -55,7 +55,7 @@
 //! copying the automation down again does not change it. Only a task worked under that role is taken
 //! ([`roles_started`]), and the way out that hands on the task taken goes on to where the role starts
 //! rather than along a line ([`by_role`]). A task with no role, or of another role, is not taken at all.
-//! An automation with no role naming where its round starts walks its picture as it is drawn.
+//! An automation with no role naming where its round starts is not launched.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -110,9 +110,7 @@ pub enum Unmet {
     /// Nothing is placed on the automation at all. Nothing else is worth saying about it.
     NoSteps,
     /// A role that names no placement on the picture as where its round starts (`AMB-D-1123`): its seats
-    /// would have nowhere to start a round. Said of every role where none of them names one and the
-    /// entry is not the built-in that takes a task either — a run of no role starts at the entry
-    /// ([`start_of`]) only for as long as a picture is drawn that way.
+    /// would have nowhere to start a round.
     RoleStartsNowhere { role: String },
     /// Nobody is chosen to file a failed round to — neither a person nor one of the automation's roles
     /// ([`crate::model::Automation::failures_to`]). A round that fails would have nobody to go to.
@@ -123,7 +121,7 @@ pub enum Unmet {
     ActionEmpty { action: String, placement: Option<i64> },
     /// An action standing on the picture that is still being written (`AMB-D-1005`) — made on the spot
     /// where it was placed, and neither finished nor given up. Its author has not said it is what they
-    /// meant, so a run is not sent through it. Raised wherever it stands, reached from the entry or not:
+    /// meant, so a run is not sent through it. Raised wherever it stands, reached from a role's start or not:
     /// it is a decision left open, not a gap a run would fall into.
     ActionDraft { action: String, placement: i64 },
     /// A role whose round starts at a placement that is not the built-in that takes a task
@@ -144,7 +142,7 @@ pub enum Unmet {
         inside: Option<i64>,
     },
     /// A required input with nothing reaching it — no wire at all, or none whose far end is both
-    /// declared and reachable from the entry before this placement is. `inside` as for
+    /// declared and reachable from a role's start before this placement is. `inside` as for
     /// [`Unmet::OpenExit`].
     UnwiredInput {
         step: String,
@@ -628,9 +626,7 @@ fn not_found(what: &str, id: i64) -> Error {
 /// **A run starts where the round of its seat's role starts** (`AMB-D-1123`, [`start_of`]), so each
 /// role is asked where that is: one naming no placement on the picture is
 /// [`Unmet::RoleStartsNowhere`], and one naming a placement that is not the built-in that takes a task
-/// is [`Unmet::RoleStartTakesNoTask`]. Where no role names a start at all, a run of no role starts at
-/// the entry, and that is let through only where the entry is the built-in that takes a task; anything
-/// else is every role starting nowhere.
+/// is [`Unmet::RoleStartTakesNoTask`].
 ///
 /// **What is asked of a placement is asked of the action standing on it**, and then of every step the
 /// action could open ([`steps_opened_by`]): a way out inside with nothing after it and a required input
@@ -707,8 +703,7 @@ fn first_round_reaching<'p>(
     defs: &Defs,
     roles: impl Iterator<Item = &'p AutomationRole>,
 ) -> BTreeMap<i64, &'p AutomationRole> {
-    let starts: BTreeSet<i64> =
-        pic.roles().iter().filter_map(|role| role.entry_placement_id).chain(pic.entry_placement_id).collect();
+    let starts: BTreeSet<i64> = pic.roles().iter().filter_map(|role| role.entry_placement_id).collect();
     let mut found = BTreeMap::new();
     for role in roles {
         let Some(entry) = role.entry_placement_id else { continue };
@@ -884,8 +879,7 @@ pub fn incidents_waiting_in_launch(conn: &Connection, launch_id: i64) -> Result<
 }
 
 /// **The placements one round reaches** — walked from where it starts, as [`reachable`] walks, but not
-/// on into a placement in `starts` other than its own: that is where the automation's entry or another
-/// role's round begins, and a line going there has left this round.
+/// on into a placement in `starts` other than its own: that is where another role's round begins, and a line going there has left this round.
 fn round_of(
     entry: i64,
     pic: &Picture,
@@ -1019,42 +1013,22 @@ fn check_picture(
     }
     let by_id: BTreeMap<i64, &AutomationPlacement> = placements.iter().map(|p| (p.id, p)).collect();
     let routed = role_entries(pic, &by_id);
-    let starts = if routed.is_empty() {
-        // No role names where its round starts, so a run of no role starts at the entry — let through
-        // only where the entry is the built-in that takes a task, as a role's start would be.
-        let entry = pic.entry_placement_id.and_then(|id| by_id.get(&id).copied());
-        let takes = match entry {
-            Some(entry) => takes_a_task_first(conn, entry)?,
-            None => false,
+    for role in pic.roles() {
+        let Some(start) = role.entry_placement_id.and_then(|id| by_id.get(&id).copied()) else {
+            unmet.push(Unmet::RoleStartsNowhere { role: role.name.clone() });
+            continue;
         };
-        if !takes {
-            for role in pic.roles() {
-                unmet.push(Unmet::RoleStartsNowhere { role: role.name.clone() });
-            }
+        if !takes_a_task_first(conn, start)? {
+            unmet.push(Unmet::RoleStartTakesNoTask {
+                role: role.name.clone(),
+                step: action_name(conn, start.action_id)?,
+                builtin: action_builtin(conn, start.action_id)?,
+                placement: start.id,
+            });
         }
-        let Some(entry) = entry else {
-            return Ok(unmet);
-        };
-        vec![entry.id]
-    } else {
-        for role in pic.roles() {
-            let Some(start) = role.entry_placement_id.and_then(|id| by_id.get(&id).copied()) else {
-                unmet.push(Unmet::RoleStartsNowhere { role: role.name.clone() });
-                continue;
-            };
-            if !takes_a_task_first(conn, start)? {
-                unmet.push(Unmet::RoleStartTakesNoTask {
-                    role: role.name.clone(),
-                    step: action_name(conn, start.action_id)?,
-                    builtin: action_builtin(conn, start.action_id)?,
-                    placement: start.id,
-                });
-            }
-        }
-        routed.clone()
-    };
+    }
     let defs = defs_of(conn, placements)?;
-    let live = reachable(&starts, pic, &by_id, &defs);
+    let live = reachable(&routed, pic, &by_id, &defs);
     let roles = roles_by_placement(pic, &by_id, &defs);
 
     for placement in placements {
@@ -1099,7 +1073,7 @@ fn check_picture(
             }
         }
         for port in def.action_inputs() {
-            if port.required && !fed(pic, placement, port.id, &starts, &live, &by_id, &defs)? {
+            if port.required && !fed(pic, placement, port.id, &routed, &live, &by_id, &defs)? {
                 unmet.push(Unmet::UnwiredInput {
                     step: name.clone(),
                     port: port.name,
@@ -1178,7 +1152,7 @@ fn check_picture(
             unmet.push(Unmet::ActionEmpty { action: name.clone(), placement: Some(placement.id) });
             continue;
         }
-        let fed_here = |port| fed(pic, placement, port, &starts, &live, &by_id, &defs);
+        let fed_here = |port| fed(pic, placement, port, &routed, &live, &by_id, &defs);
         push_new(&mut unmet, inside(def, Some(placement.id), &steps, fed_here)?);
         // A built-in names no agent and no model: Amenbo carries it out itself (`AMB-D-964`).
         for step in steps.iter().filter(|step| step.builtin.is_none()) {
@@ -1602,8 +1576,7 @@ fn steps_reached(def: &ActionDef, steps: &[AutomationStep], avoiding: Option<i64
 }
 
 /// The placements a run could actually reach, walked from where runs start — where each role starts
-/// ([`role_entries`]), a run starting where its seat's role does, or the entry where no role names a
-/// start ([`start_of`]) — along the edges that go on to another placement, and, from a way out that
+/// ([`role_entries`]), a run starting where its seat's role does ([`start_of`]) — along the edges that go on to another placement, and, from a way out that
 /// hands on the task taken, on to where each role starts. A placement nothing reaches is not checked: it
 /// cannot stop a run, and refusing to launch over one would make an automation undeletable-in-practice
 /// while its author was still drawing it.
@@ -2242,17 +2215,10 @@ pub fn fire(
 
 /// **Where a run in the seats of `role_id` starts its rounds on `pic`** (`AMB-D-1123`) — the placement
 /// the role names as where its round starts ([`AutomationRole::entry_placement_id`]), or `None` where it
-/// names none on `pic`.
-///
-/// A run in the seats of no role ([`Seats::role_id`]) — of an automation none of whose roles names where
-/// its round starts — starts at the picture's entry. That is the one place a run still reads the entry,
-/// kept for as long as an automation can be drawn with no role starting anywhere.
+/// names none on `pic`. A run in the seats of no role ([`Seats::role_id`]) starts nowhere.
 fn start_of(pic: &Picture, role_id: Option<i64>) -> Option<&AutomationPlacement> {
-    let id = match role_id {
-        Some(role) => pic.roles().iter().find(|r| r.id == role).and_then(|r| r.entry_placement_id),
-        None => pic.entry_placement_id,
-    };
-    id.and_then(|id| pic.placement(id))
+    let role = pic.roles().iter().find(|r| Some(r.id) == role_id)?;
+    role.entry_placement_id.and_then(|id| pic.placement(id))
 }
 
 /// **Where the seats of `role_id` start, as a waiting built-in reads it** ([`start_of`]): the key of the
@@ -2714,9 +2680,7 @@ pub struct LaunchRoleState {
     /// **How many of its tasks are waiting to be taken** — the ones a seat of it would take where its
     /// round starts now ([`start_of`]): not started, ready, and matching the filter the "take a task"
     /// built-in placed there is answered with. A task a seat has taken is under way, and not among them.
-    /// None for a role no round starts at, and where its round starts at no "take a task". Where no
-    /// role names where its round starts, the seats start at the entry, and the tasks of every role the
-    /// filter matches are read as the first role's, as its seats are.
+    /// None for a role no round starts at, and where its round starts at no "take a task".
     pub waiting: usize,
     /// The first [`WAITING_NAMED`] of them, in the order the role takes them in.
     pub first_waiting: Vec<WaitingTask>,
@@ -3634,10 +3598,10 @@ fn file_handed(
 /// **Copy every step of `automation` down onto the run** — [`snapshot`] for each step of each
 /// placement, at launch and again where a run paused before its next task is picked up (`AMB-D-1015`).
 ///
-/// **The copy of where the run starts is written first, and marked** ([`AutomationRunDef::entry`]) — the
-/// first step of the placement the round of `role_id`, the run's seat, starts at ([`start_of`]). So a
-/// run's copies fall into one run of rows per time they were taken, each starting at the spot the run
-/// starts at ([`current_defs`]). The rows of an earlier copy are kept: the executions opened from them
+/// **The copy of where the run starts is written first** — the first step of the placement the round of
+/// `role_id`, the run's seat, starts at ([`start_of`]), which names that role among its
+/// [`AutomationRunDef::roles`]. So a run's copies fall into one run of rows per time they were taken,
+/// each starting at the spot the run starts at ([`current_defs`]). The rows of an earlier copy are kept: the executions opened from them
 /// still point at them.
 ///
 /// What is copied is `pic`, the definition the launch read ([`ReadsFrom`]), and every row of one copy
@@ -3661,14 +3625,14 @@ fn copy_down(
     for placement in &pic.placements {
         let def = &defs[&placement.id];
         for step in steps_opened_by(def) {
-            let entry = start == Some(placement.id) && def.entry_step_id == Some(step.id);
-            steps.push((placement, step, entry));
+            let first = start == Some(placement.id) && def.entry_step_id == Some(step.id);
+            steps.push((placement, step, first));
         }
     }
-    steps.sort_by_key(|(_, _, entry)| !entry);
-    for (placement, step, entry) in steps {
+    steps.sort_by_key(|(_, _, first)| !first);
+    for (placement, step, _) in steps {
         let carried = carrier(pic, &roles, placement.id, step.id, default_agent);
-        if let Some(def) = snapshot(tx, run_id, version, pic, placement, &defs, &step, carried, entry, now)? {
+        if let Some(def) = snapshot(tx, run_id, version, pic, placement, &defs, &step, carried, now)? {
             emit_create(tx, record::automation_run_def(&def))?;
         }
     }
@@ -3870,7 +3834,6 @@ fn snapshot(
     defs: &Defs,
     step: &AutomationStep,
     carried: Option<Carrier>,
-    entry: bool,
     now: Timestamp,
 ) -> Result<Option<AutomationRunDef>> {
     let conn = tx.conn();
@@ -3941,7 +3904,6 @@ fn snapshot(
         exits: serde_json::to_string(&exits).map_err(Error::from)?,
         ins: serde_json::to_string(&ins).map_err(Error::from)?,
         cfg: serde_json::to_string(&cfg).map_err(Error::from)?,
-        entry,
         roles: serde_json::to_string(&roles).map_err(Error::from)?,
         created_at: now,
         updated_at: now,
@@ -4078,16 +4040,19 @@ fn wired_into(
 }
 
 /// **The copies a run reads from now** — the last time the automation was copied down onto it
-/// ([`copy_down`]): from the last copy marked as where it starts ([`AutomationRunDef::entry`]) on. The
-/// mark only says where one time it was copied down begins; where the run starts is read off its role
-/// ([`entry_def`]).
+/// ([`copy_down`]): from the last copy of where the round of its seat's role starts on, the one
+/// [`copy_down`] writes first each time ([`AutomationRunDef::roles`]).
 ///
-/// A run carrying a single marked copy reads all of its copies. That is every run copied down once, and
-/// it covers one launched before the marked copy was written first.
+/// A run carrying a single such copy reads all of its copies. That is every run copied down once, and
+/// it covers one launched before that copy was written first. A run in the seats of no role reads all
+/// of its copies too.
 pub(crate) fn current_defs(conn: &Connection, run_id: i64) -> Result<Vec<AutomationRunDef>> {
+    let run = read::automation_run(conn, run_id)?.ok_or_else(|| not_found("run", run_id))?;
     let mut defs = read::automation_run_defs_of(conn, run_id)?;
-    if defs.iter().filter(|def| def.entry).count() > 1 {
-        if let Some(from) = defs.iter().rposition(|def| def.entry) {
+    let Some(role) = run.role_id else { return Ok(defs) };
+    let starts = |def: &AutomationRunDef| def.role_ids().contains(&role);
+    if defs.iter().filter(|def| starts(*def)).count() > 1 {
+        if let Some(from) = defs.iter().rposition(starts) {
             defs.drain(..from);
         }
     }
@@ -4108,17 +4073,12 @@ fn copy_of(
 
 /// **The spot a run starts its rounds at** (`AMB-D-1123`), the last time it was copied down — the copy
 /// of the step the round of its seat's role starts at ([`AutomationRun::role_id`],
-/// [`AutomationRunDef::roles`]), or `None` where the run carries no such copy.
-///
-/// A run in the seats of no role starts where its copy was marked to ([`AutomationRunDef::entry`]): the
-/// picture's entry ([`start_of`]).
+/// [`AutomationRunDef::roles`]), or `None` where the run carries no such copy or sits in the seats of
+/// no role.
 pub fn entry_def(conn: &Connection, run_id: i64) -> Result<Option<AutomationRunDef>> {
     let run = read::automation_run(conn, run_id)?.ok_or_else(|| not_found("run", run_id))?;
-    let defs = current_defs(conn, run_id)?;
-    Ok(match run.role_id {
-        Some(role) => defs.into_iter().find(|def| def.role_ids().contains(&role)),
-        None => defs.into_iter().find(|def| def.entry),
-    })
+    let Some(role) = run.role_id else { return Ok(None) };
+    Ok(current_defs(conn, run_id)?.into_iter().find(|def| def.role_ids().contains(&role)))
 }
 
 /// **Whether a run starts its rounds by taking a task** — where its round starts ([`entry_def`]) is the
@@ -5611,7 +5571,7 @@ mod tests {
     }
 
     /// **A placement more than one round reaches takes the first role defined** that names an agent, and
-    /// a round stops where the automation's entry or another role's round begins.
+    /// a round stops where another role's round begins.
     #[test]
     fn a_placement_falls_back_to_the_first_role_whose_round_reaches_it() {
         with_tx(|tx| {
@@ -6363,9 +6323,8 @@ mod tests {
             assert!(run.role_id.is_some(), "it sits in the seat of the role that starts there");
             assert!(!entry.role_ids().is_empty(), "the copy its role starts at is marked at launch");
 
-            // A run in a role's seat reads where it starts off the roles its copies name, not the entry.
+            // A run in a role's seat reads where it starts off the roles its copies name.
             let mut unmarked = (*entry).clone();
-            unmarked.entry = false;
             unmarked.roles = "[]".to_string();
             crate::ops::emit_update(tx, record::automation_run_def(&entry), record::automation_run_def(&unmarked))
                 .expect("unmark it");
@@ -6469,7 +6428,7 @@ mod tests {
             assert_eq!(waits_for(tx), "読む", "a placement added since is not in its copies");
 
             automation::edge_delete(tx, onward.id).expect("delete the edge");
-            // The entry comes off last (`AMB-D-977`), so the spot taken off is the one added since.
+            // The spot taken off is the one added since.
             automation::placement_delete(tx, late.id)
                 .expect("take the placement off");
             assert_eq!(waits_for(tx), "読む", "nor is a line or a spot taken off");

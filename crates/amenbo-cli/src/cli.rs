@@ -2030,8 +2030,7 @@ pub enum AutomationCmd {
         /// opened with
         #[arg(long, value_name = "ID", required_unless_present = "builtin", conflicts_with = "builtin")]
         action: Option<i64>,
-        /// place one of Amenbo's built-ins instead (`automation builtin-list` names them). Placed first,
-        /// make_task comes set to take the task it files, the one way a run can start from it
+        /// place one of Amenbo's built-ins instead (`automation builtin-list` names them)
         #[arg(long, value_name = "KEY")]
         builtin: Option<String>,
         /// the axis `split_by_dim` splits by (name or ID) — one a task holds one value of. Its ways out
@@ -2630,8 +2629,7 @@ pub enum AutomationCmd {
     },
 
     /// Walk an automation's draft, unsaved changes included, role by role in the order the roles are
-    /// defined in, each from where it starts to its end (from the entry where no role says where it
-    /// starts), without running anything — saving is not needed, unlike `automation start`: the launch
+    /// defined in, each from where it starts to its end, without running anything — saving is not needed, unlike `automation start`: the launch
     /// check, what each step is handed and the whole prompt each agent would be started on — with no agent started,
     /// no built-in carried out and nothing kept. Each step leaves by its first way out, and by the next
     /// one each time it is reached again; what it would have handed on is a placeholder. Takes what

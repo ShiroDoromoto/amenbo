@@ -137,12 +137,12 @@ steps_cli:
     op: listed
     with: { target: auto, placements: 0, present: true }
 
-  # The first placement is what a run starts at, and it is one of the built-ins that can be: here the
-  # one that takes a task, which the action after it works on.
+  # The role the automation was born with starts its round at the built-in that takes a task, which
+  # the action after it works on.
   - type: action
     domain: automation
     op: place-add
-    with: { target: auto, builtin: take_task }
+    with: { target: auto, builtin: take_task, starts: true }
     as: at_start
   - type: action
     domain: automation

@@ -37,7 +37,9 @@ given:
   - { type: action, domain: automation, op: action-entry, with: { target: after, step: wait } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: wait, exit_to: "" } }
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one to hold from its pane" }, as: auto }
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_start }
+  # The task is the born role's, whose round starts there: a run takes only its role's tasks.
+  - { type: action, domain: task, op: update, with: { target: seed, role_of: auto } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: after }, as: at_after }

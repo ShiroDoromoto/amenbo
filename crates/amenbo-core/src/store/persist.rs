@@ -1477,18 +1477,6 @@ impl Store {
         })
     }
 
-    /// Change what a run starts at, to another of the built-ins it can start at (one operation = one
-    /// transaction) — [`crate::ops::automation::entry_replace`].
-    pub fn automation_entry_replace(
-        &mut self,
-        id: i64,
-        key: &str,
-    ) -> Result<crate::model::AutomationPlacement> {
-        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
-            crate::ops::automation::entry_replace(tx, id, key)
-        })
-    }
-
     /// Put an action on an automation (one operation = one transaction).
     pub fn automation_placement_add(
         &mut self,
@@ -1502,8 +1490,8 @@ impl Store {
     }
 
     /// Put an action in on a line (one operation = one transaction): the placement and the two edges
-    /// that leave nothing pointing at nothing — and, straight after an entry that files a task, the
-    /// built-in that closes it ([`crate::ops::automation::close_after_filed`]).
+    /// that leave nothing pointing at nothing — and, straight after a role's start that files a task,
+    /// the built-in that closes it ([`crate::ops::automation::close_after_filed`]).
     pub fn automation_placement_insert(
         &mut self,
         edge_id: i64,
@@ -1555,8 +1543,8 @@ impl Store {
     }
 
     /// Put an action on after a way out that says nothing yet (one operation = one transaction): the
-    /// placement and the one line from that way out to it — and, straight after an entry that files
-    /// a task, the built-in that closes it ([`crate::ops::automation::close_after_filed`]).
+    /// placement and the one line from that way out to it — and, straight after a role's start that
+    /// files a task, the built-in that closes it ([`crate::ops::automation::close_after_filed`]).
     pub fn automation_placement_insert_at_exit(
         &mut self,
         from_id: i64,
@@ -1776,7 +1764,7 @@ impl Store {
     }
 
     /// **Launch an automation** — check it, copy its steps into a run, and start it (one operation =
-    /// one transaction). Where its entry would wait for a task with none to take, no run is made and
+    /// one transaction). Where its role's start would wait for a task with none to take, no run is made and
     /// the automation waits for one instead ([`crate::ops::automation_run::start`]).
     ///
     /// The reach is the automation's, the run being made under it.
@@ -1801,7 +1789,7 @@ impl Store {
     }
 
     /// **Start a run of an automation waiting for a task, now that one has turned up**, or end its wait
-    /// where its entry no longer waits for one (one operation = one transaction) —
+    /// where its role's start no longer waits for one (one operation = one transaction) —
     /// [`crate::ops::automation_run::start_waiting`]. A launch its checks refuse takes the whole
     /// transaction with it, and the automation goes on waiting.
     pub fn automation_wait_start(
@@ -1975,7 +1963,7 @@ impl Store {
         })
     }
 
-    /// **Copy a run standing at its entry down afresh from a newer saved version**
+    /// **Copy a run standing where its role starts down afresh from a newer saved version**
     /// ([`crate::ops::automation_run::take_up_newer`]). `startable` and `models` are a launch's, as
     /// [`Self::automation_resume`]'s are. The reach is the run's.
     pub fn automation_take_up_newer(

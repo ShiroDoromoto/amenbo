@@ -24,7 +24,7 @@ description: >
 given:
   # The start alone, and nothing said about either of its ways out.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a start and nothing after it" }, as: auto }
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task } }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true } }
 
 steps_gui:
   - type: action

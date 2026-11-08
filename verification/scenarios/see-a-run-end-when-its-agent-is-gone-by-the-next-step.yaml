@@ -58,7 +58,9 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: read, exit_to: "" } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — an agent gone part way" }, as: auto }
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_start }
+  # The task is the born role's, whose round starts there: a run takes only its role's tasks.
+  - { type: action, domain: task, op: update, with: { target: seed, role_of: auto } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: codex-cli } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: review }, as: at_review }

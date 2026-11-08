@@ -21,10 +21,12 @@ given:
   # Left unhanded, so the first run finds nothing to take.
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the second run takes }, as: seed }
 
-  # The built-in alone, as the entry: having taken a task it stops for a person, and finding none it
+  # The built-in alone, where the role starts: having taken a task it stops for a person, and finding none it
   # closes the run.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that stops where it took a task" }, as: auto }
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_take }
+  # The task is the born role's, whose round starts there: a run takes only its role's tasks.
+  - { type: action, domain: task, op: update, with: { target: seed, role_of: auto } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, halt: true } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }
 

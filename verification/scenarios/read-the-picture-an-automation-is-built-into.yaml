@@ -29,7 +29,7 @@ given:
   - { type: action, domain: automation, op: action-add, with: { name: review }, as: review }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one task, three actions" }, as: auto }
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_start }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: review }, as: at_review }

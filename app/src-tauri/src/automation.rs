@@ -450,8 +450,7 @@ fn builtin_port_dto(port: &automation_builtin::BuiltinPort) -> AutomationPortDto
     AutomationPortDto { name: port.name.to_string(), kind: port.kind.as_str(), required: port.required }
 }
 
-/// **Put a built-in on a picture**, standing on its own — how the first placement comes in, which is
-/// one of the built-ins a run starts at (`AMB-D-977`). Its library action is written from the
+/// **Put a built-in on a picture**, standing on its own. Its library action is written from the
 /// definition the first time any automation places it
 /// ([`amenbo_core::ops::automation_builtin::action_on`]). `axis` is the axis the one that splits by an
 /// axis splits by, and nothing for any other (`AMB-D-973`).
@@ -783,8 +782,7 @@ pub fn automation_step_add(
 }
 
 /// **Make an empty action and put it in on a line** ([`amenbo_core::ops::automation::placement_insert_new`])
-/// — the one road a new action comes onto a picture by, since the first placement is one of the
-/// built-ins a run starts at (`AMB-D-977`). The way out that was pressed comes to point at the new
+/// — the one road a new action comes onto a picture by. The way out that was pressed comes to point at the new
 /// placement, and the new placement goes on to where that way out used to, in one transaction; the
 /// ack names the action it made, for the screen to go and build it.
 #[tauri::command]
@@ -2316,8 +2314,8 @@ const STEP_EVENT: &str = "automation-step";
 /// **Open one step of a run**: write the execution down, build the text its terminal is started on,
 /// and tell the workspace to stand a terminal on it.
 ///
-/// `run_def_id` names which step, and **`None` is the first one** — the copy of the automation's entry
-/// step ([`amenbo_core::ops::automation_run::entry_def`]). That is the whole of what a launch knows to
+/// `run_def_id` names which step, and **`None` is the first one** — the copy of the step the round of
+/// the run's role starts at ([`amenbo_core::ops::automation_run::entry_def`]). That is the whole of what a launch knows to
 /// ask for; which step comes after which is read from the way out the one before it took, and is the
 /// job of the op that receives a report (`AMB-T-5246`).
 ///

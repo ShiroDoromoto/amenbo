@@ -29,7 +29,9 @@ given:
   - { type: action, domain: automation, op: action-entry, with: { target: work, step: do } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: do, exit_to: "" } }
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one whose step is placed on a model" }, as: auto }
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_start }
+  # The task is the born role's, whose round starts there: a run takes only its role's tasks.
+  - { type: action, domain: task, op: update, with: { target: seed, role_of: auto } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   # The second of the two, rather than the first: the first stands beside the agent's own default, and

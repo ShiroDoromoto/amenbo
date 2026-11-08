@@ -23,7 +23,7 @@ given:
   - { type: action, domain: automation, op: cfg-add, with: { action: write, name: save to, kind: folder, required: true } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a folder to answer" }, as: auto }
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_start }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: write }, as: at_write }
   - { type: action, domain: automation, op: agent-set, with: { target: at_write, step: draft, agent: claude-code } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }

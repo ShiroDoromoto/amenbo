@@ -13,7 +13,7 @@
 id: take-a-task-with-the-built-in-that-takes-one
 title: The built-in that takes a task reserves the one handed to the AI, and a run with none to take ends
 description: >
-  Place the built-in that takes a task (`take_task`) as an automation's entry, with the way out that took a task going
+  Place the built-in that takes a task (`take_task`) where an automation's role starts, with the way out that took a task going
   on to an agent's step and the way out that found none closing the run. Start it while no task is
   handed to the AI, and read the run over on the history tab. Hand a task to the AI, start it again,
   and read the task gone to in_progress and the agent's step in the run's pane working it.
@@ -30,9 +30,11 @@ given:
   - { type: action, domain: automation, op: action-entry, with: { target: work, step: build } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: build, exit_to: "" } }
 
-  # The built-in, placed by its key, as the entry. Its ways out carry the names the code gives them.
+  # The built-in, placed by its key, where the role starts. Its ways out carry the names the code gives them.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that takes a task by itself" }, as: auto }
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_take }
+  # The task is the born role's, whose round starts there: a run takes only its role's tasks.
+  - { type: action, domain: task, op: update, with: { target: seed, role_of: auto } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: build, agent: claude-code } }

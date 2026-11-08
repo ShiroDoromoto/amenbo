@@ -1889,24 +1889,21 @@ pub struct AutomationAction {
 /// What every step of every run is told before its own prompt is not here: it is Amenbo's own fixed
 /// sentences ([`crate::agents::preamble`]), the same for every automation (`AMB-D-952`).
 ///
-/// `entry_placement_id` is where a run starts; from it the edges are walked, and the place a
-/// placement sits in the picture and the number it is drawn with both fall out of that walk rather
-/// than out of `order_key`, which records only the order things were added in.
+/// A run starts where each role's round starts ([`AutomationRole::entry_placement_id`]); from there the
+/// edges are walked, and the place a placement sits in the picture and the number it is drawn with both
+/// fall out of that walk rather than out of `order_key`, which records only the order things were added
+/// in.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Automation {
     pub id: i64,
     pub project_id: i64,
     pub name: String,
     pub notes: String,
-    /// The placement a run opens first. `None` while the automation is still being built; launching
-    /// without one is refused at the launch check, not here.
-    #[serde(default)]
-    pub entry_placement_id: Option<i64>,
     #[serde(default)]
     pub archived: bool,
     /// **Where a round that fails is filed** — a person, or one of this automation's own roles. `None`
-    /// while nobody has said; launching without one is refused at the launch check, as launching with
-    /// no entry is. Like `archived`, it is the automation's, not part of a saved version.
+    /// while nobody has said; launching without one is refused at the launch check. Like `archived`,
+    /// it is the automation's, not part of a saved version.
     #[serde(default)]
     pub failures_to: Option<FailuresTo>,
     /// **A definition from before automations had roles, kept only to be written out.** Set on every
@@ -2240,12 +2237,12 @@ pub struct AutomationPlacementStep {
 /// of the parts an automation is split into, and the two are kept apart.
 ///
 /// **The way it works is where its round starts** (`entry_placement_id`), a placement of the same
-/// automation. `None` while it is still being built, as the automation's own entry is.
+/// automation. `None` while it is still being built.
 ///
 /// **`agent` and `model` are defaults, nothing more.** A step's agent is chosen from three, in order: the
 /// choice made for the step where its action is placed ([`AutomationPlacementStep`]), then this default
-/// for every placement the role's round reaches from `entry_placement_id` — up to where the
-/// automation's entry or another role's round begins — then Amenbo's own
+/// for every placement the role's round reaches from `entry_placement_id` — up to where another
+/// role's round begins — then Amenbo's own
 /// ([`crate::ops::automation_run::Launcher::default_agent`]). A placement more than one round reaches
 /// takes the first of those roles in the order they are defined in. `model` is named only beside an
 /// agent and comes with it, and `None` leaves the agent's own default.
@@ -2462,10 +2459,6 @@ pub struct AutomationVersion {
     pub automation_id: i64,
     /// Counts up from 1 within one automation.
     pub version: i64,
-    /// The placement the copy opens first, by its id in `placements`, or `None` where the automation had
-    /// none.
-    #[serde(default)]
-    pub entry_placement_id: Option<i64>,
     /// The placements, each with the version of its action it stood on — JSON, [`AutomationPlacement`]s.
     pub placements: String,
     /// The answers written for each placement's settings — JSON, [`AutomationCfg`]s.
@@ -2858,10 +2851,6 @@ pub struct AutomationRunDef {
     pub ins: String,
     /// The settings and the answers written for them — JSON ([`RunDefCfg`]).
     pub cfg: String,
-    /// Is this the copy the run starts at — the step the automation's entry placement opens first, as
-    /// the picture stood at launch.
-    #[serde(default)]
-    pub entry: bool,
     /// **The roles whose round starts at this step** — JSON, an array of [`AutomationRole`] ids. A role
     /// names the placement its round starts at (`entry_placement_id`), and this is the copy of that
     /// placement's first step, as the roles stood at launch. `[]` on every other copy, and on one written

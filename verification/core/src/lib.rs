@@ -489,7 +489,8 @@ const REGISTRY: &[OpSpec] = &[
     // what the word names is a **folder**, one of the folders the task's own project offers, so the
     // driver hands over the path it placed that folder at rather than the word itself. It is also the
     // only field here that another road can take away: unbinding the folder empties it.
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "update", required: &["target"], refs: &["target", "mentions"], strings: &["title", "notes", "due", "start", "priority", "at"], binds: false },
+    // `role_of` names an automation, and puts the task under the role that automation was born with.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "update", required: &["target"], refs: &["target", "mentions", "role_of"], strings: &["title", "notes", "due", "start", "priority", "at"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "clear", required: &["target", "field"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "move", required: &["target"], refs: &["target", "project"], strings: &["position"], binds: false },
     // Narrowing a listing that is already drawn, by the words a reader types over it. The words travel
@@ -4180,6 +4181,10 @@ const REGISTRY: &[OpSpec] = &[
     // `axis` is the axis the built-in that splits by one (`split_by_dim`) splits by, named as the
     // project names it. There is one of that built-in per axis, and its ways out are the axis's values,
     // so an edge off one is written with a value's name.
+    //
+    // `starts: true` makes the placement where the round of the role the automation was born with
+    // starts. An automation has no start of its own, so a road that starts a run names
+    // one placement this way.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "place-add", required: &["target"], refs: &["target", "action"], strings: &["builtin", "axis"], binds: true },
     // Who carries one step (`step`) out at one placement (`target`), and the model where one is named.
     // A step a run could open with nobody chosen is refused at launch, so a premise
@@ -4276,7 +4281,7 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "runs-listed", required: &[], refs: &["target", "automation", "task"], strings: &[], binds: false },
     //
     // **A test run** (`automation test-run`): the automation walked role by role, each from where it
-    // starts (from its entry where no role says where it starts), to its end with no agent started,
+    // starts, to its end with no agent started,
     // no built-in carried out and nothing kept. It takes what `start` takes bar the file,
     // and binds nothing — a test run leaves no run behind to name. What it answered is kept on the
     // driver for `test-run-walked`, since afterwards the store holds nothing of it to read back.

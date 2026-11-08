@@ -11,7 +11,7 @@
 id: wait-for-a-task-with-the-built-in-that-takes-one
 title: The built-in that takes a task, set to wait, keeps its run going until a task turns up and then takes it
 description: >
-  Place the built-in that takes a task (`take_task`) as an automation's entry, answer its setting
+  Place the built-in that takes a task (`take_task`) where an automation's role starts, answer its setting
   "着手できるタスクが無いとき" with "着手できるタスクが出るまで待つ", and draw nothing after the way
   out that found none. Start it while
   no task is handed to the AI, and read the run still running. Hand a task to the AI, wait up to 30
@@ -33,7 +33,9 @@ given:
   # The built-in, placed by its key. Only the way out that took a task goes anywhere: the road sets it
   # to wait on the screen before it starts.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that waits for a task" }, as: auto }
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_take }
+  # The task is the born role's, whose round starts there: a run takes only its role's tasks.
+  - { type: action, domain: task, op: update, with: { target: seed, role_of: auto } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: build, agent: claude-code } }

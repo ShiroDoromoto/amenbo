@@ -515,11 +515,6 @@ export function AutomationStepPanel({
   };
   const named = placement.exits.filter((one) => one.name !== ERROR_EXIT);
   const graph = automationGraph(automation)!;
-  // Core still makes the first thing placed where a whole run starts, and refuses to take it off while
-  // anything else is on the picture (`placement_delete`). The detail no longer names that spot, but it
-  // is the oldest one — the one with the lowest id — so the press is left off there until it is alone.
-  const oldest = Math.min(...automation.placements.map((one) => one.id));
-  const removable = placement.id !== oldest || automation.placements.length === 1;
   // Amenbo never moves a spot onto a newer version of its action by itself (`AMB-D-1000`): the press is
   // here, and lines and wires the newer version has no end for go with it, so it asks first.
   const behind = behindOf(placement);
@@ -638,13 +633,11 @@ export function AutomationStepPanel({
           </ul>
         </Sec>
 
-        {removable && (
-          <div className="actpanel__foot">
-            <button type="button" className="btn btn--danger" onClick={() => void remove()}>
-              {t("auto.step.placementRemove")}
-            </button>
-          </div>
-        )}
+        <div className="actpanel__foot">
+          <button type="button" className="btn btn--danger" onClick={() => void remove()}>
+            {t("auto.step.placementRemove")}
+          </button>
+        </div>
       </div>
     </div>
   );

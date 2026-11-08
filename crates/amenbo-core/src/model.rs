@@ -2559,6 +2559,13 @@ pub struct AutomationLaunchRole {
     pub role_id: i64,
     /// From 1 up to [`MAX_ROLE_HEADCOUNT`].
     pub headcount: u32,
+    /// **The role is stopped taking tasks for this launch** — "stop once the task is done"
+    /// ([`crate::ops::automation_stop::hold_launch_role`]). Its runs finish the task they are on and take
+    /// no new one, and its free seats stay empty until it is taken up again
+    /// ([`crate::ops::automation_stop::release_launch_role`]). Apart from `headcount`, which stays as
+    /// it was: taken up again, the role fills its seats back up to it.
+    #[serde(default)]
+    pub held: bool,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

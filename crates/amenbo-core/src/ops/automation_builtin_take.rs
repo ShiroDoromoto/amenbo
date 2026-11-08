@@ -1643,6 +1643,107 @@ mod tests {
         });
     }
 
+    /// **A role stopped once its task is done finishes the tasks under way and takes no new one**: each
+    /// run ends where it comes to take its next task, and its seats stay empty with tasks still waiting.
+    /// The headcount stays as it was, and taken up again the role fills its seats back up to it.
+    #[test]
+    fn a_role_held_takes_no_new_task_until_it_is_taken_up_again() {
+        use crate::ops::automation_run::{launch_headcounts, launches_to_top_up, seats, top_up};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = round_picture(tx, project);
+            crate::ops::test_support::room_for(tx, automation.id, 2);
+            for title in ["a", "b", "c", "d"] {
+                for_ai(tx, title, project, None);
+            }
+            let (launch, role, [(first, first_work), (second, second_work)]) = two_at_work(tx, &automation);
+
+            let held = automation_stop::hold_launch_role(tx, launch, role).expect("stop the role");
+            assert!(held.role.held);
+            assert_eq!(held.role.headcount, 2, "the headcount stays as it was");
+            assert!(held.runs.is_empty(), "both runs are at work, and go on");
+            let counted = launch_headcounts(tx.conn(), launch).expect("read");
+            assert!(counted[0].held);
+            assert_eq!(counted[0].headcount, 2);
+            assert_eq!(counted[0].under_way, vec![first.id, second.id], "no task under way is stopped");
+            let again = automation_stop::hold_launch_role(tx, launch, role).expect("again");
+            assert_eq!(
+                (again.role.id, again.role.held, again.runs.len()),
+                (held.role.id, true, 0),
+                "a role already stopped is answered as it stands",
+            );
+
+            for (run, work) in [(&first, &first_work), (&second, &second_work)] {
+                let Next::Step(take) = round_finished(tx, run.id, work) else { panic!("back round to the take") };
+                let Opened::LetGo { run: let_go } = open(tx, run.id, take.id, Some(&[])).expect("open the take")
+                else {
+                    panic!("a run of a stopped role takes no new task");
+                };
+                assert_eq!(let_go.status, AutomationRunStatus::Completed);
+            }
+            assert!(seats(tx.conn(), &automation).expect("seats").iter().all(|s| !s.free()), "no seat is free");
+            assert!(
+                launches_to_top_up(tx.conn(), &[launch]).expect("ask").is_empty(),
+                "tasks still wait, and the role takes none",
+            );
+            assert_eq!(
+                read::automation_launch(tx.conn(), launch).expect("read").expect("launch").status,
+                crate::model::AutomationLaunchStatus::Running,
+                "the launch stays open",
+            );
+
+            let released = automation_stop::release_launch_role(tx, launch, role).expect("take it up again");
+            assert!(!released.held);
+            assert_eq!(released.headcount, 2);
+            assert!(!launch_headcounts(tx.conn(), launch).expect("read")[0].held);
+            assert_eq!(launches_to_top_up(tx.conn(), &[launch]).expect("ask"), vec![launch]);
+            let third = top_up(tx, launch, &launcher()).expect("top up").expect("a run in the seat");
+            assert!(matches!(open_entry(tx, &third), Opened::Carried { .. }), "it takes a task again");
+            assert!(top_up(tx, launch, &launcher()).expect("top up").is_some(), "back up to its headcount");
+        });
+    }
+
+    /// **A role is stopped or taken up only while its launch runs**: not while the launch is paused as a
+    /// whole, nor once it has ended, nor for a role the automation does not hold. Picking a launch up
+    /// again leaves a role stopped as it was.
+    #[test]
+    fn a_role_is_held_only_while_its_launch_runs() {
+        use crate::ops::automation_run::launch_headcounts;
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = round_picture(tx, project);
+            for_ai(tx, "a", project, None);
+            let run = launched(tx, &automation);
+            let launch = run.launch_id.expect("a launch");
+            open_entry(tx, &run);
+            let role = read::automation_roles_of(tx.conn(), automation.id).expect("roles")[0].id;
+
+            assert!(matches!(
+                automation_stop::hold_launch_role(tx, launch, role + 1000),
+                Err(crate::error::Error::Invalid(_))
+            ));
+            automation_stop::hold_launch_role(tx, launch, role).expect("stop the role");
+            automation_stop::pause_launch(tx, launch).expect("pause the launch");
+            assert!(matches!(
+                automation_stop::release_launch_role(tx, launch, role),
+                Err(crate::error::Error::Invalid(_))
+            ));
+            assert!(matches!(
+                automation_stop::hold_launch_role(tx, launch, role),
+                Err(crate::error::Error::Invalid(_))
+            ));
+            automation_stop::resume_launch(tx, launch, None, nothing_asked(), None).expect("pick it up");
+            assert!(launch_headcounts(tx.conn(), launch).expect("read")[0].held, "the role stays stopped");
+
+            automation_stop::stop_launch(tx, launch).expect("stop");
+            assert!(!launch_headcounts(tx.conn(), launch).expect("read")[0].held);
+            assert!(matches!(
+                automation_stop::release_launch_role(tx, launch, role),
+                Err(crate::error::Error::Invalid(_))
+            ));
+        });
+    }
+
     /// **How many are in a role for a launch is from 1 to 10** (`AMB-D-1124`), changed only on a launch
     /// under way and only for a role of the newest saved version. Once the launch ends every role reads
     /// as its definition again, and the next launch copies the definition as it then stands.

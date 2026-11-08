@@ -1532,10 +1532,15 @@ datasets! {
     // `role_id` is a plain id with no constraint behind it, as `automation_run_def.step_id` is: a saved
     // version names its roles by id, and the launch keeps the row whether or not the role is still in the
     // draft. The rows go with their launch.
+    //
+    // `held` is a role a person stopped taking tasks for this launch: its runs finish the task they are
+    // on and take no new one, and its free seats stay empty until it is taken up again. Apart from the
+    // headcount, which stays as it was.
     automation_launch_role {
         launch_id: fk("automation_launch", "RESTRICT"),
         role_id: col(KEY_REF),
         headcount: col(HEADCOUNT),
+        held: bool_col,
     } => "UNIQUE (launch_id, role_id)"
 
     // `acknowledged_at` is when a person said they had seen a failure. Until then the failure stays at

@@ -865,7 +865,12 @@ pub fn automation_launch_role(l: &AutomationLaunchRole) -> Record {
         "automation_launch_role",
         l.id,
         with_audit(
-            vec![("launch_id", kv(l.launch_id)), ("role_id", kv(l.role_id)), ("headcount", iv(i64::from(l.headcount)))],
+            vec![
+                ("launch_id", kv(l.launch_id)),
+                ("role_id", kv(l.role_id)),
+                ("headcount", iv(i64::from(l.headcount))),
+                ("held", bv(l.held)),
+            ],
             &l.created_at,
             &l.updated_at,
         ),

@@ -844,6 +844,7 @@ pub(super) fn automation_launch_role_row(r: &Row) -> rusqlite::Result<Automation
             let n: i64 = get(r, C.headcount)?;
             u32::try_from(n).map_err(|_| bad(format!("bad headcount {n}")))?
         },
+        held: get(r, C.held)?,
         created_at,
         updated_at,
     })

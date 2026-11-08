@@ -89,7 +89,8 @@ pub enum Opened {
     LeftToWait { run: AutomationRun },
     /// **The step takes a task, and the run's seat is one still to go** — the headcount of its role was
     /// lowered on the launch below the runs under way in it
-    /// ([`super::automation_run::over_headcount`]). The run ended here, completed with the step never
+    /// ([`super::automation_run::over_headcount`]), or its role is stopped taking tasks for the launch
+    /// ([`super::automation_run::role_held`]). The run ended here, completed with the step never
     /// opened and no task taken, so the seat goes as its run finishes a task and none under way is
     /// stopped.
     LetGo { run: AutomationRun },
@@ -268,10 +269,12 @@ fn open_as(
     }
     // **A seat still to go is let go here, before the run takes its next task**, so the seats go in the
     // order their runs finish a task and no task under way is stopped. Nothing is recorded of it: a
-    // headcount raised again before then leaves the run in its seat.
+    // headcount raised again before then leaves the run in its seat. **So is a seat of a role stopped
+    // taking tasks**: it stays empty until the role is taken up again, and is filled then.
     if !rehearsing
         && super::automation_stop::takes_a_task(&def)
-        && super::automation_run::over_headcount(conn, &run)?
+        && (super::automation_run::over_headcount(conn, &run)?
+            || super::automation_run::role_held(conn, &run)?)
     {
         let ended = super::automation_stop::ended(tx, run, super::automation_stop::Ending::Completed)?;
         return Ok(Opened::LetGo { run: ended.run });

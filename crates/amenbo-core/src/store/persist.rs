@@ -2098,6 +2098,29 @@ impl Store {
         })
     }
 
+    /// **Stop one role of a launch taking tasks once the task under way is done**
+    /// ([`crate::ops::automation_stop::hold_launch_role`]).
+    pub fn automation_launch_role_hold(
+        &mut self,
+        launch_id: i64,
+        role_id: i64,
+    ) -> Result<crate::ops::automation_stop::RoleHeld> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Launch, launch_id)], |tx| {
+            crate::ops::automation_stop::hold_launch_role(tx, launch_id, role_id)
+        })
+    }
+
+    /// **Take one role of a launch up again** ([`crate::ops::automation_stop::release_launch_role`]).
+    pub fn automation_launch_role_release(
+        &mut self,
+        launch_id: i64,
+        role_id: i64,
+    ) -> Result<crate::model::AutomationLaunchRole> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Launch, launch_id)], |tx| {
+            crate::ops::automation_stop::release_launch_role(tx, launch_id, role_id)
+        })
+    }
+
     /// **Start one more run in a running launch**, where there is room and a task to take — or nothing
     /// (one operation = one transaction) — [`crate::ops::automation_run::top_up`]. A launch its checks
     /// refuse takes the whole transaction with it.

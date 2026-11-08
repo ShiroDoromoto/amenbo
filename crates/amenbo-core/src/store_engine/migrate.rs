@@ -1484,6 +1484,13 @@ pub const STEPS: &[Step] = &[
         // is what the launch sat in until now. An ended launch is given none. No task is touched.
         apply: Apply::Custom(give_each_launch_its_headcount),
     },
+    Step {
+        to: 131,
+        name: "add automation_launch_role.held, a role stopped taking tasks for one launch",
+        // **Seeded, and the seed is not a guess: `0` on every row.** No build before this one could stop
+        // a role on its own. No task is touched.
+        apply: Apply::Custom(give_each_launch_role_a_hold),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -1526,6 +1533,21 @@ fn give_each_role_a_take_order(ctx: &Ctx<'_>) -> Result<()> {
                 rusqlite::params![serde_json::Value::Array(roles).to_string(), version_id],
             )?;
         }
+    }
+    Ok(())
+}
+
+/// v131: `automation_launch_role.held` — a role a person stopped taking tasks for one launch, apart from
+/// its headcount.
+///
+/// **Appended only where it is missing**, v68's guard and for v53's reason. A store with no automation
+/// adds the column to an empty table and writes nothing.
+fn give_each_launch_role_a_hold(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_launch_role")?.iter().any(|c| c == "held") {
+        tx.execute_batch(
+            "ALTER TABLE automation_launch_role ADD COLUMN held BOOLEAN NOT NULL DEFAULT 0 CHECK(held IN (0, 1));",
+        )?;
     }
     Ok(())
 }
@@ -13075,6 +13097,50 @@ mod tests {
         let n: i64 =
             engine.conn().query_row("SELECT COUNT(*) FROM automation_launch_role", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v131: every role a launch already holds arrives taking tasks — no build before this one could stop
+    /// a role on its own — and the task table is not changed.
+    #[test]
+    fn every_launch_role_already_written_is_not_held_at_v131() {
+        let dir = scratch("automation-launch-role-held");
+        let engine = store_at(&dir, 130);
+        let at = "2026-11-08T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 1, '開発', 'm', '{at}', '{at}');
+                 INSERT INTO automation_launch (id, automation_id, project_id, status, created_at, updated_at)
+                 VALUES (1, 1, 1, 'running', '{at}', '{at}');
+                 INSERT INTO automation_launch_role (launch_id, role_id, headcount, created_at, updated_at)
+                 VALUES (1, 1, 3, '{at}', '{at}'), (1, 2, 1, '{at}', '{at}');"
+            ))
+            .unwrap();
+        let columns = |table: &str| -> Vec<String> {
+            let mut stmt =
+                engine.conn().prepare("SELECT name FROM pragma_table_info(?1) ORDER BY cid").unwrap();
+            stmt.query_map([table], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+        };
+        let task_before = columns("task");
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let mut stmt = engine
+            .conn()
+            .prepare("SELECT headcount, held FROM automation_launch_role ORDER BY role_id")
+            .unwrap();
+        let rows: Vec<(i64, bool)> =
+            stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap().map(|v| v.unwrap()).collect();
+        assert_eq!(rows, vec![(3, false), (1, false)], "the headcount is kept, and nothing is held");
+        assert!(
+            engine.conn().execute("UPDATE automation_launch_role SET held = 2 WHERE role_id = 1", []).is_err(),
+            "only the two booleans go in"
+        );
+        assert_eq!(columns("task"), task_before, "the task table is not changed");
         std::fs::remove_dir_all(&dir).ok();
     }
 

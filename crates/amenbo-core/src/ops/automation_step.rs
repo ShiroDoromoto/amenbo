@@ -14,8 +14,8 @@
 //! **A value travels along a wire and along nothing else.** A later step is handed what an earlier one
 //! put on a way out *that a wire joins to this input* — a name matching by accident is not a
 //! connection, and the specification says so rather than letting a rename quietly re-plumb a run.
-//! Nothing arrives by any other road: what a person hands over at launch is filed as a task before the
-//! run starts, and is the task's rather than a step's (`AMB-D-1123`).
+//! Nothing arrives by any other road: work reaches a run as a task filed with a role before the run
+//! starts, and is the task's rather than a step's (`AMB-D-1123`).
 //!
 //! **Where it ends is `Opened`.** A required input with nothing to fill it is not an error to be
 //! reported and forgotten: the run is stopped, in the same transaction, so what the store holds
@@ -849,7 +849,7 @@ fn the_task(tx: &WriteTx<'_>, task_id: i64, parts: TaskParts) -> Result<String> 
     if !decisions.is_empty() {
         out.push_str(&format!("\n\n### The decisions linked to it\n\n{}", decisions.join("\n\n")));
     }
-    // What is attached to the task itself — the files a run was started with land here (`AMB-D-981`). Not
+    // What is attached to the task itself — the files work is handed over with (`task attach`). Not
     // behind a switch of its own: a line per file is cheap, and a step told to work from this block
     // rather than `task show` has no other way to learn the task carries one.
     let mut attachments = Vec::new();

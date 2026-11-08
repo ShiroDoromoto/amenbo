@@ -1114,7 +1114,7 @@ fn task_show_signposts_empty_categories() {
     }
 }
 
-/// `task show` lists what is attached to the task, so a file handed to the task (`AMB-D-981`) is seen by
+/// `task show` lists what is attached to the task, so a file attached to the task (`task attach`) is seen by
 /// whoever reads the task, not only by someone who thought to run `attach ls`. The line is the one
 /// `attach ls` prints, naming the attachment `AMB-ATT-<n>` as `attach open` takes it, and `--json` carries the attachments whole under `attachments`. A comment's
 /// attachment is not the task's, so it stays out.

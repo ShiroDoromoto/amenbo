@@ -178,8 +178,8 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             // to go and look.
             let decisions = store.decisions_for_task(tid);
             let comments = store.comment_list(tid, None, None).map(|r| r.comments).unwrap_or_default();
-            // What is attached to the task itself (`AMB-D-981` hands the files a run was started with to the
-            // task it files). Without it here, the only way to learn a task carries a file is to think of
+            // What is attached to the task itself (the files work is handed to an automation with, by
+            // `task attach`). Without it here, the only way to learn a task carries a file is to think of
             // asking `attach ls` — which a reader who does not know there is one never does.
             let attachments = store.attachments_for_target(AttachmentTarget::Task, tid).map_err(CliError::from)?;
             if flags.json {

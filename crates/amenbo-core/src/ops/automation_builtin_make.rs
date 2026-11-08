@@ -1,6 +1,6 @@
 //! **The built-in that files a task** — one task, from the title and the notes it is handed (`AMB-D-971`).
 //!
-//! What a person hands a run and what a run fetches become a task before anything goes on
+//! What a trigger hands a run and what a run fetches become a task before anything goes on
 //! (`AMB-D-970`), so the rest of the run is the same road a taken task walks. Filing it here rather than
 //! in a prompt keeps it to the one transaction the step is opened in, the way taking one is
 //! ([`super::automation_builtin_take`]).
@@ -21,7 +21,7 @@
 //! placed, and the step before it cannot change it: an axis already answered in [`CLASSIFY`] is not
 //! one it may choose on.
 //!
-//! **It reads nothing handed over at launch** (`AMB-D-1123`): what a person or a trigger hands a run is
+//! **It reads nothing handed over at launch** (`AMB-D-1123`): what a trigger or a test run hands a run is
 //! filed as a task with a role before the run starts ([`crate::ops::automation_run::HandedAtLaunch`]),
 //! classified as [`launch_values`] reads it, so its title, notes and classification come to it along a
 //! wire like any other step's.
@@ -2454,42 +2454,8 @@ mod tests {
         });
     }
 
-    /// **The files handed over at launch are attached to the task filed** (`AMB-D-981`) — in the order
-    /// they were handed, each saying who handed it, and none on the run.
-    #[test]
-    fn a_launch_attaches_the_files_handed_over_to_the_task_it_files() {
-        use crate::model::AttachmentTarget;
-        use crate::ops::automation_run::HandedFile;
-        with_tx(|tx| {
-            let (automation, take, _) = entry(tx);
-            let file = |name: &str| HandedFile {
-                blob_hash: "a".repeat(64),
-                filename: name.to_string(),
-                mime: Some("text/markdown".to_string()),
-                size_bytes: 12,
-            };
-            let handed = HandedAtLaunch { files: vec![file("issue.md"), file("log.txt")], ..titled("an issue") };
-            // A file has to say who handed it over, so a launcher that says nothing about itself cannot.
-            let claude = ["claude".to_string()];
-            let nobody =
-                Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: Some(true), by: None };
-            assert!(launch_handing(tx, automation.id, &nobody, &handed, ReadsFrom::Saved).is_err());
-            assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
-
-            let run = launch_with(tx, &automation, &handed).expect("launch");
-            let on_the_run = read::attachments_for_target(tx.conn(), AttachmentTarget::AutomationRun, run.id).expect("files");
-            assert!(on_the_run.is_empty(), "nothing is held on the run");
-
-            let filed = taken_first(tx, &run, &take);
-            let files = read::attachments_for_target(tx.conn(), AttachmentTarget::Task, filed.id).expect("files");
-            let names: Vec<_> = files.iter().map(|a| a.filename.clone().unwrap_or_default()).collect();
-            assert_eq!(names, ["issue.md", "log.txt"]);
-            assert!(files.iter().all(|a| a.created_by_kind.as_deref() == Some("human")));
-        });
-    }
-
-    /// **The person launching gives a value on every axis the project requires** — nobody else is there
-    /// to. Left out, the launch is refused and nothing is filed.
+    /// **What is handed at launch gives a value on every axis the project requires** — nobody else is
+    /// there to. Left out, the launch is refused and nothing is filed.
     #[test]
     fn a_required_axis_left_open_is_the_launchers_to_answer() {
         with_tx(|tx| {

@@ -2602,24 +2602,11 @@ pub enum AutomationCmd {
     /// Start an automation: check its newest saved version, copy it into a run, and start it — refused
     /// for an automation never saved (`automation save`); what is written since is not used. The tasks a
     /// step works on and the folder it runs in are the automation's own answers, given while it was
-    /// built. What is handed over here is filed as a task under the automation's first role before the
-    /// run starts: the `--title`, `--notes` and `--dim` of the task, and each `--file`, attached to it
+    /// built. It only opens the run and hands it nothing: work reaches an automation as a task filed
+    /// with one of its roles (`task add --role`), with its files attached to it (`task attach`)
     Start {
         /// automation id
         id: i64,
-        /// a file to attach to the task filed before the run (repeat for several)
-        #[arg(long = "file", value_name = "PATH")]
-        files: Vec<String>,
-        /// the title of the task filed before the run — required with --notes, --dim or --file
-        #[arg(long, value_name = "TITLE")]
-        title: Option<String>,
-        /// that task's notes, as Markdown. Pass `-` to read them from stdin
-        #[arg(long, value_name = "NOTES")]
-        notes: Option<String>,
-        /// classify that task as `<axis>=<value>`, by name (repeat for several axes). Every axis the
-        /// project requires needs a value
-        #[arg(long = "dim", value_name = "AXIS=VALUE")]
-        dim: Vec<String>,
     },
     /// Stop an automation waiting for a task: the app no longer starts a run of it once a task the
     /// take_task where a role's round starts looks for turns up. One that is not waiting is answered as it stands
@@ -2632,8 +2619,9 @@ pub enum AutomationCmd {
     /// defined in, each from where it starts to its end, without running anything — saving is not needed, unlike `automation start`: the launch
     /// check, what each step is handed and the whole prompt each agent would be started on — with no agent started,
     /// no built-in carried out and nothing kept. Each step leaves by its first way out, and by the next
-    /// one each time it is reached again; what it would have handed on is a placeholder. Takes what
-    /// `automation start` takes, bar the files
+    /// one each time it is reached again; what it would have handed on is a placeholder. The
+    /// `--title`, `--notes` and `--dim` given here are filed as a task under the first role before the
+    /// walk
     TestRun {
         /// automation id
         id: i64,

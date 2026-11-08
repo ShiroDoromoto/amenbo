@@ -64,7 +64,7 @@ use serde::Serialize;
 
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
-    ActorKind, AttachmentTarget, Automation, AutomationCfg, AutomationCfgOwner, AutomationEnds, AutomationExit,
+    ActorKind, Automation, AutomationCfg, AutomationCfgOwner, AutomationEnds, AutomationExit,
     AutomationLaunch, AutomationLaunchRole, AutomationLaunchStatus, AutomationOwner, AutomationPictureOwner,
     AutomationPlacement,
     AutomationRole,
@@ -523,26 +523,22 @@ pub struct Launcher<'a> {
     pub by: Option<ActorKind>,
 }
 
-/// **What a person hands over when launching a run** — a task, **filed before the run starts** under a
-/// role of the automation, rather than handed to its entry (`AMB-D-1123`): work is handed to an
+/// **What a trigger or a test run hands over with a run** — a task, **filed before the run starts**
+/// under a role of the automation, rather than handed to its entry (`AMB-D-1123`): work is handed to an
 /// automation as a task with a role, and each role starts from the tasks of its own waiting to be taken.
 /// The run is then started like any other, in a free seat — the seat of that role where it has one free
 /// ([`file_handed`]).
 ///
-/// The title, the notes and the classification are the task's, and the files are attached to it
-/// (`AMB-D-981`). Anything handed for a task with no title is refused: a task cannot be filed without
-/// one.
-///
-/// A trigger hands its task over the same way, as the title and notes it says, with the role the task is
-/// worked under and its own name for the line the task's timeline gets ([`fire`]).
+/// A trigger hands the title and notes it says, with the role the task is worked under and its own name
+/// for the line the task's timeline gets ([`fire`]). A test run hands the title, the notes and the
+/// classification it was given ([`crate::ops::automation_rehearse::rehearse`]). A person launching a run
+/// hands nothing: they file a task with a role and attach its files to it, and the launch only opens
+/// the run ([`start`]). Anything handed for a task with no title is refused: a task cannot be filed
+/// without one.
 ///
 /// Nothing handed is the default, and a launch that hands nothing files nothing.
 #[derive(Clone, Debug, Default)]
 pub struct HandedAtLaunch {
-    /// The files, already ingested into the blob store by the caller ([`crate::blob::BlobStore`]), in
-    /// the order they were handed over. Each is attached to the task filed, in the launch's own
-    /// transaction.
-    pub files: Vec<HandedFile>,
     /// The title of the task filed. Blank is the same as none.
     pub title: Option<String>,
     /// Its notes. Blank is the same as none.
@@ -566,19 +562,10 @@ impl HandedAtLaunch {
         self.notes.as_deref().filter(|t| !t.trim().is_empty())
     }
 
-    /// What was handed for a task to be filed from: a title, notes, a classification or a file.
+    /// What was handed for a task to be filed from: a title, notes or a classification.
     fn for_a_task(&self) -> bool {
-        self.title().is_some() || self.notes().is_some() || !self.classification.is_empty() || !self.files.is_empty()
+        self.title().is_some() || self.notes().is_some() || !self.classification.is_empty()
     }
-}
-
-/// One file handed over at launch, as [`crate::ops::attachment::add_blob`] takes it.
-#[derive(Clone, Debug)]
-pub struct HandedFile {
-    pub blob_hash: String,
-    pub filename: String,
-    pub mime: Option<String>,
-    pub size_bytes: i64,
 }
 
 /// **The models each agent offers here**, by agent id ([`crate::agent_models`]) — and only the agents
@@ -1842,9 +1829,10 @@ impl Started {
     }
 }
 
-/// **Start an automation as a person does** — [`launch_handing`] of the newest saved version, refused
-/// over everything a launch is refused over, and in that order. What was handed is filed as a task
-/// first ([`HandedAtLaunch`]), so the run started has it to take.
+/// **Start an automation as a person does** — [`launch`] of the newest saved version, refused over
+/// everything a launch is refused over, and in that order. It only opens the run, and hands it nothing:
+/// work reaches the automation as a task filed with one of its roles (`AMB-D-1123`), which the run's
+/// seat takes.
 ///
 /// **Where every role with a seat open would start its round waiting for a task, and none can be taken
 /// now, no run is made** (`AMB-D-969`): the automation is marked as waiting for one instead
@@ -1855,9 +1843,8 @@ pub fn start(
     tx: &WriteTx<'_>,
     automation_id: i64,
     by: &Launcher<'_>,
-    handed: &HandedAtLaunch,
 ) -> Result<Started> {
-    launch_asking(tx, automation_id, by, handed, ReadsFrom::Saved, None, true, |_| true)
+    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, None, true, |_| true)
 }
 
 /// **Which definition of an automation a launch reads** — what is checked and copied down onto the run.
@@ -2038,12 +2025,9 @@ fn definition(conn: &Connection, automation: &Automation, reads: ReadsFrom) -> R
     }
 }
 
-/// [`launch`], with what a person handed over along with it ([`HandedAtLaunch`]), reading the definition
-/// `reads` names. What was handed is filed as a task, its files attached to it, before the run is
-/// written ([`file_handed`]).
-///
-/// **A file needs somebody who handed it over.** An attachment says who put it there, and a launch
-/// whose caller says nothing about itself has no one to name, so it is refused rather than guessed at.
+/// [`launch`], with what a trigger or a test run handed over along with it ([`HandedAtLaunch`]),
+/// reading the definition `reads` names. What was handed is filed as a task before the run is written
+/// ([`file_handed`]).
 pub fn launch_handing(
     tx: &WriteTx<'_>,
     automation_id: i64,
@@ -3515,13 +3499,11 @@ fn launch_asking(
 /// where none was — and worked in the project's one linked folder where it has exactly one. It is given
 /// to the AI, since it is handed to the automation to be worked, and the built-in that takes a task
 /// looks for the AI's by default. Its classification is checked as the built-in that files a task
-/// checks it ([`crate::ops::automation_builtin_make::launch_values`]), and its files are attached to it.
-/// A trigger's name goes on a line in its timeline
-/// ([`crate::activity_log::event::task_filed_by_trigger`]). Its creation is finished here, so it can be
-/// taken at once.
+/// checks it ([`crate::ops::automation_builtin_make::launch_values`]). A trigger's name goes on a line
+/// in its timeline ([`crate::activity_log::event::task_filed_by_trigger`]). Its creation is finished
+/// here, so it can be taken at once.
 ///
-/// Refused where something was handed for a task with no title, and where files were handed by a
-/// launcher that says nothing about itself: an attachment says who put it there.
+/// Refused where something was handed for a task with no title.
 fn file_handed(
     tx: &WriteTx<'_>,
     automation: &Automation,
@@ -3536,15 +3518,6 @@ fn file_handed(
         return Err(Error::invalid(
             "a task handed over at launch needs a title — nothing can be filed without one",
         ));
-    };
-    let who = match (handed.files.is_empty(), by.by) {
-        (true, _) => None,
-        (false, Some(who)) => Some(who),
-        (false, None) => {
-            return Err(Error::invalid(
-                "a file handed over at launch needs the launcher to say who it is — pass who is launching",
-            ))
-        }
     };
     let conn = tx.conn();
     let project_id = automation.project_id;
@@ -3577,20 +3550,6 @@ fn file_handed(
         crate::ops::dimension::set(tx, filed.id, value)?;
     }
     crate::ops::task::set_assignee(tx, filed.id, Some(ActorKind::Ai), filed_by)?;
-    if let Some(who) = who {
-        for file in &handed.files {
-            crate::ops::attachment::add_blob(
-                tx,
-                AttachmentTarget::Task,
-                filed.id,
-                &file.blob_hash,
-                &file.filename,
-                file.mime.as_deref(),
-                file.size_bytes,
-                who,
-            )?;
-        }
-    }
     crate::ops::task::finish_creating(tx, filed.id, filed_by)?;
     Ok(role_id)
 }
@@ -5965,20 +5924,13 @@ mod tests {
     }
 
     /// **What is handed at launch is filed as a task before the run** (`AMB-D-1123`) — under the
-    /// automation's first role, given to the AI, its files attached to it — and the run takes it. Nothing
-    /// is kept on the run. Handed for a task with no title, or files with nobody to say who handed them,
-    /// the launch is refused and nothing is filed.
+    /// automation's first role, given to the AI — and the run takes it. Nothing is kept on the run.
+    /// Handed for a task with no title, the launch is refused and nothing is filed.
     #[test]
     fn what_is_handed_is_filed_as_a_task_before_the_run() {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
             let startable = claude();
-            let file = HandedFile {
-                blob_hash: "a".repeat(64),
-                filename: "issue.md".to_string(),
-                mime: Some("text/markdown".to_string()),
-                size_bytes: 12,
-            };
             let tasks = |tx: &WriteTx<'_>| read::task_ids_in_project(tx.conn(), automation.project_id).expect("tasks");
             for (handed, by, why) in [
                 (HandedAtLaunch { notes: Some("what to do".into()), ..Default::default() }, here(&startable), "needs a title"),
@@ -5986,11 +5938,6 @@ mod tests {
                     HandedAtLaunch { classification: vec![("職能".into(), "実装".into())], ..Default::default() },
                     here(&startable),
                     "needs a title",
-                ),
-                (
-                    HandedAtLaunch { title: Some("an issue".into()), files: vec![file.clone()], ..Default::default() },
-                    Launcher { by: None, ..here(&startable) },
-                    "say who it is",
                 ),
             ] {
                 let err = launch_handing(tx, automation.id, &by, &handed, ReadsFrom::Saved).expect_err(why);
@@ -6002,7 +5949,6 @@ mod tests {
             let handed = HandedAtLaunch {
                 title: Some("  an issue  ".into()),
                 notes: Some("what to do".into()),
-                files: vec![file],
                 ..Default::default()
             };
             let run = launch_handing(tx, automation.id, &here(&startable), &handed, ReadsFrom::Saved).expect("launch");
@@ -6015,9 +5961,6 @@ mod tests {
             assert_eq!(filed.role_id, Some(first_role), "under the first role");
             assert_eq!(filed.assignee_kind, Some(ActorKind::Ai));
             assert_eq!(filed.status, crate::model::TaskStatus::Todo, "waiting to be taken");
-            let files = read::attachments_for_target(tx.conn(), AttachmentTarget::Task, filed.id).expect("files");
-            assert_eq!(files.len(), 1, "the file is the task's");
-            assert!(read::attachments_for_target(tx.conn(), AttachmentTarget::AutomationRun, run.id).expect("files").is_empty());
         });
     }
 

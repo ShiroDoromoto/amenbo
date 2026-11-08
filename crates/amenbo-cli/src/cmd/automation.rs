@@ -32,7 +32,7 @@ use amenbo_core::model::{AutomationRole, FailuresTo};
 use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep, RoleChange};
 use amenbo_core::ops::automation_report::{Next, Produced};
 use amenbo_core::ops::automation_run::{
-    Carrier, ChosenAt, ForRoom, HandedAtLaunch, HandedFile, Launcher, ReadsFrom, RoleHeadcount, Started, TaskWait,
+    Carrier, ChosenAt, ForRoom, HandedAtLaunch, Launcher, ReadsFrom, RoleHeadcount, Started, TaskWait,
 };
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
 use amenbo_core::ops::automation_view::{
@@ -1206,15 +1206,14 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
         }
 
-        AutomationCmd::Start { id, files, title, notes, dim } => {
-            // Asked before anything is read or ingested, so a refusal leaves nothing behind
-            // (`AMB-D-995`).
+        AutomationCmd::Start { id } => {
+            // Asked before anything is read, so a refusal leaves nothing behind (`AMB-D-995`).
             let paths = amenbo_core::config::Paths::resolve().map_err(CliError::from)?;
             if !amenbo_core::app_running::is_running(&paths).map_err(CliError::from)? {
                 return Err(CliError::app_not_running());
             }
             // A launch reads the newest saved version, and core falls back to the draft for an
-            // automation never saved. That fallback is refused here, before any file is ingested.
+            // automation never saved. That fallback is refused here.
             let saved = store
                 .automation_detail(id)
                 .map_err(CliError::from)?
@@ -1229,25 +1228,6 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     )),
                     exit: 1,
                 })?;
-            let notes = crate::cmd::arg::body_arg_opt(notes)?;
-            let classification = classification_of(&dim)?;
-            // Every file is read and held to its limit before any is ingested, so a refusal of the last
-            // strands none of the ones before it. A launch refused after the ingest leaves its bytes to
-            // `doctor --fix`, as an attach refused after it does (`crate::cmd::attach::attach_add`).
-            let files = files
-                .iter()
-                .map(|path| crate::cmd::attach::file_to_ingest(store, path, None))
-                .collect::<Result<Vec<_>, _>>()?;
-            let mut handed = HandedAtLaunch { title, notes, classification, ..Default::default() };
-            for file in &files {
-                let blob = file.ingest(store)?;
-                handed.files.push(HandedFile {
-                    blob_hash: blob.hash,
-                    filename: file.filename.clone(),
-                    mime: file.mime.map(str::to_string),
-                    size_bytes: blob.size_bytes as i64,
-                });
-            }
             let known = startable(store);
             let by = Launcher {
                 default_agent: None,
@@ -1263,7 +1243,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 workspace_open: None,
                 by: Some(flags.facet()?),
             };
-            match store.automation_launch(id, &by, &handed).map_err(CliError::from)? {
+            match store.automation_launch(id, &by).map_err(CliError::from)? {
                 Started::Run(r) => {
                     let line = format!("✓ Run {} started from version {}", r.id, saved.version);
                     write_envelope(flags, "automation.start", "automation_run", serde_json::to_value(&r).unwrap(), None, false, line);
@@ -1286,7 +1266,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
         }
         AutomationCmd::TestRun { id, title, notes, dim } => {
             // Nothing is started, so the app need not be running, and nothing is kept, so there is no
-            // file to ingest: a test run is handed the text a launch is.
+            // file to ingest: a test run is handed text only.
             let notes = crate::cmd::arg::body_arg_opt(notes)?;
             let handed = HandedAtLaunch { title, notes, classification: classification_of(&dim)?, ..Default::default() };
             let known = startable(store);

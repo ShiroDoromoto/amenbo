@@ -1776,37 +1776,31 @@ fn run_show_names_the_versions_a_run_was_copied_from() {
     cli.json(&["automation", "cancel", &run, "--force", "--json"]);
 }
 
-/// **What a person hands over comes in on the launch itself** (`AMB-D-981`): the title, the notes and
-/// the files of a task, filed under the automation's first role before the run starts (`AMB-D-1123`).
-/// A file that cannot be read is refused before anything is started, so nothing is left holding half of
-/// what it was handed, and a text on its own is not a thing the launch takes at all.
+/// **A launch only opens the run** (`AMB-D-1123`): work reaches an automation as a task filed with one
+/// of its roles, so `automation start` takes no title, notes, classification or file. Each is refused
+/// before anything is started, and the launch with none of them goes through.
 #[test]
-fn a_launch_files_what_it_is_handed_and_refuses_the_rest() {
+fn a_launch_takes_nothing_to_hand_over() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
     let (a, _, _) = a_saved_launchable(&cli);
 
     let brief = cli.home.join("brief.md");
     std::fs::write(&brief, "the login page loses the password field\n").expect("write the brief");
-    let started = cli.json(&[
-        "automation", "start", &a, "--title", "file this", "--notes", "# a draft",
-        "--file", brief.to_str().unwrap(), "--json",
-    ]);
-    let run = id_of(&started, "automation_run");
-
-    let (err, code) = cli.run_err(&["automation", "start", &a, "--title", "again", "--text", "for a step", "--json"]);
-    assert_ne!(code, 0, "--text is gone: {err}");
-    let missing = cli.home.join("not-there.md");
-    let (err, code) = cli.run_err(&[
-        "automation", "start", &a, "--title", "again", "--file", missing.to_str().unwrap(), "--json",
-    ]);
-    assert_ne!(code, 0, "an unreadable file is refused: {err}");
-    assert!(err.contains("not_found"), "{err}");
-    assert!(err.contains("pass a readable file path"), "the hint says how to fix it: {err}");
-    assert!(!err.contains("--url"), "and names no flag this command does not have: {err}");
+    for (flag, value) in [
+        ("--title", "file this"),
+        ("--notes", "# a draft"),
+        ("--dim", "職能=実装"),
+        ("--file", brief.to_str().unwrap()),
+    ] {
+        let (err, code) = cli.run_err(&["automation", "start", &a, flag, value, "--json"]);
+        assert_ne!(code, 0, "{flag} is gone: {err}");
+        assert!(err.contains(flag), "the refusal names {flag}: {err}");
+    }
     let runs = cli.json(&["automation", "run-list", "--automation", &a, "--json"]);
-    assert_eq!(runs["count"].as_u64(), Some(1), "only the first launch made a run: {runs}");
-    assert!(runs.to_string().contains(&run), "{runs}");
+    assert_eq!(runs["count"].as_u64(), Some(0), "nothing was started: {runs}");
+
+    cli.json(&["automation", "start", &a, "--json"]);
 }
 
 /// **With no app up on the store, nothing is started** (`AMB-D-995`). A step's terminal is opened by the

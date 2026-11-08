@@ -39,8 +39,8 @@ which an agent writes through the CLI and you read in the desktop app.
   an agent to carry it out, and the way out a step leaves through decides what runs next.
   Taking a task, filing one, closing it, fetching what a run starts from, splitting by a
   classification and cutting a worktree are Amenbo's own built-ins, so a prompt is left with what
-  needs an agent's judgement. A run starts from a task it takes, from what a person hands it, or
-  from what it goes and fetches.
+  needs an agent's judgement. A run starts from a task it takes: one a person files under one of
+  its roles, one a trigger files, or one filed from what a run goes and fetches.
   A run opens one terminal per step and reads back what the step reports, so what has been
   done and what comes next is in the store rather than in an agent's memory of it.
 
@@ -375,9 +375,9 @@ amenbo decision list --filter "status:decided superseded:no" --with-body --limit
 # the work itself, a review, how a PR and its CI are handled. A name in <angle brackets> below is a
 # built-in's own, as `builtin-list` prints it.
 # Each role's round starts at take_task, which takes a task of that role its filter finds; a launch
-# is refused while a role starts its round nowhere or anywhere else. What a person hands `start`
-# (`--title/--notes/--dim`) is filed as a task under a role before the run starts, for that take_task
-# to take. fetch goes to a URL, a file path or a command set beforehand; placed in a round, what it
+# is refused while a role starts its round nowhere or anywhere else. `start` hands the run nothing:
+# work is a task filed under a role (`task add --role`, its files by `task attach`), for that
+# take_task to take. fetch goes to a URL, a file path or a command set beforehand; placed in a round, what it
 # fetches is filed through make_task.
 amenbo automation add --name "Work the queue"          # the picture itself; what every step is told first is Amenbo's own
 amenbo automation builtin-list                         # take_task, make_task, fetch, split_by_dim, cut_worktree, fold_worktree, close_task, hand_back_task, defer_task, wait — with the names of what each reads, hands on and leaves by
@@ -423,7 +423,8 @@ amenbo automation action-show 7                        # one action, and the pic
 amenbo automation action-show 7 --saved                # ...as it was saved last, which is what a placement put down now stands on
 amenbo automation test-run 3                           # walk the draft through first: every step and the prompt each agent would get, with nothing started and nothing kept
 amenbo automation start 3                              # away it goes, from the newest saved version (refused if never saved, and with no app up: the app opens the steps)
-amenbo automation start 4 --title "Login loses the password field" --dim Category=bug --file ./issue.md   # ...or hand it a task: filed under its first role before the run starts, with title, notes, classification and attachments
+amenbo task add --title "Login loses the password field" --project "Website refresh" --role 7 --to ai   # hand it work as a task with one of its roles (from role-list); the start only opens the run, and that role's seat takes the task
+amenbo task attach 42 ./issue.md                       # ...and attach what the task needs to it
 amenbo automation trigger 4 --every 60 --title "Look over the inbox"   # ...or add a trigger that files that task and starts a run on it every hour while the app is up (none while every seat of its role is taken); an automation may have several, each listed by `automation show` with its id
 amenbo automation trigger 4 --every 60 --name "Inbox" --role 7 --title "Look over the inbox"  # ...called "Inbox" on the timeline of each task it files, which is worked under role 7 (one of this automation's, from role-list) and counted in that role's seats; left out, no name and the automation's first role
 amenbo automation trigger 4 --when-idle --title "Look over the inbox"  # ...or whenever no seat of its role is taken, a minute after the last one it filed at the soonest

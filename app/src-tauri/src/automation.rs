@@ -3376,6 +3376,8 @@ fn placement_dto(view: automation_view::PlacementView, who: &mut Who) -> Automat
                 step_id: one.step.id,
                 name: one.step.name,
                 interactive: one.step.interactive,
+                script: one.step.script.is_some(),
+                builtin: one.step.builtin.is_some(),
                 agent: one.chosen.as_ref().map(|c| c.agent.clone()),
                 model: one.chosen.and_then(|c| c.model),
             })

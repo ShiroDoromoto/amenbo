@@ -370,7 +370,7 @@ describe("the picture of the steps", () => {
     const one = detail({
       placements: [
         step({ id: 1, name: "hollow" }),
-        step({ id: 2, name: "full", steps: [{ stepId: 5, name: "do", interactive: false }] }),
+        step({ id: 2, name: "full", steps: [{ stepId: 5, name: "do", interactive: false, script: false, builtin: false }] }),
         step({ id: 3, name: "take_task", builtin: "take_task" }),
       ],
     });
@@ -637,8 +637,23 @@ describe("one role's round, as the build screen draws it", () => {
           inputs: [{ name: "notes", kind: "value", required: true }],
           exits: [{ id: 20, name: "完了", outputs: [{ name: "design", kind: "value", required: true }] }],
           steps: [
-            { stepId: 1, name: "案を考える", interactive: false },
-            { stepId: 2, name: "設計を書く", interactive: false },
+            {
+              stepId: 1,
+              name: "案を考える",
+              interactive: false,
+              script: false,
+              builtin: false,
+              carrier: { agent: "claude-code", model: "opus", chosenAt: { kind: "role", roleId: 20 }, agentByStep: false, modelByStep: false },
+            },
+            {
+              stepId: 2,
+              name: "設計を書く",
+              interactive: false,
+              script: false,
+              builtin: false,
+              carrier: { agent: "claude-code", model: "haiku", chosenAt: { kind: "step" }, agentByStep: false, modelByStep: true },
+            },
+            { stepId: 3, name: "整える", interactive: false, script: true, builtin: false },
           ],
         }),
         step({
@@ -741,7 +756,23 @@ describe("one role's round, as the build screen draws it", () => {
   it("writes the steps inside the action, what it takes in and hands on, and the loop back into it", async () => {
     await render({ graph: automationGraph(rounds(), 20) });
     const write = nodes()[0]!;
-    expect(write.textContent).toContain("案を考える → 設計を書く");
+    expect(write.querySelector(".autopic__actionword")!.textContent).toBe(t("auto.pic.actionWord"));
+    // One card a step, its name over its kind, an arrow between two.
+    const cards = [...write.querySelectorAll(".autopic__step")];
+    expect(cards.map((one) => [one.querySelector(".autopic__stepname")!.textContent, one.querySelector(".autopic__stepkind")!.textContent])).toEqual([
+      ["案を考える", t("auto.pic.stepRole")],
+      ["設計を書く", tf("auto.pic.stepOwn", { what: tf("auto.pic.stepOwnModel", { name: "haiku" }) })],
+      ["整える", t("auto.pic.stepScript")],
+    ]);
+    expect(cards.map((one) => one.className)).toEqual([
+      "autopic__step autopic__step--role",
+      "autopic__step autopic__step--own",
+      "autopic__step autopic__step--script",
+    ]);
+    expect(write.querySelectorAll(".autopic__steparrow").length).toBe(2);
+    // The name is set as one label with "Action ·", and each card as wide as the layout measured it.
+    expect(write.querySelector(".autopic__nodename")!.className).toBe("autopic__nodename autopic__nodename--action");
+    expect(cards.every((one) => /^\d+px$/.test((one as HTMLElement).style.width))).toBe(true);
     // The input is fed from Research's box, numbered as the whole automation numbers it.
     expect(write.textContent).toContain(tf("auto.pic.ioIn", { names: tf("auto.pic.ioFrom", { name: "notes", no: 1 }) }));
     expect(write.textContent).toContain(tf("auto.pic.ioOut", { names: "design" }));

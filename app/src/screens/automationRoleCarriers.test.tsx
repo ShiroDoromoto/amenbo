@@ -72,6 +72,8 @@ function detail(): AutomationDetailDto {
           stepId: 11,
           name: "Read the diff",
           interactive: false,
+          script: false,
+          builtin: false,
           agent: "claude-code",
           model: "haiku",
           // The role's agent written down again, and a model of its own: only the model is the step's.
@@ -89,6 +91,8 @@ function detail(): AutomationDetailDto {
           stepId: 21,
           name: "Write it",
           interactive: false,
+          script: false,
+          builtin: false,
           carrier: {
             agent: "claude-code",
             model: "opus",
@@ -98,11 +102,13 @@ function detail(): AutomationDetailDto {
           },
         },
         // A script step: no agent carries it out, so it has no carrier.
-        { stepId: 22, name: "Run the tests", interactive: false },
+        { stepId: 22, name: "Run the tests", interactive: false, script: true, builtin: false },
         {
           stepId: 23,
           name: "Ask Amenbo",
           interactive: false,
+          script: false,
+          builtin: false,
           carrier: { agent: "gemini", chosenAt: { kind: "amenbo" }, agentByStep: false, modelByStep: false },
         },
         // A step that asks a person: an agent opens it, but it is not a row.
@@ -110,6 +116,8 @@ function detail(): AutomationDetailDto {
           stepId: 24,
           name: "Pick a plan",
           interactive: true,
+          script: false,
+          builtin: false,
           carrier: {
             agent: "claude-code",
             model: "opus",
@@ -124,6 +132,8 @@ function detail(): AutomationDetailDto {
           stepId: 31,
           name: "Review",
           interactive: false,
+          script: false,
+          builtin: false,
           carrier: { agent: "codex", chosenAt: { kind: "role", roleId: 2 }, agentByStep: false, modelByStep: false },
         },
       ]),
@@ -203,7 +213,7 @@ describe("the table", () => {
     const automation = detail();
     automation.placements = automation.placements.map((one) => ({
       ...one,
-      steps: one.steps.map(({ stepId, name, interactive }) => ({ stepId, name, interactive })),
+      steps: one.steps.map(({ stepId, name, interactive }) => ({ stepId, name, interactive, script: true, builtin: false })),
     }));
     await draw(automation, 1);
     expect(container.innerHTML).toBe("");

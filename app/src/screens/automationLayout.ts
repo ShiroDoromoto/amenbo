@@ -58,12 +58,13 @@
 // the picture it was meant to explain, so the legend says it once instead, and the panel beside the
 // picture names it for the box picked.
 import { builtinWord } from "../core/builtinWords";
-import { t, tf } from "../core/i18n";
+import { listLabel, t, tf } from "../core/i18n";
 import type {
   AutomationActionDetailDto,
   AutomationDetailDto,
   AutomationEdgeDto,
   AutomationExitDto,
+  AutomationPlacementStepDto,
   AutomationPortDto,
   AutomationWireDto,
 } from "../bindings/bindings";
@@ -92,10 +93,90 @@ export type PicBox = {
   version?: number;
   /** The newest version of that action there is. Absent on an action's picture. */
   latestVersion?: number;
-  /** The names of the steps inside the action standing here, in order — drawn inside its box on a
-   *  role's picture. Absent everywhere else. */
-  stepNames?: readonly string[];
+  /** The steps inside the action standing here, in order, each with its kind — drawn inside its box
+   *  on a role's picture. Absent everywhere else. */
+  stepCards?: readonly PicStep[];
 };
+
+/**
+ * **One step inside an action, as its box on a role's picture draws it**: its name, and under it what
+ * kind of step it is (`stepKind`).
+ *
+ * `ownAgent` and `ownModel` are what a step of the kind `own` chose for itself, each only where it is
+ * set apart from what the step falls back to (`agentByStep`, `modelByStep`). `ownAgent` is the agent's
+ * name as the table of carriers writes it, so the layout measures the words the screen draws.
+ * `ownModel` is `null` where the step's own choice is the agent's own default model.
+ */
+export type PicStep = {
+  name: string;
+  kind: PicStepKind;
+  ownAgent?: string;
+  ownModel?: string | null;
+};
+
+/**
+ * What kind a step is, on a role's picture. The mock names four (`AMB-D-1121`): a script (`script`), a
+ * step that asks a person (`ask`), one that chose its own agent or model (`own`), and one that takes
+ * the role's default (`role`). Three more are written where the mock has no example and the four would
+ * say what is not so: a built-in, which Amenbo carries out itself (`builtin`); a step that falls back
+ * past the role to Amenbo's own default (`amenbo`); and one none of the step, the role and Amenbo
+ * names an agent for (`unset`), which the launch check names.
+ */
+export type PicStepKind = "script" | "builtin" | "ask" | "own" | "role" | "amenbo" | "unset";
+
+/**
+ * The kind of one step, asked in the mock's order: a script, then a step that asks a person, then one
+ * that chose for itself, then the default it falls back to. A built-in is asked with the script, as
+ * neither has an agent; a step that asks a person is asked before what it chose, as the table of
+ * carriers leaves it out (`roleCarrierRows`).
+ */
+export function stepKind(step: AutomationPlacementStepDto, agentLabel: (id: string) => string = (id) => id): PicStep {
+  const name = step.name;
+  if (step.script) return { name, kind: "script" };
+  if (step.builtin) return { name, kind: "builtin" };
+  if (step.interactive) return { name, kind: "ask" };
+  const carrier = step.carrier;
+  if (carrier === undefined) return { name, kind: "unset" };
+  if (carrier.agentByStep || carrier.modelByStep) {
+    return {
+      name,
+      kind: "own",
+      ...(carrier.agentByStep ? { ownAgent: agentLabel(carrier.agent) } : {}),
+      ...(carrier.modelByStep ? { ownModel: carrier.model ?? null } : {}),
+    };
+  }
+  return { name, kind: carrier.chosenAt.kind === "amenbo" ? "amenbo" : "role" };
+}
+
+/**
+ * What a step's second line says — its kind, or for one that chose for itself, what it chose: the
+ * agent, the model, or both.
+ */
+export function stepKindWord(step: PicStep): string {
+  switch (step.kind) {
+    case "script":
+      return t("auto.pic.stepScript");
+    case "builtin":
+      return t("auto.pic.stepBuiltin");
+    case "ask":
+      return t("auto.pic.stepAsk");
+    case "role":
+      return t("auto.pic.stepRole");
+    case "amenbo":
+      return t("auto.pic.stepAmenbo");
+    case "unset":
+      return t("auto.pic.stepUnset");
+    case "own": {
+      const what = [
+        ...(step.ownAgent === undefined ? [] : [tf("auto.pic.stepOwnAgent", { name: step.ownAgent })]),
+        ...(step.ownModel === undefined
+          ? []
+          : [tf("auto.pic.stepOwnModel", { name: step.ownModel ?? t("auto.step.modelDefault") })]),
+      ];
+      return tf("auto.pic.stepOwn", { what: listLabel(what) });
+    }
+  }
+}
 
 /**
  * **One role's round, as the picture of it reads it** (`automationGraph` with a role): what the round
@@ -144,8 +225,13 @@ export type PicGraph = {
  * Given a role, **only that role's round** (`AutomationPlacementDto::roleId`): received from a failed
  * round, a trigger, another role or a person, the actions it passes through with their steps inside, and
  * handed on to the roles its lines leave for. A role that is gone draws the whole automation.
+ * `agentLabel` names the agent a step chose for itself (`stepKind`); absent, its id is written.
  */
-export function automationGraph(detail: AutomationDetailDto | null, roleId?: number): PicGraph | null {
+export function automationGraph(
+  detail: AutomationDetailDto | null,
+  roleId?: number,
+  agentLabel?: (id: string) => string,
+): PicGraph | null {
   if (detail === null) return null;
   const whole: PicGraph = {
     entryId: detail.entryPlacementId,
@@ -207,7 +293,7 @@ export function automationGraph(detail: AutomationDetailDto | null, roleId?: num
     entryId: role.entryPlacementId,
     boxes: detail.placements
       .filter((one) => inRound.has(one.id))
-      .map((one) => ({ ...one, stepNames: one.steps.map((step) => step.name) })),
+      .map((one) => ({ ...one, stepCards: one.steps.map((step) => stepKind(step, agentLabel)) })),
     edges: detail.edges.filter((edge) => inRound.has(edge.fromId)),
     wires: detail.wires,
     round: {
@@ -254,7 +340,7 @@ export const ERROR_EXIT = "*";
 export const DONE_EXIT = "完了";
 
 /** How big a box is, and how much room is left around it. All of it fixed, but for an action's box on
- *  a role's picture, which is sized to what it says and never wider than this (below). Two lines tall
+ *  a role's picture, which is sized to what it says (below). Two lines tall
  *  — the name, and under it where the action comes from or what it is missing — as the mock draws it. */
 const NODE_W = 220;
 const NODE_H = 46;
@@ -262,18 +348,32 @@ const NODE_H = 46;
  *  line each under its name (`AMB-T-5798`), so neither cuts the other short. */
 const STEP_H = 62;
 /** An action's box on a role's picture (`layOutAcross`), sized to what it says (`roundSize`): under
- *  its name the steps inside it, what it takes in, what it hands on, and the loop back into it — a line
- *  each. As narrow as its name and its steps let it be, between the two widths; the lines past what the
- *  narrowest can hold are cut short, and said whole on hover. */
+ *  its name the steps inside it, then what it takes in, what it hands on, and the loop back into it — a
+ *  line each. As narrow as its name and its steps on one row let it be, between `ROUND_MIN_W` and
+ *  `ROUND_MAX_W`; steps that do not fit on one row go on to the next, and the lines past what the box
+ *  can hold are cut short, and said whole on hover. */
 const ROUND_MIN_W = 132;
+const ROUND_MAX_W = 440;
 const ROUND_HEAD_H = 22;
-const ROUND_LINE_H = 16;
+const ROUND_LINE_H = 18;
 const ROUND_PAD_H = 10;
 const ROUND_PAD_W = 22;
-/** How much bigger a box's name is drawn than the words on its lines, and the room the number before
- *  it takes. */
-const ROUND_NAME = 13 / 12;
+/** The room inside a box across, past its padding and border: the width its steps wrap in. */
+const ROUND_INSET_W = 18;
+/** The room the number before a box's name takes, and how much smaller its head — "Action ·" and the
+ *  name — is drawn than the words on its lines. */
 const ROUND_NO_W = 22;
+const ROUND_SMALL = 11 / 12;
+/** A step inside an action's box, as the mock draws it: its name over its kind, never wider than
+ *  `STEP_CARD_MAX_W`, and the arrow between two of them. `STEP_CARD_PAD_W` is its padding and border
+ *  across. Its kind goes on to the next line where it does not fit, and the card stands taller by
+ *  `STEP_KIND_LINE_H` for each line past the first. The screen sets the same line heights. */
+const STEP_CARD_MAX_W = 170;
+const STEP_CARD_PAD_W = 18;
+const STEP_CARD_H = 44;
+const STEP_KIND_LINE_H = 16;
+const STEP_ARROW_W = 14;
+const STEP_GAP = 6;
 /** Between two boxes standing side by side at the same depth. */
 const COL_GAP = 24;
 /** Between one depth and the next — the room a line and its `+` are drawn in. */
@@ -365,8 +465,10 @@ export type PicNode = {
   /** The box stands on an older version of its action than the newest — the two numbers
    *  (`behindOf`). Absent where it stands on the newest, and on a built-in. */
   behind?: { version: number; latest: number };
-  /** The steps inside the action standing here, by name, on a role's picture (`PicBox`). */
-  steps?: readonly string[];
+  /** The steps inside the action standing here, each with its kind, on a role's picture (`PicBox`),
+   *  and how wide its card is drawn (`stepCardW`) — the screen draws it that wide, so its steps go on
+   *  to the next row where the layout counted them to. */
+  steps?: readonly (PicStep & { w: number })[];
   /**
    * **The lines that come back into this box from further on**, on a role's picture — each by the
    * number of the box it leaves and the way out it leaves by. Drawn as a loop under the box, not as a
@@ -935,7 +1037,8 @@ function nodeMaker(
         exitName: edge.exitName,
         builtin: boxes.get(edge.fromId)?.builtin,
       }));
-    return { steps: box.stepNames ?? [], ...(returns.length === 0 ? {} : { returns }) };
+    const steps = (box.stepCards ?? []).map((step) => ({ ...step, w: stepCardW(step) }));
+    return { steps, ...(returns.length === 0 ? {} : { returns }) };
   };
   return (box, place, no) => ({
     boxId: box.id,
@@ -958,19 +1061,66 @@ function nodeMaker(
   });
 }
 
-/** How big an action's box is on a role's picture: as wide as its name or its steps on one line,
- *  between `ROUND_MIN_W` and `NODE_W`, and as tall as the lines it has. */
+/** How wide a step inside an action's box is drawn: as wide as its name or its kind, whichever is
+ *  wider, and never wider than `STEP_CARD_MAX_W`. */
+function stepCardW(step: PicStep): number {
+  return Math.min(STEP_CARD_MAX_W, Math.max(wordW(step.name), kindW(step)) + STEP_CARD_PAD_W);
+}
+
+/** How wide a step's kind is written, in the smaller words the card sets it in. */
+function kindW(step: PicStep): number {
+  return Math.ceil(wordW(stepKindWord(step)) * ROUND_SMALL);
+}
+
+/** How tall a step's card is: one line for its name, and as many for its kind as it takes in the
+ *  card's width. */
+function stepCardH(step: PicStep): number {
+  const lines = Math.max(1, Math.ceil(kindW(step) / (stepCardW(step) - STEP_CARD_PAD_W)));
+  return STEP_CARD_H + (lines - 1) * STEP_KIND_LINE_H;
+}
+
+/** How tall the steps and the arrows between them stand in `wide`, going on to the next row where the
+ *  next one does not fit — as the box's steps wrap on the screen — each row as tall as its tallest
+ *  card. */
+function stepRowsH(cards: readonly PicStep[], wide: number): number {
+  const rows: number[] = [];
+  let used = 0;
+  cards.forEach((step, nth) => {
+    const items = nth === 0 ? [stepCardW(step)] : [STEP_ARROW_W, stepCardW(step)];
+    for (const one of items) {
+      if (used > 0 && used + STEP_GAP + one > wide) {
+        rows.push(0);
+        used = one;
+      } else {
+        if (rows.length === 0) rows.push(0);
+        used += (used > 0 ? STEP_GAP : 0) + one;
+      }
+    }
+    rows[rows.length - 1] = Math.max(rows[rows.length - 1], stepCardH(step));
+  });
+  // A row that holds only the arrow before the next card is as tall as the arrow's line.
+  return rows.reduce((sum, one, nth) => sum + (nth > 0 ? STEP_GAP : 0) + Math.max(one, ROUND_LINE_H), 0);
+}
+
+/** How big an action's box is on a role's picture: as wide as its name or its steps on one row,
+ *  between `ROUND_MIN_W` and `ROUND_MAX_W`, and as tall as the rows its steps take and the lines it
+ *  has besides. */
 function roundSize(box: PicBox, returns: boolean): { w: number; h: number } {
-  const name = ROUND_NO_W + Math.ceil(wordW(builtinWord(box.builtin, box.name)) * ROUND_NAME);
-  const steps = wordW((box.stepNames ?? []).join(" → "));
-  const w = Math.min(NODE_W, Math.max(ROUND_MIN_W, Math.max(name, steps) + ROUND_PAD_W));
+  const name =
+    ROUND_NO_W +
+    Math.ceil(wordW(t("auto.pic.actionWord")) * ROUND_SMALL) +
+    Math.ceil(wordW(builtinWord(box.builtin, box.name)) * ROUND_SMALL);
+  const cards = box.stepCards ?? [];
+  const row = cards.reduce((sum, step, nth) => sum + (nth > 0 ? 2 * STEP_GAP + STEP_ARROW_W : 0) + stepCardW(step), 0);
+  const w = Math.min(ROUND_MAX_W, Math.max(ROUND_MIN_W, Math.max(name, row) + ROUND_PAD_W));
+  // An action with no steps says where it comes from on a line of its own instead.
+  const steps = cards.length === 0 ? ROUND_LINE_H : stepRowsH(cards, w - ROUND_INSET_W) + STEP_GAP;
   const lines = [
-    true,
     box.inputs.length > 0,
     box.exits.some((exit) => exit.outputs.length > 0),
     returns,
   ].filter(Boolean).length;
-  return { w, h: ROUND_PAD_H + ROUND_HEAD_H + lines * ROUND_LINE_H };
+  return { w, h: ROUND_PAD_H + ROUND_HEAD_H + steps + lines * ROUND_LINE_H };
 }
 
 /** On a role's picture, laid out across: the room a line out of a box's right edge runs in before it

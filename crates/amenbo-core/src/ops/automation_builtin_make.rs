@@ -1303,6 +1303,9 @@ mod tests {
             let kept = read::automation_run_passes_of(tx.conn(), run.id).expect("passes");
             let spots: Vec<Option<i64>> = kept.iter().map(|k| k.placement_id).collect();
             assert_eq!(spots, vec![Some(p.make.id)], "the spot that filed it");
+            let from = |to: i64| crate::ops::automation_run::passed_from(tx.conn(), filed.id, to).expect("read");
+            assert_eq!(from(bob.id), Some(alice.id), "waiting for Bob, it came from Alice");
+            assert_eq!(from(alice.id), None, "it was never passed to Alice");
         });
         for (round_role, why) in [(true, "filed under the round's own role"), (false, "from a round under no role")] {
             with_tx(|tx| {

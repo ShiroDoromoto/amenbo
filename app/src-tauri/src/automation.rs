@@ -68,14 +68,15 @@ use crate::dto::{
     AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationFailuresToDto, AutomationHeldBackDto,
     AutomationHeldByRecordDto, AutomationHeldByValueDto, AutomationLaunchAsksDto,
     AutomationCarrierDto, AutomationLaunchBlockDto,
-    AutomationLaunchCheckDto, AutomationLaunchIncidentDto, AutomationPlacedOnDto, AutomationPlacementDto,
+    AutomationLaunchCheckDto, AutomationLaunchIncidentDto, AutomationLaunchRoleStateDto, AutomationLaunchStateDto,
+    AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRoleDto, AutomationRolePassDto, AutomationRunCardDto,
     AutomationRunEndingsDto,
     AutomationRunHistoryDto, AutomationRunIncidentDto, AutomationRunPassDto, AutomationRunStartedDto,
     AutomationRunTaskDto,
     AutomationSavedDto, AutomationStepDto, AutomationTriggerInputDto,
     AutomationStepOpenDto, AutomationStepRunDto, AutomationTestRunDto, AutomationTestStepDto,
-    AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
+    AutomationWaitingTaskDto, AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
     WriteAck,
 };
 use crate::error::CmdError;
@@ -2146,6 +2147,53 @@ pub fn automation_launch_incidents(launch_id: i64) -> Result<Vec<AutomationLaunc
         });
     }
     Ok(out)
+}
+
+/// **One launch as its pane draws it, read at once** ([`automation_run::launch_state`]) — where the launch
+/// stands, and for every role, in the order they are defined in, its headcount beside the definition's,
+/// how many are under way and still to go, whether it is held, the runs in its seats, and its tasks
+/// waiting to be taken with the first three of them. The pane draws one launch from this one read, and
+/// reads it again when the store changes.
+#[tauri::command]
+pub fn automation_launch_state(launch_id: i64) -> Result<AutomationLaunchStateDto, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_launch_state");
+    let store = open_store_read()?;
+    let state = store.automation_launch_state(launch_id)?;
+    let mut roles = Vec::with_capacity(state.roles.len());
+    for role in state.roles {
+        let counted = role.headcount;
+        roles.push(AutomationLaunchRoleStateDto {
+            role: counted.role_id,
+            name: role.name,
+            icon: role.icon,
+            defined: counted.defined,
+            headcount: counted.headcount,
+            under_way: counted.under_way.len(),
+            to_let_go: counted.to_let_go,
+            held: counted.held,
+            runs: run_cards(&store, counted.under_way)?,
+            waiting: role.waiting,
+            first_waiting: role
+                .first_waiting
+                .into_iter()
+                .map(|task| AutomationWaitingTaskDto {
+                    task: task.task_id,
+                    task_ref: amenbo_core::idref::task(task.task_id),
+                    title: task.title,
+                    from_role: task.from_role_id,
+                })
+                .collect(),
+        });
+    }
+    Ok(AutomationLaunchStateDto {
+        launch: state.launch.id,
+        project: state.launch.project_id,
+        automation: state.launch.automation_id,
+        automation_name: state.automation_name,
+        status: state.launch.status.as_str(),
+        max_headcount: amenbo_core::model::MAX_ROLE_HEADCOUNT,
+        roles,
+    })
 }
 
 /// **What a run's last step left to be read** — what a script printed, once its program has ended

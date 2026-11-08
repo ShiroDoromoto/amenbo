@@ -805,6 +805,77 @@ runTask: number,
 filedAt?: string, };
 
 /**
+ * **One role of a launch** ([`amenbo_core::ops::automation_run::LaunchRoleState`]): what it is, how many
+ * are in it, the runs in its seats, and the tasks waiting for it to take.
+ */
+export type AutomationLaunchRoleStateDto = { role: number, name: string, 
+/**
+ * The icon it is drawn with, by the name the GUI knows it under. Absent for none chosen.
+ */
+icon?: string, 
+/**
+ * The headcount the newest saved version gives it — what the next launch copies.
+ */
+defined: number, 
+/**
+ * The headcount this launch holds for it. `defined` once the launch has ended.
+ */
+headcount: number, 
+/**
+ * How many of its runs are under way, a paused one among them. None once the launch has ended.
+ */
+underWay: number, 
+/**
+ * **How many seats are still to go** after the headcount was lowered on the launch: each goes as
+ * its run finishes its task.
+ */
+toLetGo: number, 
+/**
+ * **Whether the role is stopped taking tasks for the launch** — its runs finish the task they are
+ * on and take no new one.
+ */
+held: boolean, 
+/**
+ * **The runs in its seats**, oldest first — one card for each of [`Self::under_way`].
+ */
+runs: Array<AutomationRunCardDto>, 
+/**
+ * How many of its tasks are waiting to be taken — not started, ready, and matching the filter of
+ * the automation's "take a task" entry. None where no round of it starts there.
+ */
+waiting: number, 
+/**
+ * The first three of them, in the order the role takes them in.
+ */
+firstWaiting: Array<AutomationWaitingTaskDto>, };
+
+/**
+ * **One launch as its pane draws it, read at once** ([`amenbo_core::ops::automation_run::launch_state`])
+ * — the launch, the automation it is of, and every role of it with its seats and the tasks waiting for
+ * it. One pane is drawn per launch.
+ */
+export type AutomationLaunchStateDto = { launch: number, project: number, automation: number, 
+/**
+ * The automation's name as it stands now.
+ */
+automationName: string, 
+/**
+ * **Where the launch stands** — `paused` once every run under way in it has been asked to pause
+ * before its next task (`AMB-D-1019`). Read apart from each role's [`AutomationLaunchRoleStateDto::held`]:
+ * a paused launch takes no task in any role, held or not.
+ */
+status: "running" | "paused" | "ended", 
+/**
+ * The most a role's headcount may be set to for the launch (`AMB-D-1124`).
+ */
+maxHeadcount: number, 
+/**
+ * Every role the newest saved version holds, in the order they are defined in — those with no task
+ * under way or waiting among them.
+ */
+roles: Array<AutomationLaunchRoleStateDto>, };
+
+/**
  * **One automation an action is placed on**, with the project it is in — a global action stands on
  * automations in more than one, and going to one is going to its project.
  */
@@ -1543,6 +1614,20 @@ export type AutomationTriggerTaskInputDto = { "kind": "fixed", title: string, no
  * holds, `script` whenever its script says to.
  */
 export type AutomationTriggerWhenDto = { "kind": "every", minutes: number, } | { "kind": "idle" } | { "kind": "tasks" } | { "kind": "script" };
+
+/**
+ * **One task waiting for a role to take it** ([`amenbo_core::ops::automation_run::WaitingTask`]).
+ */
+export type AutomationWaitingTaskDto = { task: number, 
+/**
+ * The task's reference.
+ */
+taskRef: string, title: string, 
+/**
+ * **The role it was passed on from**, by its id. Absent where no round passed it on, and where
+ * that round had no role or the role has since been taken out.
+ */
+fromRole?: number, };
 
 /**
  * **What is handed from one box to the next**, on whichever picture it is drawn on —

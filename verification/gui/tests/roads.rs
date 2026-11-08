@@ -159,6 +159,132 @@ fn automations_with_a_task_of_their_role(given: &[Step]) -> HashSet<String> {
         .collect()
 }
 
+/// A run that puts its task off ends with the task back at `todo`, still on the AI. The seat does not
+/// stop with the run: its next round's take finds that task first unless something makes it wait for
+/// another. So a screen road that reads such a task as `todo` once a step has been reported done reads
+/// a task the next round has already taken again. Nothing else catches it: the road renders, lints and
+/// walks, and the operator is the one who finds the task in progress.
+#[test]
+fn no_screen_road_reads_a_task_put_off_as_waiting_when_nothing_makes_it_wait() {
+    for f in scenario_files() {
+        let scenario = amenbo_scenario::lint_file(&f, None).expect("lints");
+        if !scenario.runs_on(Driver::Gui) {
+            continue;
+        }
+        let read = todo_reads_of_a_task_taken_again(&scenario);
+        assert!(
+            read.is_empty(),
+            "{} reads {read:?} as `todo` after a step is reported done, but the run that took it puts \
+             it off and nothing makes it wait for another (`task depend`), so the seat goes round \
+             again and its next run takes it — it is `in_progress` by then",
+            f.display()
+        );
+    }
+}
+
+/// Held here as well as in the scan above, so the rule is reached even while every road in
+/// `verification/scenarios/` keeps to it.
+#[test]
+fn a_task_put_off_with_nothing_to_wait_for_is_not_read_as_todo() {
+    let road = |depend: &str| {
+        format!(
+            r#"
+id: x
+title: y
+given:
+  - {{ type: action, domain: task, op: create, with: {{ title: seed }}, as: seed }}
+  - {{ type: action, domain: task, op: create, with: {{ title: fix }}, as: fix }}
+  - {{ type: action, domain: automation, op: create, with: {{ name: auto }}, as: auto }}
+  - {{ type: action, domain: automation, op: place-add, with: {{ target: auto, builtin: take_task, starts: true }}, as: at_start }}
+  - {{ type: action, domain: task, op: update, with: {{ target: seed, role_of: auto }} }}
+  - {{ type: action, domain: automation, op: place-add, with: {{ target: auto, builtin: defer_task }}, as: at_later }}
+{depend}
+steps_gui:
+  - {{ type: action, domain: automation, op: start, with: {{ target: auto }}, as: run }}
+  - {{ type: action, domain: automation, op: done-in-pane, with: {{ target: run, exit: got one }} }}
+  - {{ type: assert, domain: task, op: field, with: {{ target: seed, field: status, equals: todo }} }}
+"#
+        )
+    };
+
+    let taken_again = amenbo_scenario::load_str(&road("")).expect("loads");
+    assert_eq!(
+        todo_reads_of_a_task_taken_again(&taken_again),
+        vec!["seed".to_string()],
+        "a task put off with nothing to wait for is taken again by the seat's next round, so `todo` \
+         is not what a road reads after the step is done"
+    );
+
+    let waiting = amenbo_scenario::load_str(&road(
+        "  - { type: action, domain: task, op: depend, with: { target: seed, on: fix } }",
+    ))
+    .expect("loads");
+    assert!(
+        todo_reads_of_a_task_taken_again(&waiting).is_empty(),
+        "a task that waits for another is not taken again, so it does stay `todo`"
+    );
+}
+
+/// The tasks, by binding, a screen road reads as `todo` after a step has been reported done, where
+/// the task is filed with the role of an automation it started that puts a task off, and nothing in
+/// the world makes the task wait for another.
+fn todo_reads_of_a_task_taken_again(scenario: &Scenario) -> Vec<String> {
+    let puts_off: HashSet<String> = scenario
+        .given
+        .iter()
+        .filter_map(|step| {
+            let Step::Action { domain: Domain::Automation, op, with, .. } = step else { return None };
+            let defer = with.get("builtin").and_then(|v| v.as_str()) == Some("defer_task");
+            (op == "place-add" && defer)
+                .then(|| with.get("target").and_then(|v| v.as_str()).map(str::to_string))
+                .flatten()
+        })
+        .collect();
+    let mut role_of: Vec<(String, String)> = Vec::new();
+    let mut waits: HashSet<String> = HashSet::new();
+    for step in &scenario.given {
+        let Step::Action { domain: Domain::Task, op, with, .. } = step else { continue };
+        let target = with.get("target").and_then(|v| v.as_str()).map(str::to_string);
+        match op.as_str() {
+            "update" => {
+                if let (Some(task), Some(role)) =
+                    (target, with.get("role_of").and_then(|v| v.as_str()))
+                {
+                    role_of.push((task, role.to_string()));
+                }
+            }
+            "depend" => waits.extend(target),
+            _ => {}
+        }
+    }
+
+    let mut started: HashSet<String> = HashSet::new();
+    let mut done = false;
+    let mut read = Vec::new();
+    for step in scenario.steps(Driver::Gui) {
+        match step {
+            Step::Action { domain: Domain::Automation, op, with, .. } => match op.as_str() {
+                "start" => started.extend(with.get("target").and_then(|v| v.as_str()).map(str::to_string)),
+                "done-in-pane" => done = true,
+                _ => {}
+            },
+            Step::Assert { domain: Domain::Task, op, with, .. } if done && op == "field" => {
+                let field = with.get("field").and_then(|v| v.as_str());
+                let equals = with.get("equals").and_then(|v| v.as_str());
+                let Some(task) = with.get("target").and_then(|v| v.as_str()) else { continue };
+                let taken_again = role_of
+                    .iter()
+                    .any(|(t, role)| t == task && started.contains(role) && puts_off.contains(role));
+                if field == Some("status") && equals == Some("todo") && taken_again && !waits.contains(task) {
+                    read.push(task.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+    read
+}
+
 /// The projects an operator could find in the list when a road opens: whatever the world raised, and
 /// the one the run is standing in before it raised anything.
 ///

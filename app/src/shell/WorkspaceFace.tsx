@@ -1859,6 +1859,7 @@ export function WorkspaceFace({
                     : builtin !== undefined ? `:builtin:${builtinPanes.current.get(terminal)}` : ""}`}
                   frame={frame.id}
                   terminal={terminal}
+                  launch={frame.launch}
                   // Where this pane sits on the page's grid, worked out from the order rather than
                   // held against the pane (`../talk/layout`).
                   at={gridAt(frame.size, across, down)}
@@ -1921,23 +1922,11 @@ export function WorkspaceFace({
                   onGrab={panes.length > 1 ? (e) => grabPane(e, frame.id) : undefined}
                   onStretch={(e) => stretchPane(e, frame.id, { across, down })}
                   size={frame.size}
-                  // A round pressed on the bar over this run's terminal (`./RunPicture`). On a launch's
-                  // pane it is another seat of the same launch, put in front in this same place
-                  // (`seatedIn`): one launch is one pane. A run kept from before launches has a pane
-                  // of its own, brought up with its page — or stood, where it has none yet, as a row
-                  // of the "running" tab does.
-                  onGoToRun={(run) => {
-                    if (frame.launch !== null) {
-                      setLayout((was) => focusOn(seatFront(was, frame.id, run), frame.id));
-                      return;
-                    }
-                    const id = runFrameId(run);
-                    setLayout((was) => {
-                      if (was.frames.some((one) => one.id === id)) return focusOn(was, id);
-                      const stood = stoodForRun(was, frame.project, run);
-                      return focusOn(stood.layout, stood.frame.id);
-                    });
-                    landOn(id);
+                  // A seat pressed among this pane's roles (`./RunPicture`): another seat of the same
+                  // launch, put in front in this same place (`seatedIn`) — one launch is one pane. Only
+                  // a launch's pane lists seats, so no other pane is handed this.
+                  onGoToRun={frame.launch === null ? undefined : (run) => {
+                    setLayout((was) => focusOn(seatFront(was, frame.id, run), frame.id));
                   }}
                   onSize={(to) => {
                     // As the corner does on letting go: the question about where a pane works

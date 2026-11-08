@@ -2760,6 +2760,51 @@ button.feed__target:hover { color: var(--c-accent); }
   .runroles__to { display: inline; }
 }
 .runroles__none { margin: 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
+/* **The seats of a launch** (`../shell/RunPicture`), under the room: each role with someone in a seat,
+   and a row per seat pressed for its terminal. The room keeps the most of the pane; the seats scroll
+   inside themselves past half of it. */
+.runseats {
+  flex: none; max-height: 50%; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--s-2);
+  padding: var(--s-2);
+  border-top: var(--border-w) var(--border-style) var(--c-rule);
+}
+.runseats__head { display: flex; align-items: center; gap: var(--s-1); margin: 0 0 var(--s-1); font-size: var(--fs-xs); font-weight: var(--fw-bold); }
+.runseats__head > .icon { flex: none; }
+.runseats__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runseats__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s-1); }
+.runseat {
+  position: relative; width: 100%; box-sizing: border-box;
+  display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: var(--s-2); align-items: start;
+  padding: var(--s-1) var(--s-2);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
+  background: var(--c-surface-pic) var(--c-surface); color: var(--c-text); font: inherit; text-align: left; cursor: pointer;
+}
+.runseat:hover { background: var(--c-accent-faint); }
+.runseat::before {
+  content: ""; position: absolute; left: -1px; top: -1px; bottom: -1px; width: 3px;
+  border-radius: var(--r-sm) 0 0 var(--r-sm); background: var(--c-accent);
+}
+.runseat[data-state="asks"] { border-color: var(--c-human); }
+.runseat[data-state="asks"]::before { background: var(--c-human); }
+.runseat:is([data-state="paused"], [data-state="waiting"]) { border-color: var(--c-heed); }
+.runseat:is([data-state="paused"], [data-state="waiting"])::before { background: var(--c-heed); }
+.runseat[data-state="failed"] { border-color: var(--c-stop); }
+.runseat[data-state="failed"]::before { background: var(--c-stop); }
+.runseat--free { grid-template-columns: 22px minmax(0, 1fr); border-style: dashed; background: transparent; color: var(--c-text-muted); cursor: default; }
+.runseat--free:hover { background: transparent; }
+.runseat--free::before { display: none; }
+.runseat__n {
+  width: 22px; height: 22px; box-sizing: border-box; border-radius: 50%;
+  display: grid; place-items: center;
+  border: var(--border-w) var(--border-style) var(--c-rule);
+  font-size: var(--fs-xs); color: var(--c-text-muted); font-variant-numeric: tabular-nums;
+}
+.runseat__body { min-width: 0; display: flex; flex-direction: column; }
+.runseat__task { font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runseat__step { font-size: var(--fs-xs); color: var(--c-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runseat__end { display: inline-flex; align-items: center; gap: 6px; }
+.runseat__end > .runroles__pulse { margin-left: 0; }
 /* The roles with no round: their icons alone, in one line that scrolls sideways inside the bar. */
 .runroles__idle {
   flex: none; display: flex; align-items: center; gap: var(--s-2);
@@ -2778,13 +2823,12 @@ button.feed__target:hover { color: var(--c-accent); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: var(--fs-xs); color: var(--c-stop);
 }
-/* **The bar over a run's terminal** (`../shell/RunPicture`): the way back to the roles and whose round
-   this is, then the other rounds of the same automation as icons with a dot each, then — where a step
-   turned the pane — why. It stands in the pane's body under the roles, so the terminal keeps its size
-   when the face is turned.
+/* **The bar over a run's terminal** (`../shell/RunPicture`): the way back to the roles, whose round
+   this is — role, seat, task and step — and how long it has run, then — where a step turned the pane —
+   why. It stands in the pane's body under the roles, so the terminal keeps its size when the face is
+   turned.
    **Its width is the pane's, never its own** (`contain: inline-size`): what it says is held on one line
-   and cut short, and a task's title or a row of rounds would otherwise ask the pane for its whole
-   length. */
+   and cut short, and a task's title would otherwise ask the pane for its whole length. */
 .runterm { flex: none; display: flex; flex-direction: column; min-width: 0; contain: inline-size; }
 .runterm__head { display: flex; align-items: center; gap: var(--s-2); min-width: 0; padding: var(--s-1) var(--s-2); border-bottom: var(--border-w) var(--border-style) var(--c-rule); }
 .runterm__head > .icon { flex: none; }
@@ -2797,28 +2841,11 @@ button.feed__target:hover { color: var(--c-accent); }
 .runterm__body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .runterm__task { font-size: var(--fs-xs); font-weight: var(--fw-bold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .runterm__step { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.runterm__strip {
-  display: flex; align-items: center; gap: var(--s-1);
-  padding: 2px var(--s-2); overflow-x: auto; white-space: nowrap;
-  border-bottom: var(--border-w) var(--border-style) var(--c-rule);
-  font-size: var(--fs-xs); color: var(--c-text-muted);
+.runterm__time {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--fs-xs); color: var(--c-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
-.runterm__others { flex: none; }
-.runterm__round {
-  flex: none; position: relative; display: inline-flex; padding: 2px;
-  border: var(--border-w) var(--border-style) transparent; border-radius: var(--r-sm);
-  background: transparent; color: var(--c-text); cursor: pointer;
-}
-.runterm__round[aria-current] { border-color: var(--c-accent); background: var(--c-accent-faint); }
-.runterm__dot {
-  position: absolute; top: -2px; right: -2px;
-  width: 7px; height: 7px; border-radius: 50%;
-  border: 1px solid var(--c-surface); background: var(--c-accent);
-}
-.runterm__round[data-state="asks"] .runterm__dot { background: var(--c-human); }
-.runterm__round[data-state="paused"] .runterm__dot,
-.runterm__round[data-state="waiting"] .runterm__dot { background: var(--c-heed); }
-.runterm__round[data-state="failed"] .runterm__dot { background: var(--c-stop); }
+.runterm__time > .runroles__pulse { margin-left: 0; }
 .runterm__notice {
   margin: 0; padding: var(--s-1) var(--s-2);
   border-bottom: var(--border-w) var(--border-style) var(--c-rule);

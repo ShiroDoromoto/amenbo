@@ -6,9 +6,9 @@
 // and nothing is kept for the app as a whole: one reader turning one pane to its terminal says nothing
 // about the next run.
 //
-// **A press elsewhere can turn a run's pane to its terminal**: a round on the bar over another run's
-// terminal, or the task a failed round was filed as. The pane may be up already, so it is told as well
-// as written down; one not up yet reads it here as it goes up.
+// **A press elsewhere can turn a run's pane to its terminal**: its seat pressed among the roles of its
+// launch's pane, which puts that seat in front, or the task a failed round was filed as. The pane may
+// be up already, so it is told as well as written down; one not up yet reads it here as it goes up.
 
 /** What a run's pane shows under its row: its roles, or the terminal (`./RunPicture`). */
 export type Face = "roles" | "terminal";

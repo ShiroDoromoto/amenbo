@@ -16,18 +16,21 @@
 // **A round that needs a person, out of sight in the room, is named at the room's edge**, and the
 // notice scrolls the room to it when pressed — never by itself. It is read again as the room scrolls.
 //
-// **A card or a row is pressed to read its round's terminal**, and the terminal has a bar over it: the way back to
-// the roles, the other rounds of the same automation, and — where a step turned the pane — why.
+// **A card or a row is pressed to read its round's terminal**, and **a seat of a launch's pane is
+// pressed to read that seat's**, in the same pane. The terminal has a bar over it: the way back to the
+// roles — the only way, the row above has no control for it — the role, the seat, the task, the step,
+// how long it has run, and — where a step turned the pane — why. It names no other seat.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Say } from "../talk/nameplate";
-import type { AutomationRunCardDto, TaskRoleDto } from "../bindings/bindings";
+import type { AutomationLaunchRoleStateDto, AutomationLaunchStateDto, AutomationRunCardDto, TaskRoleDto } from "../bindings/bindings";
 import type { BuiltinRun } from "../talk/automationStep";
 import { TerminalPane } from "./TerminalPane";
 import { t, tf } from "../core/i18n";
 import {
-  attnOf, cardsFit, filedLine, fitOf, handsAway, handsOf, noticeOf, roleCards, roundsOf, silenceOf, unseenOf, type RoleCard,
+  attnOf, cardsFit, filedLine, fitOf, handsAway, handsOf, noticeOf, roleCards, seatOf, seatStateOf, seatsOf, silenceOf, unseenOf,
+  type RoleCard,
 } from "./RunPicture";
 import { showTerminalOf } from "./runFaces";
 
@@ -52,19 +55,29 @@ vi.mock("../talk/plate", () => ({
 let roles: TaskRoleDto[] = [];
 vi.mock("../core/projectRoles", () => ({ useProjectRoles: () => roles }));
 
-/** The runs under way, as the bar over a run's terminal reads them (`../core/automations`). */
-let live: AutomationRunCardDto[] = [];
+/** The launch the pane draws, as its roles and the bar over its terminal read it (`../core/automations`). */
+let launched: AutomationLaunchStateDto | null = null;
 vi.mock("../core/automations", async (actual) => ({
   ...(await actual<typeof import("../core/automations")>()),
-  useLiveRuns: () => live,
+  useLaunchState: (launch: number | null) => (launch === null ? null : launched),
 }));
 
-/** A run under way of the automation `automation`, as the "running" tab's row carries it. */
+/** A run under way of the automation `automation`, as a seat of a launch carries it. */
 const liveRun = (run: number, more: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto => ({
   run, project: 1, projectName: "P", automation: 3, automationName: "Nightly", status: "running",
   pauseRequested: false, pauseBeforeNextTask: false, pausableBeforeNextTask: false, waiting: false, waitsForRoom: false,
   stepsDone: 1, passes: [], reportWithheld: [], acknowledged: false, ...more,
 } as AutomationRunCardDto);
+
+/** A role of a launch, with the runs `runs` in its seats. */
+const launchRole = (role: number, name: string, runs: AutomationRunCardDto[], headcount = runs.length): AutomationLaunchRoleStateDto => ({
+  role, name, defined: headcount, headcount, underWay: runs.length, toLetGo: 0, held: false, runs, waiting: 0, firstWaiting: [],
+});
+
+/** The launch 5, with the roles `roles`. */
+const launchOf = (roles: AutomationLaunchRoleStateDto[]): AutomationLaunchStateDto => ({
+  launch: 5, project: 1, automation: 3, automationName: "Nightly", status: "running", maxHeadcount: 10, roles,
+});
 
 const role = (id: number, name: string, automationId = 3, icon: string | null = null): TaskRoleDto => ({
   id, name, icon, automationId, automationName: "Nightly",
@@ -82,7 +95,7 @@ let root: Root;
 
 beforeEach(() => {
   roles = [];
-  live = [];
+  launched = null;
   window.innerWidth = 1600;
   container = document.createElement("div");
   document.body.append(container);
@@ -97,11 +110,14 @@ afterEach(() => {
 /** A pane, on a run or on none — with a terminal put up where `autoStart`, or a built-in in its place. */
 async function pane(
   run: Say | null,
-  { autoStart = false, builtin = null, onGoToRun }: { autoStart?: boolean; builtin?: BuiltinRun | null; onGoToRun?: (run: number) => void } = {},
+  { autoStart = false, builtin = null, launch = null, onGoToRun }: {
+    autoStart?: boolean; builtin?: BuiltinRun | null; launch?: number | null; onGoToRun?: (run: number) => void;
+  } = {},
 ): Promise<void> {
   await act(async () => {
     root.render(createElement(TerminalPane, {
-      frame: run === null ? "1" : `run-${run.run}`,
+      frame: run === null ? "1" : launch === null ? `run-${run.run}` : `launch-${launch}`,
+      launch,
       hue: 199,
       project: 1,
       names: new Map(),
@@ -126,9 +142,13 @@ async function pane(
   });
 }
 
-const faces = () => [...container.querySelectorAll<HTMLButtonElement>(".slot__face")];
-const pressed = () => faces().find((one) => one.getAttribute("aria-pressed") === "true")?.textContent;
 const shown = () => container.querySelector(".runroles");
+/** The face the pane is turned to: the roles while they are drawn, and the terminal otherwise. */
+const pressed = () => (shown() === null ? "terminal" : "roles");
+/** Turn the pane to the terminal, as a reader does: the first card or row pressed. */
+const toTerminal = () => container.querySelector<HTMLButtonElement>(".runroles__open")!.click();
+/** Turn the pane back to the roles, as a reader does: the way back on the bar over the terminal. */
+const toRoles = () => container.querySelector<HTMLButtonElement>(".runterm__back")!.click();
 const cards = () => [...container.querySelectorAll<HTMLElement>(".runroles__card")];
 const idle = () => [...container.querySelectorAll<HTMLElement>(".runroles__idlelist > li")];
 const views = () => [...container.querySelectorAll<HTMLButtonElement>(".slot__view")];
@@ -137,8 +157,8 @@ const rows = () => [...container.querySelectorAll<HTMLElement>(".runroles__row")
 describe("the face a run's pane is turned to", () => {
   it("opens on the roles, with the terminal face kept behind them", async () => {
     await pane(FAILED);
-    expect(faces().map((one) => one.textContent)).toEqual([t("auto.run.faceRoles"), t("auto.run.faceTerminal")]);
-    expect(pressed()).toBe(t("auto.run.faceRoles"));
+    expect(container.querySelector(".slot__faces"), "the row above offers the roles or the terminal").toBeNull();
+    expect(pressed()).toBe("roles");
     expect(shown()).not.toBeNull();
     expect(shown()?.parentElement?.classList.contains("slot__body"), "the roles are not drawn over the terminal face").toBe(true);
   });
@@ -155,28 +175,28 @@ describe("the face a run's pane is turned to", () => {
 
   it("turns to the terminal and back, and keeps the turn for that run's pane", async () => {
     await pane(FAILED);
-    await act(async () => faces()[1]!.click());
-    expect(pressed()).toBe(t("auto.run.faceTerminal"));
+    await act(async () => toTerminal());
+    expect(pressed()).toBe("terminal");
     expect(shown()).toBeNull();
 
     // The pane comes down with its page and goes up again for the same run.
     act(() => root.unmount());
     root = createRoot(container);
     await pane(FAILED);
-    expect(pressed(), "a pane back up for the same run forgot the reader's turn").toBe(t("auto.run.faceTerminal"));
+    expect(pressed(), "a pane back up for the same run forgot the reader's turn").toBe("terminal");
 
     // Another run opens on its roles, whatever the last one was turned to.
     await pane({ ...FAILED, run: 16 });
-    expect(pressed()).toBe(t("auto.run.faceRoles"));
+    expect(pressed()).toBe("roles");
 
     await pane(FAILED);
-    await act(async () => faces()[0]!.click());
+    await act(async () => toRoles());
     expect(shown()).not.toBeNull();
   });
 
   it("is not a question on an ordinary pane", async () => {
     await pane(null);
-    expect(faces()).toHaveLength(0);
+    expect(container.querySelector(".runterm"), "an ordinary pane has a way back to roles").toBeNull();
     expect(shown()).toBeNull();
   });
 });
@@ -193,32 +213,32 @@ describe("a step that may wait for a person", () => {
 
   it("turns the pane to its terminal while it runs, and back to the roles after it", async () => {
     await pane(RUNNING);
-    expect(pressed()).toBe(t("auto.run.faceRoles"));
+    expect(pressed()).toBe("roles");
     await pane(ASKING);
-    expect(pressed(), "a step asking a person was left behind the roles").toBe(t("auto.run.faceTerminal"));
+    expect(pressed(), "a step asking a person was left behind the roles").toBe("terminal");
     await pane({ ...RUNNING, step: "after" });
-    expect(pressed()).toBe(t("auto.run.faceRoles"));
+    expect(pressed()).toBe("roles");
   });
 
   it("leaves the terminal up after it where the reader had chosen the terminal", async () => {
     await pane({ ...RUNNING, run: 22 });
-    await act(async () => faces()[1]!.click());
+    await act(async () => toTerminal());
     await pane({ ...ASKING, run: 22 });
     await pane({ ...RUNNING, run: 22, step: "after" });
-    expect(pressed()).toBe(t("auto.run.faceTerminal"));
+    expect(pressed()).toBe("terminal");
   });
 
   it("keeps a press made while it runs as the reader's choice", async () => {
     await pane({ ...ASKING, run: 23 });
-    await act(async () => faces()[0]!.click());
-    expect(pressed()).toBe(t("auto.run.faceRoles"));
+    await act(async () => toRoles());
+    expect(pressed()).toBe("roles");
     await pane({ ...RUNNING, run: 23, step: "after" });
-    expect(pressed()).toBe(t("auto.run.faceRoles"));
+    expect(pressed()).toBe("roles");
   });
 
   it("does not turn a run that is not going", async () => {
     await pane({ ...ASKING, run: 24, state: { ...FAILED.state!, status: "paused", word: "Paused" } });
-    expect(pressed()).toBe(t("auto.run.faceRoles"));
+    expect(pressed()).toBe("roles");
   });
 });
 
@@ -254,7 +274,7 @@ describe("the roles of a run", () => {
     roles = [role(12, "Bob")];
     await pane({ ...RUNNING, interactive: true, run: 42 });
     // The pane is turned to the terminal while such a step runs; the roles are turned to by hand.
-    await act(async () => faces()[0]!.click());
+    await act(async () => toRoles());
     expect(cards()[0]!.dataset.state).toBe("asks");
     expect(cards()[0]!.querySelector(".runroles__chip")?.textContent).toBe(t("auto.run.roles.asks"));
     expect(cards()[0]!.querySelector(".runroles__pulse"), "a round that may wait has the dot").toBeNull();
@@ -450,7 +470,7 @@ describe("cards or the list", () => {
     expect(views().find((one) => one.getAttribute("aria-pressed") === "true")?.textContent).toBe(t("auto.run.viewAuto"));
     expect(cards()).toHaveLength(1);
 
-    await act(async () => faces()[1]!.click());
+    await act(async () => toTerminal());
     expect(views(), "the terminal face offers a layout of the roles").toHaveLength(0);
   });
 
@@ -678,16 +698,16 @@ describe("the terminal of a round", () => {
   const bar = () => container.querySelector<HTMLElement>(".runterm");
   const back = () => container.querySelector<HTMLButtonElement>(".runterm__back")!;
   const notice = () => container.querySelector(".runterm__notice");
-  const rounds = () => [...container.querySelectorAll<HTMLButtonElement>(".runterm__round")];
+  const seats = () => [...container.querySelectorAll<HTMLButtonElement>("button.runseat")];
 
   it("turns to the terminal when a card is pressed, and back to the roles from the bar", async () => {
     roles = [role(12, "Bob")];
     await pane(RUNNING);
-    expect(pressed()).toBe(t("auto.run.faceRoles"));
+    expect(pressed()).toBe("roles");
     const open = cards()[0]!.querySelector<HTMLButtonElement>(".runroles__open")!;
     expect(open.getAttribute("aria-label")).toBe(tf("auto.run.roundTerminal", { name: "Bob" }));
     await act(async () => open.click());
-    expect(pressed()).toBe(t("auto.run.faceTerminal"));
+    expect(pressed()).toBe("terminal");
     expect(shown()).toBeNull();
     expect(bar()?.parentElement?.classList.contains("slot__body"), "the bar is not in the pane's body").toBe(true);
     expect(container.querySelector(".runterm__task")?.textContent).toBe("Bob ・ AMB-T-7 Fix the search filter");
@@ -696,7 +716,7 @@ describe("the terminal of a round", () => {
 
     expect(back().textContent).toBe(t("auto.run.backToRoles"));
     await act(async () => back().click());
-    expect(pressed()).toBe(t("auto.run.faceRoles"));
+    expect(pressed()).toBe("roles");
     expect(shown()).not.toBeNull();
     expect(bar(), "the bar left the layout under the roles").not.toBeNull();
   });
@@ -712,7 +732,7 @@ describe("the terminal of a round", () => {
       const open = rows()[0]!.querySelector<HTMLButtonElement>(".runroles__open")!;
       expect(open.getAttribute("aria-label")).toBe(tf("auto.run.roundTerminal", { name: "Bob" }));
       await act(async () => open.click());
-      expect(pressed()).toBe(t("auto.run.faceTerminal"));
+      expect(pressed()).toBe("terminal");
 
       await act(async () => back().click());
       expect(rows(), "the way back did not come back to the list").toHaveLength(1);
@@ -725,18 +745,18 @@ describe("the terminal of a round", () => {
     roles = [role(12, "Bob")];
     await pane({ ...RUNNING, run: 62 });
     await pane({ ...RUNNING, run: 62, interactive: true });
-    expect(pressed()).toBe(t("auto.run.faceTerminal"));
+    expect(pressed()).toBe("terminal");
     expect(notice()?.textContent).toBe(tf("auto.run.turnedForStep", { role: "Bob" }));
     // A press is the reader's, and the line goes with it.
     await act(async () => back().click());
-    await act(async () => faces()[1]!.click());
+    await act(async () => toTerminal());
     expect(notice()).toBeNull();
   });
 
   it("says nothing where the reader had the terminal up already", async () => {
     roles = [role(12, "Bob")];
     await pane({ ...RUNNING, run: 63 });
-    await act(async () => faces()[1]!.click());
+    await act(async () => toTerminal());
     await pane({ ...RUNNING, run: 63, interactive: true });
     expect(notice()).toBeNull();
   });
@@ -747,57 +767,110 @@ describe("the terminal of a round", () => {
     roles = [role(12, "Bob")];
     showTerminalOf(67);
     await pane({ ...RUNNING, run: 67, step: "upload the release", state: FAILED.state });
-    expect(pressed()).toBe(t("auto.run.faceTerminal"));
+    expect(pressed()).toBe("terminal");
     expect(container.querySelector(".runterm__step")?.textContent)
       .toBe(tf("auto.run.stepFailed", { step: "upload the release" }));
     expect(notice(), "the reader opened it, no step turned it").toBeNull();
   });
 
-  it("puts the other rounds of the automation on the bar, and goes to one when it is pressed", async () => {
+  it("lists the launch's seats by role, and turns this same pane to the terminal of the one pressed", async () => {
     roles = [role(12, "Bob"), role(13, "Carol", 3, "robot")];
-    live = [liveRun(64), liveRun(66, { role: 13, status: "failed", task: { id: 1, ref: "AMB-T-9", title: "Tidy", seq: 1 } }), liveRun(65, { automation: 9 })];
+    launched = launchOf([
+      launchRole(12, "Bob", [
+        liveRun(64, { role: 12, task: { id: 1, ref: "AMB-T-7", title: "Fix the search filter", seq: 1 }, stepName: "write the tests" }),
+        liveRun(66, { role: 12, status: "failed", task: { id: 2, ref: "AMB-T-9", title: "Tidy", seq: 1 } }),
+      ], 3),
+      launchRole(13, "Carol", []),
+    ]);
     const went: number[] = [];
-    await pane({ ...RUNNING, run: 64 }, { onGoToRun: (run) => went.push(run) });
-    await act(async () => faces()[1]!.click());
-    expect(rounds().map((one) => [one.dataset.run, one.dataset.state, one.getAttribute("aria-current")])).toEqual([
+    await pane({ ...RUNNING, run: 64 }, { launch: 5, onGoToRun: (run) => went.push(run) });
+    expect(pressed()).toBe("roles");
+    expect([...container.querySelectorAll<HTMLElement>(".runseats__role")].map((one) => one.dataset.role),
+      "a role with nobody in a seat is listed").toEqual(["12"]);
+    expect(seats().map((one) => [one.dataset.run, one.dataset.state, one.getAttribute("aria-current")])).toEqual([
       ["64", "running", "true"],
       ["66", "failed", null],
     ]);
-    // Each is named by its task, so two rounds under one role are told apart.
-    expect(rounds().map((one) => one.getAttribute("aria-label"))).toEqual([
-      tf("auto.run.roundTerminalOf", { name: "Bob", which: "AMB-T-7" }),
-      tf("auto.run.roundTerminalOf", { name: "Carol", which: "AMB-T-9" }),
+    expect(seats().map((one) => one.getAttribute("aria-label"))).toEqual([
+      tf("auto.run.seatOpen", { role: "Bob", n: 1, task: "AMB-T-7 Fix the search filter" }),
+      tf("auto.run.seatOpen", { role: "Bob", n: 2, task: "AMB-T-9 Tidy" }),
     ]);
-    await act(async () => rounds()[1]!.click());
+    // The seat nobody is in is said, and is not a press.
+    const free = container.querySelector<HTMLElement>(".runseat--free");
+    expect(free?.tagName).toBe("DIV");
+    expect(free?.textContent).toContain(tf("auto.run.seatsFree", { n: 1 }));
+
+    // The seat in front turns this pane to its own terminal.
+    await act(async () => seats()[0]!.click());
+    expect(pressed()).toBe("terminal");
+    expect(went).toEqual([]);
+
+    // Another seat is reached from the roles alone: the bar names no other seat.
+    expect(container.querySelector(".runterm__strip"), "the bar lists the other seats").toBeNull();
+    await act(async () => back().click());
+    await act(async () => seats()[1]!.click());
     expect(went).toEqual([66]);
-    // Its pane goes up on the terminal.
-    act(() => root.unmount());
-    root = createRoot(container);
-    await pane({ ...RUNNING, run: 66, round: { role: 13, startedAt: null }, state: FAILED.state });
-    expect(pressed()).toBe(t("auto.run.faceTerminal"));
+    // Put in front in the same place, it comes up on its terminal.
+    await pane({ ...RUNNING, run: 66, state: FAILED.state }, { launch: 5, onGoToRun: (run) => went.push(run) });
+    expect(pressed()).toBe("terminal");
   });
 
-  it("draws no rounds where this run is the automation's only one", async () => {
-    live = [liveRun(67)];
-    await pane({ ...RUNNING, run: 67 });
-    expect(rounds()).toHaveLength(0);
+  it("says the seat and how long its round has run on the bar over its terminal", async () => {
+    roles = [role(12, "Bob")];
+    launched = launchOf([launchRole(12, "Bob", [liveRun(63, { role: 12 }), liveRun(64, { role: 12 })])]);
+    await pane({ ...RUNNING, run: 64, round: { role: 12, startedAt: Date.now() - 65_000 } }, { launch: 5 });
+    await act(async () => toTerminal());
+    expect(container.querySelector(".runterm__task")?.textContent)
+      .toBe(`Bob ・ ${tf("auto.run.seat", { n: 2 })} ・ AMB-T-7 Fix the search filter`);
+    const time = container.querySelector(".runterm__time")?.textContent;
+    expect([tf("face.elapsed", { time: "1:05" }), tf("face.elapsed", { time: "1:06" })]).toContain(time);
+    expect(container.querySelector(".runterm__time .runroles__pulse"), "a round under way has no dot").not.toBeNull();
+
+    // A step that may wait for a person is not drawn as one at work.
+    await pane({ ...RUNNING, run: 64, interactive: true, round: { role: 12, startedAt: Date.now() - 65_000 } }, { launch: 5 });
+    expect(container.querySelector(".runterm__time")).not.toBeNull();
+    expect(container.querySelector(".runterm__time .runroles__pulse")).toBeNull();
+
+    // A paused round has stopped at a moment the pane does not know.
+    await pane({ ...RUNNING, run: 64, state: { ...FAILED.state!, status: "paused", word: "Paused" } }, { launch: 5 });
+    expect(container.querySelector(".runterm__time")).toBeNull();
+  });
+
+  it("lists no seats on a run kept from before launches", async () => {
+    roles = [role(12, "Bob")];
+    await pane({ ...RUNNING, run: 69 });
+    expect(container.querySelector(".runseats")).toBeNull();
   });
 });
 
-describe("roundsOf", () => {
-  const RUN: Say = { ...FAILED, run: 5, round: { role: 2, startedAt: null }, interactive: true, state: { ...FAILED.state!, status: "running", word: "Running" } };
+describe("the seats of a launch", () => {
+  const FRONT: Say = { ...FAILED, run: 5, interactive: true, state: { ...FAILED.state!, status: "running", word: "Running" } };
 
-  it("draws each round by its role, or by the automation where it has none, in the order the runs began", () => {
-    const task = { id: 1, ref: "AMB-T-2", title: "Tidy", seq: 1 };
-    const got = roundsOf(RUN, [liveRun(7, { waiting: true, task }), liveRun(5), liveRun(3, { status: "paused", automationName: "Old" })], [role(2, "B")]);
-    expect(got).toEqual([
-      { run: 3, name: "Old", icon: "robot", dot: "paused", which: "#3" },
-      { run: 5, name: "B", icon: "person", dot: "asks", which: "#5" },
-      { run: 7, name: "Nightly", icon: "robot", dot: "waiting", which: "AMB-T-2" },
+  it("lists the roles with someone in a seat, in the order they are defined in, with their free seats", () => {
+    const got = seatsOf(launchOf([
+      launchRole(1, "A", [liveRun(4)], 2),
+      launchRole(2, "B", []),
+      { ...launchRole(3, "C", [liveRun(5), liveRun(6)], 1), icon: "robot" },
+    ]));
+    expect(got.map((one) => [one.role, one.icon, one.runs.map((run) => run.run), one.free])).toEqual([
+      [1, "person", [4], 1],
+      [3, "robot", [5, 6], 0],
     ]);
+    expect(seatsOf(null)).toEqual([]);
   });
 
-  it("draws none where no other run of the automation is under way", () => {
-    expect(roundsOf(RUN, [liveRun(5), liveRun(8, { automation: 4 })], [])).toEqual([]);
+  it("numbers a run by its place among its role's seats", () => {
+    const launch = launchOf([launchRole(1, "A", [liveRun(4)]), launchRole(2, "B", [liveRun(7), liveRun(5)])]);
+    expect(seatOf(launch, 5)).toEqual({ role: "B", n: 2 });
+    expect(seatOf(launch, 9)).toBeNull();
+    expect(seatOf(null, 5)).toBeNull();
+  });
+
+  it("says how a seat stands, and that it may wait for a person only of the pane's own run", () => {
+    expect(seatStateOf(liveRun(5), FRONT)).toBe("asks");
+    expect(seatStateOf(liveRun(6), FRONT)).toBe("running");
+    expect(seatStateOf(liveRun(6, { waitsForRoom: true }), FRONT)).toBe("waiting");
+    expect(seatStateOf(liveRun(6, { status: "paused" }), FRONT)).toBe("paused");
+    expect(seatStateOf(liveRun(6, { status: "failed" }), FRONT)).toBe("failed");
   });
 });

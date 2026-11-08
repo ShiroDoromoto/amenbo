@@ -15,6 +15,7 @@ import { getSnapshot } from "../core/snapshot";
 import { t } from "../core/i18n";
 import { classAxis, classLine, pressedClass, readLines, writeLines } from "./automationCfg";
 import { useDraft } from "./automationPanel";
+import { asTyped } from "../core/keys";
 
 /** The built-in that files a task (`amenbo_core::ops::automation_builtin_make::MAKE_TASK`). */
 const MAKE_TASK = "make_task";
@@ -132,6 +133,7 @@ export function NumberLines({ name, label, value, onAnswer }: {
   const [text, setText] = useDraft(written);
   return (
     <textarea
+      {...asTyped}
       aria-label={label}
       rows={3}
       placeholder={t(NUMBERS[name] ?? "auto.step.oneALine")}

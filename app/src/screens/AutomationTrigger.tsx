@@ -248,6 +248,7 @@ function ScriptBoxesField({
         <span className="autostep__label">{t("auto.step.args")}</span>
         <div className="autostep__field">
           <textarea
+            {...asTyped}
             className="autostep__mono"
             aria-label={t("auto.step.args")}
             rows={3}
@@ -837,7 +838,13 @@ export function AutomationTrigger({
                 <label className="trigcard__lbl" htmlFor={notesId}>
                   {t("auto.trigger.taskNotes")}
                 </label>
-                <textarea id={notesId} rows={3} value={form.notes} onChange={(e) => put({ notes: e.target.value })} />
+                <textarea
+                  {...asTyped}
+                  id={notesId}
+                  rows={3}
+                  value={form.notes}
+                  onChange={(e) => put({ notes: e.target.value })}
+                />
               </div>
             )}
             {form.task === "file" && (

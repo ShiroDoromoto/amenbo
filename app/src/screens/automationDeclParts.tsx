@@ -18,6 +18,7 @@ import { t } from "../core/i18n";
 import { DeclareRow, useDraft, type Choice, type Run } from "./automationPanel";
 import { kindLabel } from "./automationPortKinds";
 import type { AutomationExitDto } from "../bindings/bindings";
+import { asTyped } from "../core/keys";
 
 /** An on/off that writes the moment it is flipped. `boxed` draws it framed, standing apart — the
  *  start, on a spot and on a step alike. */
@@ -225,6 +226,7 @@ export function ExitEdit({
   return (
     <div className="autostep__decl">
       <input
+        {...asTyped}
         className="autostep__declname"
         aria-label={t("auto.step.exitName")}
         value={name}

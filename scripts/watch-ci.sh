@@ -13,6 +13,8 @@
 # 5 = what was being watched read the same for AMENBO_CI_STALL seconds; the state it was
 # stuck in is printed last. Nothing is decided: read it, and watch again if it is fine.
 # 6 = `pr` saw the pull request conflict (DIRTY) twice in a row, and stopped.
+# 7 = a run read completed while a job it carries had no conclusion yet, for
+# AMENBO_CI_RERUN_LIMIT seconds; those jobs are printed last. Watch again if a re-run is late.
 #
 # Usage — one mode per KIND of CI, so the caller names the thing and not the filter:
 #
@@ -71,6 +73,8 @@
 #                  A CLEAN pull request with auto-merge on is not counted
 #   AMENBO_CI_STALL — seconds a run, a pull request or a check may read the same before
 #                  exit code 5. Resolving an id is not timed by it
+#   AMENBO_CI_RERUN_LIMIT — seconds a run may read completed while a job it carries has no
+#                  conclusion, before exit code 7
 #
 # The repository is resolved once, up front, and passed to every call afterwards, so
 # nothing in the loop reads the filesystem. A watch that outlives the directory it
@@ -89,6 +93,10 @@ STUCK_ROUNDS="${AMENBO_CI_STUCK_ROUNDS:-3}" # rounds a settled, still-open, not 
 # Past the slowest run seen from start to finish, a release tag's at 90 minutes, so even a
 # run whose jobs all end together has moved before this runs out.
 STALL_SECONDS="${AMENBO_CI_STALL:-7200}" # seconds what is watched may read the same before exit code 5
+# A re-run moves the run off `completed` within moments of restarting its jobs, so a run that
+# still reads completed this long after is not in that window. STALL_SECONDS is no bound here:
+# a job's status changing in the meantime restarts its clock.
+RERUN_LIMIT="${AMENBO_CI_RERUN_LIMIT:-900}" # seconds a completed run may carry a job with no conclusion before exit code 7
 
 # How many rounds of the appear wait fit in a minute, so an open-ended one repeats what
 # it is waiting for about that often. A watch that has gone quiet for ten minutes cannot
@@ -238,7 +246,7 @@ dispatch_newest() {
 
 # Watch one run to its conclusion. Failing jobs are named as they appear, each once.
 watch_run() {
-    local id="$1" miss=0 prev="" said_restart="" st fail status restarting
+    local id="$1" miss=0 prev="" said_restart="" restart_since="" st fail status restarting
     echo "watching run $id  https://github.com/$repo/actions/runs/$id"
     while :; do
         if ! st=$(gh run view "$id" -R "$repo" --json status,conclusion,jobs 2>&1); then
@@ -273,8 +281,11 @@ watch_run() {
         # for a build nobody has finished. So the jobs are asked as well, and a run is
         # over only when nothing it carries is still going. A run with no jobs at all
         # has nothing to contradict its status, and is read exactly as before.
-        restarting=$(jq '[(.jobs // [])[]
-            | select(.status != "completed" or (.conclusion // "") == "")] | length' <<< "$st")
+        #
+        # "Still going" is a job with no conclusion, not one whose status is short of
+        # `completed`: GitHub has returned a finished run's job as `in_progress` with a
+        # `success` conclusion, and asking the status held a green run open for good.
+        restarting=$(jq '[(.jobs // [])[] | select((.conclusion // "") == "")] | length' <<< "$st")
         if [ "$status" = completed ] && [ "$restarting" = 0 ]; then
             local conclusion; conclusion=$(jq -r .conclusion <<< "$st")
             echo "run $id: $conclusion"
@@ -284,9 +295,20 @@ watch_run() {
         fi
         # Held by the window above rather than by the run still running. Said once, so
         # a watch that stays quiet through it is not mistaken for one that died.
-        if [ "$status" = completed ] && [ -z "$said_restart" ]; then
-            echo "run $id reads completed while a job it carries is still going — waiting out the re-run" >&2
-            said_restart=yes
+        if [ "$status" = completed ]; then
+            if [ -z "$said_restart" ]; then
+                echo "run $id reads completed while a job it carries is still going — waiting out the re-run" >&2
+                said_restart=yes
+            fi
+            # Timed on its own clock, since the jobs' states may move while the run does not.
+            [ -n "$restart_since" ] || restart_since=$SECONDS
+            if [ $((SECONDS - restart_since)) -ge "$RERUN_LIMIT" ]; then
+                echo "run $id read completed for ${RERUN_LIMIT}s while these jobs had no conclusion:"
+                jq -r '.jobs[] | select((.conclusion // "") == "") | "  \(.name): \(.status)"' <<< "$st"
+                return 7
+            fi
+        else
+            restart_since=""
         fi
         sleep "$POLL_SECONDS"
     done

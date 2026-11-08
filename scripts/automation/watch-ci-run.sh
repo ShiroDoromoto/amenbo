@@ -99,5 +99,6 @@ $(cat "$work/none.log")"
         fi
         red "$work/failed.log" "run $run_id is red: $url"
         ;;
+    7) die "run $run_id reads completed, but a job it carries never reached a conclusion: $url" ;;
     *) die "watch-ci.sh run $run_id ended with exit code $watched: $url" ;;
 esac

@@ -111,7 +111,7 @@ mod tests {
     use crate::ops::automation_run::{launch_past_the_task_checks as launch, nothing_asked, Launcher};
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
-    use crate::ops::test_support::{mk_project, mk_task_in, way_out, with_tx};
+    use crate::ops::test_support::{give_to, mk_project, mk_task_in, start_at, way_out, with_tx};
     use crate::store_engine::WriteTx;
     use std::path::{Path, PathBuf};
 
@@ -134,11 +134,13 @@ mod tests {
         automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
         automation::edge_add(tx, on, fold.id, None, EdgeTarget::Done, None).expect("folded");
         automation::edge_add(tx, on, fold.id, Some(UNMERGED), EdgeTarget::Done, None).expect("unmerged");
-        automation::set_entry(tx, automation.id, Some(take.id)).expect("entry")
+        start_at(tx, automation.id, take.id);
+        automation
     }
 
-    /// A project bound to a fresh clone, a task for the AI in it, and that task's worktree cut with one
-    /// commit of its own on the branch. Answers the clone, the task and the worktree.
+    /// A project bound to a fresh clone, a task for the AI in it — of the role whose round starts at the
+    /// take — and that task's worktree cut with one commit of its own on the branch. Answers the clone,
+    /// the task and the worktree.
     fn a_task_with_work(tx: &WriteTx<'_>, tag: &str, when_unmerged: Option<&str>) -> (Automation, PathBuf, i64, PathBuf) {
         let (app, _) = repositories(tag);
         let project = mk_project(tx, "amenbo");
@@ -146,6 +148,8 @@ mod tests {
         let automation = picture(tx, project, when_unmerged);
         let task = mk_task_in(tx, "直すもの", Some(project));
         crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
+        let role = read::automation_roles_of(tx.conn(), automation.id).expect("roles").remove(0);
+        give_to(tx, task, role.id);
         let root = worktree_cut::git_root(&app).expect("root");
         let cut = worktree_cut::layout(&root, &task.to_string());
         worktree_cut::start_from_origin(&cut).expect("cut");

@@ -223,7 +223,7 @@ mod tests {
     use crate::ops::automation_run::{launch_past_the_task_checks as launch, nothing_asked, Launcher};
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
-    use crate::ops::test_support::{mk_placed, mk_project, mk_task_in, way_out, with_tx};
+    use crate::ops::test_support::{give_to, mk_placed, mk_project, mk_task_in, start_at, way_out, with_tx};
     use super::fixture::{bind, git, repositories};
     use crate::store_engine::WriteTx;
 
@@ -243,7 +243,8 @@ mod tests {
         automation::edge_add(tx, on, cut.id, None, EdgeTarget::Go(work.id), None).expect("cut → work");
         automation::edge_add(tx, on, cut.id, Some(ALREADY_THERE), EdgeTarget::Done, None).expect("already there");
         automation::edge_add(tx, on, work.id, None, EdgeTarget::Done, None).expect("work → done");
-        automation::set_entry(tx, automation.id, Some(take.id)).expect("entry")
+        start_at(tx, automation.id, take.id);
+        automation
     }
 
     /// Launch, take the task, and carry out the cut. Answers the run, the cut's execution and where the
@@ -273,9 +274,12 @@ mod tests {
         (run, run_step_id, next)
     }
 
-    fn for_ai(tx: &WriteTx<'_>, project: i64) -> i64 {
+    /// A task for the AI, of the role whose round starts at the take.
+    fn for_ai(tx: &WriteTx<'_>, automation: &Automation, project: i64) -> i64 {
         let id = mk_task_in(tx, "直すもの", Some(project));
         crate::ops::task::set_assignee(tx, id, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
+        let role = read::automation_roles_of(tx.conn(), automation.id).expect("roles").remove(0);
+        give_to(tx, id, role.id);
         id
     }
 
@@ -289,7 +293,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             bind(tx, project, &[&app]);
             let automation = picture(tx, project);
-            let task = for_ai(tx, project);
+            let task = for_ai(tx, &automation, project);
 
             let (_, run_step_id, next) = walk(tx, &automation);
             assert!(matches!(next, Next::Step(_)), "it goes on to the work: {next:?}");
@@ -328,7 +332,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             bind(tx, project, &[&app]);
             let automation = picture(tx, project);
-            let task = for_ai(tx, project);
+            let task = for_ai(tx, &automation, project);
             let root = worktree_cut::git_root(&app).expect("root");
             let standing = worktree_cut::layout(&root, &task.to_string());
             worktree_cut::start_from_origin(&standing).expect("left behind by a run that was stopped");
@@ -358,7 +362,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             bind(tx, project, &[&app]);
             let automation = picture(tx, project);
-            let task = for_ai(tx, project);
+            let task = for_ai(tx, &automation, project);
             let root = worktree_cut::git_root(&app).expect("root");
             let standing = worktree_cut::layout(&root, &task.to_string());
             worktree_cut::start_from_origin(&standing).expect("cut");
@@ -381,7 +385,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             bind(tx, project, &[&app]);
             let automation = picture(tx, project);
-            let task = for_ai(tx, project);
+            let task = for_ai(tx, &automation, project);
             let root = worktree_cut::git_root(&app).expect("root");
             worktree_cut::start_from_origin(&worktree_cut::layout(&root, &task.to_string())).expect("cut");
             tx.conn()
@@ -402,7 +406,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             bind(tx, project, &[&app]);
             let automation = picture(tx, project);
-            let task = for_ai(tx, project);
+            let task = for_ai(tx, &automation, project);
             let claude = ["claude".to_string()];
             let by = Launcher {
                 default_agent: None,
@@ -437,7 +441,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             bind(tx, project, &[&amenbo_scratch::scratch("builtin-cut-nowhere")]);
             let automation = picture(tx, project);
-            for_ai(tx, project);
+            for_ai(tx, &automation, project);
 
             let (_, _, next) = walk(tx, &automation);
             assert!(matches!(next, Next::Halted(_)), "nothing follows the error way out: {next:?}");

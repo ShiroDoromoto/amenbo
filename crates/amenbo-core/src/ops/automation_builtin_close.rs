@@ -140,7 +140,7 @@ mod tests {
     use crate::ops::test_support::open;
     use crate::lifecycle::name::{COMMENT_ADDED, TASK_DONE, TASK_STATUS_CHANGED};
     use crate::ops::test_support::{by_ai, events_after, outbox_head};
-    use crate::ops::test_support::{mk_out, mk_placed, mk_project, mk_task_in, only_step, out_port, with_tx};
+    use crate::ops::test_support::{give_to, mk_out, mk_placed, mk_project, mk_task_in, only_step, out_port, start_at, with_tx};
 
     /// Take a task, work on it — handing the commit on — and close it: the line a run walks for each
     /// task, and the one `AMB-D-964` puts this built-in at the end of.
@@ -148,6 +148,8 @@ mod tests {
         automation: Automation,
         work: AutomationPlacement,
         work_step: i64,
+        /// The role whose round starts at the take.
+        role: i64,
     }
 
     fn picture(tx: &WriteTx<'_>, project: i64) -> Picture {
@@ -166,14 +168,15 @@ mod tests {
         automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(close.id), None).expect("work → close");
         automation::edge_add(tx, on, close.id, None, EdgeTarget::Done, None).expect("close → done");
         automation::wire_add(tx, on, work.id, None, COMMIT, close.id, COMMIT).expect("wire the commit");
-        let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
+        let role = start_at(tx, automation.id, take.id);
         let work_step = only_step(tx, &work_action).id;
-        Picture { automation, work, work_step }
+        Picture { automation, work, work_step, role }
     }
 
-    fn for_ai(tx: &WriteTx<'_>, project: i64) -> i64 {
+    fn for_ai(tx: &WriteTx<'_>, p: &Picture, project: i64) -> i64 {
         let id = mk_task_in(tx, "直すもの", Some(project));
         crate::ops::task::set_assignee(tx, id, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
+        give_to(tx, id, p.role);
         id
     }
 
@@ -237,7 +240,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let p = picture(tx, project);
-            let task = for_ai(tx, project);
+            let task = for_ai(tx, &p, project);
 
             let (run, next) = walk(tx, &p, Some(SHA), "Fixed it.\n\nThe test covers it.");
             let Next::Step(again) = next else { panic!("the run goes round to its entry: {next:?}") };
@@ -266,8 +269,8 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let p = picture(tx, project);
-            let first = for_ai(tx, project);
-            let second = for_ai(tx, project);
+            let first = for_ai(tx, &p, project);
+            let second = for_ai(tx, &p, project);
             let claude = ["claude".to_string()];
 
             let (run, next) = walk(tx, &p, None, "The first.");
@@ -325,7 +328,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let p = picture(tx, project);
-            for_ai(tx, project);
+            for_ai(tx, &p, project);
             let claude = ["claude".to_string()];
             let by = Launcher {
                 default_agent: None,
@@ -375,7 +378,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let p = picture(tx, project);
-            let task = for_ai(tx, project);
+            let task = for_ai(tx, &p, project);
             let claude = ["claude".to_string()];
             let by = Launcher {
                 startable: Some(&claude),
@@ -431,7 +434,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let p = picture(tx, project);
-            let task = for_ai(tx, project);
+            let task = for_ai(tx, &p, project);
 
             let (_, next) = walk(tx, &p, None, "Nothing to merge.");
             assert!(matches!(&next, Next::Step(again) if again.entry), "the run goes round: {next:?}");
@@ -448,7 +451,7 @@ mod tests {
             let p = picture(tx, project);
             automation::step_update(tx, p.work_step, None, None, None, None, Some(true), None, None, None, None, None, None)
                 .expect("report to the task");
-            let task = for_ai(tx, project);
+            let task = for_ai(tx, &p, project);
 
             walk(tx, &p, None, "Fixed it.");
             assert_eq!(comments(tx, task), vec!["Fixed it.".to_string()]);
@@ -465,7 +468,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let p = picture(tx, project);
-            for_ai(tx, project);
+            for_ai(tx, &p, project);
             let head = outbox_head(tx);
 
             walk(tx, &p, None, "Fixed it.");
@@ -489,7 +492,7 @@ mod tests {
             let p = picture(tx, project);
             automation::step_update(tx, p.work_step, None, None, None, None, Some(true), None, None, None, None, None, None)
                 .expect("report to the task");
-            for_ai(tx, project);
+            for_ai(tx, &p, project);
             let head = outbox_head(tx);
 
             walk(tx, &p, None, "Fixed it.");
@@ -511,7 +514,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let p = picture(tx, project);
-            let task = for_ai(tx, project);
+            let task = for_ai(tx, &p, project);
 
             let (_, next) = walk(tx, &p, Some("main"), "Merged.");
             assert!(matches!(next, Next::Halted(_)), "nothing follows the error way out: {next:?}");

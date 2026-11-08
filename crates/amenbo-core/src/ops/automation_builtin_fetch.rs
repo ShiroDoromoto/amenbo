@@ -299,14 +299,14 @@ mod tests {
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{launch_past_the_task_checks as launch, nothing_asked, Launcher};
     use crate::ops::automation_step::Opened;
-    use crate::ops::test_support::{mk_placed, mk_project, mk_task_in, open, with_tx};
+    use crate::ops::test_support::{give_to, mk_placed, mk_project, mk_task_in, open, start_at, with_tx};
     use crate::store_engine::{read, WriteTx};
 
     /// Take a task, fetch, and go on to an agent's step on what came back; nothing there goes on to
     /// close the task.
     fn picture(tx: &WriteTx<'_>, project: i64, form: &str, target: &str) -> Automation {
-        crate::ops::task::set_assignee(tx, mk_task_in(tx, "one", Some(project)), Some(ActorKind::Ai), ActorKind::Ai)
-            .expect("give it to the AI");
+        let task = mk_task_in(tx, "one", Some(project));
+        crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
         let automation =
             automation::add(tx, project, NewAutomation { name: "fetch".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("automation");
@@ -326,11 +326,13 @@ mod tests {
         automation::edge_add(tx, on, fetch.id, Some(NOT_FOUND), EdgeTarget::Go(close.id), None).expect("none");
         automation::edge_add(tx, on, work.id, None, EdgeTarget::Done, None).expect("work → done");
         automation::edge_add(tx, on, close.id, None, EdgeTarget::Done, None).expect("close → done");
-        automation::set_entry(tx, automation.id, Some(take.id)).expect("entry")
+        give_to(tx, task, start_at(tx, automation.id, take.id));
+        automation
     }
 
-    /// The fetch standing first: what came back is filed as a task and taken, then closed; with nothing
-    /// there the run ends. `straight_to_an_agent` hands what came back to an agent's step instead.
+    /// The fetch where the round starts: what came back is filed as a task and taken, then closed; with
+    /// nothing there the run ends. `straight_to_an_agent` hands what came back to an agent's step
+    /// instead.
     fn starting_at_the_fetch(tx: &WriteTx<'_>, project: i64, straight_to_an_agent: bool) -> Automation {
         let automation =
             automation::add(tx, project, NewAutomation { name: "inbox".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
@@ -359,12 +361,13 @@ mod tests {
                 .expect("make → close");
             automation::edge_add(tx, on, close.id, None, EdgeTarget::Done, None).expect("close → done");
         }
-        automation::set_entry(tx, automation.id, Some(fetch.id)).expect("entry")
+        start_at(tx, automation.id, fetch.id);
+        automation
     }
 
     /// **A run does not start at the fetch** (`AMB-D-1123`): a round starts at the built-in that takes a
-    /// task, so the fetch standing first is every role starting nowhere — whether what it brings back is
-    /// filed and taken before any step works on it, or goes straight on to an agent's step.
+    /// task, so a role starting its round at the fetch is refused — whether what it brings back is filed
+    /// and taken before any step works on it, or goes straight on to an agent's step.
     #[test]
     fn a_run_does_not_start_at_the_fetch() {
         for straight_to_an_agent in [false, true] {
@@ -376,7 +379,10 @@ mod tests {
                     crate::ops::automation_run::check(tx.conn(), automation.id, Some(&claude), nothing_asked(), None)
                         .expect("check");
                 assert!(
-                    unmet.iter().any(|u| matches!(u, crate::ops::automation_run::Unmet::RoleStartsNowhere { .. })),
+                    unmet.iter().any(|u| matches!(
+                        u,
+                        crate::ops::automation_run::Unmet::RoleStartTakesNoTask { builtin: Some(b), .. } if b == "fetch"
+                    )),
                     "{straight_to_an_agent}: {unmet:?}",
                 );
             });

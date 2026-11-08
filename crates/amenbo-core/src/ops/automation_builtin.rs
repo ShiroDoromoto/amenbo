@@ -1026,7 +1026,7 @@ mod tests {
         for exit in find(key).expect("known").exits {
             automation::edge_add(tx, on, builtin.id, Some(exit.name), EdgeTarget::Done, None).expect("closes");
         }
-        let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
+        crate::ops::test_support::start_at(tx, automation.id, first.id);
         Picture { automation, project, first, builtin }
     }
 
@@ -1201,15 +1201,14 @@ mod tests {
             let p = picture(tx, "test_stamp");
             let startable = vec!["claude".to_string()];
             let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked(), None).expect("check");
-            // The picture ends with the task open, and takes it at a step of its own rather than a
-            // built-in, which is no start for a round either — each its own reason, and none the one
-            // asked here.
+            // The picture ends with the task open, and its role starts at a step of its own rather than
+            // the built-in that takes a task — each its own reason, and none the one asked here.
             let gaps: Vec<_> = unmet
                 .iter()
                 .filter(|u| {
                     !matches!(
                         u,
-                        Unmet::LeavesTaskOpen { .. } | Unmet::HandsOnTaskTaken { .. } | Unmet::RoleStartsNowhere { .. }
+                        Unmet::LeavesTaskOpen { .. } | Unmet::HandsOnTaskTaken { .. } | Unmet::RoleStartTakesNoTask { .. }
                     )
                 })
                 .collect();

@@ -881,7 +881,7 @@ mod tests {
             .expect("second closes");
         automation::edge_add(tx, on, second.id, Some(ERROR_EXIT), EdgeTarget::Halt, None)
             .expect("second error");
-        let automation = automation::set_entry(tx, automation.id, Some(first.id)).expect("entry");
+        crate::ops::test_support::start_at(tx, automation.id, first.id);
         Picture { automation, project, first_action, first, second }
     }
 

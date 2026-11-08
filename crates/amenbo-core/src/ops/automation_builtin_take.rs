@@ -349,11 +349,12 @@ mod tests {
     use crate::ops::test_support::open;
     use crate::ops::automation_stop;
     use crate::ops::task::{self, TaskPatch};
-    use crate::ops::test_support::{mk_out, mk_placed, mk_project, mk_task_in, way_out, with_tx};
+    use crate::ops::test_support::{give_to, mk_out, mk_placed, mk_project, mk_task_in, start_at, way_out, with_tx};
     use crate::store_engine::{read, WriteTx};
 
-    /// An automation whose entry is the built-in. What it takes goes on to an agent's step, since a run
-    /// does not end with its task still in progress (`AMB-D-967`); nothing to take closes the run.
+    /// An automation whose role starts its round at the built-in. What it takes goes on to an agent's
+    /// step, since a run does not end with its task still in progress (`AMB-D-967`); nothing to take
+    /// closes the run.
     fn picture(tx: &WriteTx<'_>, project: i64) -> (Automation, AutomationPlacement) {
         let automation =
             automation::add(tx, project, NewAutomation { name: "take".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
@@ -365,8 +366,42 @@ mod tests {
         automation::edge_add(tx, on, spot.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("onward");
         automation::edge_add(tx, on, spot.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("closes");
         crate::ops::test_support::mk_closed_after(tx, &automation, work.id, None);
-        let automation = automation::set_entry(tx, automation.id, Some(spot.id)).expect("entry");
-        (automation, spot)
+        start_at(tx, automation.id, spot.id);
+        (as_it_stands(tx, &automation), spot)
+    }
+
+    /// The automation as it stands now, read back.
+    fn as_it_stands(tx: &WriteTx<'_>, automation: &Automation) -> Automation {
+        read::automation(tx.conn(), automation.id).expect("read").expect("automation")
+    }
+
+    /// The role an automation here was born with, which its round starts as.
+    fn born(tx: &WriteTx<'_>, automation: &Automation) -> i64 {
+        read::automation_roles_of(tx.conn(), automation.id).expect("roles")[0].id
+    }
+
+    /// Where the role an automation here was born with starts its round ([`born`]).
+    fn start_of(tx: &WriteTx<'_>, automation: &Automation) -> i64 {
+        read::automation_roles_of(tx.conn(), automation.id).expect("roles")[0]
+            .entry_placement_id
+            .expect("where the role starts")
+    }
+
+    /// A task for the AI of the role `automation`'s round starts as ([`born`]) — one a run of it takes.
+    fn ours(tx: &WriteTx<'_>, title: &str, automation: &Automation, priority: Option<Priority>) -> i64 {
+        let id = for_ai(tx, title, automation.project_id, priority);
+        give_to(tx, id, born(tx, automation));
+        id
+    }
+
+    /// The placement the step named `name` was copied from onto run `run`.
+    fn placed(tx: &WriteTx<'_>, run: i64, name: &str) -> i64 {
+        read::automation_run_defs_of(tx.conn(), run)
+            .expect("defs")
+            .into_iter()
+            .find(|d| d.name == name)
+            .and_then(|d| d.placement_id)
+            .expect("the step's placement")
     }
 
     /// Launch it and open the step it starts at, which the built-in carries out on the spot.
@@ -400,14 +435,15 @@ mod tests {
             let elsewhere = mk_project(tx, "other");
             let (automation, _) = picture(tx, project);
 
-            let low = for_ai(tx, "low", project, Some(Priority::Low));
-            let high = for_ai(tx, "high", project, Some(Priority::High));
+            let low = ours(tx, "low", &automation, Some(Priority::Low));
+            let high = ours(tx, "high", &automation, Some(Priority::High));
             let people = mk_task_in(tx, "a person's", Some(project));
+            give_to(tx, people, born(tx, &automation));
             task::update(tx, people, TaskPatch { priority: Some(Priority::High), ..Default::default() })
                 .expect("priority");
-            let running = for_ai(tx, "running", project, Some(Priority::High));
+            let running = ours(tx, "running", &automation, Some(Priority::High));
             task::set_status(tx, running, TaskStatus::InProgress, crate::model::ActorKind::Ai).expect("reserve");
-            let waiting = for_ai(tx, "waiting", project, Some(Priority::High));
+            let waiting = ours(tx, "waiting", &automation, Some(Priority::High));
             crate::ops::dependency::add(tx, waiting, low, None).expect("depend");
             for_ai(tx, "not ours", elsewhere, Some(Priority::High));
 
@@ -437,9 +473,10 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let (automation, spot) = picture(tx, project);
-            let running = for_ai(tx, "running", project, None);
+            let running = ours(tx, "running", &automation, None);
             task::set_status(tx, running, TaskStatus::InProgress, crate::model::ActorKind::Ai).expect("reserve");
             let people = mk_task_in(tx, "a person's", Some(project));
+            give_to(tx, people, born(tx, &automation));
             automation::cfg_set(
                 tx,
                 spot.id,
@@ -462,6 +499,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             let (automation, _) = picture(tx, project);
             let people = mk_task_in(tx, "a person's", Some(project));
+            give_to(tx, people, born(tx, &automation));
 
             let (run, run_step_id, next) = carried(tx, &automation);
             assert!(matches!(next, Next::Closed(_)), "the line after it closes the run: {next:?}");
@@ -486,7 +524,8 @@ mod tests {
         automation::edge_add(tx, on, spot.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("onward");
         crate::ops::test_support::mk_closed_after(tx, &automation, work.id, None);
         automation::cfg_set(tx, spot.id, WHEN_NONE, Some(&format!("\"{WAIT}\""))).expect("wait");
-        automation::set_entry(tx, automation.id, Some(spot.id)).expect("entry")
+        start_at(tx, automation.id, spot.id);
+        as_it_stands(tx, &automation)
     }
 
     fn launched(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
@@ -545,7 +584,7 @@ mod tests {
             assert!(start_waiting(tx, automation.id, &launcher()).expect("start").is_none(), "nothing started");
             assert!(waits_since(tx, &automation).is_some(), "it goes on waiting");
 
-            let turned_up = for_ai(tx, "new", project, None);
+            let turned_up = ours(tx, "new", &automation, None);
             assert_eq!(tasks_turned_up(tx.conn(), &[automation.id]).expect("ask"), vec![automation.id]);
             let next = start_waiting(tx, automation.id, &launcher()).expect("start").expect("a run");
             assert_eq!(next.status, AutomationRunStatus::Running);
@@ -585,7 +624,7 @@ mod tests {
             let stopped = stop_waiting(tx, automation.id).expect("stop");
             assert_eq!(stopped.waits_for_task_since, None);
             assert_eq!(task_wait(tx.conn(), automation.id).expect("read"), None);
-            for_ai(tx, "new", project, None);
+            ours(tx, "new", &automation, None);
             assert!(tasks_turned_up(tx.conn(), &[automation.id]).expect("ask").is_empty(), "not waiting");
             assert!(start_waiting(tx, automation.id, &launcher()).expect("start").is_none());
 
@@ -607,8 +646,7 @@ mod tests {
                 start(tx, automation.id, &launcher(), &HandedAtLaunch::default()).expect("start"),
                 Started::Waits(_)
             ));
-            let entry = read::automation(tx.conn(), automation.id).expect("read").expect("row").entry_placement_id;
-            automation::cfg_set(tx, entry.expect("an entry"), WHEN_NONE, None).expect("no longer wait");
+            automation::cfg_set(tx, start_of(tx, &automation), WHEN_NONE, None).expect("no longer wait");
             automation::version_add(tx, automation.id).expect("save the automation");
 
             assert_eq!(tasks_turned_up(tx.conn(), &[automation.id]).expect("ask"), vec![automation.id]);
@@ -630,7 +668,7 @@ mod tests {
                 Started::Waits(_)
             ));
             let standing = launched(tx, &automation);
-            for_ai(tx, "new", project, None);
+            ours(tx, "new", &automation, None);
 
             assert!(tasks_turned_up(tx.conn(), &[automation.id]).expect("ask").is_empty(), "no room");
             assert!(start_waiting(tx, automation.id, &launcher()).expect("start").is_none());
@@ -649,8 +687,8 @@ mod tests {
             let automation = waiting_picture(tx, project);
             // A person's task, which the filter does not take, is what two of the AI's wait on.
             let first = mk_task_in(tx, "the part before", Some(project));
-            let after_a = for_ai(tx, "after it, a", project, None);
-            let after_b = for_ai(tx, "after it, b", project, None);
+            let after_a = ours(tx, "after it, a", &automation, None);
+            let after_b = ours(tx, "after it, b", &automation, None);
             crate::ops::dependency::add(tx, after_a, first, None).expect("depend");
             crate::ops::dependency::add(tx, after_b, first, None).expect("depend");
             // One of them also stands on a decision nobody has settled.
@@ -667,7 +705,7 @@ mod tests {
             .expect("decision");
             crate::ops::decision::link(tx, premise.id, after_b).expect("link");
             // And one waits for its start day.
-            let later = for_ai(tx, "later", project, None);
+            let later = ours(tx, "later", &automation, None);
             let day = crate::time::today() + chrono::Days::new(30);
             task::update(tx, later, TaskPatch { start: Some(crate::model::Schedule::Day(day)), ..Default::default() }).expect("start");
 
@@ -687,7 +725,7 @@ mod tests {
             assert!(held.values.is_empty());
             assert_eq!(held.drafts, 0);
 
-            for_ai(tx, "one it can take", project, None);
+            ours(tx, "one it can take", &automation, None);
             start_waiting(tx, automation.id, &launcher()).expect("start").expect("a run");
             assert_eq!(task_wait_held_back(tx.conn(), automation.id).expect("held back"), None, "no longer waiting");
         });
@@ -741,7 +779,8 @@ mod tests {
         automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
         automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(close.id), None).expect("work → close");
         automation::edge_add(tx, on, close.id, None, EdgeTarget::Go(take.id), None).expect("close → take");
-        automation::set_entry(tx, automation.id, Some(take.id)).expect("entry")
+        start_at(tx, automation.id, take.id);
+        as_it_stands(tx, &automation)
     }
 
     /// Report the agent's step open in this opening as done, and answer where the run went from there.
@@ -793,8 +832,8 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = round_picture(tx, project);
-            let a = for_ai(tx, "a", project, Some(Priority::High));
-            let b = for_ai(tx, "b", project, Some(Priority::Low));
+            let a = ours(tx, "a", &automation, Some(Priority::High));
+            let b = ours(tx, "b", &automation, Some(Priority::Low));
 
             let (run, first, opened) = paused_after_the_first(tx, &automation);
             assert_eq!(first, a);
@@ -833,8 +872,8 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = round_picture(tx, project);
-            for_ai(tx, "a", project, Some(Priority::High));
-            let b = for_ai(tx, "b", project, Some(Priority::Low));
+            ours(tx, "a", &automation, Some(Priority::High));
+            let b = ours(tx, "b", &automation, Some(Priority::Low));
             let (run, _, opened) = paused_after_the_first(tx, &automation);
             assert!(matches!(opened, Opened::Waiting { .. }));
             let launched_with = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
@@ -899,10 +938,10 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = round_picture(tx, project);
-            for_ai(tx, "a", project, Some(Priority::High));
+            ours(tx, "a", &automation, Some(Priority::High));
             let (run, _, _) = paused_after_the_first(tx, &automation);
             let copies = read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len();
-            automation::set_entry(tx, automation.id, None).expect("no entry");
+            start_at(tx, automation.id, placed(tx, run.id, "work"));
 
             let refused = automation_stop::resume(tx, run.id, None, nothing_asked(), None).expect_err("refused");
             assert!(matches!(refused, crate::error::Error::NotReady(_)), "{refused:?}");
@@ -923,8 +962,8 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = round_picture(tx, project);
-            for_ai(tx, "a", project, Some(Priority::High));
-            let b = for_ai(tx, "b", project, Some(Priority::Low));
+            ours(tx, "a", &automation, Some(Priority::High));
+            let b = ours(tx, "b", &automation, Some(Priority::Low));
 
             let (run, first, opened) = paused_after_the_first(tx, &automation);
             assert!(matches!(opened, Opened::Waiting { .. }));
@@ -982,8 +1021,8 @@ mod tests {
             assert!(again.paused.is_empty(), "stopping a stopped one writes nothing");
 
             let rounds = round_picture(tx, project);
-            let a = for_ai(tx, "a", project, Some(Priority::High));
-            let b = for_ai(tx, "b", project, Some(Priority::Low));
+            let a = ours(tx, "a", &rounds, Some(Priority::High));
+            let b = ours(tx, "b", &rounds, Some(Priority::Low));
             let claude = ["claude".to_string()];
             let run = launched(tx, &rounds);
             let Opened::Carried { next: Next::Step(work), .. } = open_entry(tx, &run) else {
@@ -1050,7 +1089,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let (automation, _) = picture(tx, project);
-            for_ai(tx, "a", project, None);
+            ours(tx, "a", &automation, None);
             let (run, _, next) = carried(tx, &automation);
             assert!(matches!(next, Next::Step(_)), "on to the work");
             automation::version_add(tx, automation.id).expect("save the automation");
@@ -1070,7 +1109,7 @@ mod tests {
             let automation = waiting_picture(tx, project);
             let run = launched(tx, &automation);
             let copies = read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len();
-            automation::set_entry(tx, automation.id, None).expect("no entry");
+            start_at(tx, automation.id, placed(tx, run.id, "work"));
             automation::version_add(tx, automation.id).expect("save past the check");
 
             let TakenUp::Failed(failed) = take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look") else {
@@ -1087,7 +1126,8 @@ mod tests {
     }
 
     /// **A newer version that starts by filing a task fails the run standing at its entry**: nothing
-    /// reaches the title of the task it files, since nothing is handed to an entry (`AMB-D-1123`).
+    /// reaches the title of the task it files, since nothing is handed to where a round starts
+    /// (`AMB-D-1123`).
     #[test]
     fn a_run_standing_at_its_entry_fails_on_a_version_that_starts_by_filing_a_task() {
         use crate::ops::automation_builtin_make::{MADE_AND_TAKEN, TAKE_IT, TITLE, WHAT_THEN};
@@ -1099,16 +1139,11 @@ mod tests {
             let make = automation::placement_add(tx, automation.id, written.id).expect("place it");
             automation::cfg_set(tx, make.id, WHAT_THEN, Some(&serde_json::to_string(TAKE_IT).expect("json")))
                 .expect("take it");
-            let work = read::automation_run_defs_of(tx.conn(), run.id)
-                .expect("defs")
-                .into_iter()
-                .find(|d| d.name == "work")
-                .and_then(|d| d.placement_id)
-                .expect("the work");
+            let work = placed(tx, run.id, "work");
             let on = AutomationPictureOwner::Automation;
             automation::edge_add(tx, on, make.id, Some(MADE_AND_TAKEN), EdgeTarget::Go(work), None)
                 .expect("onward");
-            automation::set_entry(tx, automation.id, Some(make.id)).expect("entry");
+            start_at(tx, automation.id, make.id);
             let claude = ["claude".to_string()];
             let unmet = check(tx.conn(), automation.id, Some(&claude), nothing_asked(), None).expect("check");
             assert!(
@@ -1155,8 +1190,9 @@ mod tests {
     fn asked_on_its_own_a_run_is_asked_and_no_other() {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
-            for_ai(tx, "a", project, Some(Priority::High));
-            let run = launched(tx, &round_picture(tx, project));
+            let rounds = round_picture(tx, project);
+            ours(tx, "a", &rounds, Some(Priority::High));
+            let run = launched(tx, &rounds);
             assert!(matches!(open_entry(tx, &run), Opened::Carried { next: Next::Step(_), .. }));
             let other = launched(tx, &waiting_picture(tx, project));
 
@@ -1194,7 +1230,7 @@ mod tests {
             mk_out(tx, &work_action, None, "task", AutomationPortKind::TaskTake, false);
             automation::edge_add(tx, AutomationPictureOwner::Automation, work.id, None, EdgeTarget::Done, None)
                 .expect("done");
-            let taskless = automation::set_entry(tx, taskless.id, Some(work.id)).expect("entry");
+            start_at(tx, taskless.id, work.id);
             let claude = ["claude".to_string()];
             let by = Launcher {
                 default_agent: None,
@@ -1221,7 +1257,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = waiting_picture(tx, project);
-            let spot = automation.entry_placement_id.expect("entry");
+            let spot = start_of(tx, &automation);
             let startable = ["claude".to_string()];
             for answer in [None, Some(format!("\"{GO_ON}\""))] {
                 automation::cfg_set(tx, spot, WHEN_NONE, answer.as_deref()).expect("answer");
@@ -1279,10 +1315,8 @@ mod tests {
         let written = action(tx, "take_task").expect("the built-in's action");
         let on = AutomationPictureOwner::Automation;
         let mut roles = Vec::new();
-        let mut first = None;
         for name in ["実装", "レビュー"] {
             let take = automation::placement_add(tx, automation.id, written.id).expect("place it");
-            first.get_or_insert(take.id);
             automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("closes");
             let (_, work) = mk_placed(tx, &automation, name, "work on it", "claude");
             automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("onward");
@@ -1292,14 +1326,10 @@ mod tests {
             roles.push((role.id, work));
         }
         automation::role_delete(tx, born.id).expect("the role it was born with");
-        let automation = automation::set_entry(tx, automation.id, first).expect("entry");
+        let automation = as_it_stands(tx, &automation);
         let reviewer = roles.pop().expect("the reviewer");
         let builder = roles.pop().expect("the builder");
         (automation, [builder, reviewer])
-    }
-
-    fn under(tx: &WriteTx<'_>, task: i64, role: i64) {
-        task::update(tx, task, TaskPatch { role_id: Some(role), ..Default::default() }).expect("the role");
     }
 
     /// **A round starts where its seat's role starts its round**, takes a task of that role there, and goes
@@ -1316,7 +1346,7 @@ mod tests {
 
             let roleless = for_ai(tx, "no role", project, Some(Priority::High));
             let reviewed = for_ai(tx, "to review", project, None);
-            under(tx, reviewed, reviewer);
+            give_to(tx, reviewed, reviewer);
 
             let (run, _, next) = carried(tx, &automation);
             assert_eq!(status(tx, reviewed), TaskStatus::InProgress, "the task of a role is taken");
@@ -1369,12 +1399,12 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             let (automation, [(builder, _), (reviewer, review)]) = by_role(tx, project);
             let reviewed = for_ai(tx, "to review", project, None);
-            under(tx, reviewed, reviewer);
+            give_to(tx, reviewed, reviewer);
 
             let run = launched(tx, &automation);
             assert_eq!(run.role_id, Some(reviewer), "the first role with a task to take");
             let built = for_ai(tx, "to build", project, Some(Priority::High));
-            under(tx, built, builder);
+            give_to(tx, built, builder);
 
             let Opened::Carried { next, .. } = open_entry(tx, &run) else { panic!("the built-in is carried out") };
             assert_eq!(status(tx, reviewed), TaskStatus::InProgress, "its own role's task is taken");
@@ -1406,10 +1436,10 @@ mod tests {
             let (automation, [(builder, _), (reviewer, _)]) = by_role(tx, project);
             for title in ["build one", "build two"] {
                 let built = for_ai(tx, title, project, None);
-                under(tx, built, builder);
+                give_to(tx, built, builder);
             }
             let reviewed = for_ai(tx, "to review", project, None);
-            under(tx, reviewed, reviewer);
+            give_to(tx, reviewed, reviewer);
 
             let first = launched(tx, &automation);
             assert_eq!(first.role_id, Some(builder), "the first role with a task to take");
@@ -1445,7 +1475,7 @@ mod tests {
             let run = launched(tx, &automation);
             assert_eq!(run.role_id, Some(builder));
             let reviewed = for_ai(tx, "to review", project, None);
-            under(tx, reviewed, reviewer);
+            give_to(tx, reviewed, reviewer);
 
             automation::version_add(tx, automation.id).expect("save the automation");
             assert!(matches!(
@@ -1489,7 +1519,7 @@ mod tests {
                     ("put first", None, "2026-01-05T00:00:00Z", None),
                 ] {
                     let id = for_ai(tx, title, project, priority);
-                    under(tx, id, reviewer);
+                    give_to(tx, id, reviewer);
                     if due.is_some() {
                         task::update(tx, id, TaskPatch { due, ..Default::default() }).expect("due");
                     }
@@ -1534,7 +1564,7 @@ mod tests {
             let (automation, _) = picture(tx, project);
             crate::ops::test_support::room_for(tx, automation.id, 2);
             for title in ["one", "two", "three", "four"] {
-                for_ai(tx, title, project, None);
+                ours(tx, title, &automation, None);
             }
 
             let first = launched(tx, &automation);
@@ -1615,7 +1645,7 @@ mod tests {
             let automation = round_picture(tx, project);
             crate::ops::test_support::room_for(tx, automation.id, 2);
             for title in ["a", "b", "c", "d"] {
-                for_ai(tx, title, project, None);
+                ours(tx, title, &automation, None);
             }
             let (launch, role, [(first, first_work), (second, second_work)]) = two_at_work(tx, &automation);
 
@@ -1653,7 +1683,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             let automation = round_picture(tx, project);
             crate::ops::test_support::room_for(tx, automation.id, 2);
-            let tasks: Vec<i64> = ["a", "b", "c", "d", "e", "f"].iter().map(|t| for_ai(tx, t, project, None)).collect();
+            let tasks: Vec<i64> = ["a", "b", "c", "d", "e", "f"].iter().map(|t| ours(tx, t, &automation, None)).collect();
             let (launch, role, _) = two_at_work(tx, &automation);
 
             let state = launch_state(tx.conn(), launch).expect("read");
@@ -1681,7 +1711,7 @@ mod tests {
             let automation = round_picture(tx, project);
             crate::ops::test_support::room_for(tx, automation.id, 2);
             for title in ["a", "b", "c", "d"] {
-                for_ai(tx, title, project, None);
+                ours(tx, title, &automation, None);
             }
             let (launch, role, [(first, first_work), _]) = two_at_work(tx, &automation);
 
@@ -1710,7 +1740,7 @@ mod tests {
             let automation = round_picture(tx, project);
             crate::ops::test_support::room_for(tx, automation.id, 2);
             for title in ["a", "b", "c", "d"] {
-                for_ai(tx, title, project, None);
+                ours(tx, title, &automation, None);
             }
             let (launch, role, [(first, first_work), (second, second_work)]) = two_at_work(tx, &automation);
 
@@ -1768,7 +1798,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = round_picture(tx, project);
-            for_ai(tx, "a", project, None);
+            ours(tx, "a", &automation, None);
             let run = launched(tx, &automation);
             let launch = run.launch_id.expect("a launch");
             open_entry(tx, &run);
@@ -1809,7 +1839,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = round_picture(tx, project);
-            for_ai(tx, "a", project, None);
+            ours(tx, "a", &automation, None);
             let run = launched(tx, &automation);
             let launch = run.launch_id.expect("a launch");
             let role = read::automation_roles_of(tx.conn(), automation.id).expect("roles")[0].id;
@@ -1841,7 +1871,7 @@ mod tests {
             assert_eq!((ended[0].defined, ended[0].headcount), (3, 3), "back at the definition");
             assert!(matches!(launch_headcount_set(tx, launch, role, 2), Err(crate::error::Error::Invalid(_))));
 
-            for_ai(tx, "b", project, None);
+            ours(tx, "b", &automation, None);
             let next = launched(tx, &automation).launch_id.expect("a launch of its own");
             assert_eq!(launch_headcounts(tx.conn(), next).expect("read")[0].headcount, 3, "copied afresh");
         });
@@ -1866,7 +1896,7 @@ mod tests {
             assert_eq!(open.status, crate::model::AutomationLaunchStatus::Running);
             assert!(open.ended_at.is_none());
 
-            for_ai(tx, "later", project, None);
+            ours(tx, "later", &automation, None);
             let next = top_up(tx, launch, &launcher()).expect("top up").expect("a run for the task");
             assert_eq!(next.launch_id, Some(launch), "it starts in the launch left open");
 
@@ -1891,7 +1921,7 @@ mod tests {
             assert!(matches!(open_entry(tx, &run), Opened::LeftToWait { .. }));
             assert_eq!(launch_of(tx, launch).status, crate::model::AutomationLaunchStatus::Running);
 
-            for_ai(tx, "new", project, None);
+            ours(tx, "new", &automation, None);
             let next = start_waiting(tx, automation.id, &launcher()).expect("start").expect("a run");
             assert_eq!(next.launch_id, Some(launch), "it joins the launch standing");
             open_entry(tx, &next);
@@ -1923,7 +1953,7 @@ mod tests {
             let to = Some(Some(FailuresTo::Role { role_id: reviewer }));
             automation::update(tx, automation.id, None, None, None, to).expect("to the reviewer");
             let built = for_ai(tx, "to build", project, None);
-            under(tx, built, builder);
+            give_to(tx, built, builder);
 
             let (run, launch) = failed_in_a_launch(tx, &automation);
             let round = read::automation_run_task_last(tx.conn(), run.id).expect("read").expect("the round");
@@ -1961,7 +1991,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             let (automation, [(builder, _), _]) = by_role(tx, project);
             let built = for_ai(tx, "to build", project, None);
-            under(tx, built, builder);
+            give_to(tx, built, builder);
 
             let (run, launch) = failed_in_a_launch(tx, &automation);
             let round = read::automation_run_task_last(tx.conn(), run.id).expect("read").expect("the round");
@@ -1971,8 +2001,8 @@ mod tests {
         });
     }
 
-    /// **A start of an automation whose entry would wait opens the launch the run joins later**, and it
-    /// stays open once a person ends the wait: only stopping the launch ends it.
+    /// **A start of an automation whose round starts at a take that would wait opens the launch the run
+    /// joins later**, and it stays open once a person ends the wait: only stopping the launch ends it.
     #[test]
     fn a_start_that_waits_opens_a_launch_that_outlasts_the_wait() {
         with_tx(|tx| {
@@ -1999,7 +2029,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             let (automation, _) = picture(tx, project);
             crate::ops::test_support::room_for(tx, automation.id, 3);
-            let tasks: Vec<i64> = ["one", "two", "three"].iter().map(|t| for_ai(tx, t, project, None)).collect();
+            let tasks: Vec<i64> = ["one", "two", "three"].iter().map(|t| ours(tx, t, &automation, None)).collect();
 
             let first = launched(tx, &automation);
             let launch = first.launch_id.expect("a launch");

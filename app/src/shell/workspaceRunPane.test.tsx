@@ -1037,6 +1037,7 @@ describe("the header of a launch's pane", () => {
       automationName: "サンプル制作チーム",
       status: "running",
       maxHeadcount: 10,
+      failed: [],
       roles: [
         role(1, "エンジニア", 3, [runCard({ run: 7, launch: 3 }), runCard({ run: 8, launch: 3, waiting: true })]),
         role(2, "レビュアー", 2, [runCard({ run: 9, launch: 3, status: "paused" })]),

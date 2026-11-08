@@ -179,6 +179,8 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
         ending
     };
     let now = Timestamp::now();
+    // Read while the run is still in its seat: once it is written over, it has left the seats.
+    let seat = crate::ops::automation_run::seat_of(tx.conn(), &before)?;
     let mut after = before.clone();
     after.status = ending.status();
     after.stopped_reason = ending.reason();
@@ -194,7 +196,7 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
         true => hand_the_task_back(tx, &after, stretch.as_ref(), ending)?,
         false => None,
     };
-    close_stretch(tx, stretch.as_ref(), now, incident)?;
+    close_stretch(tx, stretch.as_ref(), now, incident, incident.and(seat))?;
     Ok(Ended { run: after })
 }
 
@@ -243,18 +245,20 @@ fn close_step(tx: &WriteTx<'_>, run_id: i64, ending: Ending, now: Timestamp) -> 
 
 /// Close the stretch the run was in — at the run's end, and at the end of a round
 /// ([`crate::ops::automation_report`]) — naming the task it was filed as where it failed
-/// ([`hand_the_task_back`]). A stretch already closed is left alone: a run that handed its task back
-/// has nothing open.
+/// ([`hand_the_task_back`]), and the seat it failed in ([`crate::ops::automation_run::seat_of`]). A
+/// stretch already closed is left alone: a run that handed its task back has nothing open.
 pub(crate) fn close_stretch(
     tx: &WriteTx<'_>,
     stretch: Option<&AutomationRunTask>,
     now: Timestamp,
     incident: Option<i64>,
+    seat: Option<u32>,
 ) -> Result<()> {
     let Some(before) = stretch.filter(|s| s.ended_at.is_none()) else { return Ok(()) };
     let mut ended = before.clone();
     ended.ended_at = Some(now);
     ended.incident_task_id = incident;
+    ended.seat = seat.map(i64::from);
     ended.updated_at = now;
     crate::ops::emit_update(
         tx,
@@ -1330,6 +1334,37 @@ mod tests {
                 None,
                 "a run with no task in hand files nothing",
             );
+        });
+    }
+
+    /// **A failed round names the seat it failed in**, read as it failed: its run's place among the runs
+    /// under way then. A run that left its seat a moment before — in the same second — is not counted,
+    /// and a round that filed nothing names no seat.
+    #[test]
+    fn a_failed_round_names_the_seat_it_failed_in() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            crate::ops::test_support::room_for_runs(tx, p.automation.id);
+            let first = a_run(tx, &p.automation);
+            let second = a_run(tx, &p.automation);
+            let third = a_run(tx, &p.automation);
+            let seat_of = |run: &AutomationRun| {
+                read::automation_run_task_last(tx.conn(), run.id).expect("read").and_then(|r| r.seat)
+            };
+            let fail = |run: &AutomationRun| {
+                let opening = opened(tx, run, &p.first);
+                let task = a_task_in_hand(tx, p.project, opening.run_step.id);
+                let now = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
+                ended(tx, now, Ending::Failed(AutomationStoppedReason::Crashed)).expect("fail");
+                filed_for(tx, run.id, task);
+            };
+
+            ended(tx, first.clone(), Ending::Failed(AutomationStoppedReason::Crashed)).expect("fail");
+            assert_eq!(seat_of(&first), None, "a round that filed nothing names no seat");
+            fail(&third);
+            assert_eq!(seat_of(&third), Some(2), "the run that left a moment before is not counted");
+            fail(&second);
+            assert_eq!(seat_of(&second), Some(1));
         });
     }
 

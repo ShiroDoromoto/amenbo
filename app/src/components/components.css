@@ -2869,13 +2869,24 @@ button.runseat:focus-visible { outline: 2px solid var(--c-accent); outline-offse
 .runroles__idleone { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px dashed var(--c-rule); border-radius: var(--r-sm); }
 .runroles__idleone > .identicon { flex: none; opacity: .6; }
 .runroles__idlecountone { font-variant-numeric: tabular-nums; }
-/* The line under the pane for a failed round that was filed as a task: one line, cut where it runs out. */
-.runroles__filed {
-  flex: none; margin: 0; padding: var(--s-1) var(--s-2);
+/* The lines under the pane, one for each failed round that was filed as a task, newest first, scrolled
+   past a handful: its time, muted and never squeezed, then what happened in red on one line, cut where
+   it runs out — the filed task a link. */
+.runroles__events {
+  flex: none; display: flex; flex-direction: column; gap: 2px; min-width: 0; max-height: 7.5em; overflow-y: auto;
+  padding: var(--s-1) var(--s-2);
   border-top: var(--border-w) var(--border-style) var(--c-rule);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: var(--fs-xs); color: var(--c-stop);
+  font-size: var(--fs-xs);
 }
+.runroles__filed { flex: none; display: flex; gap: var(--s-2); min-width: 0; margin: 0; }
+.runroles__filedat { flex: none; color: var(--c-text-muted); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.runroles__filedwords { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--c-stop); }
+.runroles__filedref {
+  padding: 0; border: 0; background: none; font: inherit;
+  color: var(--c-accent-text); cursor: pointer;
+}
+.runroles__filedref:not(:disabled) { text-decoration: underline; }
+.runroles__filedref:disabled { cursor: default; }
 /* **The bar over a run's terminal** (`../shell/RunPicture`): the way back to the roles, whose round
    this is — role, seat, task and step — and how long it has run, then — where a step turned the pane —
    why. It stands in the pane's body under the roles, so the terminal keeps its size when the face is

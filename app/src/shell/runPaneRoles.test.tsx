@@ -29,12 +29,16 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Say } from "../talk/nameplate";
-import type { AutomationLaunchRoleStateDto, AutomationLaunchStateDto, AutomationRunCardDto, TaskRoleDto } from "../bindings/bindings";
+import type {
+  AutomationLaunchFailedDto, AutomationLaunchRoleStateDto, AutomationLaunchStateDto, AutomationRunCardDto, TaskRoleDto,
+} from "../bindings/bindings";
 import type { BuiltinRun } from "../talk/automationStep";
 import { TerminalPane } from "./TerminalPane";
 import { t, tf } from "../core/i18n";
+import { formatTimeOfDay } from "../core/i18n/format";
+import { RefNavProvider, type RefNav } from "../core/refNav";
 import {
-  attnOf, desksOf, filedLine, minutesOf, noticeOf, runDesks, seatOf, seatStateOf, silenceOf, unseenOf,
+  attnOf, desksOf, filedLine, filedLines, minutesOf, noticeOf, runDesks, seatOf, seatStateOf, silenceOf, unseenOf,
 } from "./RunPicture";
 import { showTerminalOf } from "./runFaces";
 
@@ -100,9 +104,19 @@ const launchRole = (role: number, name: string, runs: AutomationRunCardDto[], he
   role, name, defined: headcount, headcount, underWay: runs.length, toLetGo: 0, held: false, runs, waiting: 0, firstWaiting: [],
 });
 
-/** The launch 5, with the roles `roles`. */
-const launchOf = (roles: AutomationLaunchRoleStateDto[]): AutomationLaunchStateDto => ({
-  launch: 5, project: 1, automation: 3, automationName: "Nightly", status: "running", maxHeadcount: 10, roles,
+/** The launch 5, with the roles `roles` and the failed rounds `failed`, newest first. */
+const launchOf = (roles: AutomationLaunchRoleStateDto[], failed: AutomationLaunchFailedDto[] = []): AutomationLaunchStateDto => ({
+  launch: 5, project: 1, automation: 3, automationName: "Nightly", status: "running", maxHeadcount: 10, roles, failed,
+});
+
+/** A failed round of the run `run`, of the role `role` on the task `task`, filed as the task `id` to the
+ *  role `to` — failed at `at` in the seat `seat`. */
+const failedRound = (
+  run: number,
+  { role = 12, task = "AMB-T-149", id = 214, to = 14, at = "2026-11-08T05:05:00Z", seat = 1 }:
+    { role?: number; task?: string; id?: number; to?: number; at?: string; seat?: number } = {},
+): AutomationLaunchFailedDto => ({
+  run, role, task, incident: { id, ref: `AMB-T-${id}`, title: "failed", role: to, person: false, at, seat },
 });
 
 const role = (id: number, name: string, automationId = 3, icon: string | null = null): TaskRoleDto => ({
@@ -138,13 +152,13 @@ afterEach(() => {
 /** A pane, on a run or on none — with a terminal put up where `autoStart`, or a built-in in its place. */
 async function pane(
   run: Say | null,
-  { autoStart = false, builtin = null, launch = null, onGoToRun, expected }: {
+  { autoStart = false, builtin = null, launch = null, onGoToRun, expected, nav = {} }: {
     autoStart?: boolean; builtin?: BuiltinRun | null; launch?: number | null; onGoToRun?: (run: number) => void;
-    expected?: ReadonlyMap<string, number>;
+    expected?: ReadonlyMap<string, number>; nav?: RefNav;
   } = {},
 ): Promise<void> {
   await act(async () => {
-    root.render(createElement(TerminalPane, {
+    root.render(createElement(RefNavProvider, { value: nav, children: createElement(TerminalPane, {
       frame: run === null ? "1" : launch === null ? `run-${run.run}` : `launch-${launch}`,
       launch,
       hue: 199,
@@ -168,7 +182,7 @@ async function pane(
       onFold: () => {},
       onFocus: () => {},
       onGoToRun,
-    }));
+    }) }));
   });
 }
 
@@ -679,33 +693,150 @@ describe("silenceOf", () => {
 
 describe("filedLine", () => {
   const roles = [role(2, "B"), role(4, "D")];
-  const failed = (incident: { ref: string; role: number | null; person: boolean } | undefined): Say => ({
+  type Filed = { role: number | null; person: boolean; at?: number | null; seat?: number | null };
+  const failed = (incident: Filed | undefined, task: Say["task"] = null): Say => ({
     ...FAILED,
-    round: { role: 2, startedAt: null, ...(incident === undefined ? {} : { incident }) },
+    task,
+    round: {
+      role: 2,
+      startedAt: null,
+      ...(incident === undefined ? {} : { incident: { id: 9, ref: "AMB-T-9", at: null, seat: null, ...incident } }),
+    },
+  });
+  /** The sentence the line says, the filed task's reference standing where it is linked. */
+  const words = (line: ReturnType<typeof filedLine>) => line === null ? null : `${line.before}${line.ref}${line.after}`;
+
+  it("names the role the failure was filed to, and links the task it was filed as", () => {
+    const line = filedLine(failed({ role: 4, person: false }), roles);
+    expect(words(line)).toBe(tf("auto.run.roles.filedRole", { who: "B", to: "D", ref: "AMB-T-9" }));
+    expect(line).toMatchObject({ id: 9, ref: "AMB-T-9", at: null });
   });
 
-  it("names the role the failure was filed to", () => {
-    expect(filedLine(failed({ ref: "AMB-T-9", role: 4, person: false }), roles)).toBe(
-      tf("auto.run.roles.filedRole", { role: "B", to: "D", ref: "AMB-T-9" }),
+  it("says the seat the round failed in, as its record names it, and the task it was on, each where there is one", () => {
+    const task = { ref: "AMB-T-149", title: "Write the theme", seq: 1 };
+    const seated = tf("auto.run.roles.filedSeat", { role: "B", n: 1 });
+    expect(words(filedLine(failed({ role: 4, person: false, seat: 1 }, task), roles))).toBe(
+      tf("auto.run.roles.filedRole", {
+        who: tf("auto.run.roles.filedTask", { who: seated, task: "AMB-T-149" }), to: "D", ref: "AMB-T-9",
+      }),
     );
+    expect(words(filedLine(failed({ role: 4, person: false, seat: 1 }), roles))).toBe(
+      tf("auto.run.roles.filedRole", { who: seated, to: "D", ref: "AMB-T-9" }),
+    );
+    expect(words(filedLine(failed({ role: 4, person: false }, task), roles))).toBe(
+      tf("auto.run.roles.filedRole", {
+        who: tf("auto.run.roles.filedTask", { who: "B", task: "AMB-T-149" }), to: "D", ref: "AMB-T-9",
+      }),
+    );
+  });
+
+  it("carries when the round failed", () => {
+    const at = Date.parse("2026-11-08T05:05:00Z");
+    expect(filedLine(failed({ role: 4, person: false, at }), roles)?.at).toBe(at);
   });
 
   it("says a person where it went to one, and names nobody where the role is gone", () => {
-    expect(filedLine(failed({ ref: "AMB-T-9", role: null, person: true }), roles)).toBe(
-      tf("auto.run.roles.filedPerson", { role: "B", ref: "AMB-T-9" }),
+    expect(words(filedLine(failed({ role: null, person: true }), roles))).toBe(
+      tf("auto.run.roles.filedPerson", { who: "B", ref: "AMB-T-9" }),
     );
-    expect(filedLine(failed({ ref: "AMB-T-9", role: 77, person: false }), roles)).toBe(
-      tf("auto.run.roles.filed", { role: "B", ref: "AMB-T-9" }),
+    expect(words(filedLine(failed({ role: 77, person: false }), roles))).toBe(
+      tf("auto.run.roles.filed", { who: "B", ref: "AMB-T-9" }),
     );
   });
 
   it("has no line where the round filed nothing, or did not fail", () => {
     expect(filedLine(failed(undefined), roles)).toBeNull();
     const running: Say = {
-      ...failed({ ref: "AMB-T-9", role: 4, person: false }),
+      ...failed({ role: 4, person: false }),
       state: { ...FAILED.state!, status: "running", word: "Running" },
     };
     expect(filedLine(running, roles)).toBeNull();
+  });
+
+  it("names each failed round of a launch, newest first, by its own role, seat and task", () => {
+    const launch = launchOf([], [
+      failedRound(87, { role: 2, task: "AMB-T-387", id: 389, to: 4, seat: 2 }),
+      failedRound(86, { role: 2, task: "AMB-T-386", id: 388, to: 4, seat: 1 }),
+    ]);
+    const lines = filedLines(launch, roles);
+    const said = (n: number, task: string, ref: string) => tf("auto.run.roles.filedRole", {
+      who: tf("auto.run.roles.filedTask", { who: tf("auto.run.roles.filedSeat", { role: "B", n }), task }),
+      to: "D",
+      ref,
+    });
+    expect(lines.map(words)).toEqual([said(2, "AMB-T-387", "AMB-T-389"), said(1, "AMB-T-386", "AMB-T-388")]);
+    expect(lines.map((line) => line.id)).toEqual([389, 388]);
+    expect(lines[0]!.at).toBe(Date.parse("2026-11-08T05:05:00Z"));
+    expect(filedLines(launchOf([]), roles)).toEqual([]);
+  });
+});
+
+describe("the line under the pane for a failed round", () => {
+  const at = Date.parse("2026-11-08T05:05:00Z");
+  const FILED: Say = {
+    ...FAILED,
+    run: 81,
+    task: { ref: "AMB-T-149", title: "Write the theme", seq: 1 },
+    round: { role: 12, startedAt: null, incident: { id: 214, ref: "AMB-T-214", role: 14, person: false, at, seat: 2 } },
+  };
+  const line = () => container.querySelector<HTMLElement>(".runroles__filed");
+  const lines = () => [...container.querySelectorAll<HTMLElement>(".runroles__filed")];
+
+  it("says when the round failed, which seat failed on which task, and opens the filed task when pressed", async () => {
+    roles = [role(12, "Bob"), role(14, "Dave")];
+    // The failed run has left the seats, as a launch read after the failure has it: the seat is the
+    // one its record names.
+    launched = launchOf([launchRole(12, "Bob", [liveRun(80)])], [failedRound(81, { seat: 2 })]);
+    const selectTask = vi.fn();
+    await pane(FILED, { launch: 5, nav: { selectTask } });
+
+    expect(container.querySelector(".runroles__events")?.getAttribute("role")).toBe("status");
+    const time = line()!.querySelector("time")!;
+    expect(time.textContent).toBe(formatTimeOfDay(new Date(at)));
+    expect(time.getAttribute("datetime")).toBe(new Date(at).toISOString());
+    const who = tf("auto.run.roles.filedTask", { who: tf("auto.run.roles.filedSeat", { role: "Bob", n: 2 }), task: "AMB-T-149" });
+    expect(line()!.querySelector(".runroles__filedwords")?.textContent).toBe(
+      tf("auto.run.roles.filedRole", { who, to: "Dave", ref: "AMB-T-214" }),
+    );
+
+    const link = line()!.querySelector<HTMLButtonElement>(".runroles__filedref")!;
+    expect(link.textContent).toBe("AMB-T-214");
+    await act(async () => link.click());
+    expect(selectTask).toHaveBeenCalledWith(214);
+  });
+
+  it("is one line for each failed round of the launch, newest first, the round in front or not", async () => {
+    roles = [role(12, "Bob"), role(14, "Dave")];
+    launched = launchOf([launchRole(12, "Bob", [liveRun(80)])], [
+      failedRound(87, { task: "AMB-T-387", id: 389, seat: 2 }),
+      failedRound(86, { task: "AMB-T-386", id: 388, seat: 1 }),
+      failedRound(84, { task: "AMB-T-384", id: 385, seat: 1, at: "2026-11-08T05:01:00Z" }),
+    ]);
+    await pane({ ...FILED, run: 86 }, { launch: 5 });
+
+    const said = lines().map((one) => one.querySelector(".runroles__filedref")?.textContent);
+    expect(said).toEqual(["AMB-T-389", "AMB-T-388", "AMB-T-385"]);
+    expect(lines()[0]!.querySelector(".runroles__filedwords")?.textContent).toBe(
+      tf("auto.run.roles.filedRole", {
+        who: tf("auto.run.roles.filedTask", { who: tf("auto.run.roles.filedSeat", { role: "Bob", n: 2 }), task: "AMB-T-387" }),
+        to: "Dave",
+        ref: "AMB-T-389",
+      }),
+    );
+  });
+
+  it("has no line in a launch none of whose rounds failed, whatever the run in front says", async () => {
+    roles = [role(12, "Bob"), role(14, "Dave")];
+    launched = launchOf([launchRole(12, "Bob", [liveRun(80)])]);
+    await pane(FILED, { launch: 5 });
+    expect(lines()).toEqual([]);
+  });
+
+  it("cannot be pressed where there is nowhere to open the task, and says no time where none was kept", async () => {
+    roles = [role(12, "Bob"), role(14, "Dave")];
+    await pane({ ...FILED, run: 82, round: { ...FILED.round!, incident: { ...FILED.round!.incident!, at: null } } });
+    expect(line()!.querySelector("time")).toBeNull();
+    expect(line()!.querySelector<HTMLButtonElement>(".runroles__filedref")!.disabled).toBe(true);
   });
 });
 

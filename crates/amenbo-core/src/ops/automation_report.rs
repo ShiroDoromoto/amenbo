@@ -526,7 +526,7 @@ fn whats_next(
 fn round_over(tx: &WriteTx<'_>, run: AutomationRun) -> Result<Next> {
     let conn = tx.conn();
     let stretch = read::automation_run_task_last(conn, run.id)?;
-    automation_stop::close_stretch(tx, stretch.as_ref(), Timestamp::now(), None)?;
+    automation_stop::close_stretch(tx, stretch.as_ref(), Timestamp::now(), None, None)?;
     if run.pause_requested || run.pause_before_next_task || automation_stop::automation_stopped(conn, &run)? {
         return Ok(Next::Paused(automation_stop::settle(tx, run, AutomationPauseKind::BeforeNextTask)?));
     }

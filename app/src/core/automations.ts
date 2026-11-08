@@ -1365,7 +1365,8 @@ export function useRunCards(runs: readonly number[]): AutomationRunCardDto[] {
 /**
  * **One launch as its pane draws it, read at once** — where the launch stands, and for every role its
  * headcount beside the definition's, how many are under way and still to go, whether it is held, the
- * runs in its seats, and its tasks waiting to be taken with the first three of them. Null outside Tauri.
+ * runs in its seats, and its tasks waiting to be taken with the first three of them — and the launch's
+ * failed rounds that were filed as a task, newest first. Null outside Tauri.
  */
 export async function fetchLaunchState(launchId: number): Promise<AutomationLaunchStateDto | null> {
   if (!inTauri()) return null;

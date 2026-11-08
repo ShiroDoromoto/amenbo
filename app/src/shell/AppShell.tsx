@@ -666,6 +666,9 @@ export function AppShell() {
     setFace("tasks");
   }, [navTo]);
   const openWorkspace = useCallback(() => selectFace("workspace"), [selectFace]);
+  // The other way: a record pressed on the workspace opens on the ledger. Held steady, since the
+  // workspace's panes read the navigation built from it (`useLedgerNav`).
+  const openLedger = useCallback(() => setFace("tasks"), []);
   // `nth` makes a second press on the same axis a new arrival, so the panel opens again after being closed.
   const openDimension = useCallback((project: number, dimension: number) => {
     arrivals.current += 1;
@@ -780,7 +783,7 @@ export function AppShell() {
             onWindow={splitOutWorkspace}
             note={windowError}
             projectId={cameFromProject}
-            onOpenLedger={() => setFace("tasks")}
+            onOpenLedger={openLedger}
             openIn={openIn}
           />
         </div>

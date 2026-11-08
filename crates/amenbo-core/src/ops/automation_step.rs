@@ -627,6 +627,7 @@ fn new_stretch(
         ended_at: None,
         role_id: None,
         incident_task_id: None,
+        seat: None,
         created_at: now,
         updated_at: now,
     };

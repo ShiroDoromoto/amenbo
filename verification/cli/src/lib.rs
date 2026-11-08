@@ -157,6 +157,22 @@ impl World<'_> {
         let outcome = self.driver.exec(step)?;
         Ok((outcome.pass, outcome.note))
     }
+
+    /// How many runs the automation a `start` step names has behind it, read off the store through
+    /// the driver that stood the world up. The screen harness asks this before the press and again
+    /// after it, and a start that raised a run is one where the second answer is the higher.
+    ///
+    /// Only a read: the step is never carried out here. The press is the operator's, at the screen.
+    pub fn runs_of(&self, step: &Step) -> Result<usize, String> {
+        let Step::Action { with, .. } = step else {
+            return Err("only a start step names an automation whose runs can be counted".into());
+        };
+        let automation = self.driver.resolve(with)?;
+        let v = self
+            .driver
+            .run_json(&["automation", "run-list", "--automation", &automation.to_string(), "--json"])?;
+        Ok(v["runs"].as_array().map_or(0, Vec::len))
+    }
 }
 
 /// Pin the binary under test to where the caller named it, while we are still standing there.

@@ -1715,6 +1715,17 @@ impl Store {
         })
     }
 
+    /// Put the built-in that takes a task on a role's automation and make the role start there (one
+    /// operation = one transaction) — [`crate::ops::automation::role_start_take_task`].
+    pub fn automation_role_start_take_task(
+        &mut self,
+        id: i64,
+    ) -> Result<crate::ops::automation::RoleStarted> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Role, id)], |tx| {
+            crate::ops::automation::role_start_take_task(tx, id)
+        })
+    }
+
     /// Reorder a role among its automation's roles (one operation = one transaction).
     pub fn automation_role_move(
         &mut self,

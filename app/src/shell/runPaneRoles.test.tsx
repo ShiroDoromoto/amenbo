@@ -355,7 +355,7 @@ describe("the desks of a launch", () => {
     expect(head.querySelector("b")?.textContent).toBe("5");
     const lines = [...carol.querySelectorAll<HTMLElement>(".runroles__waiting")];
     expect(lines.map((one) => one.textContent)).toEqual([
-      `AMB-T-8 Review the filter　${tf("auto.run.roles.from", { role: "Bob" })}`,
+      `AMB-T-8 Review the filter\u3000${tf("auto.run.roles.from", { role: "Bob" })}`,
       "AMB-T-10 Check the docs",
       "AMB-T-11 Read the plan",
       tf("auto.run.roles.more", { n: 2 }),

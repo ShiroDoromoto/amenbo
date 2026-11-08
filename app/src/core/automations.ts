@@ -1396,6 +1396,37 @@ export function useLaunchState(launchId: number | null): AutomationLaunchStateDt
   return data ?? null;
 }
 
+/**
+ * **How many seats of a launch are working a task now** — the "N" of the pane header's "N / M working".
+ * A run in a seat counts while it is `running` and not standing before a built-in waiting for a task to
+ * turn up: a paused run holds its seat but works nothing, and a run asked to pause once its task is over
+ * is still working it until then. Nothing once the launch has ended.
+ */
+export function launchWorking(state: AutomationLaunchStateDto): number {
+  if (state.status === "ended") return 0;
+  return state.roles.reduce(
+    (n, role) => n + role.runs.filter((run) => run.status === "running" && !run.waiting).length,
+    0,
+  );
+}
+
+/** **How many are in a launch** — every role's headcount for it added up, the "M" of the pane header
+ *  (`AMB-D-1123`). */
+export function launchHeadcount(state: AutomationLaunchStateDto): number {
+  return state.roles.reduce((n, role) => n + role.headcount, 0);
+}
+
+/**
+ * **Whether a role of a launch takes no new task** — stopped on its own (`held`), or the whole launch
+ * paused from the pane header: either way its seats finish the task they are on and take no new one.
+ */
+export function roleHeld(
+  state: AutomationLaunchStateDto,
+  role: AutomationLaunchStateDto["roles"][number],
+): boolean {
+  return role.held || state.status === "paused";
+}
+
 /** The one ending the "history" tab can be narrowed to, or all three. */
 export type RunHistoryFilter = "all" | "completed" | "failed" | "canceled";
 

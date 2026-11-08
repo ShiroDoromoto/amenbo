@@ -620,7 +620,7 @@ function DeskView({ desk, front, now, silenceAt, onOpen }: {
               title={`${task.ref} ${task.title}`}
             >
               {task.ref} {task.title}
-              {task.from !== null && `　${tf("auto.run.roles.from", { role: task.from })}`}
+              {task.from !== null && `\u3000${tf("auto.run.roles.from", { role: task.from })}`}
             </span>
           ))}
           {desk.waiting > desk.first.length && (

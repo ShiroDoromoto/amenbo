@@ -2526,8 +2526,7 @@ pub fn placement_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
         if others > 0 {
             return Err(Error::invalid(format!(
                 "placement '{id}' is where a run of this automation starts, and {others} other \
-                 placement(s) are still on it — take those off first, or change what it starts at with \
-                 `automation entry-replace`"
+                 placement(s) are still on it — take those off first"
             )));
         }
         // `entry_placement_id` is `RESTRICT`, and that check bites at the statement rather than at the
@@ -6953,7 +6952,7 @@ mod tests {
             edge_add(tx, AutomationPictureOwner::Automation, one.id, Some("着手した"), EdgeTarget::Go(two.id), None)
                 .expect("add edge");
             let refused = placement_delete(tx, one.id).expect_err("others are on it");
-            assert!(refused.to_string().contains("entry-replace"), "{refused}");
+            assert!(refused.to_string().contains("take those off first"), "{refused}");
 
             placement_delete(tx, two.id).expect("take the other off");
             assert!(read::automation_edge_ids(tx.conn(), AutomationPictureOwner::Automation, automation.id)

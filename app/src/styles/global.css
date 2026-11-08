@@ -3024,8 +3024,9 @@ body.dragging-row { user-select: none; }
 /* Spelled out for the reason `.plate[hidden]` is: the run's parts are drawn on the same row as an
    ordinary pane's name, and are away there — and the lamp is away on a run's pane (`../talk/nameplate`).
    The built-in's chip is one of them twice over: it wears `.actscope`'s `display`, and without this it
-   was drawn on every step of a run (`AMB-T-5589`). The chip saying who carries a step out wears it too. */
-.plate__dot[hidden], .plate__auto[hidden], .plate__no[hidden], .plate__builtin[hidden],
+   was drawn on every step of a run (`AMB-T-5589`). The chip saying who carries a step out wears it too.
+   The name is away under a launch's header, which says it already (`../shell/LaunchHead`). */
+.plate__dot[hidden], .plate__auto[hidden], .plate__name[hidden], .plate__no[hidden], .plate__builtin[hidden],
 .plate__by[hidden] { display: none; }
 /* **The mark glows while the run is under way** (`AMB-D-1010`), in place of a chip saying running: its
    edge brightens and dims at the pace the state chip's dot used to pulse at, so the page keeps one
@@ -3076,6 +3077,30 @@ body.dragging-row { user-select: none; }
   position: relative; z-index: 1;
   container: runbar / inline-size;
 }
+/* **A launch's header** (`../shell/LaunchHead`): the top of the pane, on the run's wash and ruled off
+   from the seat's row under it, which then sits straight below it rather than taking the top corners. */
+.launchhead {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2);
+  margin: calc(-1 * var(--s-1)) calc(-1 * var(--s-1)) 0;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  background: var(--c-ai-weak);
+  border-bottom: var(--border-w) var(--border-style) var(--c-rule);
+}
+.slot--launch .slot__bar { border-radius: 0; }
+.launchhead__name { font-weight: var(--fw-bold); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.launchhead__chip {
+  display: inline-flex; align-items: center;
+  font-size: var(--fs-xs); line-height: 20px; padding: 0 var(--s-2);
+  border-radius: 999px; white-space: nowrap;
+}
+.launchhead__chip--auto { background: var(--c-ai); color: var(--c-on-ai); }
+.launchhead__chip--run { background: var(--c-accent-weak); color: var(--c-accent-text); }
+.launchhead__chip--hold { background: var(--c-heed-weak); color: var(--c-heed); }
+.launchhead__count { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: nowrap; }
+.launchhead__count b { font-variant-numeric: tabular-nums; }
+.launchhead__gap { flex: 1; }
+.launchhead__hold[aria-pressed="true"] { background: var(--c-heed-weak); border-color: var(--c-heed); color: var(--c-heed); }
 .slot--run .slot__plate { display: contents; }
 .slot--run .slot__plate--behind { display: none; }
 .slot--run .plate { flex: 1 1 0; min-width: 0; }

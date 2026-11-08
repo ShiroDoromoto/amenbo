@@ -200,4 +200,54 @@ describe("the menu shell", () => {
     expect(items().map((one) => one.textContent)).toEqual(["app one", "app two"]);
     expect(document.activeElement).toBe(items()[0]);
   });
+
+  it("hangs its right edge at the point where it is aligned to the end, and goes right of it where it does not fit", async () => {
+    const back = boxIs(300, 120);
+    try {
+      await act(async () => {
+        root.render(createElement(Menu, { at: { x: 600, y: 50 }, align: "end", onClose: () => {}, children: "x" }));
+      });
+      expect(placed()).toEqual({ left: "300px", top: "50px" });
+      await act(async () => {
+        root.render(createElement(Menu, { at: { x: 100, y: 50 }, align: "end", onClose: () => {}, children: "x" }));
+      });
+      expect(placed().left).toBe("100px");
+    } finally { back(); }
+  });
+
+  it("is a dialog that stands on the first thing that can be pressed, with its items plain buttons", async () => {
+    await act(async () => {
+      root.render(createElement(Menu, {
+        at: AT,
+        kind: "dialog",
+        label: "Bob",
+        onClose: () => {},
+        children: [
+          createElement("button", { key: "off", type: "button", disabled: true, className: "first" }, "off"),
+          createElement("button", { key: "on", type: "button", className: "second" }, "on"),
+          createElement(MenuItem, { key: "item", onClick: () => {}, children: "item" }),
+        ],
+      }));
+    });
+    const box = document.querySelector<HTMLElement>(".menu")!;
+    expect([box.getAttribute("role"), box.getAttribute("aria-label")]).toEqual(["dialog", "Bob"]);
+    expect(document.activeElement?.className).toBe("second");
+    expect(items()[0]!.getAttribute("role"), "a menuitem outside a menu").toBeNull();
+    await press(document.activeElement!, "ArrowDown");
+    expect(document.activeElement?.className, "a dialog is walked with Tab, not the arrows").toBe("second");
+  });
+
+  it("takes a press on the button that opened it as that button's own, not a press outside", async () => {
+    const opener = document.createElement("button");
+    document.body.appendChild(opener);
+    const from = { current: opener };
+    await act(async () => {
+      root.render(createElement(Menu, { at: AT, from, onClose: () => { closed += 1; }, children: "x" }));
+    });
+    await pointerDownOn(opener);
+    expect(closed).toBe(0);
+    await pointerDownOn(document.body);
+    expect(closed).toBe(1);
+    opener.remove();
+  });
 });

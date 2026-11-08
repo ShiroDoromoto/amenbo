@@ -13,6 +13,11 @@
 // out of its headcount and a square per seat; under it a row per seat at work, the free seats as one
 // row, and the tasks waiting for it. There is no choice between cards and a list.
 //
+// **A desk's "⋯" opens the role's menu**, one at a time: the headcount for this launch alone, put back
+// to the definition's where it differs, and the role's own stop — not while the whole launch is paused,
+// and no menu at all once it has ended. A headcount other than the definition's, and a cut still letting
+// seats go, are said under the desk's head.
+//
 // **A round that needs a person, out of sight in the room, is named at the room's edge**, and the
 // notice scrolls the room to it when pressed — never by itself. It is read again as the room scrolls.
 //
@@ -56,9 +61,20 @@ vi.mock("../core/projectRoles", () => ({ useProjectRoles: () => roles }));
 
 /** The launch the pane draws, as its roles and the bar over its terminal read it (`../core/automations`). */
 let launched: AutomationLaunchStateDto | null = null;
+/** The moves a role's menu makes on its launch, caught rather than sent. */
+const moves = vi.hoisted(() => ({
+  set: vi.fn(async (_launch: number, _role: number, _n: number) => {}),
+  reset: vi.fn(async (_launch: number, _role: number) => {}),
+  hold: vi.fn(async (_launch: number, _role: number) => {}),
+  release: vi.fn(async (_launch: number, _role: number) => {}),
+}));
 vi.mock("../core/automations", async (actual) => ({
   ...(await actual<typeof import("../core/automations")>()),
   useLaunchState: (launch: number | null) => (launch === null ? null : launched),
+  setLaunchHeadcount: moves.set,
+  resetLaunchHeadcount: moves.reset,
+  holdLaunchRole: moves.hold,
+  releaseLaunchRole: moves.release,
 }));
 
 /** A run under way of the automation `automation`, as a seat of a launch carries it. */
@@ -393,6 +409,159 @@ describe("the desks of a launch", () => {
   });
 });
 
+/// The role's "⋯": the headcount for this launch alone, and the role's own stop.
+describe("a role's menu", () => {
+  const FRONT: Say = {
+    ...FAILED,
+    run: 31,
+    step: "write the tests",
+    round: { role: 12, startedAt: Date.now() - 65_000 },
+    state: { ...FAILED.state!, status: "running", word: "Running" },
+  };
+  const bob = (more: Partial<AutomationLaunchRoleStateDto> = {}) =>
+    ({ ...launchRole(12, "Bob", [liveRun(31, { role: 12 }), liveRun(32, { role: 12 })], 3), ...more });
+  const carol = () => launchRole(13, "Carol", [liveRun(33, { role: 13 })], 1);
+  const more = (at: number) => desks()[at]!.querySelector<HTMLButtonElement>(".runroles__more");
+  const panel = () => document.querySelector<HTMLElement>(".runmenu");
+  const click = (el: HTMLElement) => act(async () => {
+    el.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    el.click();
+    await new Promise((r) => setTimeout(r, 0));
+  });
+  const stepper = () => panel()!.querySelector<HTMLElement>(".stepper")!;
+  const stepBy = (label: string) =>
+    [...stepper().querySelectorAll("button")].find((one) => one.getAttribute("aria-label") === label)!;
+  /** The pane drawn afresh on the launch as it now is: the desks are drawn again only when the run moves. */
+  const again = async () => {
+    act(() => root.unmount());
+    root = createRoot(container);
+    await pane(FRONT, { launch: 5 });
+  };
+
+  beforeEach(() => {
+    for (const fn of Object.values(moves)) fn.mockClear();
+  });
+
+  it("opens one menu at a time, under the role's name, and closes it on a second press and on Escape", async () => {
+    launched = launchOf([bob(), carol()]);
+    await pane(FRONT, { launch: 5 });
+    expect(more(0)!.getAttribute("aria-expanded")).toBe("false");
+    await click(more(0)!);
+    expect(more(0)!.getAttribute("aria-expanded")).toBe("true");
+    expect([panel()!.getAttribute("role"), panel()!.getAttribute("aria-label")])
+      .toEqual(["dialog", tf("auto.run.roles.menu", { name: "Bob" })]);
+    expect(panel()!.querySelector(".menu__head")?.textContent).toBe("Bob");
+
+    await click(more(1)!);
+    expect(document.querySelectorAll(".runmenu"), "two menus open").toHaveLength(1);
+    expect(panel()!.getAttribute("aria-label")).toBe(tf("auto.run.roles.menu", { name: "Carol" }));
+    expect(more(0)!.getAttribute("aria-expanded")).toBe("false");
+
+    await click(more(1)!);
+    expect(panel()).toBeNull();
+
+    await click(more(0)!);
+    await act(async () => {
+      document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(panel()).toBeNull();
+    expect(document.activeElement, "Escape left the reader on nothing").toBe(more(0));
+  });
+
+  it("steps the headcount for this launch alone between 1 and the cap, and leaves the menu open", async () => {
+    launched = launchOf([bob()]);
+    await pane(FRONT, { launch: 5 });
+    await click(more(0)!);
+    expect(panel()!.querySelector(".menu__label")?.textContent).toBe(t("auto.run.roles.menuHeadcount"));
+    expect(stepper().getAttribute("aria-label")).toBe(tf("auto.run.roles.menuHeadcountOf", { name: "Bob" }));
+    expect(stepper().classList.contains("stepper--s")).toBe(true);
+    expect(stepper().querySelector("output")?.textContent).toBe(tf("auto.side.headcountValue", { n: 3 }));
+    expect(panel()!.querySelector(".menu__hint")?.textContent).toBe(tf("auto.run.roles.menuDefined", { n: 3 }));
+    expect(panel()!.querySelector(".menu__help")?.textContent).toBe(t("auto.run.roles.menuHelp"));
+    expect(panel()!.querySelector(".menu__reset"), "a link back to where it already is").toBeNull();
+
+    await click(stepBy(t("auto.side.headcountMore")));
+    expect(moves.set).toHaveBeenCalledWith(5, 12, 4);
+    expect(panel()).not.toBeNull();
+
+    launched = launchOf([bob({ headcount: 10 })]);
+    await again();
+    await click(more(0)!);
+    expect(stepBy(t("auto.side.headcountMore")).disabled).toBe(true);
+    launched = launchOf([bob({ headcount: 1 })]);
+    await again();
+    await click(more(0)!);
+    expect(stepBy(t("auto.side.headcountLess")).disabled).toBe(true);
+  });
+
+  it("offers the definition's headcount back where this launch has another", async () => {
+    launched = launchOf([bob({ headcount: 5 })]);
+    await pane(FRONT, { launch: 5 });
+    await click(more(0)!);
+    const reset = panel()!.querySelector<HTMLButtonElement>(".menu__reset")!;
+    expect(reset.textContent).toBe(tf("auto.run.roles.menuReset", { n: 3 }));
+    await click(reset);
+    expect(moves.reset).toHaveBeenCalledWith(5, 12);
+  });
+
+  it("stops the role after its tasks, or resumes it, and closes", async () => {
+    launched = launchOf([bob()]);
+    await pane(FRONT, { launch: 5 });
+    await click(more(0)!);
+    const stop = panel()!.querySelector<HTMLButtonElement>(".menu__item")!;
+    expect(stop.querySelector(".menu__title")?.textContent).toBe(t("auto.run.roles.held"));
+    expect(stop.querySelector(".menu__desc")?.textContent).toBe(t("auto.run.roles.holdHelp"));
+    await click(stop);
+    expect(moves.hold).toHaveBeenCalledWith(5, 12);
+    expect(panel()).toBeNull();
+
+    launched = launchOf([bob({ held: true })]);
+    await again();
+    await click(more(0)!);
+    const resume = panel()!.querySelector<HTMLButtonElement>(".menu__item")!;
+    expect(resume.querySelector(".menu__title")?.textContent).toBe(t("auto.launch.resume"));
+    expect(resume.querySelector(".menu__desc")?.textContent).toBe(t("auto.run.roles.releaseHelp"));
+    await click(resume);
+    expect(moves.release).toHaveBeenCalledWith(5, 12);
+  });
+
+  it("cannot stop a role while the whole launch is paused, and says why", async () => {
+    launched = { ...launchOf([bob()]), status: "paused" };
+    await pane(FRONT, { launch: 5 });
+    await click(more(0)!);
+    const stop = panel()!.querySelector<HTMLButtonElement>(".menu__item")!;
+    expect(stop.getAttribute("aria-disabled")).toBe("true");
+    expect(stop.querySelector(".menu__desc")?.textContent).toBe(t("auto.run.roles.pausedHelp"));
+    await click(stop);
+    expect(moves.hold).not.toHaveBeenCalled();
+  });
+
+  it("has no menu on a launch that has ended", async () => {
+    launched = { ...launchOf([bob()]), status: "ended" };
+    await pane(FRONT, { launch: 5 });
+    expect(more(0)).toBeNull();
+  });
+
+  it("says in the heed colour a headcount other than the definition's, and a cut still to let seats go", async () => {
+    launched = launchOf([bob()]);
+    await pane(FRONT, { launch: 5 });
+    expect(desks()[0]!.querySelector(".runroles__notes"), "an ordinary role said something").toBeNull();
+
+    launched = launchOf([bob({ headcount: 1, underWay: 2, toLetGo: 1 })]);
+    await again();
+    const notes = desks()[0]!.querySelector(".runroles__notes")!;
+    expect(notes.querySelector(".runroles__temp")?.textContent).toBe(tf("auto.run.roles.temp", { n: 1, m: 3 }));
+    expect(notes.querySelector(".runroles__letgo")?.textContent)
+      .toBe(tf("auto.run.roles.letGo", { u: 2, n: 1, k: 1 }));
+
+    launched = launchOf([bob({ headcount: 1, underWay: 2, toLetGo: 1, held: true })]);
+    await again();
+    expect(desks()[0]!.querySelector(".runroles__letgo"), "a stopped role said a cut").toBeNull();
+    expect(desks()[0]!.querySelector(".runroles__temp")).not.toBeNull();
+  });
+});
+
 describe("desksOf", () => {
   const FRONT: Say = { ...FAILED, run: 5, interactive: true, state: { ...FAILED.state!, status: "running", word: "Running" } };
 
@@ -434,7 +603,7 @@ describe("runDesks", () => {
   it("draws the run's role as a desk with the run its one seat, and the rest on the bar, in the order they are defined in", () => {
     const got = runDesks(RUNNING, [role(3, "C"), role(2, "B", 3, "seed"), role(1, "A"), role(9, "Elsewhere", 9)]);
     expect(got.desks).toEqual([{
-      role: 2, name: "B", icon: "seed", headcount: 1, held: false, free: 0, waiting: 0, first: [],
+      role: 2, name: "B", icon: "seed", headcount: 1, held: false, free: 0, waiting: 0, first: [], control: null,
       seats: [{ run: 15, task: "AMB-T-7 Fix", step: "check", state: "running", since: 1000, to: [] }],
     }]);
     expect(got.idle.map((one) => [one.role, one.headcount])).toEqual([[3, null], [1, null]]);

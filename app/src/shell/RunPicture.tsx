@@ -13,9 +13,30 @@
 //
 // **A desk's head is one line, never wrapped**: the role's icon and name, "stops after the task" where
 // the role is held, how many seats are at work out of its headcount, a small square per seat, and the
-// role's "⋯". What the "⋯" opens is not drawn here. The count leads with its figures ("2 / 3 working"),
-// so where the line is short of room it is cut down to its first figure and an ellipsis before anything
-// else gives way; the head stays inside the desk, its squares and "⋯" with it.
+// role's "⋯". The count leads with its figures ("2 / 3 working"), so where the line is short of room it
+// is cut down to its first figure and an ellipsis before anything else gives way; the head stays inside
+// the desk, its squares and "⋯" with it.
+//
+// **The "⋯" opens the role's menu**, hung under its right end and free to stand past the pane's edge.
+// One menu is open at a time: pressing another "⋯" closes the one before, pressing the same one again
+// closes it, and so does a press outside it or Escape, which puts the reader back on the "⋯". In it,
+// under the role's icon and name:
+//
+// - **The headcount for this launch alone** (`AMB-D-1123`), stepped between 1 and the cap
+//   (`AMB-D-1124`), beside the definition's headcount and a line on what a step does. A raise is taken
+//   up at once; a cut lets seats go as their tasks end; the launch goes back to the definition when it
+//   ends. Where the two differ, a link puts it back to the definition's. Stepping leaves the menu open.
+// - **"Stop after the task"**, or "Resume" where the role is stopped — the role's own stop, apart from
+//   the whole launch's pause (`AMB-D-1019`). Pressed, the menu closes. While the whole launch is paused
+//   it cannot be pressed, and its line says why.
+//
+// There is no "⋯" where there is nothing for it to work on: on a run kept from before launches, and on
+// a launch that has ended.
+//
+// **Under the head, a line in the heed colour, only where something is out of the ordinary**: that this
+// launch has a headcount other than the definition's, and that a cut is still letting seats go — how
+// many are at work, the headcount they come down to and how many seats are still to go. The second is
+// not said while the role is stopped. Where both hold, both are said, side by side.
 //
 // A seat whose round failed, is paused or waits holds its place but is not counted as at work, and its
 // square is not filled as one at work.
@@ -70,10 +91,19 @@
 // drawn from its seed (`AMB-D-686`).
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useProjectRoles } from "../core/projectRoles";
-import { useLaunchState } from "../core/automations";
-import { t, tf } from "../core/i18n";
+import {
+  holdLaunchRole,
+  releaseLaunchRole,
+  resetLaunchHeadcount,
+  setLaunchHeadcount,
+  useLaunchState,
+} from "../core/automations";
+import { errText, t, tf } from "../core/i18n";
+import { pushNotice } from "../core/notice";
 import { formatNumber } from "../core/i18n/format";
 import { Icon } from "../components/Icon";
+import { Menu, MenuItem } from "../components/Menu";
+import { Stepper } from "../components/Stepper";
 import { RoleIcon } from "../screens/AutomationRoles";
 import { clockOf, type Say } from "../talk/nameplate";
 import { quietAt, type Quiet } from "../talk/moving";
@@ -117,6 +147,23 @@ export type Waiting = {
   readonly from: string | null;
 };
 
+/** What a role's menu works on: the launch's own numbers for the role. */
+export type DeskControl = {
+  readonly launch: number;
+  /** The definition's headcount, which the launch goes back to when it ends. */
+  readonly defined: number;
+  /** How many of its seats are working a task, which a cut waits on. */
+  readonly underWay: number;
+  /** How many seats a cut has still to let go as their tasks end. */
+  readonly toLetGo: number;
+  /** Whether the role is stopped on its own, apart from the whole launch's pause. */
+  readonly held: boolean;
+  /** Whether the whole launch is paused, which leaves the role's own stop out of reach. */
+  readonly paused: boolean;
+  /** The most one role may have (`AMB-D-1124`). */
+  readonly max: number;
+};
+
 /** One role with a task: its seats at work, its free seats and the tasks waiting for it. */
 export type Desk = {
   /** The role's id, or null for a round under no role. */
@@ -132,6 +179,9 @@ export type Desk = {
   /** How many tasks are waiting for it, and the first three of them. */
   readonly waiting: number;
   readonly first: readonly Waiting[];
+  /** What its menu works on; null where there is nothing to work on — a run kept from before launches,
+   *  or a launch that has ended. */
+  readonly control: DeskControl | null;
 };
 
 /** One role with no task, on the bar at the bottom. */
@@ -197,6 +247,15 @@ export function desksOf(launch: AutomationLaunchStateDto, front: Say): { desks: 
         title: task.title,
         from: nameOf(task.fromRole) ?? null,
       })),
+      control: launch.status === "ended" ? null : {
+        launch: launch.launch,
+        defined: role.defined,
+        underWay: role.underWay,
+        toLetGo: role.toLetGo,
+        held: role.held,
+        paused: launch.status === "paused",
+        max: launch.maxHeadcount,
+      },
     });
   }
   return { desks, idle };
@@ -224,7 +283,7 @@ export function runDesks(run: Say, roles: readonly TaskRoleDto[]): { desks: Desk
     to: [],
   };
   const deskOf = (role: number | null, name: string, icon: string | null): Desk => ({
-    role, name, icon, headcount: 1, held: false, seats: [seat], free: 0, waiting: 0, first: [],
+    role, name, icon, headcount: 1, held: false, seats: [seat], free: 0, waiting: 0, first: [], control: null,
   });
   const idleOf = (role: TaskRoleDto): IdleRole => ({ role: role.id, name: role.name, icon: role.icon, headcount: null });
   if (at === null) {
@@ -534,10 +593,140 @@ function Dots() {
   );
 }
 
-/** One role with a task: its head, a row per seat at work, its free seats, and the tasks waiting for it. */
-function DeskView({ desk, front, now, silenceAt, onOpen }: {
-  desk: Desk; front: number; now: number; silenceAt: (seat: Seat) => Silence; onOpen?: (run: number) => void;
+/** "Stop after the task", drawn: two bars. */
+function PauseMark() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <rect x="4" y="3" width="2.5" height="10" rx="1" fill="currentColor" />
+      <rect x="9.5" y="3" width="2.5" height="10" rx="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** "Resume", drawn: a triangle pointing on. */
+function PlayMark() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M5 3.5v9l7.5-4.5z" fill="currentColor" />
+    </svg>
+  );
+}
+
+/**
+ * **What the line in the heed colour under a desk's head says**: the launch's headcount where it is not
+ * the definition's, and the cut still letting seats go where the role is not stopped. Empty for the rest.
+ */
+export function deskNotes(desk: Desk): { temp: string | null; letGo: string | null } {
+  const control = desk.control;
+  if (control === null) return { temp: null, letGo: null };
+  return {
+    temp: desk.headcount === control.defined ? null : tf("auto.run.roles.temp", { n: desk.headcount, m: control.defined }),
+    letGo: control.toLetGo > 0 && !desk.held
+      ? tf("auto.run.roles.letGo", { u: control.underWay, n: desk.headcount, k: control.toLetGo })
+      : null,
+  };
+}
+
+/**
+ * **The role's menu**, hung under the right end of its "⋯" at `at`. One press at a time: a second
+ * landing while the first is on its way would be answered off a role that has already moved. A refusal
+ * is said on the toast.
+ */
+function DeskMenu({ desk, role, control, at, from, onClose }: {
+  desk: Desk; role: number; control: DeskControl; at: { x: number; y: number };
+  from: RefObject<HTMLButtonElement | null>; onClose: () => void;
 }) {
+  const [pressing, setPressing] = useState(false);
+  const press = async (act: () => Promise<void>) => {
+    setPressing(true);
+    try {
+      await act();
+    } catch (e) {
+      pushNotice(errText(e));
+    } finally {
+      setPressing(false);
+    }
+  };
+  const step = (next: number) => {
+    if (!pressing) void press(() => setLaunchHeadcount(control.launch, role, next));
+  };
+  const hold = () => {
+    onClose();
+    void press(() => (control.held ? releaseLaunchRole : holdLaunchRole)(control.launch, role));
+  };
+  const holdHelp = control.paused
+    ? "auto.run.roles.pausedHelp"
+    : control.held ? "auto.run.roles.releaseHelp" : "auto.run.roles.holdHelp";
+  return (
+    <Menu
+      at={at}
+      align="end"
+      kind="dialog"
+      label={tf("auto.run.roles.menu", { name: desk.name })}
+      from={from}
+      className="menu--panel runmenu"
+      onClose={onClose}
+    >
+      <div className="menu__head">
+        <RoleIcon role={desk} size={18} />
+        <span>{desk.name}</span>
+      </div>
+      <div className="menu__sec">
+        <span className="menu__label">{t("auto.run.roles.menuHeadcount")}</span>
+        <div className="menu__row">
+          <Stepper
+            small
+            value={desk.headcount}
+            min={1}
+            max={control.max}
+            label={tf("auto.run.roles.menuHeadcountOf", { name: desk.name })}
+            valueText={tf("auto.side.headcountValue", { n: desk.headcount })}
+            lessLabel={t("auto.side.headcountLess")}
+            moreLabel={t("auto.side.headcountMore")}
+            onStep={step}
+          />
+          <span className="menu__hint">{tf("auto.run.roles.menuDefined", { n: control.defined })}</span>
+        </div>
+        <p className="menu__help">{t("auto.run.roles.menuHelp")}</p>
+        {desk.headcount !== control.defined && (
+          <button
+            type="button"
+            className="menu__reset"
+            disabled={pressing}
+            onClick={() => void press(() => resetLaunchHeadcount(control.launch, role))}
+          >
+            {tf("auto.run.roles.menuReset", { n: control.defined })}
+          </button>
+        )}
+      </div>
+      <div className="menu__sec">
+        <MenuItem off={control.paused || pressing} onClick={hold}>
+          {control.held ? <PlayMark /> : <PauseMark />}
+          <span className="menu__title">{t(control.held ? "auto.launch.resume" : "auto.run.roles.held")}</span>
+          <span className="menu__desc">{t(holdHelp)}</span>
+        </MenuItem>
+      </div>
+    </Menu>
+  );
+}
+
+/** Where a menu hung under the right end of the button `button` stands: its top right corner, a little
+ *  below the button. */
+function underEnd(button: HTMLElement): { x: number; y: number } {
+  const box = button.getBoundingClientRect();
+  return { x: box.right, y: box.bottom + 6 };
+}
+
+/** One role with a task: its head, a row per seat at work, its free seats, and the tasks waiting for it. */
+function DeskView({ desk, front, now, silenceAt, onOpen, menuAt, onMenu }: {
+  desk: Desk; front: number; now: number; silenceAt: (seat: Seat) => Silence; onOpen?: (run: number) => void;
+  /** Where its menu is open, or null where it is not. */
+  menuAt: { x: number; y: number } | null;
+  /** Open its menu at a place, or close it with null. */
+  onMenu: (at: { x: number; y: number } | null) => void;
+}) {
+  const more = useRef<HTMLButtonElement>(null);
+  const notes = deskNotes(desk);
   const silences = desk.seats.map(silenceAt);
   const asks = desk.seats.some((seat) => seat.state === "asks");
   const stalled = silences.some((one) => one.stage > 0);
@@ -567,16 +756,41 @@ function DeskView({ desk, front, now, silenceAt, onOpen }: {
             />
           ))}
         </span>
-        <button
-          type="button"
-          className="runroles__more"
-          aria-haspopup="dialog"
-          aria-expanded={false}
-          aria-label={tf("auto.run.roles.menu", { name: desk.name })}
-        >
-          <Dots />
-        </button>
+        {desk.control !== null && desk.role !== null && (
+          <button
+            type="button"
+            className="runroles__more"
+            ref={more}
+            aria-haspopup="dialog"
+            aria-expanded={menuAt !== null}
+            aria-label={tf("auto.run.roles.menu", { name: desk.name })}
+            onClick={(e) => {
+              // Focused by hand, as a press does not focus a button in every web view: the menu gives
+              // the focus back to what held it when it opened.
+              e.currentTarget.focus();
+              onMenu(menuAt === null ? underEnd(e.currentTarget) : null);
+            }}
+          >
+            <Dots />
+          </button>
+        )}
+        {menuAt !== null && desk.control !== null && desk.role !== null && (
+          <DeskMenu
+            desk={desk}
+            role={desk.role}
+            control={desk.control}
+            at={menuAt}
+            from={more}
+            onClose={() => onMenu(null)}
+          />
+        )}
       </div>
+      {(notes.temp !== null || notes.letGo !== null) && (
+        <div className="runroles__notes">
+          {notes.temp !== null && <span className="runroles__temp">{notes.temp}</span>}
+          {notes.letGo !== null && <span className="runroles__letgo">{notes.letGo}</span>}
+        </div>
+      )}
       {(desk.seats.length > 0 || desk.free > 0) && (
         <ul className="runroles__seats">
           {desk.seats.map((seat, at) => (
@@ -660,6 +874,8 @@ export const RunRoles = memo(
       [launchState, reading, run, roles],
     );
     const filed = useMemo(() => filedLine(run, roles), [run, roles]);
+    // The one role whose menu is open, and where; one at a time.
+    const [menu, setMenu] = useState<{ role: number | null; at: { x: number; y: number } } | null>(null);
     const room = useRef<HTMLDivElement>(null);
     const unseen = useUnseen(room);
     const jump = (up: boolean) => {
@@ -688,6 +904,8 @@ export const RunRoles = memo(
                     now={now}
                     silenceAt={silenceAt}
                     onOpen={onOpen}
+                    menuAt={menu !== null && menu.role === desk.role ? menu.at : null}
+                    onMenu={(at) => setMenu(at === null ? null : { role: desk.role, at })}
                   />
                 ))}
               </ul>

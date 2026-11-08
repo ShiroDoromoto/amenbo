@@ -1468,7 +1468,8 @@ button.feed__target:hover { color: var(--c-accent); }
    wraps: a wrapped row left an arrow at the end of a line pointing at nothing. The picture comes
    first: it takes its own width, and the two ends grow into what is left, up to their own. Where the
    row is too narrow, the ends give way first, their words wrapping down to their heading on one
-   line, and only then does the picture narrow and scroll across inside it. On the build screen the
+   line, and only then does the picture narrow and scroll across inside it. An end that hands on to
+   a role does not give way (`.autopic__end--pass`). On the build screen the
    row is given the screen's whole width before that (`.actbuild__body--stacked`). */
 .autopic__flow {
   display: flex; align-items: stretch; gap: 10px;
@@ -1489,6 +1490,15 @@ button.feed__target:hover { color: var(--c-accent); }
    anywhere, so a long name does not hold the end wider than its heading. */
 .autopic__endhead { align-self: flex-start; white-space: nowrap; }
 .autopic__endwords { color: var(--c-text); font-weight: var(--fw-medium); overflow-wrap: anywhere; }
+/* The role an end hands on to: its icon, set in the line as a mark is, beside its name. The title of the
+   task under it keeps the end's own colour, and wraps anywhere as the name does. */
+.autopic__endrole { display: flex; align-items: center; gap: 6px; }
+.autopic__endrole > .identicon { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
+.autopic__endtask { overflow-wrap: anywhere; }
+/* An end handed on to holds its width — its words on as few lines as fit, up to its own — and does
+   not give way: the role's name and the task's title read whole, and the picture beside it narrows
+   and scrolls across instead. */
+.autopic__end--pass { flex: none; width: max-content; }
 .autopic__roundempty { font-size: var(--fs-md); color: var(--c-text-muted); }
 /* A box that takes the next task, said over its top-right — where a stretch begins. */
 .autopic__takes {

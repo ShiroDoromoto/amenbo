@@ -694,7 +694,7 @@ describe("one role's round, as the build screen draws it", () => {
       "autopic__flowarrow",
       "autopic",
       "autopic__flowarrow",
-      "autopic__end",
+      "autopic__end autopic__end--pass",
     ]);
     expect(flow.nextElementSibling?.className).toBe("autopic__legend");
     expect(nodes().map((one) => one.querySelector(".autopic__nodename")!.textContent)).toEqual(["書く", "確かめる"]);
@@ -703,7 +703,49 @@ describe("one role's round, as the build screen draws it", () => {
   it("says the round receives from people where nothing else hands it its task, and ends at done where it hands on to nobody", async () => {
     await render({ graph: automationGraph(rounds({ edges: [] }), 10) });
     const ends = [...container.querySelectorAll(".autopic__end")].map((one) => one.textContent);
-    expect(ends).toEqual([t("auto.pic.receives") + t("auto.pic.fromPeople"), t("auto.pic.handsOn") + t("auto.pic.handsNone")]);
+    expect(ends).toEqual([t("auto.pic.receives") + t("auto.pic.fromPeople"), t("auto.pic.handsToNone") + t("auto.pic.handsNone")]);
+  });
+
+  /** Design's round, filing a task for Build that depends on another and one for Upkeep. */
+  function filing(): AutomationDetailDto {
+    const base = rounds();
+    return {
+      ...base,
+      roles: base.roles.map((one) =>
+        one.id === 20
+          ? {
+              ...one,
+              passes: [
+                { toRole: 30, placement: 3, name: "起票する", depends: true, taskRef: "T-9", taskTitle: "テストを足す" },
+                { toRole: 40, placement: 3, name: "直しを起票する", depends: false },
+              ],
+            }
+          : one,
+      ),
+    };
+  }
+
+  it("draws a frame for each role it hands on to, with the role's icon and name and the task's title", async () => {
+    await render({ graph: automationGraph(filing(), 20) });
+    const ends = [...container.querySelectorAll(".autopic__end")].map((one) => one.textContent);
+    expect(ends).toEqual([
+      t("auto.pic.receives") + tf("auto.pic.fromRole", { role: "Research" }),
+      t("auto.pic.handsOn") + "Build" + tf("auto.pic.passTaskDepends", { title: "テストを足す" }),
+      t("auto.pic.handsOn") + "Upkeep" + tf("auto.pic.passTask", { title: "直しを起票する" }),
+    ]);
+    // Each frame carries the role's icon beside its name, outside the words.
+    const roles = [...container.querySelectorAll(".autopic__endrole")];
+    expect(roles.map((one) => one.querySelectorAll(".identicon").length)).toEqual([1, 1]);
+    // One arrow before the frames it hands on to, and none between them.
+    const flow = container.querySelector(".autopic__flow")!;
+    expect([...flow.children].map((one) => one.className)).toEqual([
+      "autopic__end",
+      "autopic__flowarrow",
+      "autopic",
+      "autopic__flowarrow",
+      "autopic__end autopic__end--pass",
+      "autopic__end autopic__end--pass",
+    ]);
   });
 
   it("says a failed round's incident first, then each trigger by name, then the roles, in one row", async () => {
@@ -815,5 +857,26 @@ describe("one role's round, as the build screen draws it", () => {
     expect(onRowNeeds).toHaveBeenLastCalledWith(expect.any(Number));
     await render({ graph: automationGraph(rounds(), 40), onRowNeeds });
     expect(onRowNeeds).toHaveBeenLastCalledWith(0);
+  });
+
+  it("counts each frame it hands on to in how wide its row has to be, at its own whole width", async () => {
+    // Every heading of an end 40px wide, every frame handed on to 120px, and nothing else with a width
+    // of its own: the end it receives from gives way down to its heading, a frame handed on to does not.
+    // Design's round hands on to Build in one frame; filing for Build and Upkeep, it hands on in two.
+    const width = vi
+      .spyOn(HTMLElement.prototype, "offsetWidth", "get")
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.classList.contains("autopic__endhead")) return 40;
+        return this.classList.contains("autopic__end--pass") ? 120 : 0;
+      });
+    try {
+      const onRowNeeds = vi.fn();
+      await render({ graph: automationGraph(rounds(), 20), onRowNeeds });
+      const one = onRowNeeds.mock.lastCall![0] as number;
+      await render({ graph: automationGraph(filing(), 20), onRowNeeds });
+      expect(onRowNeeds.mock.lastCall![0]).toBe(one + 120);
+    } finally {
+      width.mockRestore();
+    }
   });
 });

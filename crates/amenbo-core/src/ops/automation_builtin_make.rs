@@ -2163,6 +2163,67 @@ mod tests {
         });
     }
 
+    /// **A trigger is tried as it is typed, before it is saved** — what writing it refuses is refused,
+    /// its condition is counted now, and trying it says what the task would say, read from its file
+    /// where it is one, or that the condition does not hold. Nothing is written: no trigger, no run.
+    #[test]
+    fn a_trigger_not_yet_saved_is_tried_as_it_is_typed() {
+        use crate::model::{TriggerCondition, TriggerWhen};
+        use crate::ops::automation_run::{trigger_draft, ConditionCount, TriggerTried};
+        use crate::ops::test_support::mk_task_in;
+        with_tx(|tx| {
+            let (automation, _, project) = entry(tx);
+            let typed = |task: automation::NewTriggerTask| automation::NewTrigger {
+                name: "調査の残りを補う".into(),
+                role_id: None,
+                when: TriggerWhen::Idle,
+                condition: Some(TriggerCondition { filter: "status:todo".into(), role_id: None, below: 2 }),
+                script: None,
+                task,
+            };
+            let fixed = || automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: "3 件まで".into() };
+            mk_task_in(tx, "待っている", Some(project));
+
+            let draft = trigger_draft(tx.conn(), automation.id, typed(fixed())).expect("ready");
+            assert_eq!(draft.condition, Some(ConditionCount { matched: 1, below: 2 }));
+            assert_eq!(
+                draft.try_now(|| false),
+                TriggerTried::Files { title: "調査を起票する".into(), notes: "3 件まで".into() },
+            );
+            let kept = read::automation(tx.conn(), automation.id).expect("read").expect("there");
+            assert!(kept.triggers.is_empty(), "no trigger written");
+            assert!(read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read").is_empty(), "no run");
+
+            let dir = std::env::temp_dir().join(format!("amenbo-trigger-draft-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).expect("dir");
+            let path = dir.join("task.md");
+            std::fs::write(&path, "\n報告を読む\n\n未整理のもの\n").expect("written");
+            let from_file = automation::NewTriggerTask::File { path: path.to_string_lossy().into_owned() };
+            let draft = trigger_draft(tx.conn(), automation.id, typed(from_file)).expect("ready");
+            assert_eq!(
+                draft.try_now(|| false),
+                TriggerTried::Files { title: "報告を読む".into(), notes: "未整理のもの".into() },
+                "the file as it stands now",
+            );
+            std::fs::remove_file(&path).expect("gone");
+            assert!(matches!(draft.try_now(|| false), TriggerTried::SaidNothing { .. }), "a file that is not there");
+
+            mk_task_in(tx, "もう一つ", Some(project));
+            let full = trigger_draft(tx.conn(), automation.id, typed(fixed())).expect("ready");
+            assert_eq!(full.try_now(|| false), TriggerTried::Condition, "two todo, not below 2");
+
+            let soon = automation::NewTrigger { when: TriggerWhen::Every { minutes: 0 }, ..typed(fixed()) };
+            assert!(matches!(trigger_draft(tx.conn(), automation.id, soon), Err(Error::Invalid(_))), "under a minute");
+            let blank = automation::NewTriggerTask::Fixed { title: " ".into(), notes: String::new() };
+            assert!(matches!(trigger_draft(tx.conn(), automation.id, typed(blank)), Err(Error::Invalid(_))), "no title");
+            let elsewhere = automation::NewTrigger {
+                condition: Some(TriggerCondition { filter: "project:x".into(), role_id: None, below: 2 }),
+                ..typed(fixed())
+            };
+            assert!(trigger_draft(tx.conn(), automation.id, elsewhere).is_err(), "a `project:` is refused");
+        });
+    }
+
     /// **A trigger with a script files only once that script said yes** — the look puts it in `ask`
     /// rather than `due`, and `fire` files nothing unless it is handed the very script the trigger has:
     /// none at all, or one rewritten since it was asked, files nothing and leaves `next_at` where it was.

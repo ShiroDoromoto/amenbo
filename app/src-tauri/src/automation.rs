@@ -75,13 +75,15 @@ use crate::dto::{
     AutomationRunHistoryDto, AutomationRunIncidentDto, AutomationRunPassDto, AutomationRunStartedDto,
     AutomationRunTaskDto,
     AutomationSavedDto, AutomationStepDto, AutomationTriggerConditionDto, AutomationTriggerInputDto,
+    AutomationTriggerTriedDto,
     AutomationStepOpenDto, AutomationStepRunDto, AutomationTestRunDto, AutomationTestStepDto,
     AutomationWaitingTaskDto, AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
     WriteAck,
 };
 use crate::error::CmdError;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use tauri::{Emitter, Manager};
 
 /// The automations of one project, in the order they were placed in.
@@ -262,6 +264,52 @@ pub fn automation_trigger_count(automation_id: i64, condition: AutomationTrigger
     let store = open_store_read()?;
     let counted = automation_run::condition_count_of(store.read_model().conn(), automation_id, &condition)?;
     Ok(counted.matched)
+}
+
+/// The tries of a trigger as it is typed that are running ([`automation_trigger_try`]), each by the tag
+/// the card gave it, with what stops it.
+fn trigger_tries() -> std::sync::MutexGuard<'static, HashMap<u64, Arc<AtomicBool>>> {
+    static TRIES: OnceLock<Mutex<HashMap<u64, Arc<AtomicBool>>>> = OnceLock::new();
+    // A poisoned lock guards a map still whole, so it is taken as it is.
+    TRIES.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// **Try a trigger as it is typed, before it is saved** — whether its condition holds now, what the
+/// program it asks first says, and what the task it would file says
+/// ([`amenbo_core::ops::automation_run::trigger_draft`]). Nothing is written: no trigger, no task, no
+/// run, and its `nextAt` is not moved. What writing it would refuse is refused here, as core's refusal.
+///
+/// Its programs may run for hours, so it is `async` and runs off the store thread, the store closed
+/// before they start. `tag` is the card's name for this try: [`automation_trigger_try_stop`] with it
+/// stops the programs, which then say nothing.
+#[tauri::command]
+pub async fn automation_trigger_try(
+    automation_id: i64,
+    trigger: AutomationTriggerInputDto,
+    tag: u64,
+) -> Result<AutomationTriggerTriedDto, CmdError> {
+    let stop = Arc::new(AtomicBool::new(false));
+    trigger_tries().insert(tag, stop.clone());
+    let new: amenbo_core::ops::automation::NewTrigger = trigger.into();
+    let ran = tauri::async_runtime::spawn_blocking(move || -> Result<AutomationTriggerTriedDto, CmdError> {
+        let draft = {
+            let store = open_store_read()?;
+            automation_run::trigger_draft(store.read_model().conn(), automation_id, new)?
+        };
+        Ok(draft.try_now(|| stop.load(Ordering::Relaxed)).into())
+    })
+    .await;
+    trigger_tries().remove(&tag);
+    ran.map_err(|e| -> CmdError { format!("trying the trigger did not run: {e}").into() })?
+}
+
+/// **Stop the try the card named `tag`** ([`automation_trigger_try`]) — its programs are stopped and say
+/// nothing. A try already over is left as it is.
+#[tauri::command]
+pub fn automation_trigger_try_stop(tag: u64) {
+    if let Some(stop) = trigger_tries().get(&tag) {
+        stop.store(true, Ordering::Relaxed);
+    }
 }
 
 /// **Change what a run starts at**, to another of the built-ins it can start at
@@ -3967,6 +4015,29 @@ mod tests {
         assert_eq!(automation_trigger_count(automation_id, typed("status:todo")).unwrap(), 0, "no task matches yet");
         assert!(automation_trigger_count(automation_id, typed("project:Other")).is_err(), "a `project:` is refused");
         assert!(triggers().is_empty(), "counting writes nothing");
+
+        let try_typed = |v: serde_json::Value| tauri::async_runtime::block_on(automation_trigger_try(automation_id, input(v), 7));
+        assert_eq!(
+            try_typed(serde_json::json!({
+                "when": { "kind": "every", "minutes": 60 },
+                "condition": { "filter": "status:todo", "below": 1 },
+                "task": { "kind": "fixed", "title": "受信箱を見る", "notes": "メモ" },
+            }))
+            .unwrap(),
+            AutomationTriggerTriedDto::Files { title: "受信箱を見る".into(), notes: "メモ".into() },
+            "no task matches, so fewer than one do",
+        );
+        assert!(
+            try_typed(serde_json::json!({
+                "when": { "kind": "every", "minutes": 0 },
+                "task": { "kind": "fixed", "title": "受信箱を見る", "notes": "" },
+            }))
+            .is_err(),
+            "a wait under a minute is core's refusal",
+        );
+        assert!(trigger_tries().is_empty(), "a try over is forgotten");
+        automation_trigger_try_stop(7);
+        assert!(triggers().is_empty(), "trying writes nothing");
 
         automation_trigger_add(
             automation_id,

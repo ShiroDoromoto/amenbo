@@ -2186,6 +2186,7 @@ button.feed__target:hover { color: var(--c-accent); }
   border: var(--border-w) dashed var(--c-edge); border-radius: var(--r-md);
 }
 .trigstage__previewtitle { font-size: var(--fs-md); font-weight: var(--fw-bold); }
+.trigstage__previewnotes { white-space: pre-wrap; color: var(--c-text-muted); }
 .trigcard {
   flex: 1 1 520px; max-width: 640px; display: flex; flex-direction: column; gap: var(--s-4); padding: var(--s-5);
   background: var(--c-surface-pic) var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);

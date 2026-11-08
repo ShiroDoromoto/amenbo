@@ -3138,7 +3138,50 @@ pub fn trigger_try(
     check: &TriggerCheck,
     stop: impl FnMut() -> bool,
 ) -> TriggerTried {
-    if check.condition.is_some_and(|condition| !condition.holds()) {
+    tried(trigger, check.condition, stop)
+}
+
+/// **A trigger not yet written, ready to be tried** ([`trigger_draft`]): the trigger as it would be
+/// written, and the tasks its condition counts now.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TriggerDraft {
+    pub trigger: crate::model::AutomationTrigger,
+    /// The tasks its condition counts now — `None` where it has no condition.
+    pub condition: Option<ConditionCount>,
+}
+
+/// **Make ready to try a trigger as a person has it typed, before it is saved** — `new` as it would be
+/// written on automation `automation_id` ([`crate::ops::automation::trigger_drafted`]), refused where
+/// writing it would be, and its condition counted now. It reads the store and writes nothing; the
+/// trying itself ([`TriggerDraft::try_now`]) runs its programs and so is left to the caller, outside
+/// any read or write.
+pub fn trigger_draft(
+    conn: &Connection,
+    automation_id: i64,
+    new: crate::ops::automation::NewTrigger,
+) -> Result<TriggerDraft> {
+    let trigger = crate::ops::automation::trigger_drafted(conn, automation_id, new)?;
+    let automation = read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    let condition = condition_count(conn, automation.project_id, &trigger)?;
+    Ok(TriggerDraft { trigger, condition })
+}
+
+impl TriggerDraft {
+    /// **Try the trigger as it was typed, filing nothing** — as [`trigger_try`] tries a written one: its
+    /// condition as counted when it was made ready, then the program it asks first, then what the task
+    /// would say. Its programs run stopped at their timeout or once `stop` answers `true`.
+    pub fn try_now(&self, stop: impl FnMut() -> bool) -> TriggerTried {
+        tried(&self.trigger, self.condition, stop)
+    }
+}
+
+/// What a trigger's own parts say, its condition counted as `condition` ([`trigger_try`]).
+fn tried(
+    trigger: &crate::model::AutomationTrigger,
+    condition: Option<ConditionCount>,
+    stop: impl FnMut() -> bool,
+) -> TriggerTried {
+    if condition.is_some_and(|condition| !condition.holds()) {
         return TriggerTried::Condition;
     }
     let said = match TriggerScripts::of(trigger) {

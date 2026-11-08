@@ -1324,9 +1324,9 @@ fn checked_failures_to(tx: &WriteTx<'_>, automation_id: i64, to: Option<Failures
 
 /// The task a trigger files is worked under one of **its own automation's** roles — a role of another
 /// automation is not one this automation's runs know.
-fn checked_trigger_role(tx: &WriteTx<'_>, automation_id: i64, role_id: Option<i64>) -> Result<()> {
+fn checked_trigger_role(conn: &Connection, automation_id: i64, role_id: Option<i64>) -> Result<()> {
     let Some(role_id) = role_id else { return Ok(()) };
-    if live_role(tx, role_id)?.automation_id != automation_id {
+    if role_in(conn, role_id)?.automation_id != automation_id {
         return Err(Error::invalid(format!(
             "role '{role_id}' belongs to another automation, so the task this one's trigger files cannot be \
              worked under it"
@@ -1424,7 +1424,7 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
         refuse_trigger_on_export_only(&before)?;
     }
     let now = Timestamp::now();
-    let written = trigger.map(|new| checked_trigger(tx, &before, new, now, &[])).transpose()?;
+    let written = trigger.map(|new| checked_trigger(tx.conn(), &before, new, now, &[])).transpose()?;
     for old in &before.triggers {
         tx.delete_record("automation_trigger", old.id)?;
     }
@@ -1446,7 +1446,7 @@ pub fn trigger_add(tx: &WriteTx<'_>, automation_id: i64, new: NewTrigger) -> Res
     let automation = live_automation(tx, automation_id)?;
     refuse_trigger_on_export_only(&automation)?;
     let sibs: Vec<(i64, String)> = automation.triggers.iter().map(|t| (t.id, t.order_key.clone())).collect();
-    let trigger = checked_trigger(tx, &automation, new, Timestamp::now(), &sibs)?;
+    let trigger = checked_trigger(tx.conn(), &automation, new, Timestamp::now(), &sibs)?;
     emit_create(tx, record::automation_trigger(&trigger))?;
     Ok(trigger)
 }
@@ -1460,7 +1460,7 @@ pub fn trigger_update(tx: &WriteTx<'_>, id: i64, new: NewTrigger) -> Result<Auto
     let automation = live_automation(tx, before.automation_id)?;
     refuse_trigger_on_export_only(&automation)?;
     let now = Timestamp::now();
-    let written = checked_trigger(tx, &automation, new, now, &[])?;
+    let written = checked_trigger(tx.conn(), &automation, new, now, &[])?;
     let after = AutomationTrigger {
         id: before.id,
         enabled: before.enabled,
@@ -1471,6 +1471,16 @@ pub fn trigger_update(tx: &WriteTx<'_>, id: i64, new: NewTrigger) -> Result<Auto
     };
     emit_update(tx, record::automation_trigger(&before), record::automation_trigger(&after))?;
     Ok(after)
+}
+
+/// **A trigger as it would be written on automation `automation_id`, writing nothing** — checked as
+/// [`trigger_set`] says, and refused where it would refuse it, so what a person has typed and not yet
+/// saved can be tried ([`automation_run::trigger_draft`]). Its id is the one the next trigger written
+/// would take, and its first time to be asked is counted from now; neither is kept anywhere.
+pub fn trigger_drafted(conn: &Connection, automation_id: i64, new: NewTrigger) -> Result<AutomationTrigger> {
+    let automation = read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    refuse_trigger_on_export_only(&automation)?;
+    checked_trigger(conn, &automation, new, Timestamp::now(), &[])
 }
 
 /// **Take one trigger away from its automation.** The others are left as they are, and the tasks it
@@ -1514,14 +1524,14 @@ fn refuse_trigger_on_export_only(automation: &Automation) -> Result<()> {
 /// be asked counted from `now`. It is given the next id, enabled, and the place after `sibs` among the
 /// automation's triggers — the first where it is given none, as [`trigger_set`] does.
 fn checked_trigger(
-    tx: &WriteTx<'_>,
+    conn: &Connection,
     automation: &Automation,
     new: NewTrigger,
     now: Timestamp,
     sibs: &[(i64, String)],
 ) -> Result<AutomationTrigger> {
     let NewTrigger { name, role_id, when, condition, script, task } = new;
-    checked_trigger_role(tx, automation.id, role_id)?;
+    checked_trigger_role(conn, automation.id, role_id)?;
     match when {
         TriggerWhen::Every { minutes } if minutes < MIN_TRIGGER_EVERY_MINUTES => {
             return Err(Error::invalid(format!(
@@ -1552,7 +1562,7 @@ fn checked_trigger(
                 ));
             }
             if let Some(counted) = counted_role_id {
-                if live_role(tx, counted)?.automation_id != automation.id {
+                if role_in(conn, counted)?.automation_id != automation.id {
                     return Err(Error::invalid(format!(
                         "role '{counted}' belongs to another automation, so this one's trigger cannot count the \
                          tasks worked under it"
@@ -1560,7 +1570,7 @@ fn checked_trigger(
                 }
             }
             let roles: Vec<i64> = counted_role_id.into_iter().collect();
-            crate::query::count(tx.conn(), crate::reach::Reach::binding(automation.project_id), &filter, &roles)?;
+            crate::query::count(conn, crate::reach::Reach::binding(automation.project_id), &filter, &roles)?;
             Some(TriggerCondition { filter, role_id: counted_role_id, below })
         }
     };
@@ -1583,7 +1593,7 @@ fn checked_trigger(
         NewTriggerTask::Script(script) => TriggerTask::Script { script: checked_script(script)? },
     };
     Ok(AutomationTrigger {
-        id: read::next_id(tx.conn(), "automation_trigger")?,
+        id: read::next_id(conn, "automation_trigger")?,
         automation_id: automation.id,
         enabled: true,
         name: name.trim().to_string(),
@@ -2684,7 +2694,12 @@ pub struct RoleChange {
 }
 
 fn live_role(tx: &WriteTx<'_>, id: i64) -> Result<AutomationRole> {
-    read::automation_role(tx.conn(), id)?.ok_or_else(|| not_found("role", id))
+    role_in(tx.conn(), id)
+}
+
+/// The role with this id, read on `conn`, or not found.
+fn role_in(conn: &Connection, id: i64) -> Result<AutomationRole> {
+    read::automation_role(conn, id)?.ok_or_else(|| not_found("role", id))
 }
 
 /// A role's icon, agent or model: not blank, where one is written.

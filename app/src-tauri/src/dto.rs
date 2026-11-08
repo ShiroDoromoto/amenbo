@@ -4146,6 +4146,33 @@ impl From<AutomationTriggerTaskInputDto> for amenbo_core::ops::automation::NewTr
     }
 }
 
+/// **What a trigger's own parts said, tried as it is typed** — the wire form of
+/// [`amenbo_core::ops::automation_run::TriggerTried`]: `condition` where its condition does not hold,
+/// `program_said_no` where the program it asks first said not to file one, `said_nothing` where it
+/// could say nothing that can be filed (`why` in core's sentence), and `files` with the title and notes
+/// of the task it would file.
+#[derive(Debug, PartialEq, Eq, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum AutomationTriggerTriedDto {
+    Condition,
+    ProgramSaidNo,
+    SaidNothing { why: String },
+    Files { title: String, notes: String },
+}
+
+impl From<amenbo_core::ops::automation_run::TriggerTried> for AutomationTriggerTriedDto {
+    fn from(t: amenbo_core::ops::automation_run::TriggerTried) -> Self {
+        use amenbo_core::ops::automation_run::TriggerTried;
+        match t {
+            TriggerTried::Condition => AutomationTriggerTriedDto::Condition,
+            TriggerTried::ProgramSaidNo => AutomationTriggerTriedDto::ProgramSaidNo,
+            TriggerTried::SaidNothing { why } => AutomationTriggerTriedDto::SaidNothing { why },
+            TriggerTried::Files { title, notes } => AutomationTriggerTriedDto::Files { title, notes },
+        }
+    }
+}
+
 /// **Who a failed round of an automation is filed to** — the wire form of
 /// [`amenbo_core::model::FailuresTo`]: `human` for the person, `role` for a role of the same
 /// automation. It is read and written in the same form.

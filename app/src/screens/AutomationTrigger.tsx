@@ -39,14 +39,27 @@
 // comes back as core's own sentence, drawn at the top, and the card stays open with what was typed.
 // The form does not check its own boxes (`noValidate`), so core's sentence is the only one drawn.
 //
+// **"Try it now" tries the trigger as it is typed, before it is saved** (`tryAutomationTrigger`), so
+// what it would file can be seen without saving and waiting. Core checks it as the save would, counts
+// its condition, runs the script it asks first and the one that writes the task, or reads the file,
+// and writes nothing: no trigger, no task, no run. What it says stands in the preview on the right — the
+// title and notes of the task it would file, or why it would file none: the condition does not hold,
+// the script said no, or nothing could be read (core's sentence). When it is due and whether a run
+// leaves it room are not part of the try; "Now: N match → …" says those. A script may run long, so the
+// button cannot be pressed again until it answers, and closing the card stops it. What is tried is
+// what was typed then: typing anything after takes the answer away, as it no longer says what the
+// card holds. What core refuses is drawn at the top, as the save's refusal is.
+//
 // **Only its buttons close it** from within: a stray press or Escape would throw away what was typed.
 // The build screen puts its picture back in the card's place when a role is picked on the left or the
 // trigger goes away.
-import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   addAutomationTrigger,
   removeAutomationTrigger,
   setAutomationTriggerEnabled,
+  stopTriggerTry,
+  tryAutomationTrigger,
   updateAutomationTrigger,
   useTriggerCount,
 } from "../core/automations";
@@ -64,6 +77,7 @@ import type {
   AutomationTriggerConditionDto,
   AutomationTriggerDto,
   AutomationTriggerInputDto,
+  AutomationTriggerTriedDto,
 } from "../bindings/bindings";
 
 /** The four answers to 1 — whether to file a task now. */
@@ -440,20 +454,53 @@ function TriggerList({ automation }: { automation: AutomationDetailDto }) {
   );
 }
 
-/** The task the trigger files, as it will stand: its title, the role, who works it and the trigger. */
-function Preview({ automation, form }: { automation: AutomationDetailDto; form: TriggerForm }) {
+/** What a try said, as the preview's first line: the title of the task it would file, or why none. */
+function triedLine(tried: AutomationTriggerTriedDto): string {
+  switch (tried.kind) {
+    case "files":
+      return tried.title;
+    case "condition":
+      return t("auto.trigger.triedCondition");
+    case "program_said_no":
+      return t("auto.trigger.triedSaidNo");
+    case "said_nothing":
+      return tf("auto.trigger.triedNothing", { why: tried.why });
+  }
+}
+
+/**
+ * The task the trigger files, as it will stand: its title, the role, who works it and the trigger.
+ * Where the card was tried as it now stands, what the try said takes the title's place — the title
+ * and notes the task would be filed with, or why none would be.
+ */
+function Preview({
+  automation,
+  form,
+  tried,
+}: {
+  automation: AutomationDetailDto;
+  form: TriggerForm;
+  tried: AutomationTriggerTriedDto | null;
+}) {
   const role = automation.roles.find((one) => one.id === form.roleId);
-  const title =
+  const typed =
     form.task === "fixed"
       ? form.title.trim()
       : t(form.task === "file" ? "auto.trigger.previewFromFile" : "auto.trigger.previewFromScript");
+  const title = tried === null ? typed : triedLine(tried);
+  const notes = tried?.kind === "files" ? tried.notes.trim() : "";
   return (
     <>
       <h3>{t("auto.trigger.preview")}</h3>
-      <div className="trigstage__preview">
+      <div className="trigstage__preview" data-tried={tried?.kind}>
         <span className="trigstage__previewtitle" data-preview="title">
           {title === "" ? t("auto.trigger.previewNoTitle") : title}
         </span>
+        {notes !== "" && (
+          <span className="trigstage__previewnotes" data-preview="notes">
+            {notes}
+          </span>
+        )}
         <span className="autostep__hint" data-preview="line">
           {tf("auto.trigger.previewLine", {
             role: role?.name ?? t("auto.trigger.roleNone"),
@@ -588,6 +635,9 @@ function NowLine({
   );
 }
 
+/** The name the next try is given, so that closing the card stops that one and no other. */
+let nextTryTag = 1;
+
 export function AutomationTrigger({
   automation,
   trigger,
@@ -604,6 +654,11 @@ export function AutomationTrigger({
   const [form, setForm] = useState<TriggerForm>(() => formOf(trigger));
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
+  /** What the last try said, and the form it tried — shown only while the card still holds that form. */
+  const [tried, setTried] = useState<{ form: TriggerForm; said: AutomationTriggerTriedDto } | null>(null);
+  const [trying, setTrying] = useState(false);
+  /** The tag of the try running now, or `null`, for closing the card to stop it. */
+  const running = useRef<{ tag: number | null }>({ tag: null });
   const put = (patch: Partial<TriggerForm>) => setForm((now) => ({ ...now, ...patch }));
   const titleId = useId();
   const notesId = useId();
@@ -636,6 +691,32 @@ export function AutomationTrigger({
   const remove = async () => {
     const name = trigger?.name ?? "";
     if (await confirmDialog(tf("auto.trigger.removeConfirm", { name }))) void write(null);
+  };
+
+  // Closing the card stops a try still running: what it would say is no longer read.
+  useEffect(() => {
+    const now = running.current;
+    return () => {
+      if (now.tag !== null) void stopTriggerTry(now.tag);
+    };
+  }, []);
+
+  const tryNow = async () => {
+    const tag = nextTryTag++;
+    const typed = form;
+    running.current.tag = tag;
+    setTrying(true);
+    setRefused(null);
+    try {
+      const said = await tryAutomationTrigger(automation.id, inputOf(typed), tag);
+      setTried(said === null ? null : { form: typed, said });
+    } catch (e) {
+      setTried(null);
+      setRefused(errText(e));
+    } finally {
+      running.current.tag = null;
+      setTrying(false);
+    }
   };
 
   const switchOn = (on: boolean) => {
@@ -802,6 +883,15 @@ export function AutomationTrigger({
             <button type="button" className="btn" disabled={busy} onClick={onClose}>
               {t("auto.add.cancel")}
             </button>
+            <button
+              type="button"
+              className="btn"
+              disabled={busy || trying}
+              aria-busy={trying}
+              onClick={() => void tryNow()}
+            >
+              {t(trying ? "auto.trigger.trying" : "auto.trigger.try")}
+            </button>
             <button type="submit" className="btn btn--primary" disabled={busy}>
               {t("auto.trigger.save")}
             </button>
@@ -809,7 +899,7 @@ export function AutomationTrigger({
         </form>
         <div className="trigstage__notes">
           <TriggerList automation={automation} />
-          <Preview automation={automation} form={form} />
+          <Preview automation={automation} form={form} tried={tried?.form === form ? tried.said : null} />
         </div>
       </div>
     </div>

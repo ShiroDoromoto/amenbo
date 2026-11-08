@@ -48,6 +48,7 @@ import type {
   AutomationRunStartedDto,
   AutomationTestRunDto,
   AutomationTriggerInputDto,
+  AutomationTriggerTriedDto,
   EveryAutomationActionCardDto,
   EveryAutomationCardDto,
   WakeDto,
@@ -226,6 +227,28 @@ export function useTriggerCount(
     () => fetchTriggerCount(automationId, filter, roleId),
   );
   return { count: error === undefined ? (data ?? null) : null, error };
+}
+
+/**
+ * **Try a trigger as it is typed, before it is saved** — whether its condition holds now, what the
+ * program it asks first says, and what the task it would file says. Nothing is written. `tag` names
+ * this try for {@link stopTriggerTry}. Its programs may run for a long time, so the answer may be slow.
+ * Core refuses what writing the trigger would refuse, and that refusal reaches the caller as it is.
+ * Outside the app there is nothing to try, and `null` comes back.
+ */
+export async function tryAutomationTrigger(
+  automationId: number,
+  trigger: AutomationTriggerInputDto,
+  tag: number,
+): Promise<AutomationTriggerTriedDto | null> {
+  if (!inTauri()) return null;
+  return invoke<AutomationTriggerTriedDto>("automation_trigger_try", { automationId, trigger, tag });
+}
+
+/** **Stop the try named `tag`** ({@link tryAutomationTrigger}): its programs are stopped. */
+export async function stopTriggerTry(tag: number): Promise<void> {
+  if (!inTauri()) return;
+  await invoke<void>("automation_trigger_try_stop", { tag });
 }
 
 /**

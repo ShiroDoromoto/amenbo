@@ -1,5 +1,6 @@
-// **A test run, stepped through on the build screen** (`AMB-T-5804`) — the automation walked from its
-// entry to its end with no agent started, no built-in carried out and nothing kept
+// **A test run, stepped through on the build screen** (`AMB-T-5804`) — the automation walked role by
+// role, each from where it starts to its end (from its entry where no role says where it starts), with
+// no agent started, no built-in carried out and nothing kept
 // (`amenbo_core::ops::automation_rehearse`), so the reader sees how it would go before anything real
 // is set moving.
 //

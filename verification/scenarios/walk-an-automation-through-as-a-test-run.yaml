@@ -1,7 +1,8 @@
 # Before anything real is set moving, a person wants to see how a picture they built would go: which
-# box comes after which, which way out each is left by, and whether it ends. A test run walks it from
-# its entry to its end with no agent started and no built-in carried out, so nothing is taken, closed
-# or filed on the way. What a road has to prove is both halves of that — that the walk followed the
+# box comes after which, which way out each is left by, and whether it ends. A test run walks it role
+# by role, each from where it starts to its end — here, where no role says where it starts, from its
+# entry — with no agent started and no built-in carried out, so nothing is taken, closed or filed on
+# the way. What a road has to prove is both halves of that — that the walk followed the
 # picture, round and out again, and that the store is as it was before the walk.
 #
 # Which way out a step is left by is chosen by the test run, since nobody is doing the work that

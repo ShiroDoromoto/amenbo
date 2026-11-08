@@ -4275,8 +4275,9 @@ const REGISTRY: &[OpSpec] = &[
     // is reached by, and the whole of what a listing of runs is (there is no listing of every run).
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "runs-listed", required: &[], refs: &["target", "automation", "task"], strings: &[], binds: false },
     //
-    // **A test run** (`automation test-run`): the automation walked from its entry to its end with no
-    // agent started, no built-in carried out and nothing kept. It takes what `start` takes bar the file,
+    // **A test run** (`automation test-run`): the automation walked role by role, each from where it
+    // starts (from its entry where no role says where it starts), to its end with no agent started,
+    // no built-in carried out and nothing kept. It takes what `start` takes bar the file,
     // and binds nothing — a test run leaves no run behind to name. What it answered is kept on the
     // driver for `test-run-walked`, since afterwards the store holds nothing of it to read back.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "test-run", required: &[], refs: &["target"], strings: &["title", "notes", "dim"], binds: false },

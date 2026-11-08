@@ -1884,7 +1884,7 @@ pub fn start(
     by: &Launcher<'_>,
     handed: &HandedAtLaunch,
 ) -> Result<Started> {
-    launch_asking(tx, automation_id, by, handed, ReadsFrom::Saved, true, true, |_| true)
+    launch_asking(tx, automation_id, by, handed, ReadsFrom::Saved, None, true, |_| true)
 }
 
 /// **Which definition of an automation a launch reads** — what is checked and copied down onto the run.
@@ -2078,19 +2078,30 @@ pub fn launch_handing(
     handed: &HandedAtLaunch,
     reads: ReadsFrom,
 ) -> Result<AutomationRun> {
-    launch_asking(tx, automation_id, by, handed, reads, true, false, |_| true)?.run()
+    launch_asking(tx, automation_id, by, handed, reads, None, false, |_| true)?.run()
 }
 
-/// [`launch_handing`], not refused where no role has a free seat. For a test run, whose run
-/// is thrown away with its transaction and so never stands beside the others.
-pub fn launch_handing_past_the_limit(
+/// **The seats a test run sits in, one after another** ([`seat_roles`]) — the roles of `automation_id`
+/// that name where their round starts on the definition `reads` names, in the order they are defined
+/// in, or the seats of no role alone where none does.
+pub(crate) fn rehearsal_seats(conn: &Connection, automation_id: i64, reads: ReadsFrom) -> Result<Vec<Option<i64>>> {
+    let automation = read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    let (pic, _) = definition(conn, &automation, reads)?;
+    Ok(seat_roles(&pic))
+}
+
+/// [`launch_handing`], sitting in the seat of `role_id` ([`rehearsal_seats`]) and not refused where
+/// that seat is taken. For a test run, whose run is thrown away with its transaction and so never
+/// stands beside the others.
+pub(crate) fn launch_in_seat_past_the_limit(
     tx: &WriteTx<'_>,
     automation_id: i64,
     by: &Launcher<'_>,
     handed: &HandedAtLaunch,
     reads: ReadsFrom,
+    role_id: Option<i64>,
 ) -> Result<AutomationRun> {
-    launch_asking(tx, automation_id, by, handed, reads, false, false, |_| true)?.run()
+    launch_asking(tx, automation_id, by, handed, reads, Some(role_id), false, |_| true)?.run()
 }
 
 /// **What the triggers say on one look** ([`triggers_due`]): the triggers due now, the ones due but for
@@ -3367,7 +3378,7 @@ pub(crate) fn launch_past_the_task_checks(
     automation_id: i64,
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
-    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, true, false, |unmet| {
+    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, None, false, |unmet| {
         !past_the_task_checks(unmet)
     })?
     .run()
@@ -3395,7 +3406,7 @@ pub(crate) fn launch_past_the_setting_checks(
     automation_id: i64,
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
-    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, true, false, |unmet| {
+    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, None, false, |unmet| {
         !past_the_task_checks(unmet)
             && !matches!(
                 unmet,
@@ -3406,18 +3417,19 @@ pub(crate) fn launch_past_the_setting_checks(
 }
 
 /// [`launch`] of the definition `reads` names, refusing only over what `counts` says counts — and over
-/// the runs under way only where `limited` — and filing what was `handed` as a task before the run is
-/// written ([`file_handed`]).
+/// the runs under way only where `sit_in` is `None` — and filing what was `handed` as a task before the
+/// run is written ([`file_handed`]).
 ///
 /// Where `may_wait`, seats that would each start their round waiting for a task with none to take
 /// ([`waits_at_every_start`]) make no run, and the automation waits instead ([`start`]). Asked last,
 /// once nothing refuses the launch: an automation that could not be launched is not one to wait on.
 ///
-/// Where `limited`, the run sits in a free seat ([`seats`]) — refused where no role has one — and joins
-/// the launch standing for the automation, or opens one ([`join_launch`]); a paused launch is refused. A
-/// launch opened for seats that wait stands with no run, and the run started once a task turns up
-/// joins it. Where not, the run may sit in any seat, free or not. **The run sits in the seat of the role
-/// the task handed was filed under** where that seat may be taken, so it takes that task. **It starts
+/// Where `sit_in` is `None`, the run sits in a free seat ([`seats`]) — refused where no role has one —
+/// and joins the launch standing for the automation, or opens one ([`join_launch`]); a paused launch is
+/// refused. A launch opened for seats that wait stands with no run, and the run started once a task
+/// turns up joins it. **The run sits in the seat of the role the task handed was filed under** where
+/// that seat is free, so it takes that task. Where `sit_in` names a seat — a test run's
+/// ([`rehearsal_seats`]) — the run sits in that one, free or not, and joins no launch. **It starts
 /// where the round of its seat's role starts** ([`start_of`], `AMB-D-1123`), and is copied down marking
 /// that spot ([`copy_down`]).
 #[allow(clippy::too_many_arguments)]
@@ -3427,7 +3439,7 @@ fn launch_asking(
     by: &Launcher<'_>,
     handed: &HandedAtLaunch,
     reads: ReadsFrom,
-    limited: bool,
+    sit_in: Option<Option<i64>>,
     may_wait: bool,
     counts: impl Fn(&Unmet) -> bool,
 ) -> Result<Started> {
@@ -3471,7 +3483,8 @@ fn launch_asking(
     // go through with room to spare either, and what to fix is the person's to see first. A launch
     // refused after it takes the task with it, in the same transaction.
     let filed_under = file_handed(tx, &automation, &pic, by, handed)?;
-    // A test run sits in no seat: it may take any of them, free or not.
+    // A test run sits in the seat it names, free or not.
+    let limited = sit_in.is_none();
     let seats = seats_of(tx.conn(), automation_id, &pic)?;
     let open: Vec<&Seats> = seats.iter().filter(|s| !limited || s.free()).collect();
     if open.is_empty() {
@@ -3499,9 +3512,10 @@ fn launch_asking(
     if may_wait && waits_at_every_start(tx.conn(), automation.project_id, &pic, &open)? {
         return Ok(Started::Waits(Box::new(mark_waiting(tx, automation)?)));
     }
-    let role_id = match filed_under.and_then(|role| open.iter().find(|s| s.role_id == Some(role))) {
-        Some(s) => s.role_id,
-        None => seat(tx.conn(), automation.project_id, &pic, &open)?,
+    let role_id = match (sit_in, filed_under.and_then(|role| open.iter().find(|s| s.role_id == Some(role)))) {
+        (Some(role_id), _) => role_id,
+        (None, Some(s)) => s.role_id,
+        (None, None) => seat(tx.conn(), automation.project_id, &pic, &open)?,
     };
     let now = Timestamp::now();
     let run = AutomationRun {

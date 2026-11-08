@@ -1,5 +1,11 @@
-//! **A test run** — an automation walked from its entry to its end with nothing carried out, so a
-//! person can see how it would go before anything real is set moving.
+//! **A test run** — an automation walked role by role, each from where its round starts to its end, with
+//! nothing carried out, so a person can see how it would go before anything real is set moving.
+//!
+//! **Each role is walked in turn** (`AMB-D-1123`), in the order the roles are defined in: a task of
+//! that role is filed, a run is launched in its seat, and that run is walked from where the role's round
+//! starts — the step that takes a task — to its end. The next role is walked once the run before it has
+//! completed. An automation none of whose roles names where its round starts is walked as one run in the
+//! seats of no role, from the picture's entry.
 //!
 //! **It walks the same road a run does.** The launch check refuses it where it would refuse a launch,
 //! the steps are copied into a run, each step is opened by [`super::automation_step`] — which resolves
@@ -15,21 +21,21 @@
 //! is filed, taken or closed, no worktree is cut or folded, nothing is fetched or merged. In their place
 //! every output of the way out a step leaves by is put down as a placeholder
 //! ([`crate::run_wording::rehearsal`]), and a step that hands on a task hands on one made up for the
-//! purpose. Where the automation's roles say where each starts, the round of that made-up task is put
-//! under the first of them, and the walk goes on where it starts.
+//! purpose, filed under the role of the seat the run sits in, so the round goes on where that role
+//! starts.
 //!
 //! **Nothing it writes is kept.** The whole walk is one write transaction that is never committed
 //! ([`crate::store::Store::automation_rehearse`]): the run, its steps, the task filed from what was
-//! handed over ([`HandedAtLaunch`]), the placeholder tasks and the lines a run leaves on its task are all
-//! gone the moment it returns, and nobody watching the store sees
-//! any of them. What survives is the account handed back ([`Rehearsal`]).
+//! handed over ([`HandedAtLaunch`]) with the first run, the placeholder tasks and the lines a run leaves
+//! on its task are all gone the moment it returns, and nobody watching the store sees any of them. What
+//! survives is the account handed back ([`Rehearsal`]).
 //!
 //! **Which way out a step takes is chosen here**, since nobody is doing the work that would decide it.
 //! The first time a step is reached it leaves by the first way out it declares; each time it is reached
 //! again, by the next one. That walks a picture that goes round — a step that takes tasks until there
 //! are none — once round and then out. The error way out is never chosen, and neither is one a
 //! built-in's answers say it never leaves by. A step reached again with no way out left untried ends the
-//! walk ([`Cut::Looped`]).
+//! walk ([`Cut::Looped`]). Which ways out were taken is counted again for each role's run.
 
 use std::collections::BTreeMap;
 
@@ -37,7 +43,7 @@ use serde::Serialize;
 
 use crate::error::{Error, Result};
 use crate::model::{
-    ActorKind, AttachmentTarget, AutomationPortKind, AutomationRunDef, AutomationRunStatus,
+    ActorKind, AttachmentTarget, AutomationPortKind, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationStoppedReason, RunDefExit, TaskStatus, ERROR_EXIT,
 };
 use crate::ops::automation_builtin_close;
@@ -47,19 +53,20 @@ use crate::ops::automation_report::{self, Next, Produced};
 use crate::ops::automation_run::{self, HandedAtLaunch, Launcher, ReadsFrom, Waiting};
 use crate::ops::automation_step::{self, Opened};
 use crate::ops::task::{self, NewTask};
-use crate::store_engine::{read, WriteTx};
+use crate::store_engine::{read, record, WriteTx};
 
 /// **How many steps a test run opens at most.** A picture whose lines are all limited ends well before
 /// this; one that is not would otherwise walk round for ever.
 const MOST: usize = 200;
 
-/// **What a test run found** — every step it opened, in order, and how it ended.
+/// **What a test run found** — every step it opened, role after role in order, and how it ended.
 #[derive(Clone, Debug, Serialize)]
 pub struct Rehearsal {
     pub steps: Vec<Rehearsed>,
-    /// Where the run stood when the walk ended: `completed` where the picture ran out, `failed` where
-    /// the run itself would have been stopped (`stopped_reason` saying why), or `running` where the walk
-    /// was cut short ([`Rehearsal::cut`]).
+    /// Where the last run walked stood when the walk ended: `completed` where the picture ran out for
+    /// every role, `failed` where that run would have been stopped (`stopped_reason` saying why), or
+    /// `running` where the walk was cut short ([`Rehearsal::cut`]). A run that does not complete ends the
+    /// walk, and the roles after it are not walked.
     pub status: AutomationRunStatus,
     pub stopped_reason: Option<AutomationStoppedReason>,
     /// The required inputs the last step opened found nothing wired into — the run is stopped there, as
@@ -84,6 +91,8 @@ pub enum Cut {
 /// **One step a test run opened.**
 #[derive(Clone, Debug, Serialize)]
 pub struct Rehearsed {
+    /// The role whose seat the run that opened it sat in, or `None` for the seats of no role.
+    pub role_id: Option<i64>,
     /// The placement on the automation's picture it was opened from.
     pub placement_id: Option<i64>,
     /// The step inside the placed action.
@@ -103,7 +112,8 @@ pub struct Rehearsed {
     pub exit: String,
 }
 
-/// **Walk an automation from its entry to its end with nothing carried out** — see the module.
+/// **Walk an automation role by role, each from where its round starts to its end, with nothing
+/// carried out** — see the module.
 ///
 /// `tx` is expected to be thrown away by the caller: everything written here is only there to be read
 /// back by the next step.
@@ -115,15 +125,50 @@ pub fn rehearse(
 ) -> Result<Rehearsal> {
     // No pane is opened, so whether the window is open is nobody's concern here.
     let by = Launcher { workspace_open: None, ..*by };
-    let run = automation_run::launch_handing_past_the_limit(tx, automation_id, &by, handed, ReadsFrom::Draft)?;
     let mut rehearsal = Rehearsal {
         steps: Vec::new(),
-        status: run.status,
+        status: AutomationRunStatus::Completed,
         stopped_reason: None,
         missing: Vec::new(),
         no_agent: None,
         cut: None,
     };
+    let nothing = HandedAtLaunch::default();
+    let project_id = read::automation(tx.conn(), automation_id)?
+        .ok_or_else(|| Error::not_found(format!("automation '{automation_id}' not found")))?
+        .project_id;
+    let seats = automation_run::rehearsal_seats(tx.conn(), automation_id, ReadsFrom::Draft)?;
+    for (i, role_id) in seats.into_iter().enumerate() {
+        // What was handed is filed once, with the first run, as a launch files it.
+        let handed = if i == 0 { handed } else { &nothing };
+        let mut filed = Some(made_up(tx, project_id, role_id)?);
+        let run =
+            automation_run::launch_in_seat_past_the_limit(tx, automation_id, &by, handed, ReadsFrom::Draft, role_id)?;
+        walk_run(tx, &run, &by, &mut filed, &mut rehearsal)?;
+        let ended = read::automation_run(tx.conn(), run.id)?.unwrap_or(run);
+        rehearsal.status = ended.status;
+        rehearsal.stopped_reason = ended.stopped_reason;
+        let walked_out = ended.status == AutomationRunStatus::Completed
+            && rehearsal.cut.is_none()
+            && rehearsal.missing.is_empty()
+            && rehearsal.no_agent.is_none();
+        if !walked_out {
+            break;
+        }
+    }
+    Ok(rehearsal)
+}
+
+/// **Walk one run of a test run** from where it starts to its end, putting every step it opens on
+/// `rehearsal`. `filed` is the task filed under the run's role before it was launched, which the first
+/// step that takes a task takes.
+fn walk_run(
+    tx: &WriteTx<'_>,
+    run: &AutomationRun,
+    by: &Launcher<'_>,
+    filed: &mut Option<i64>,
+    rehearsal: &mut Rehearsal,
+) -> Result<()> {
     let mut visits: BTreeMap<i64, usize> = BTreeMap::new();
     while let Waiting::Step(def) = automation_run::next_def(tx.conn(), run.id)? {
         if rehearsal.steps.len() >= MOST {
@@ -141,7 +186,7 @@ pub fn rehearse(
                 break;
             }
             // A built-in is never carried out, held or waited on here; a run that took a fresh task
-            // with the last still open has been failed, which is read off the run below.
+            // with the last still open has been failed, which is read off the run by the caller.
             _ => break,
         };
         let def = opening.run_def;
@@ -154,6 +199,7 @@ pub fn rehearse(
         *seen += 1;
         let builtin = def.builtin.is_some();
         rehearsal.steps.push(Rehearsed {
+            role_id: run.role_id,
             placement_id: def.placement_id,
             step_id: def.step_id,
             name: def.name.clone(),
@@ -164,7 +210,7 @@ pub fn rehearse(
             folder: opening.folder,
             exit: exit.name.clone(),
         });
-        stand_in(tx, &run, opening.run_step.id, &def, exit)?;
+        stand_in(tx, run, opening.run_step.id, &def, exit, filed)?;
         let report = crate::run_wording::rehearsal(tx.language(), "report", &[("exit", &exit.name)]);
         if let Next::Closed(_) | Next::Halted(_) | Next::Paused(_) =
             automation_report::done(tx, opening.run_step.id, Some(exit.id), &report)?
@@ -172,10 +218,7 @@ pub fn rehearse(
             break;
         }
     }
-    let ended = read::automation_run(tx.conn(), run.id)?.unwrap_or(run);
-    rehearsal.status = ended.status;
-    rehearsal.stopped_reason = ended.stopped_reason;
-    Ok(rehearsal)
+    Ok(())
 }
 
 /// **The way out a step reached for the `seen`+1-th time leaves by** — the module says which. `None`
@@ -195,12 +238,16 @@ fn choose<'e>(def: &AutomationRunDef, exits: &'e [RunDefExit], seen: usize) -> R
 /// kind — and, for the built-ins that close the task, hand it back to a person or put it off, close the
 /// one the run holds or put it back in `todo`, so the next task it takes is not taken with this one still
 /// open.
+///
+/// A task taken is `filed` — the one filed under the run's role before it was launched — the first time,
+/// and one made up under that role after that.
 fn stand_in(
     tx: &WriteTx<'_>,
-    run: &crate::model::AutomationRun,
+    run: &AutomationRun,
     run_step_id: i64,
     def: &AutomationRunDef,
     exit: &RunDefExit,
+    filed: &mut Option<i64>,
 ) -> Result<()> {
     for port in &exit.outs {
         match port.kind {
@@ -225,16 +272,15 @@ fn stand_in(
                 automation_report::out(tx, run_step_id, port.id, Produced::File(file.id))?;
             }
             AutomationPortKind::TaskTake => {
-                let task = made_up(tx)?;
+                let task = match filed.take() {
+                    Some(task) => task,
+                    None => made_up(tx, run.project_id, run.role_id)?,
+                };
+                // The task names the role the run sits in, so its round goes on where that role starts.
                 automation_report::take(tx, run_step_id, task)?;
-                // A made-up task names no role, so its round is put under the role the run is a seat of,
-                // and the walk goes on where that role starts.
-                if let Some(role) = automation_run::roles_started(tx.conn(), run.id)?.first() {
-                    automation_report::put_under(tx, run_step_id, *role)?;
-                }
             }
             AutomationPortKind::TaskMake => {
-                let task = made_up(tx)?;
+                let task = made_up(tx, run.project_id, run.role_id)?;
                 automation_report::out(tx, run_step_id, port.id, Produced::Task(task))?;
             }
         }
@@ -259,34 +305,38 @@ fn stand_in(
     Ok(())
 }
 
-/// **A task made up for a step to hand on**, named as a test run's.
+/// **A task made up for a step to hand on**, named as a test run's, filed in the automation's project
+/// under `role_id` — a task names a role only in the project of the automation that defines it.
 ///
-/// It is filed in no project, so no axis the project requires holds its creation.
-fn made_up(tx: &WriteTx<'_>) -> Result<i64> {
+/// Its creation is finished without asking for the axes the project requires: it stands in for a task
+/// whose classification is nobody's to choose here, and it is thrown away with the walk.
+fn made_up(tx: &WriteTx<'_>, project_id: i64, role_id: Option<i64>) -> Result<i64> {
     let filed = task::add(
         tx,
         NewTask {
             title: crate::run_wording::rehearsal(tx.language(), "task", &[]),
-            project_id: None,
+            project_id: Some(project_id),
             due: None,
             start: None,
             priority: None,
             notes: String::new(),
             created_by_kind: Some(ActorKind::Ai),
             at_binding_id: None,
-            role_id: None,
+            role_id,
             made_in_run_step_id: None,
             made_in: None,
         },
     )?;
-    Ok(task::finish_creating(tx, filed.id, ActorKind::Ai)?.id)
+    let finished = crate::model::Task { draft: false, ..filed.clone() };
+    crate::ops::emit_update(tx, record::task(&filed), record::task(&finished))?;
+    Ok(finished.id)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::{Automation, AutomationPictureOwner, DONE_EXIT};
-    use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewScript};
+    use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewRole, NewScript, RoleChange};
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_builtin_close::COMMIT;
     use crate::ops::automation_builtin_make::{MADE_AND_TAKEN, TAKE_IT, WHAT_THEN};
@@ -308,6 +358,29 @@ mod tests {
 
     fn walked(rehearsal: &Rehearsal) -> Vec<(&str, &str)> {
         rehearsal.steps.iter().map(|s| (s.name.as_str(), s.exit.as_str())).collect()
+    }
+
+    /// Have the role the automation was made with start its round at `placement`.
+    fn start_at(tx: &WriteTx<'_>, automation: &Automation, placement: i64) -> i64 {
+        let born = read::automation_roles_of(tx.conn(), automation.id).expect("roles").remove(0);
+        let change = RoleChange { entry_placement_id: Some(Some(placement)), ..Default::default() };
+        automation::role_update(tx, born.id, change).expect("where the role starts").id
+    }
+
+    /// A take that goes on to an agent's step named `name`, then closes the task and goes round to the
+    /// take again.
+    fn mk_round(tx: &WriteTx<'_>, automation: &Automation, name: &str) -> i64 {
+        let on = AutomationPictureOwner::Automation;
+        let take = automation::placement_add(tx, automation.id, action(tx, "take_task").expect("take").id)
+            .expect("place take");
+        let (_, work) = mk_placed(tx, automation, name, "work on it", "claude");
+        let close = automation::placement_add(tx, automation.id, action(tx, "close_task").expect("close").id)
+            .expect("place close");
+        automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
+        automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
+        automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(close.id), None).expect("work → close");
+        automation::edge_add(tx, on, close.id, None, EdgeTarget::Go(take.id), None).expect("close → take");
+        take.id
     }
 
     /// **A picture that goes round is walked once round and then out** — the take leaves by the way out
@@ -334,7 +407,7 @@ mod tests {
             automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(close.id), None).expect("work → close");
             automation::edge_add(tx, on, close.id, None, EdgeTarget::Go(take.id), None).expect("close → take");
             automation::wire_add(tx, on, work.id, None, COMMIT, close.id, COMMIT).expect("wire the commit");
-            let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
+            start_at(tx, &automation, take.id);
 
             let rehearsal = walk(tx, &automation, &HandedAtLaunch::default());
             assert_eq!(
@@ -376,7 +449,7 @@ mod tests {
             automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
             automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(back.id), None).expect("work → back");
             automation::edge_add(tx, on, back.id, None, EdgeTarget::Go(take.id), None).expect("back → take");
-            let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
+            start_at(tx, &automation, take.id);
 
             let rehearsal = walk(tx, &automation, &HandedAtLaunch::default());
             assert_eq!(
@@ -395,7 +468,7 @@ mod tests {
 
     /// **A built-in that files a task leaves by the way out its answers choose** rather than the first it
     /// declares — here set to take the task it files, after the round before it closed its own. Each
-    /// closed round goes round to the take at the entry, which finds nothing the second time.
+    /// closed round goes round to the take where the role starts, which finds nothing the second time.
     #[test]
     fn a_built_in_that_files_a_task_leaves_by_the_way_out_its_answers_choose() {
         with_tx(|tx| {
@@ -424,7 +497,7 @@ mod tests {
                 .expect("onward");
             automation::wire_add(tx, on, write.id, None, "title", make.id, TITLE).expect("wire the title");
             mk_closed_after(tx, &automation, work.id, None);
-            let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
+            start_at(tx, &automation, take.id);
 
             let rehearsal = walk(tx, &automation, &HandedAtLaunch::default());
             let exits: Vec<&str> = rehearsal.steps.iter().map(|s| s.exit.as_str()).collect();
@@ -434,8 +507,11 @@ mod tests {
                 "{rehearsal:?}",
             );
             assert_eq!(rehearsal.status, AutomationRunStatus::Completed);
-            let filed = read::task_ids_in_project(tx.conn(), project).expect("tasks");
-            assert!(filed.is_empty(), "nothing is filed in the project: {filed:?}");
+            let placeholder = crate::run_wording::rehearsal(tx.language(), "task", &[]);
+            for id in read::task_ids_in_project(tx.conn(), project).expect("tasks") {
+                let filed = read::task(tx.conn(), id).expect("read").expect("the task");
+                assert_eq!(filed.title, placeholder, "only the test run's placeholders are filed: {filed:?}");
+            }
         });
     }
 
@@ -458,7 +534,7 @@ mod tests {
             automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(plan.id), None).expect("take → plan");
             automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
             mk_closed_after(tx, &automation, plan.id, None);
-            let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
+            start_at(tx, &automation, take.id);
 
             let handed = HandedAtLaunch { title: Some("梅雨どきの家事の記事".into()), ..Default::default() };
             let rehearsal = walk(tx, &automation, &handed);
@@ -466,6 +542,43 @@ mod tests {
             assert_eq!(exits, vec![TAKEN, DONE_EXIT, DONE_EXIT, NONE_TO_TAKE], "{rehearsal:?}");
             assert_eq!(rehearsal.steps[1].name, "plan", "{rehearsal:?}");
             assert_eq!(rehearsal.status, AutomationRunStatus::Completed, "{rehearsal:?}");
+            assert_eq!(rehearsal.cut, None);
+        });
+    }
+
+    /// **Each role is walked in turn, in the order the roles are defined in** — a run in the seat of
+    /// each, from the take where its round starts to its end, the one after the other.
+    #[test]
+    fn each_role_is_walked_in_turn_from_where_it_starts() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation =
+                automation::add(tx, project, NewAutomation { name: "roles".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
+                    .expect("automation");
+            let first = mk_round(tx, &automation, "draft");
+            let second = mk_round(tx, &automation, "finish");
+            let drafting = start_at(tx, &automation, first);
+            let finishing = NewRole { name: "仕上げ".into(), entry_placement_id: Some(second), ..NewRole::default() };
+            let finishing = automation::role_add(tx, automation.id, finishing).expect("another role").id;
+
+            let rehearsal = walk(tx, &automation, &HandedAtLaunch::default());
+            assert_eq!(
+                walked(&rehearsal),
+                vec![
+                    ("タスクに着手する", TAKEN),
+                    ("draft", DONE_EXIT),
+                    ("タスクを閉じる", DONE_EXIT),
+                    ("タスクに着手する", NONE_TO_TAKE),
+                    ("タスクに着手する", TAKEN),
+                    ("finish", DONE_EXIT),
+                    ("タスクを閉じる", DONE_EXIT),
+                    ("タスクに着手する", NONE_TO_TAKE),
+                ],
+                "{rehearsal:?}",
+            );
+            let roles: Vec<Option<i64>> = rehearsal.steps.iter().map(|s| s.role_id).collect();
+            assert_eq!(roles, [[Some(drafting); 4], [Some(finishing); 4]].concat(), "{rehearsal:?}");
+            assert_eq!(rehearsal.status, AutomationRunStatus::Completed);
             assert_eq!(rehearsal.cut, None);
         });
     }
@@ -493,7 +606,7 @@ mod tests {
             automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
             automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
             mk_closed_after(tx, &automation, work.id, None);
-            let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
+            start_at(tx, &automation, take.id);
 
             let claude = ["claude".to_string()];
             let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };

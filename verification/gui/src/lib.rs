@@ -14844,6 +14844,41 @@ steps_gui:
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// The action build road reads its steps' names off a screen that also draws the action's own
+    /// name. A seed named after a step the road deletes is read as still drawn, and one named after a
+    /// step the road adds is read as drawn before it is, so no word a reading of that road looks for
+    /// stands in the name the road opens on.
+    #[test]
+    fn the_action_build_road_seeds_a_name_holding_none_of_the_words_it_reads() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("verification/")
+            .join("scenarios/build-what-an-action-holds-on-its-own-screen.yaml");
+        let s = load(&std::fs::read_to_string(path).expect("the road"));
+        let seeds: Vec<String> = s
+            .given
+            .iter()
+            .filter_map(|st| match st {
+                Step::Action { with, .. } => arg_str(with, "name").map(fold),
+                _ => None,
+            })
+            .collect();
+        assert!(!seeds.is_empty(), "the road opens on a named action");
+
+        let ins = Instructor::new();
+        let words: Vec<String> =
+            s.steps(Driver::Gui).iter().filter_map(|st| ins.expectation(st)).map(|e| fold(&e.text)).collect();
+        assert!(!words.is_empty(), "the road reads words off the picture");
+        for seed in &seeds {
+            for word in &words {
+                assert!(
+                    !held_whatever_the_spacing(seed, word).found,
+                    "the seed {seed:?} holds {word:?}, which the road reads off the picture"
+                );
+            }
+        }
+    }
+
     /// A road whose assert is of a row in a column narrow enough to draw the name cut.
     const OFF_THE_TREE: &str = r#"
 id: sample-tree

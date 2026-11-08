@@ -1723,7 +1723,7 @@ mod tests {
 
             assert!(matches!(
                 automation_stop::hold_launch_role(tx, launch, role + 1000),
-                Err(crate::error::Error::Invalid(_))
+                Err(crate::error::Error::NotFound(_))
             ));
             automation_stop::hold_launch_role(tx, launch, role).expect("stop the role");
             automation_stop::pause_launch(tx, launch).expect("pause the launch");
@@ -1770,8 +1770,8 @@ mod tests {
             let most = launch_headcount_set(tx, launch, role, crate::model::MAX_ROLE_HEADCOUNT).expect("ten");
             assert_eq!(most.headcount, crate::model::MAX_ROLE_HEADCOUNT);
             assert!(
-                matches!(launch_headcount_set(tx, launch, role + 1000, 2), Err(crate::error::Error::Invalid(_))),
-                "a role the automation does not hold",
+                matches!(launch_headcount_set(tx, launch, role + 1000, 2), Err(crate::error::Error::NotFound(_))),
+                "a role that does not exist (`AMB-D-986`)",
             );
 
             automation::role_update(tx, role, automation::RoleChange { headcount: Some(3), ..Default::default() })

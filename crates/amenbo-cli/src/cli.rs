@@ -2698,6 +2698,58 @@ pub enum AutomationCmd {
         run: i64,
     },
 
+    /// How many are in each role for one launch, beside its definition: the headcount the definition
+    /// gives it, the one this launch holds, the runs under way, the seats still to go after it was
+    /// lowered, and whether it is stopped once its task is done. A run names its launch (`run-show`)
+    LaunchShow {
+        /// launch id
+        launch: i64,
+    },
+    /// Change how many are in one role for this launch alone, 1 to 10 — the definition is left as it
+    /// is, and the next launch copies it again. Raised, the role takes tasks into the new seats at once;
+    /// lowered, no task under way is stopped: a seat goes once its run finishes the task it is on.
+    /// Raised again before they have gone, the seats still to go are called off. To stop a role taking
+    /// tasks, `launch-role-hold` it rather than set it to none
+    LaunchHeadcountSet {
+        /// launch id
+        launch: i64,
+        /// role id
+        #[arg(long)]
+        role: i64,
+        /// how many are in the role for this launch, 1 to 10
+        #[arg(long)]
+        headcount: u32,
+    },
+    /// Put one role of this launch back at its definition's headcount — what `launch-headcount-set` set
+    /// is let go, as lowering or raising it would be
+    LaunchHeadcountReset {
+        /// launch id
+        launch: i64,
+        /// role id
+        #[arg(long)]
+        role: i64,
+    },
+    /// Stop one role of this launch once its task is done: each run of it finishes the task it is on
+    /// and takes no new one, and its seats stay empty until `launch-role-release`. The headcount stays as
+    /// it was. Apart from `pause --before-next-task`, which is one run's. Refused for a launch paused as
+    /// a whole
+    LaunchRoleHold {
+        /// launch id
+        launch: i64,
+        /// role id
+        #[arg(long)]
+        role: i64,
+    },
+    /// Take a role stopped by `launch-role-hold` up again: it takes tasks into its seats up to the
+    /// headcount it had. Refused for a launch paused as a whole
+    LaunchRoleRelease {
+        /// launch id
+        launch: i64,
+        /// role id
+        #[arg(long)]
+        role: i64,
+    },
+
     /// **Put down one thing this step produced**, on the output the step's text lists it under. Written
     /// `<id>=<value>`, or `<id> --file <path>` for a file
     StepOut {

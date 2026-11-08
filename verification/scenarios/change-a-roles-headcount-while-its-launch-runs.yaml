@@ -8,8 +8,9 @@
 # the launch's alone, and ends with it.
 #
 # The automation is the one pause-a-launch-after-the-current-task-from-its-pane walks. Its one role is
-# the one it was born with, named after it, and its round starts at the entry, so the launch has one
-# set of seats, read as that role's. Two tasks wait, so a second seat has one to take.
+# the one it was born with, named after it, and its round starts at the take_task placed first, so
+# the launch has one set of seats, read as that role's. Two tasks wait, so a second seat has one to
+# take.
 id: change-a-roles-headcount-while-its-launch-runs
 title: A role's headcount is raised, lowered, raised again and put back for one launch, and the definition stays
 description: >
@@ -47,7 +48,7 @@ given:
   - { type: action, domain: automation, op: action-entry, with: { target: after, step: wait } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: wait, exit_to: "" } }
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — headcount" }, as: auto }
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_start }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: after }, as: at_after }

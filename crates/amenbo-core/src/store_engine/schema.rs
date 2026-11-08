@@ -1120,15 +1120,14 @@ datasets! {
     // before its own prompt is Amenbo's own and is written in the build (`crate::agents::preamble`),
     // so no column here carries it.
     //
-    // `entry_placement_id` is where a run starts, and from it the edges are walked: the place a
-    // placement sits in the picture and the number it is drawn with both fall out of that walk, never
-    // out of `order_key`, which records only the order things were added in. Nullable and `RESTRICT`
-    // for the reasons `automation_action.entry_step_id` is.
+    // A run starts where each role's round starts (`automation_role.entry_placement_id`), and from there
+    // the edges are walked: the place a placement sits in the picture and the number it is drawn with
+    // both fall out of that walk, never out of `order_key`, which records only the order things were
+    // added in.
     automation {
         project_id: fk("project", "RESTRICT"),
         name: col(REQ),
         notes: col(REQ),
-        entry_placement_id: fk_opt("automation_placement", "RESTRICT"),
         archived: bool_col,
         // Where a round that fails is filed: `human` for a person, `role` for the role
         // `failures_to_role_id` names. NULL while nobody has said, which the launch check refuses. Like
@@ -1472,12 +1471,10 @@ datasets! {
     // placement's settings, the agents chosen for each placement's steps, the edges and wires drawn
     // on the automation, and the roles defined in it — each the row's own record, under its own id,
     // for the reason `automation_action_version`'s are (`AMB-D-961`). A placement in the copy keeps the
-    // version of its action it stood on. `entry_placement_id` is the placement the copy opens first, a
-    // key into `placements` rather than a reference to a placement that may since have been taken off.
+    // version of its action it stood on.
     automation_version {
         automation_id: fk("automation", "RESTRICT"),
         version: col(COUNT),
-        entry_placement_id: col(KEY_REF_OPT),
         placements: col(REQ),
         cfgs: col(REQ),
         placement_steps: col(REQ),
@@ -1639,7 +1636,6 @@ datasets! {
         exits: col(REQ),
         ins: col(REQ),
         cfg: col(REQ),
-        entry: bool_col,
         // The roles whose round starts at this step — a JSON array of `automation_role` ids, plain ids
         // for the reason `placement_id` is. Copied from the roles the automation held at launch onto the
         // copy of the first step of the placement each one starts at (`automation_role.entry_placement_id`),
@@ -1672,7 +1668,7 @@ datasets! {
         // The seat the round failed in, counted from 1 among its role's runs under way as it failed —
         // written beside `incident_task_id`, since the order runs left their seats in within one second
         // is not kept anywhere else. NULL for a round that did not fail, one of a run started in no
-        // launch, and one that failed before this was written (v132).
+        // launch, and one that failed before this was written (v133).
         seat: col(INT_OPT),
     }
 

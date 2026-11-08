@@ -33,23 +33,32 @@ fn an_action(cli: &Cli, project: &str, name: &str, prompt: &str) -> (String, Str
     (action, step)
 }
 
-/// Put the built-in of `key` on an automation — the first thing placed is where a run starts, and it
-/// has to be one of the built-ins a run can start at (`AMB-D-977`). Answers the placement.
-fn an_entry(cli: &Cli, automation: &str, key: &str) -> String {
-    id_of(
+/// Put the built-in of `key` on an automation, as where the round of the role it was born with starts
+/// (`AMB-D-1123`). Answers the placement.
+fn a_start(cli: &Cli, automation: &str, key: &str) -> String {
+    let placement = id_of(
         &cli.json(&["automation", "place-add", automation, "--builtin", key, "--json"]),
         "automation_placement",
-    )
+    );
+    let born = born_role(cli, automation);
+    cli.json(&["automation", "role-update", &born, "--entry", &placement, "--json"]);
+    placement
 }
 
-/// An automation with one action placed on it, after the built-in it starts at — the shape most of
+/// The role an automation was born with — the first of its roles.
+fn born_role(cli: &Cli, automation: &str) -> String {
+    let listed = cli.json(&["automation", "role-list", automation, "--json"]);
+    id_str(&listed["roles"][0]["id"])
+}
+
+/// An automation with one action placed on it, after the built-in its role starts at — the shape most of
 /// these tests start from. Answers the project it is in, the automation, the action and the placement
 /// of the action. The project is named rather than left to the folder: the harness runs in a home
 /// nothing has bound.
 fn an_automation(cli: &Cli) -> (String, String, String, String) {
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--failures-to", "human", "--json"]), "automation");
-    an_entry(cli, &a, "take_task");
+    a_start(cli, &a, "take_task");
     let (action, _) = an_action(cli, &p, "one", "do it");
     let placement = id_of(
         &cli.json(&["automation", "place-add", &a, "--action", &action, "--json"]),
@@ -71,10 +80,10 @@ fn a_picture_is_built_from_the_ids_each_command_hands_back() {
     let (fix_action, _) = an_action(&cli, &p, "Fix", "fix it");
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Review and fix", "--failures-to", "human", "--json"]), "automation");
 
-    // The first thing placed is where a run starts (`AMB-D-977`).
-    let take = an_entry(&cli, &a, "take_task");
+    // The role it was born with starts its round at the built-in that takes a task (`AMB-D-1123`).
+    let take = a_start(&cli, &a, "take_task");
     let shown = cli.json(&["automation", "show", &a, "--json"]);
-    assert_eq!(shown["automation"]["entry_placement_id"].to_string(), take);
+    assert_eq!(shown["roles"][0]["entry_placement_id"].to_string(), take);
     let review = id_of(
         &cli.json(&["automation", "place-add", &a, "--action", &review_action, "--json"]),
         "automation_placement",
@@ -183,7 +192,7 @@ fn a_line_is_drawn_on_an_automation_or_inside_an_action() {
     assert_eq!(inside["automation_edge"]["owner_id"], serde_json::json!(action.parse::<i64>().unwrap()));
 
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--failures-to", "human", "--json"]), "automation");
-    an_entry(&cli, &a, "take_task");
+    a_start(&cli, &a, "take_task");
     let placement = id_of(
         &cli.json(&["automation", "place-add", &a, "--action", &action, "--json"]),
         "automation_placement",
@@ -488,7 +497,7 @@ fn a_definition_is_read_back_whole_with_each_placement_resolved() {
     let (review_action, _) = an_action(&cli, &p, "Review", "review it");
     let (fix_action, _) = an_action(&cli, &p, "Fix", "fix it");
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Review and fix", "--failures-to", "human", "--json"]), "automation");
-    an_entry(&cli, &a, "take_task");
+    a_start(&cli, &a, "take_task");
     let review = id_of(
         &cli.json(&["automation", "place-add", &a, "--action", &review_action, "--json"]),
         "automation_placement",
@@ -899,7 +908,7 @@ fn the_library_is_one_list_and_global_narrows_it() {
     // One action placed twice on one automation is one automation whose runs change when the prompt
     // is rewritten, which is what the count is about.
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--failures-to", "human", "--json"]), "automation");
-    an_entry(&cli, &a, "take_task");
+    a_start(&cli, &a, "take_task");
     for _ in 0..2 {
         cli.json(&["automation", "place-add", &a, "--action", &action, "--json"]);
     }
@@ -994,7 +1003,7 @@ fn split_by_dim_is_placed_on_the_axis_given_and_leaves_by_its_values() {
     cli.json(&["dimension", "value-add", "Kind", "--name", "build", "--json"]);
     cli.json(&["dimension", "value-add", "Kind", "--name", "investigate", "--json"]);
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--failures-to", "human", "--json"]), "automation");
-    an_entry(&cli, &a, "take_task");
+    a_start(&cli, &a, "take_task");
 
     let split = id_of(
         &cli.json(&["automation", "place-add", &a, "--builtin", "split_by_dim", "--axis", "Kind", "--json"]),
@@ -1170,7 +1179,7 @@ fn an_action_is_saved_and_a_placement_is_moved_onto_its_version() {
     let cli = Cli::new();
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--failures-to", "human", "--json"]), "automation");
-    an_entry(&cli, &a, "take_task");
+    a_start(&cli, &a, "take_task");
     let (action, step) = an_action(&cli, &p, "one", "do it");
     let placement = id_of(
         &cli.json(&["automation", "place-add", &a, "--action", &action, "--json"]),
@@ -1285,7 +1294,7 @@ fn an_action_is_set_to_take_one_run_at_a_time_in_its_draft() {
     assert_eq!(both["automation_action"]["one_at_a_time"], serde_json::json!(true), "{both}");
 
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--failures-to", "human", "--json"]), "automation");
-    an_entry(&cli, &a, "take_task");
+    a_start(&cli, &a, "take_task");
     let builtin = id_str(&cli.json(&["automation", "show", &a, "--json"])["placements"][0]["placement"]["action_id"]);
     let (err, code) = cli.run_err(&["automation", "action-update", &builtin, "--one-at-a-time", "on", "--json"]);
     assert_ne!(code, 0, "{err}");
@@ -1299,7 +1308,7 @@ fn a_built_in_is_not_saved_or_moved_by_hand() {
     let cli = Cli::new();
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "A", "--failures-to", "human", "--json"]), "automation");
-    let take = an_entry(&cli, &a, "take_task");
+    let take = a_start(&cli, &a, "take_task");
     let (err, code) = cli.run_err(&["automation", "place-version", &take, "1", "--json"]);
     assert_ne!(code, 0, "{err}");
     assert!(err.contains("built into Amenbo"), "{err}");
@@ -1339,8 +1348,7 @@ fn saved(cli: &Cli, a: &str) {
 /// Let the automation have two runs going at once: the role it was born with made one of two, saved,
 /// since the runs under way are measured against its newest saved version.
 fn room_for_two(cli: &Cli, a: &str) {
-    let listed = cli.json(&["automation", "role-list", a, "--json"]);
-    let born = id_str(&listed["roles"][0]["id"]);
+    let born = born_role(cli, a);
     cli.json(&["automation", "role-update", &born, "--headcount", "2", "--json"]);
     saved(cli, a);
 }
@@ -1351,11 +1359,13 @@ fn a_picture(cli: &Cli, with_task: bool) -> (String, String, String, String) {
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Do one", "--failures-to", "human", "--json"]), "automation");
     if with_task {
-        let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &p, "--json"])["task"]["id"]);
+        let born = born_role(cli, &a);
+        let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &p, "--role", &born, "--json"])["task"]["id"]);
         cli.finish_creating(&t);
     }
-    // The first thing placed is where a run starts (`AMB-D-977`), set to take any task that is ready.
-    let take = an_entry(cli, &a, "take_task");
+    // The role it was born with starts its round at the built-in that takes a task (`AMB-D-1123`), set
+    // to take any task of the role that is ready.
+    let take = a_start(cli, &a, "take_task");
     cli.json(&["automation", "cfg-set", &take, "--name", "絞り込み", "--status", "todo", "--json"]);
     let (action, step) = an_action(cli, &p, "work", "work on it");
     // The step inside leaves the action by its done way out — the launch check asks the picture
@@ -1535,7 +1545,7 @@ fn inside_a_step_its_own_run_is_not_paused_or_force_canceled() {
         let run: i64 = own.parse().unwrap();
         let paths = amenbo_core::config::Paths::at(cli.home.clone());
         let mut store = amenbo_core::Store::open_at(paths).expect("the store");
-        let entry = store.automation_run_defs(run).expect("defs").into_iter().find(|d| d.entry).expect("an entry");
+        let entry = store.automation_run_defs(run).expect("defs").into_iter().find(|d| !d.role_ids().is_empty()).expect("an entry");
         match store.automation_step_open(run, entry.id, None).expect("open") {
             amenbo_core::ops::automation_step::Opened::Carried { run_step_id, .. } => run_step_id.to_string(),
             _ => panic!("the entry takes a task and is carried out"),
@@ -1584,7 +1594,7 @@ fn a_task_filed_inside_a_step_remembers_the_step() {
     // No watch opens a step here, so the run's first one is opened on the store, as the app's watch would.
     let step = {
         let mut store = open();
-        let entry = store.automation_run_defs(run).expect("defs").into_iter().find(|d| d.entry).expect("an entry");
+        let entry = store.automation_run_defs(run).expect("defs").into_iter().find(|d| !d.role_ids().is_empty()).expect("an entry");
         match store.automation_step_open(run, entry.id, None).expect("open") {
             amenbo_core::ops::automation_step::Opened::Carried { run_step_id, .. } => run_step_id,
             _ => panic!("the entry takes a task and is carried out"),
@@ -1636,7 +1646,7 @@ fn only_a_failed_run_is_acknowledged() {
     assert!(!shown.contains("acknowledged:"), "a cancel is not waiting on anyone: {shown}");
 }
 
-/// **A start with nothing to take makes no run** where the entry is set to wait for a task: the
+/// **A start with nothing to take makes no run** where the round starts at a take_task set to wait for a task: the
 /// automation waits instead, `show` says since when and what for, and `stop-waiting` ends the wait.
 #[test]
 fn a_start_with_nothing_to_take_waits_and_stop_waiting_ends_it() {
@@ -1683,17 +1693,18 @@ fn run_show_says_when_a_run_is_waiting_for_room() {
     room_for_two(&cli, &a);
     let first = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
     let project = cli.json(&["automation", "run-show", &first, "--json"])["run"]["project_id"].to_string();
-    let t = id_str(&cli.json(&["task", "add", "--title", "two", "--project", &project, "--json"])["task"]["id"]);
+    let born = born_role(&cli, &a);
+    let t = id_str(&cli.json(&["task", "add", "--title", "two", "--project", &project, "--role", &born, "--json"])["task"]["id"]);
     cli.finish_creating(&t);
     let second = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
-    // No watch opens a step here, so each run's entry — the built-in that takes a task — is opened on
+    // No watch opens a step here, so where each run's round starts — the built-in that takes a task — is opened on
     // the store, as the app's watch would. Both then stand before the action.
     {
         let paths = amenbo_core::config::Paths::at(cli.home.clone());
         let mut store = amenbo_core::Store::open_at(paths).expect("the store");
         for run in [&first, &second] {
             let run: i64 = run.parse().unwrap();
-            let entry = store.automation_run_defs(run).expect("defs").into_iter().find(|d| d.entry).expect("an entry");
+            let entry = store.automation_run_defs(run).expect("defs").into_iter().find(|d| !d.role_ids().is_empty()).expect("an entry");
             match store.automation_step_open(run, entry.id, None).expect("open") {
                 amenbo_core::ops::automation_step::Opened::Carried { .. } => {}
                 _ => panic!("the entry takes a task and is carried out"),
@@ -1737,7 +1748,8 @@ fn run_show_names_the_versions_a_run_was_copied_from() {
     // A start with nothing to take makes no run, so there is one to take as it starts. Taken by
     // somebody else straight after, it leaves the run standing before a take that would wait.
     let project = cli.json(&["automation", "show", &a, "--json"])["automation"]["project_id"].to_string();
-    let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &project, "--json"])["task"]["id"]);
+    let born = born_role(&cli, &a);
+    let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &project, "--role", &born, "--json"])["task"]["id"]);
     cli.finish_creating(&t);
     let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
     cli.json(&["task", "status", &t, "in_progress", "--json"]);
@@ -1828,7 +1840,7 @@ fn a_save_is_refused_while_a_way_out_has_nothing_after_it() {
     let _app = cli.the_app_up();
     let p = cli.a_project();
     let a = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "Half drawn", "--failures-to", "human", "--json"]), "automation");
-    an_entry(&cli, &a, "take_task");
+    a_start(&cli, &a, "take_task");
 
     let (err, code) = cli.run_err(&["automation", "save", &a, "--json"]);
     assert_ne!(code, 0, "an unfinished automation is not saved: {err}");
@@ -1845,7 +1857,8 @@ fn a_save_is_refused_while_a_way_out_has_nothing_after_it() {
 fn a_start_is_refused_until_somebody_is_named_to_file_a_failed_round_to() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
-    let (a, _, _) = a_saved_launchable(&cli);
+    let (a, _, _, take) = a_picture(&cli, true);
+    saved(&cli, &a);
 
     let shown = cli.json(&["automation", "show", &a, "--json"]);
     assert_eq!(shown["automation"]["failures_to"]["kind"].as_str(), Some("human"), "{shown}");
@@ -1867,7 +1880,11 @@ fn a_start_is_refused_until_somebody_is_named_to_file_a_failed_round_to() {
     let (_, code) = cli.run_err(&["automation", "update", &a, "--failures-to", "human", "--no-failures-to"]);
     assert_ne!(code, 0, "saying it and leaving it unsaid at once is refused");
 
-    let role = id_of(&cli.json(&["automation", "role-add", &a, "--name", "Review", "--json"]), "automation_role");
+    // Every role says where its round starts, or the save is refused (`AMB-D-1123`).
+    let role = id_of(
+        &cli.json(&["automation", "role-add", &a, "--name", "Review", "--entry", &take, "--json"]),
+        "automation_role",
+    );
     let set = cli.json(&["automation", "update", &a, "--failures-to", &role, "--json"]);
     assert_eq!(set["automation"]["failures_to"]["kind"].as_str(), Some("role"), "{set}");
     assert_eq!(id_str(&set["automation"]["failures_to"]["role_id"]), role, "{set}");

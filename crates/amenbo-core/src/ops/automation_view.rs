@@ -408,7 +408,7 @@ pub fn detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>> {
 /// What belongs to a placement itself — the answers to its settings and who carries out its steps — is
 /// read off the version. The action standing on it is read the way [`detail`] reads it.
 pub fn saved_detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>> {
-    let Some(mut automation) = read::automation(conn, id)? else { return Ok(None) };
+    let Some(automation) = read::automation(conn, id)? else { return Ok(None) };
     let Some(version) = read::automation_version_latest(conn, id)? else {
         return Err(Error::conflict(format!("automation '{id}' has no saved version")));
     };
@@ -436,7 +436,6 @@ pub fn saved_detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>
         }
         placements.push(view);
     }
-    automation.entry_placement_id = version.entry_placement_id;
     let roles: Vec<AutomationRole> = rows(saved_roles(&version))?;
     Ok(Some(AutomationView {
         automation,
@@ -690,7 +689,7 @@ mod tests {
     fn a_placement_is_read_as_the_version_it_stands_on() {
         use crate::model::AutomationPortKind;
         use crate::ops::automation::{
-            action_from_prompt, action_version_add, exit_add, placement_add_by_hand, port_add, step_update,
+            action_from_prompt, action_version_add, exit_add, placement_add, port_add, step_update,
             NewStep,
         };
         with_tx(|tx| {
@@ -699,7 +698,7 @@ mod tests {
                 add(tx, project, NewAutomation { name: "1件やりきる".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
             let action = action_from_prompt(tx, Some(project), NewStep::new("点検", "見る"), &[], &[]).unwrap();
             action_version_add(tx, action.id).unwrap();
-            let placement = placement_add_by_hand(tx, automation.id, action.id).unwrap();
+            let placement = placement_add(tx, automation.id, action.id).unwrap();
             let step = action.entry_step_id.unwrap();
             step_update(tx, step, None, Some("もう一度見る"), None, None, None, None, None, None, None, None, None)
                 .unwrap();

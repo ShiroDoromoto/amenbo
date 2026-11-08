@@ -147,6 +147,18 @@ impl Driver<'_> {
                     args.push("--at".into());
                     args.push(dir.to_string_lossy().into_owned());
                 }
+                // `role_of` names an automation, and the task is put under the role it was born with —
+                // the one whose round a road starts with `place-add`'s `starts: true`. A run takes only
+                // the tasks of its seat's role.
+                if with.contains_key("role_of") {
+                    let automation = self.resolve_key(with, "role_of")?;
+                    let listed = self.run_json(&["automation", "role-list", &automation.to_string(), "--json"])?;
+                    let born = listed["roles"][0]["id"]
+                        .as_i64()
+                        .ok_or_else(|| format!("automation {automation} has no role to put task {target} under"))?;
+                    args.push("--role".into());
+                    args.push(born.to_string());
+                }
                 if args.len() == 3 {
                     return Err("`update` names no field to set".to_string());
                 }

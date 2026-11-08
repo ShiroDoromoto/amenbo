@@ -251,7 +251,6 @@ CREATE TABLE IF NOT EXISTS automation (
     project_id BIGINT NOT NULL DEFAULT 0 REFERENCES project(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     name TEXT NOT NULL DEFAULT '',
     notes TEXT NOT NULL DEFAULT '',
-    entry_placement_id BIGINT REFERENCES automation_placement(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     archived BOOLEAN NOT NULL DEFAULT 0 CHECK(archived IN (0, 1)),
     failures_to_kind TEXT CHECK(failures_to_kind IN ('human', 'role')),
     failures_to_role_id BIGINT REFERENCES automation_role(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
@@ -423,7 +422,6 @@ CREATE TABLE IF NOT EXISTS automation_version (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     version BIGINT NOT NULL DEFAULT 0,
-    entry_placement_id BIGINT,
     placements TEXT NOT NULL DEFAULT '',
     cfgs TEXT NOT NULL DEFAULT '',
     placement_steps TEXT NOT NULL DEFAULT '',
@@ -503,7 +501,6 @@ CREATE TABLE IF NOT EXISTS automation_run_def (
     exits TEXT NOT NULL DEFAULT '',
     ins TEXT NOT NULL DEFAULT '',
     cfg TEXT NOT NULL DEFAULT '',
-    entry BOOLEAN NOT NULL DEFAULT 0 CHECK(entry IN (0, 1)),
     roles TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
@@ -517,7 +514,6 @@ CREATE TABLE IF NOT EXISTS automation_run_task (
     ended_at TEXT CHECK(ended_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     role_id BIGINT REFERENCES automation_role(id) ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     incident_task_id BIGINT REFERENCES task(id) ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
-    seat BIGINT,
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
 );

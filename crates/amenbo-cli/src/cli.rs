@@ -2030,8 +2030,7 @@ pub enum AutomationCmd {
         /// opened with
         #[arg(long, value_name = "ID", required_unless_present = "builtin", conflicts_with = "builtin")]
         action: Option<i64>,
-        /// place one of Amenbo's built-ins instead (`automation builtin-list` names them). Placed first,
-        /// make_task comes set to take the task it files, the one way a run can start from it
+        /// place one of Amenbo's built-ins instead (`automation builtin-list` names them)
         #[arg(long, value_name = "KEY")]
         builtin: Option<String>,
         /// the axis `split_by_dim` splits by (name or ID) — one a task holds one value of. Its ways out
@@ -2507,8 +2506,8 @@ pub enum AutomationCmd {
         /// --in-action only: an automation's picture has nothing outside it
         #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "", conflicts_with_all = ["done", "halt"])]
         exit_to: Option<String>,
-        /// close the run — or, in a run whose entry is take_task, the round whose task it closed, which
-        /// goes round to the entry
+        /// close the run — or, in a run whose role's round starts at take_task, the round whose task it
+        /// closed, which goes round to where the round starts
         #[arg(long, conflicts_with = "halt")]
         done: bool,
         /// end the run failed (halted): its task goes back to todo, keeping its assignee and role, and waits on a task filed to whoever the automation sends a failed round to (--failures-to), carrying why it failed and the step's report
@@ -2533,8 +2532,8 @@ pub enum AutomationCmd {
         /// --in-action only: an automation's picture has nothing outside it
         #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "", conflicts_with_all = ["done", "halt"])]
         exit_to: Option<String>,
-        /// close the run — or, in a run whose entry is take_task, the round whose task it closed, which
-        /// goes round to the entry
+        /// close the run — or, in a run whose role's round starts at take_task, the round whose task it
+        /// closed, which goes round to where the round starts
         #[arg(long, conflicts_with = "halt")]
         done: bool,
         /// end the run failed (halted): its task goes back to todo, keeping its assignee and role, and waits on a task filed to whoever the automation sends a failed round to (--failures-to), carrying why it failed and the step's report
@@ -2630,8 +2629,7 @@ pub enum AutomationCmd {
     },
 
     /// Walk an automation's draft, unsaved changes included, role by role in the order the roles are
-    /// defined in, each from where it starts to its end (from the entry where no role says where it
-    /// starts), without running anything — saving is not needed, unlike `automation start`: the launch
+    /// defined in, each from where it starts to its end, without running anything — saving is not needed, unlike `automation start`: the launch
     /// check, what each step is handed and the whole prompt each agent would be started on — with no agent started,
     /// no built-in carried out and nothing kept. Each step leaves by its first way out, and by the next
     /// one each time it is reached again; what it would have handed on is a placeholder. Takes what

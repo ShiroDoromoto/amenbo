@@ -1640,18 +1640,13 @@ fn render_automation(
 ) {
     let a = &view.automation;
     human(flags, format!("Automation {}  {}", a.id, a.name));
-    let entry = match a.entry_placement_id {
-        Some(placement) => format!("starts at placement {placement}"),
-        None => "starts nowhere".to_string(),
-    };
     let archived = if a.archived { "  archived" } else { "" };
     let stopped = if a.stopped { "  stopped" } else { "" };
     human(
         flags,
         format!(
-            "project {}  {}  {} placement(s){stopped}{archived}",
+            "project {}  {} placement(s){stopped}{archived}",
             a.project_id,
-            entry,
             view.placements.len()
         ),
     );
@@ -1823,7 +1818,8 @@ fn render_placement(
 ) {
     let row = &placement.placement;
     let boxes: Vec<i64> = view.placements.iter().map(|p| p.placement.id).collect();
-    let back = lines_back(view.automation.entry_placement_id, &boxes, &view.edges);
+    let starts: Vec<i64> = view.roles.iter().filter_map(|r| r.entry_placement_id).collect();
+    let back = lines_back(&starts, &boxes, &view.edges);
     let named = match &placement.action {
         Some(action) => format!(
             "action {} ({}) {}",
@@ -2034,7 +2030,7 @@ fn placed_version(version: Option<i64>, latest: Option<i64>) -> String {
 /// out.
 fn render_step(flags: &Flags, view: &ActionView, step: &StepView) {
     let boxes: Vec<i64> = view.steps.iter().map(|s| s.step.id).collect();
-    let back = lines_back(view.action.entry_step_id, &boxes, &view.edges);
+    let back = lines_back(view.action.entry_step_id.as_slice(), &boxes, &view.edges);
     let row = &step.step;
     let mut marks = Vec::new();
     if row.interactive {

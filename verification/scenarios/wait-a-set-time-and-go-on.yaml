@@ -12,7 +12,7 @@
 id: wait-a-set-time-and-go-on
 title: The built-in that waits holds the run for the time it is set to, and then goes on by itself
 description: >
-  Place the built-in that takes a task (`take_task`) as an automation's entry, going on to the
+  Place the built-in that takes a task (`take_task`) where an automation's role starts, going on to the
   built-in that waits (`wait`), and from there to the built-in that closes the task. Hand a task to
   the AI, answer the wait's seconds with 5 on the placement's panel, start the run, and read the
   task gone to in_progress. Wait up to 30 seconds, and read the task gone to done and the run over
@@ -21,7 +21,9 @@ given:
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the run waits over }, as: seed }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that waits and goes on" }, as: auto }
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_take }
+  # The task is the born role's, whose round starts there: a run takes only its role's tasks.
+  - { type: action, domain: task, op: update, with: { target: seed, role_of: auto } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: wait }, as: at_wait }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_wait } }

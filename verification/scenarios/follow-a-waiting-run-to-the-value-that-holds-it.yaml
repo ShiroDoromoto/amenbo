@@ -49,7 +49,9 @@ given:
   # The built-in, set to wait on the screen before the run starts. Its filter is left unanswered, so
   # it looks for the tasks handed to the AI.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that waits on a stage" }, as: auto }
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_take }
+  # The task is the born role's, whose round starts there: a run takes only its role's tasks.
+  - { type: action, domain: task, op: update, with: { target: later, role_of: auto } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: build, agent: claude-code } }

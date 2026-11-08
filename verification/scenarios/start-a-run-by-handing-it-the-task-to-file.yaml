@@ -1,6 +1,6 @@
 # A run can be handed a task as it starts: the title, the notes, the classification and the files to
 # attach are filed as a task before the run is made, under the automation's first role and given to
-# the AI. The run's entry, the built-in that takes a task, takes it, and from there the
+# the AI. The built-in that takes a task, where that role starts, takes it, and from there the
 # run goes on as one that took a task does.
 #
 # The terminal hands it a file the run wrote as well, and meets the guards the start keeps in front of
@@ -11,7 +11,7 @@
 id: start-a-run-by-handing-it-the-task-to-file
 title: A run starts on the task filed from the title, classification and file it is handed
 description: >
-  Place the built-in that takes a task as an automation's entry, then close it. Start it from the
+  Place the built-in that takes a task where an automation's role starts, then close it. Start it from the
   terminal with no app up on the store and read it refused; then, with the app up, start it handing a
   title, notes, a value on the axis the project requires and a file, and read the run under way. Start
   it with no title, with no value on that axis, and with a file that is not there, and read each
@@ -23,7 +23,7 @@ given:
 
   # Take, close.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one handed a task to file" }, as: auto }
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_take }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }

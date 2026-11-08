@@ -17,7 +17,7 @@ given:
   - { type: action, domain: automation, op: action-entry, with: { target: draft, step: write } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one hole inside an action" }, as: auto }
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_start }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: draft }, as: at_draft }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: agent-set, with: { target: at_draft, step: write, agent: claude-code } }

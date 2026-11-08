@@ -178,7 +178,7 @@ mod tests {
             let entry = read::automation_run_defs_of(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
-                .find(|d| d.entry)
+                .find(|d| !d.role_ids().is_empty())
                 .expect("the entry");
             let Opened::Carried { next: Next::Step(work), .. } =
                 open(tx, run.id, entry.id, Some(&claude)).expect("take")
@@ -253,7 +253,7 @@ mod tests {
         read::automation_run_defs_of(tx.conn(), run_id)
             .expect("defs")
             .into_iter()
-            .find(|d| d.entry)
+            .find(|d| !d.role_ids().is_empty())
             .expect("the entry")
             .id
     }

@@ -1493,6 +1493,14 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 132,
+        name: "drop automation.entry_placement_id, automation_version.entry_placement_id and automation_run_def.entry, the start the whole automation had",
+        // **Each role starts its round where it says, and nothing else names a start** (`AMB-D-1123`).
+        // An entry that takes a task is carried onto the first role of an automation none of whose
+        // roles names a start, in its draft and its newest saved version. No task is touched.
+        apply: Apply::Custom(take_the_entry_off_the_automation),
+    },
+    Step {
+        to: 133,
         name: "add automation_run_task.seat, the seat a failed round failed in",
         // **Not seeded: NULL on every row.** The order runs left their seats in within one second was
         // not kept, so no seat can be told for a round that failed before. No task is touched.
@@ -1559,7 +1567,156 @@ fn give_each_launch_role_a_hold(ctx: &Ctx<'_>) -> Result<()> {
     Ok(())
 }
 
-/// v132: `automation_run_task.seat`, the seat a failed round failed in.
+/// v132: **an automation has no start of its own** (`AMB-D-1123`) — each role starts its round where it
+/// says, and nothing else names where a run starts. `automation.entry_placement_id`,
+/// `automation_version.entry_placement_id` and `automation_run_def.entry` go.
+///
+/// **Where no role of an automation names a start, the entry is carried onto its first role** — the
+/// role defined first — as long as the entry is the built-in that takes a task, the one start a role may
+/// have. The draft's roles take the draft's entry and the newest saved version's take its own, as v127
+/// reads them, and no `updated_at` is moved, so a draft that read as its newest version still does
+/// (`ops::automation::unsaved`). Any other entry is let go: a role starting there is refused at launch.
+///
+/// **`automation.entry_placement_id` loses its `REFERENCES` before it is dropped**, by v91's procedure:
+/// SQLite does not drop a column a foreign key names, and `automation` is referenced by too many tables
+/// to be rebuilt. The other two are plain columns and are dropped as they are.
+///
+/// **Only the automation tables are read and written.** A store with no automation drops three columns
+/// of empty tables and writes no row. Each is dropped only where it is there, v68's guard and for v53's
+/// reason.
+fn take_the_entry_off_the_automation(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if column_names(tx, "automation")?.iter().any(|c| c == "entry_placement_id") {
+        carry_the_entry_onto_the_first_role(tx)?;
+        loosen_the_entry(ctx)?;
+        tx.execute_batch("ALTER TABLE automation DROP COLUMN entry_placement_id;")?;
+    }
+    if column_names(tx, "automation_version")?.iter().any(|c| c == "entry_placement_id") {
+        tx.execute_batch("ALTER TABLE automation_version DROP COLUMN entry_placement_id;")?;
+    }
+    if column_names(tx, "automation_run_def")?.iter().any(|c| c == "entry") {
+        tx.execute_batch("ALTER TABLE automation_run_def DROP COLUMN entry;")?;
+    }
+    Ok(())
+}
+
+/// The key of the built-in that takes a task, as it stood at v132.
+const V132_TAKE_TASK: &str = "take_task";
+
+/// [`take_the_entry_off_the_automation`]'s carrying: the entry onto the first role, in the draft and in
+/// the newest saved version, where no role names a start and the entry takes a task.
+fn carry_the_entry_onto_the_first_role(tx: &Transaction<'_>) -> Result<()> {
+    let mut drafts: Vec<(i64, i64)> = Vec::new();
+    {
+        let mut stmt = tx.prepare(
+            "SELECT a.id, a.entry_placement_id FROM automation a \
+             JOIN automation_placement p ON p.id = a.entry_placement_id \
+             JOIN automation_action x ON x.id = p.action_id \
+             WHERE x.builtin = ?1 \
+               AND NOT EXISTS (SELECT 1 FROM automation_role r \
+                               WHERE r.automation_id = a.id AND r.entry_placement_id IS NOT NULL)",
+        )?;
+        let rows = stmt.query_map([V132_TAKE_TASK], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        for row in rows {
+            drafts.push(row?);
+        }
+    }
+    for (automation_id, entry) in drafts {
+        tx.execute(
+            "UPDATE automation_role SET entry_placement_id = ?1 WHERE id = \
+               (SELECT id FROM automation_role WHERE automation_id = ?2 ORDER BY order_key, id LIMIT 1)",
+            rusqlite::params![entry, automation_id],
+        )?;
+    }
+
+    let mut versions: Vec<(i64, i64, String, String)> = Vec::new();
+    {
+        let mut stmt = tx.prepare(
+            "SELECT v.id, v.entry_placement_id, v.placements, v.roles FROM automation_version v \
+             WHERE v.entry_placement_id IS NOT NULL AND v.roles NOT IN ('', '[]') \
+               AND v.version = (SELECT MAX(w.version) FROM automation_version w \
+                                WHERE w.automation_id = v.automation_id)",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
+        for row in rows {
+            versions.push(row?);
+        }
+    }
+    for (version_id, entry, placements, roles) in versions {
+        let Ok(placements) = serde_json::from_str::<Vec<serde_json::Value>>(&placements) else { continue };
+        let Some(action_id) =
+            placements.iter().find(|p| p["id"].as_i64() == Some(entry)).and_then(|p| p["action_id"].as_i64())
+        else {
+            continue;
+        };
+        let builtin: Option<String> = tx
+            .query_row("SELECT builtin FROM automation_action WHERE id = ?1", [action_id], |r| r.get(0))
+            .optional()?
+            .flatten();
+        if builtin.as_deref() != Some(V132_TAKE_TASK) {
+            continue;
+        }
+        let Ok(mut roles) = serde_json::from_str::<Vec<serde_json::Value>>(&roles) else { continue };
+        if roles.iter().any(|role| !role["entry_placement_id"].is_null()) {
+            continue;
+        }
+        let Some(first) = roles.first_mut().and_then(|role| role.as_object_mut()) else { continue };
+        first.insert("entry_placement_id".to_string(), serde_json::Value::from(entry));
+        tx.execute(
+            "UPDATE automation_version SET roles = ?1 WHERE id = ?2",
+            rusqlite::params![serde_json::Value::Array(roles).to_string(), version_id],
+        )?;
+    }
+    Ok(())
+}
+
+/// Rewrite `automation.entry_placement_id` as a plain column, so that it can be dropped — v91's
+/// procedure, copied rather than called, and checked the same way: the declaration must carry the
+/// clause [`AUTOMATION_ENTRY_PLACEMENT`] spells, and the column list must read the same afterwards. A
+/// column with no foreign key is left as it is.
+fn loosen_the_entry(ctx: &Ctx<'_>) -> Result<()> {
+    const PLAIN: &str = "entry_placement_id BIGINT";
+    let keyed: i64 = ctx.tx.query_row(
+        "SELECT COUNT(*) FROM pragma_foreign_key_list('automation') WHERE \"from\" = 'entry_placement_id'",
+        [],
+        |r| r.get(0),
+    )?;
+    if keyed == 0 {
+        return Ok(());
+    }
+    let declared: String = ctx.tx.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'automation'",
+        [],
+        |r| r.get(0),
+    )?;
+    if declared.matches(AUTOMATION_ENTRY_PLACEMENT).count() != 1 {
+        return Err(super::StoreEngineError::UnrecognisedDdl {
+            table: "automation",
+            expected: AUTOMATION_ENTRY_PLACEMENT,
+        });
+    }
+    let loosened = declared.replace(AUTOMATION_ENTRY_PLACEMENT, PLAIN);
+
+    let before = column_names(ctx.tx, "automation")?;
+    ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
+    let wrote = ctx.tx.execute(
+        "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'automation'",
+        [loosened.as_str()],
+    );
+    // `RESET` both shuts the door and drops the connection's parsed schema, so the `DROP COLUMN` after
+    // this reads the declaration this left.
+    ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+    wrote?;
+    if column_names(ctx.tx, "automation")? != before {
+        return Err(super::StoreEngineError::UnrecognisedDdl {
+            table: "automation",
+            expected: AUTOMATION_ENTRY_PLACEMENT,
+        });
+    }
+    Ok(())
+}
+
+/// v133: `automation_run_task.seat`, the seat a failed round failed in.
 ///
 /// **Appended only where it is missing**, v68's guard and for v53's reason. The column may be added by
 /// `ALTER TABLE` because it has no default but NULL.
@@ -2887,10 +3044,14 @@ fn ids_and_entries(tx: &Transaction<'_>, sql: &str) -> Result<Vec<(i64, Option<i
 ///
 /// **The table is laid down here in frozen text** as well as by genesis, for the reason v53's are, and
 /// **the column is appended only where it is missing**, v68's guard and for v53's reason. The copies
-/// already there are left at NULL.
+/// already there are left at NULL. A table genesis laid down from today's registry has no
+/// `entry_placement_id`, which v94 to v131 still write, so it is appended there until v132 drops it.
 fn give_the_automations_versions(ctx: &Ctx<'_>) -> Result<()> {
     let tx = ctx.tx;
     tx.execute_batch(AUTOMATION_VERSION_TABLE)?;
+    if !column_names(tx, "automation_version")?.iter().any(|c| c == "entry_placement_id") {
+        tx.execute_batch("ALTER TABLE automation_version ADD COLUMN entry_placement_id BIGINT;")?;
+    }
     if !column_names(tx, "automation_run_def")?.iter().any(|c| c == "automation_version") {
         tx.execute_batch("ALTER TABLE automation_run_def ADD COLUMN automation_version BIGINT;")?;
     }
@@ -6985,6 +7146,12 @@ fn fold_the_automation_into_three_layers(ctx: &Ctx<'_>) -> Result<()> {
         |r| r.get(0),
     )?;
     if two_layer == 0 {
+        // Today's registry no longer declares the entry, so a store genesis handed the automation
+        // tables arrives without it — and v62 to v131 still read and write it. It is appended as v53
+        // declares it, and v132 takes it away again.
+        if !column_names(tx, "automation")?.iter().any(|c| c == "entry_placement_id") {
+            tx.execute_batch(&format!("ALTER TABLE automation ADD COLUMN {AUTOMATION_ENTRY_PLACEMENT};"))?;
+        }
         return Ok(());
     }
 
@@ -10202,7 +10369,8 @@ mod tests {
                 )
                 .unwrap();
 
-            run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+            // Stop at v131: v132 takes the automation's entry and the copy's mark away.
+            run(&engine, &dir, steps_through(131), &mut crate::progress::ignore).unwrap();
 
             let conn = engine.conn();
             let one = |sql: &str| -> i64 { conn.query_row(sql, [], |r| r.get(0)).unwrap() };
@@ -11113,9 +11281,10 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        // Stop at v131: v132 takes the automation's entry and the copy's mark away.
+        run(&engine, &dir, steps_through(131), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 131);
         let conn = engine.conn();
         let exits = |id: i64| -> Vec<crate::model::RunDefExit> {
             let json: String = conn
@@ -11555,9 +11724,10 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        // Stop at v131: v132 takes the automation's entry and the copy's mark away.
+        run(&engine, &dir, steps_through(131), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 131);
         let conn = engine.conn();
         let saved: i64 =
             conn.query_row("SELECT COUNT(*) FROM automation_action_version", [], |r| r.get(0)).unwrap();
@@ -12867,9 +13037,10 @@ mod tests {
             ))
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        // Stop at v131: v132 takes the automation's entry and the copy's mark away.
+        run(&engine, &dir, steps_through(131), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 131);
         let roles = |automation: i64| -> Vec<(i64, String, i64, Option<i64>)> {
             let mut stmt = engine
                 .conn()
@@ -13119,12 +13290,12 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v132: a round written before the step names no seat — the order runs left their seats in was not
+    /// v133: a round written before the step names no seat — the order runs left their seats in was not
     /// kept — and a seat can be written on it after.
     #[test]
-    fn a_round_written_before_v132_names_no_seat() {
+    fn a_round_written_before_v133_names_no_seat() {
         let dir = scratch("automation-run-task-seat");
-        let engine = store_at(&dir, 131);
+        let engine = store_at(&dir, 132);
         engine
             .conn()
             .execute_batch(
@@ -13187,6 +13358,138 @@ mod tests {
             "only the two booleans go in"
         );
         assert_eq!(columns("task"), task_before, "the task table is not changed");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v132 on a store with no automation drops the three columns of empty tables, writes no row, and
+    /// leaves the task table as it was.
+    #[test]
+    fn a_store_with_no_automation_only_loses_the_entry_columns_at_v132() {
+        let dir = scratch("automation-entry-gone-empty");
+        let engine = store_at(&dir, 131);
+        let columns = |table: &str| -> Vec<String> {
+            let mut stmt =
+                engine.conn().prepare("SELECT name FROM pragma_table_info(?1) ORDER BY cid").unwrap();
+            stmt.query_map([table], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+        };
+        let task_before = columns("task");
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert!(!columns("automation").iter().any(|c| c == "entry_placement_id"));
+        assert!(!columns("automation_version").iter().any(|c| c == "entry_placement_id"));
+        assert!(!columns("automation_run_def").iter().any(|c| c == "entry"));
+        assert!(columns("automation_role").iter().any(|c| c == "entry_placement_id"), "a role's start stays");
+        assert_eq!(columns("task"), task_before, "the task table is not changed");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v132: the entry of an automation none of whose roles names a start is carried onto its first role
+    /// where it takes a task — in the draft and in the newest saved version — and let go anywhere else.
+    /// The columns go, and what referenced the automation still does.
+    #[test]
+    fn the_entry_that_takes_a_task_is_carried_onto_the_first_role_at_v132() {
+        let dir = scratch("automation-entry-gone");
+        let engine = store_at(&dir, 131);
+        let at = "2026-11-08T00:00:00Z";
+        let role = |id: i64, automation: i64, start: &str| {
+            format!(
+                r#"{{"id":{id},"automation_id":{automation},"name":"さくら","headcount":1,"take_order":"priority","icon":null,"entry_placement_id":{start},"agent":null,"model":null,"order_key":"a","created_at":"{at}","updated_at":"{at}"}}"#
+            )
+        };
+        let placements = |take: i64, other: i64| {
+            format!(r#"[{{"id":{take},"automation_id":1,"action_id":1}},{{"id":{other},"automation_id":1,"action_id":2}}]"#)
+        };
+        let saved_nowhere = format!("[{},{}]", role(1, 1, "null"), role(2, 1, "null"));
+        let saved_elsewhere = format!("[{}]", role(3, 2, "4"));
+        let saved_on_work = format!("[{}]", role(4, 3, "null"));
+        engine
+            .conn()
+            .execute_batch(&format!(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation_action (id, name, builtin, order_key, created_at, updated_at)
+                 VALUES (1, '着手する', 'take_task', 'a', '{at}', '{at}'), (2, '直す', NULL, 'b', '{at}', '{at}');
+                 INSERT INTO automation (id, project_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 1, '開発', 'a', '{at}', '{at}'), (2, 1, 'レビュー', 'b', '{at}', '{at}'),
+                        (3, 1, '下書き', 'c', '{at}', '{at}');
+                 INSERT INTO automation_placement (id, automation_id, action_id, order_key, created_at, updated_at)
+                 VALUES (1, 1, 1, 'a', '{at}', '{at}'), (2, 1, 2, 'b', '{at}', '{at}'),
+                        (3, 2, 1, 'a', '{at}', '{at}'), (4, 2, 1, 'b', '{at}', '{at}'),
+                        (5, 3, 2, 'a', '{at}', '{at}');
+                 UPDATE automation SET entry_placement_id = 1 WHERE id = 1;
+                 UPDATE automation SET entry_placement_id = 3 WHERE id = 2;
+                 UPDATE automation SET entry_placement_id = 5 WHERE id = 3;
+                 INSERT INTO automation_role (id, automation_id, name, entry_placement_id, order_key, created_at, updated_at)
+                 VALUES (1, 1, 'さくら', NULL, 'a', '{at}', '{at}'), (2, 1, '山田', NULL, 'b', '{at}', '{at}'),
+                        (3, 2, '佐藤', 4, 'a', '{at}', '{at}'), (4, 3, 'Alice', NULL, 'a', '{at}', '{at}');
+                 INSERT INTO automation_version (automation_id, version, entry_placement_id, placements, cfgs, placement_steps, edges, wires, roles, created_at, updated_at)
+                 VALUES (1, 1, 1, '{p1}', '[]', '[]', '[]', '[]', '[]', '{at}', '{at}'),
+                        (1, 2, 1, '{p1}', '[]', '[]', '[]', '[]', '{saved_nowhere}', '{at}', '{at}'),
+                        (2, 1, 3, '{p2}', '[]', '[]', '[]', '[]', '{saved_elsewhere}', '{at}', '{at}'),
+                        (3, 1, 5, '{p3}', '[]', '[]', '[]', '[]', '{saved_on_work}', '{at}', '{at}');
+                 INSERT INTO automation_run (id, automation_id, project_id, status, created_at, updated_at)
+                 VALUES (1, 1, 1, 'running', '{at}', '{at}');
+                 INSERT INTO automation_run_def (id, run_id, placement_id, name, agent, exits, ins, cfg, entry, roles, created_at, updated_at)
+                 VALUES (1, 1, 1, '着手する', '', '[]', '[]', '[]', 1, '[1]', '{at}', '{at}');",
+                p1 = placements(1, 2),
+                p2 = placements(3, 4),
+                p3 = placements(6, 5),
+            ))
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let conn = engine.conn();
+        let starts: Vec<(i64, Option<i64>, String)> = {
+            let mut stmt =
+                conn.prepare("SELECT id, entry_placement_id, updated_at FROM automation_role ORDER BY id").unwrap();
+            stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap().map(|r| r.unwrap()).collect()
+        };
+        assert_eq!(
+            starts,
+            vec![
+                (1, Some(1), at.to_string()),
+                (2, None, at.to_string()),
+                (3, Some(4), at.to_string()),
+                (4, None, at.to_string()),
+            ],
+            "the first role of the first takes its entry; a role that names a start keeps it, and an entry \
+             that takes no task is let go",
+        );
+        let saved = |automation: i64, version: i64| -> Vec<serde_json::Value> {
+            let roles: String = conn
+                .query_row(
+                    "SELECT roles FROM automation_version WHERE automation_id = ?1 AND version = ?2",
+                    [automation, version],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            serde_json::from_str(&roles).unwrap()
+        };
+        assert_eq!(saved(1, 2)[0]["entry_placement_id"], serde_json::json!(1), "and so does the newest version");
+        assert_eq!(saved(1, 2)[1]["entry_placement_id"], serde_json::Value::Null);
+        assert!(saved(1, 1).is_empty(), "an older version is not touched");
+        assert_eq!(saved(2, 1)[0]["entry_placement_id"], serde_json::json!(4));
+        assert_eq!(saved(3, 1)[0]["entry_placement_id"], serde_json::Value::Null);
+
+        let has = |table: &str, column: &str| -> bool {
+            conn.query_row(
+                "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = ?2",
+                [table, column],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap()
+                > 0
+        };
+        assert!(!has("automation", "entry_placement_id"));
+        assert!(!has("automation_version", "entry_placement_id"));
+        assert!(!has("automation_run_def", "entry"));
+        let roles: String = conn.query_row("SELECT roles FROM automation_run_def WHERE id = 1", [], |r| r.get(0)).unwrap();
+        assert_eq!(roles, "[1]", "the copy keeps the roles that start at it");
+        let broken: i64 = conn.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |r| r.get(0)).unwrap();
+        assert_eq!(broken, 0, "what referenced the automation still does");
         std::fs::remove_dir_all(&dir).ok();
     }
 

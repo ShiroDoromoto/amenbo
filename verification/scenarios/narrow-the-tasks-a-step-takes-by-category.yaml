@@ -29,7 +29,7 @@ given:
   # A picture starts at a built-in a run can start at, so the action answering the filter goes on
   # after the one that takes a task. That built-in's own filter needs no answer, so the only setting
   # the launch check names is the action's.
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_start }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
 

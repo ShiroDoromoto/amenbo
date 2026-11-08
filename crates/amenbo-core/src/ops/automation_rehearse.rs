@@ -4,8 +4,8 @@
 //! **Each role is walked in turn** (`AMB-D-1123`), in the order the roles are defined in: a task of
 //! that role is filed, a run is launched in its seat, and that run is walked from where the role's round
 //! starts — the step that takes a task — to its end. The next role is walked once the run before it has
-//! completed. An automation none of whose roles names where its round starts is walked as one run in the
-//! seats of no role, from the picture's entry.
+//! completed. An automation none of whose roles names where its round starts is refused by the launch
+//! check, as a launch of it is.
 //!
 //! **It walks the same road a run does.** The launch check refuses it where it would refuse a launch,
 //! the steps are copied into a run, each step is opened by [`super::automation_step`] — which resolves

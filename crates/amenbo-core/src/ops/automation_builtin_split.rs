@@ -332,7 +332,7 @@ mod tests {
             let automation =
                 automation::add(tx, project, NewAutomation { name: "split".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                     .expect("automation");
-            let placed = automation::placement_add_by_hand(tx, automation.id, split.id).expect("place");
+            let placed = automation::placement_add(tx, automation.id, split.id).expect("place");
             let on = AutomationPictureOwner::Automation;
             let line = automation::edge_add(tx, on, placed.id, Some("技術"), EdgeTarget::Done, None).expect("line");
 
@@ -402,7 +402,7 @@ mod tests {
         let entry = read::automation_run_defs_of(tx.conn(), run.id)
             .expect("defs")
             .into_iter()
-            .find(|d| d.entry)
+            .find(|d| !d.role_ids().is_empty())
             .expect("the entry");
         let Opened::Carried { next: Next::Step(split), .. } = open(tx, run.id, entry.id, None).expect("take") else {
             panic!("the take goes on to the split");
@@ -457,7 +457,7 @@ mod tests {
             let entry = read::automation_run_defs_of(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
-                .find(|d| d.entry)
+                .find(|d| !d.role_ids().is_empty())
                 .expect("the entry");
             let Opened::Carried { next: Next::Step(split), .. } = open(tx, run.id, entry.id, None).expect("take")
             else {
@@ -555,7 +555,7 @@ mod tests {
             let entry = read::automation_run_defs_of(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
-                .find(|d| d.entry)
+                .find(|d| !d.role_ids().is_empty())
                 .expect("the entry");
             let Opened::Carried { next: Next::Step(at_split), .. } = open(tx, run.id, entry.id, None).expect("take") else {
                 panic!("the take goes on down the line drawn from it");

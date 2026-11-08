@@ -775,6 +775,15 @@ moves, the pause at the end of the action under way and the cancel among them, a
 running tab. The row under the header is the seat in front (`run-pane`). The pane opens on the desks of
 the roles (`run-roles`); a seat pressed turns it to that seat's terminal, and the bar over the
 terminal is the one way back (`press-run` with `press: terminal` / `roles`).
+**A role of a launch is changed for that launch alone**, from the menu its desk's "⋯" opens and at
+the terminal alike, the role named by its name (`role`) and the launch by a run of it (`target`): its
+headcount (`launch-headcount-set`, 1 to 10, and `launch-headcount-reset` back to the definition) and
+whether it stops after the task (`launch-role-hold` / `launch-role-release`). `launch-role` reads what
+the launch holds for it beside the definition — off `launch-show` at the terminal, off the desk's
+count, notes and tag on the screen. None and past ten are refused at the terminal alone, since the
+screen's stepper stops at 1 and 10; the role's stop while the launch is paused as a whole is refused on
+the screen alone, since no terminal pauses a launch as a whole, and so is the role read back at its
+definition once the launch has ended, since no terminal ends one.
 **What a step of a run types is the screen's too** (`out-in-pane` / `done-in-pane`):
 which step is being answered comes off the environment the window opened that terminal with, so the
 two are refused anywhere else — and a run started at the terminal opens no pane to type them in.

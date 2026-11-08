@@ -260,6 +260,26 @@ impl Driver<'_> {
                 }
                 args.push("--json".into());
                 let id = self.bound_id(&args, "automation_placement", bind)?;
+                // `starts: true` makes it where the round of the role the automation was born with
+                // starts: an automation has no start of its own, so a run is launched only from a
+                // role's.
+                if with.get("starts").and_then(|v| v.as_bool()) == Some(true) {
+                    let listed = self.run_json(&["automation", "role-list", &automation.to_string(), "--json"])?;
+                    let born = listed["roles"][0]["id"]
+                        .as_i64()
+                        .ok_or_else(|| format!("automation {automation} has no role to start at placement {id}"))?;
+                    self.run_json(&[
+                        "automation",
+                        "role-update",
+                        &born.to_string(),
+                        "--entry",
+                        &id.to_string(),
+                        "--json",
+                    ])?;
+                    return Ok(Outcome::action(format!(
+                        "placed {what} {placed} on automation {automation} (placement {id}), where role {born}'s round starts"
+                    )));
+                }
                 Ok(Outcome::action(format!(
                     "placed {what} {placed} on automation {automation} (placement {id})"
                 )))
@@ -571,12 +591,78 @@ impl Driver<'_> {
                 self.run_json(&["automation", "cancel", &run.to_string(), "--json"])?;
                 Ok(Outcome::action(format!("canceled run {run}")))
             }
+            // One role of the run's launch, for that launch alone. A headcount outside 1 to 10 is
+            // handed on as it is written, so the refusal a road reads is the binary's own.
+            "launch-headcount-set" => {
+                let (launch, role, name) = self.launch_role(with)?;
+                let headcount = req_i64(with, "headcount")?;
+                let v = self.run_json(&[
+                    "automation",
+                    "launch-headcount-set",
+                    &launch.to_string(),
+                    "--role",
+                    &role.to_string(),
+                    "--headcount",
+                    &headcount.to_string(),
+                    "--json",
+                ])?;
+                let got = v["automation_launch_role"]["headcount"].as_u64().unwrap_or_default();
+                Ok(Outcome::action(format!("role `{name}` has {got} in launch {launch}")))
+            }
+            verb @ ("launch-headcount-reset" | "launch-role-hold" | "launch-role-release") => {
+                let (launch, role, name) = self.launch_role(with)?;
+                let v = self.run_json(&[
+                    "automation",
+                    verb,
+                    &launch.to_string(),
+                    "--role",
+                    &role.to_string(),
+                    "--json",
+                ])?;
+                let row = &v["automation_launch_role"];
+                let headcount = row["headcount"].as_u64().unwrap_or_default();
+                let held = row["held"].as_bool().unwrap_or_default();
+                Ok(Outcome::action(format!(
+                    "`{verb}` on role `{name}` in launch {launch}: {headcount} in it, {}",
+                    if held { "stopped once its task is done" } else { "taking tasks" }
+                )))
+            }
             _ => Err(unmapped(Domain::Automation, op)),
         }
     }
 
     pub(crate) fn automation_assert(&self, op: &str, with: &Args) -> Result<Outcome, String> {
         match op {
+            // What the run's launch holds for one role, off `launch-show`. Only what the road names is
+            // compared; `under_way` is how many runs of the role are running or paused.
+            "launch-role" => {
+                let (launch, role, name) = self.launch_role(with)?;
+                let v = self.run_json(&["automation", "launch-show", &launch.to_string(), "--json"])?;
+                let Some(row) = rows_of(&v, "roles").iter().find(|r| r["role_id"].as_i64() == Some(role)) else {
+                    return Ok(Outcome::assert(false, format!("launch {launch} holds no row for role `{name}` ({role})")));
+                };
+                let mut pass = true;
+                let mut said = format!("role `{name}` in launch {launch}:");
+                for key in ["headcount", "defined", "under_way", "to_let_go"] {
+                    let Some(want) = with.get(key) else { continue };
+                    let want = want.as_u64().ok_or_else(|| format!("arg `{key}` must be a whole number"))?;
+                    let got = match key {
+                        "under_way" => row[key].as_array().map(|runs| runs.len() as u64),
+                        _ => row[key].as_u64(),
+                    };
+                    pass = pass && got == Some(want);
+                    let got = got.map_or("(none reported)".to_string(), |n| n.to_string());
+                    said.push_str(&format!(" {key} {got} (expected {want}),"));
+                }
+                if let Some(want) = opt_bool(with, "held") {
+                    let got = row["held"].as_bool();
+                    pass = pass && got == Some(want);
+                    let got = got.map_or("(none reported)".to_string(), |b| b.to_string());
+                    said.push_str(&format!(" held {got} (expected {want}),"));
+                }
+                said.push_str(if pass { " as expected" } else { " MISMATCH" });
+                Ok(Outcome::assert(pass, said))
+            }
             "run" => {
                 let run = self.resolve(with)?;
                 let want = req_str(with, "status")?;
@@ -912,6 +998,32 @@ impl Driver<'_> {
         }
         args.push("--json".into());
         Ok(args)
+    }
+
+    /// The launch a run (`target`) is a seat of, and the role of its automation named `role`, as the
+    /// commands that change a role for one launch take them. The role is found by name, the way its desk
+    /// is on the pane — refused where two carry it, since which of them the road meant is not written.
+    fn launch_role(&self, with: &Args) -> Result<(i64, i64, String), String> {
+        let run = self.resolve(with)?;
+        let name = req_str(with, "role")?;
+        let v = self.run_json(&["automation", "run-show", &run.to_string(), "--json"])?;
+        let launch = v["run"]["launch_id"]
+            .as_i64()
+            .ok_or_else(|| format!("run {run} names no launch"))?;
+        let automation = v["run"]["automation_id"]
+            .as_i64()
+            .ok_or_else(|| format!("run {run} names no automation"))?;
+        let roles = self.run_json(&["automation", "role-list", &automation.to_string(), "--json"])?;
+        let named: Vec<i64> = rows_of(&roles, "roles")
+            .iter()
+            .filter(|r| r["name"].as_str() == Some(name))
+            .filter_map(|r| r["id"].as_i64())
+            .collect();
+        match named.as_slice() {
+            [role] => Ok((launch, *role, name.to_string())),
+            [] => Err(format!("automation {automation} has no role named `{name}`")),
+            _ => Err(format!("automation {automation} has {} roles named `{name}` — which one is not written", named.len())),
+        }
     }
 
     fn definition(&self, automation: i64) -> Result<serde_json::Value, String> {

@@ -45,7 +45,7 @@ given:
   # A picture with nothing on it takes only a built-in a run starts at, so the library
   # action goes in on a line leaving one. The built-in's way out for having taken a task ends the run,
   # which is the line the `+` stands on.
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_take }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した } }
 
 steps_gui:

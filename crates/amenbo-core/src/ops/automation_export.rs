@@ -23,7 +23,6 @@ use crate::model::{
     AutomationPortDirection, AutomationPortKind, AutomationPortOwner, StepScript, ACTION_BOUNDARY,
 };
 use crate::ops::automation::{ActionDef, Picture};
-use crate::ops::automation_builtin_take::TAKE_TASK;
 use crate::store_engine::read;
 
 /// What the file says it is, and which shape of it — the number moves when the shape does.
@@ -311,15 +310,6 @@ pub fn export(conn: &Connection, automation_id: i64) -> Result<AutomationFile> {
         });
     }
 
-    // A store written before each role started its own runs can name an entry for the whole automation
-    // and no start for any role. That entry is written out as where the first role starts, as the import
-    // reads it off an older file, so it is not lost with the entry.
-    let no_role_starts = picture.roles().iter().all(|r| r.entry_placement_id.is_none());
-    let old_start = picture.entry_placement_id.and_then(at).filter(|&place| {
-        no_role_starts
-            && matches!(&placements[place].stands_on, StandsOn::Builtin(b) if b.key == TAKE_TASK.key)
-    });
-
     Ok(AutomationFile {
         format: FORMAT.to_string(),
         amenbo_version: crate::export::APP_VERSION.to_string(),
@@ -333,13 +323,12 @@ pub fn export(conn: &Connection, automation_id: i64) -> Result<AutomationFile> {
         roles: picture
             .roles()
             .iter()
-            .enumerate()
-            .map(|(i, r)| RoleFile {
+            .map(|r| RoleFile {
                 name: r.name.clone(),
                 headcount: r.headcount,
                 take_order: r.take_order,
                 icon: r.icon.clone(),
-                entry: r.entry_placement_id.and_then(at).or(if i == 0 { old_start } else { None }),
+                entry: r.entry_placement_id.and_then(at),
                 agent: r.agent.clone(),
                 model: r.model.clone(),
             })
@@ -657,7 +646,7 @@ mod tests {
             assert_eq!(file.placements.len(), 1);
             assert_eq!(file.edges.len(), 1, "what the draft holds is in the file");
             assert_eq!(file.roles.len(), 1);
-            assert_eq!(file.roles[0].entry, Some(0), "the entry is written out as where the first role starts");
+            assert_eq!(file.roles[0].entry, None, "a role that names no start is written out starting nowhere");
         });
     }
 }

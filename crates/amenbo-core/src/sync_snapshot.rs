@@ -1089,15 +1089,11 @@ mod tests {
             rusqlite::params![automation, action, at],
         );
         put(
-            "UPDATE automation SET entry_placement_id = ?2 WHERE id = ?1",
-            rusqlite::params![automation, placement],
-        );
-        put(
             "INSERT INTO automation_version \
-                 (automation_id, version, entry_placement_id, placements, cfgs, placement_steps, edges, \
-                  wires, created_at, updated_at) \
-             VALUES (?1, 1, ?2, '[]', '[]', '[]', '[]', '[]', ?3, ?3)",
-            rusqlite::params![automation, placement, at],
+                 (automation_id, version, placements, cfgs, placement_steps, edges, wires, created_at, \
+                  updated_at) \
+             VALUES (?1, 1, '[]', '[]', '[]', '[]', '[]', ?2, ?2)",
+            rusqlite::params![automation, at],
         );
         put(
             "INSERT INTO automation_placement_step \

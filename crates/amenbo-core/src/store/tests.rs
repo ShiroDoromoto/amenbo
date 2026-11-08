@@ -1626,7 +1626,7 @@ fn amenbos_default_agent_is_read_and_not_written_at_placing() {
         "the project's comes first",
     );
 
-    // The first thing placed is the entry, a built-in (`AMB-D-977`); the action goes on after it.
+    // A built-in is placed first, and the action goes on after it.
     s.automation_builtin_place(automation.id, "take_task", None).unwrap();
     let placed = s.automation_placement_add(automation.id, action.id).unwrap();
     assert_eq!(chosen(&s, placed.id, step), None, "placing writes nobody onto the step");

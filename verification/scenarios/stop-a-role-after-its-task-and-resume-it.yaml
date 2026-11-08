@@ -1,0 +1,281 @@
+# A reader wants one role of a launch to stop taking tasks without cutting off the one it is on. So the
+# role's menu stops it after the task: each run of it finishes the task it is on and takes no new one,
+# and its seats stay empty. The headcount stays as it was, and resuming fills the seats back up to it.
+# This is the role's, apart from the header's pause after the current task, which is the whole
+# launch's: while the launch is paused as a whole, the role's stop and resume are not offered, and the
+# desk already reads as stopped.
+#
+# The automation is the one pause-a-launch-after-the-current-task-from-its-pane walks. Its one role is
+# the one it was born with, named after it.
+id: stop-a-role-after-its-task-and-resume-it
+title: A role of a launch is stopped after its task and resumed, its headcount kept, and neither is offered while the launch is paused
+description: >
+  Start a run, stop its role after the task and read the role stopped with its headcount as it was,
+  the run still working its task; change the headcount while it is stopped and read it still stopped;
+  resume it and read it taking tasks again. On the screen, then pause the launch from its header and
+  find the role's stop shut in its menu, saying why, before picking the launch up again.
+given:
+  # Two rather than one because the terminal's premise stands its programs up in front of the
+  # machine's own and cannot make a row shorter than two; the step names the first of them either way.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
+  # The task the built-in takes on the screen. Stopping the role after the task leaves it with the run.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the stopped role finishes }, as: seed }
+  - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: seed } }
+  # The action the run opens once the built-in has taken the task, holding the one step it runs. Its
+  # way out is declared on both layers: the step's is what the step reports, and the action's is what the
+  # automation's picture goes on from — the line inside the action carries the one out by the other.
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: work the task the run took }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: exit-add, with: { step: claim, name: got one }, as: claim_got_one }
+  - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  # The action the run goes on to, so the task is still the run's once the first step has reported.
+  - { type: action, domain: automation, op: action-add, with: { name: after }, as: after }
+  - { type: action, domain: automation, op: step-add, with: { target: after, name: wait, prompt: carry on with the task }, as: wait }
+  - { type: action, domain: automation, op: action-entry, with: { target: after, step: wait } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: wait, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — stop after the task" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: after }, as: at_after }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_after, step: wait, agent: claude-code } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_after } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_after, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
+
+# No terminal pauses a launch as a whole — that is the pane's header — so the terminal road reads the
+# role's stop and resume, and leaves the paused launch to the screen. A run started from the terminal
+# opens no step, so whether it is still under way once its role is stopped is not read here.
+steps_cli:
+  # A run's steps are opened by the app, so a run is started with one up on the store.
+  - { type: action, domain: store, op: app-up }
+  # A run starts from the newest saved version, so it is saved first.
+  - { type: action, domain: automation, op: save, with: { target: auto } }
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  - type: assert
+    domain: automation
+    op: launch-role
+    with:
+      target: run
+      role: SCENARIO SEED — stop after the taskの係
+      headcount: 1
+      held: false
+
+  - type: action
+    domain: automation
+    op: launch-role-hold
+    with:
+      target: run
+      role: SCENARIO SEED — stop after the taskの係
+
+  # Stopped, with the headcount as it was.
+  - type: assert
+    domain: automation
+    op: launch-role
+    with:
+      target: run
+      role: SCENARIO SEED — stop after the taskの係
+      headcount: 1
+      defined: 1
+      held: true
+
+  # The headcount is apart from the stop: changed while the role is stopped, it stays stopped.
+  - type: action
+    domain: automation
+    op: launch-headcount-set
+    with:
+      target: run
+      role: SCENARIO SEED — stop after the taskの係
+      headcount: 2
+
+  - type: assert
+    domain: automation
+    op: launch-role
+    with:
+      target: run
+      role: SCENARIO SEED — stop after the taskの係
+      headcount: 2
+      held: true
+
+  - type: action
+    domain: automation
+    op: launch-role-release
+    with:
+      target: run
+      role: SCENARIO SEED — stop after the taskの係
+
+  # Resumed at the headcount it had.
+  - type: assert
+    domain: automation
+    op: launch-role
+    with:
+      target: run
+      role: SCENARIO SEED — stop after the taskの係
+      headcount: 2
+      held: false
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: auto
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: assert
+    domain: automation
+    op: launch-role
+    with:
+      target: run
+      role: SCENARIO SEED — stop after the taskの係
+      headcount: 1
+      under_way: 1
+      held: false
+
+  # Stopped after the task while the first step is open. The task under way is not cut off: the desk
+  # says the role stops after the task, its seat that it stops after this one, and the run is still
+  # working it. The headcount is as it was.
+  - type: action
+    domain: automation
+    op: launch-role-hold
+    with:
+      target: run
+      role: SCENARIO SEED — stop after the taskの係
+
+  - type: assert
+    domain: automation
+    op: launch-role
+    with:
+      target: run
+      role: SCENARIO SEED — stop after the taskの係
+      headcount: 1
+      under_way: 1
+      held: true
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      task: seed
+      state: running
+
+  # The stop is the role's, not the launch's: the header still says it is running.
+  - type: assert
+    domain: automation
+    op: launch-head
+    with:
+      target: run
+      state: running
+
+  # Resumed from the same menu, whose item now says so.
+  - type: action
+    domain: automation
+    op: launch-role-release
+    with:
+      target: run
+      role: SCENARIO SEED — stop after the taskの係
+
+  - type: assert
+    domain: automation
+    op: launch-role
+    with:
+      target: run
+      role: SCENARIO SEED — stop after the taskの係
+      headcount: 1
+      under_way: 1
+      held: false
+
+  # The whole launch paused from its header. Every role takes no task then, so the role's own stop is
+  # not offered: the menu's item is shut and says why, and the desk already reads as stopped.
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: run
+      press: pause
+      on: pane
+
+  - type: assert
+    domain: automation
+    op: launch-head
+    with:
+      target: run
+      state: paused
+
+  - type: action
+    domain: automation
+    op: launch-role-hold
+    with:
+      target: run
+      role: SCENARIO SEED — stop after the taskの係
+      refused: invalid
+
+  # Picked up again, the desk is no longer stopped: the role was never stopped on its own.
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: run
+      press: resume
+      on: pane
+
+  - type: assert
+    domain: automation
+    op: launch-head
+    with:
+      target: run
+      state: running
+
+  - type: assert
+    domain: automation
+    op: launch-role
+    with:
+      target: run
+      role: SCENARIO SEED — stop after the taskの係
+      held: false

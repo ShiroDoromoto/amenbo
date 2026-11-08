@@ -1,0 +1,71 @@
+# A role's headcount for one launch is from 1 to 10. None is not a way to stop a role — stopping it
+# after the task is (`stop-a-role-after-its-task-and-resume-it`) — and past ten is past what a role
+# holds. Both are turned away, and the launch holds what it held before.
+#
+# A terminal road alone: the screen's stepper stops at 1 and 10, so it has neither to press.
+id: refuse-a-launch-headcount-of-none-or-past-ten
+title: A launch's headcount of none or past ten is refused, and what the launch held stays
+description: >
+  Start a run, then set its role's headcount for the launch to none and to eleven. Both are refused,
+  and the role still holds one.
+given:
+  # Two rather than one because the terminal's premise stands its programs up in front of the
+  # machine's own and cannot make a row shorter than two; the step names the first of them either way.
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
+  # The task the run takes, so the launch has a run under way while it is asked.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the bounded launch works }, as: seed }
+  - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: seed } }
+  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }
+  - { type: action, domain: automation, op: step-add, with: { target: take, name: claim, prompt: work the task the run took }, as: claim }
+  - { type: action, domain: automation, op: action-entry, with: { target: take, step: claim } }
+  - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — headcount bounds" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
+  - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
+
+steps_cli:
+  # A run's steps are opened by the app, so a run is started with one up on the store.
+  - { type: action, domain: store, op: app-up }
+  # A run starts from the newest saved version, so it is saved first.
+  - { type: action, domain: automation, op: save, with: { target: auto } }
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  - type: action
+    domain: automation
+    op: launch-headcount-set
+    with:
+      target: run
+      role: SCENARIO SEED — headcount boundsの係
+      headcount: 0
+      refused: invalid
+
+  - type: action
+    domain: automation
+    op: launch-headcount-set
+    with:
+      target: run
+      role: SCENARIO SEED — headcount boundsの係
+      headcount: 11
+      refused: invalid
+
+  - type: assert
+    domain: automation
+    op: launch-role
+    with:
+      target: run
+      role: SCENARIO SEED — headcount boundsの係
+      headcount: 1
+      defined: 1

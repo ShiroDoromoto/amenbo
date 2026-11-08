@@ -4688,6 +4688,41 @@ impl Instructor {
                     other => return Err(format!("`on` does not know `{other}` — it is row / pane")),
                 }
             }
+            // One role of the launch, changed from the menu its desk's "⋯" opens
+            // (`app/src/shell/RunPicture.tsx`, `DeskMenu`). The stepper stays open under the presses, so
+            // the menu is closed by hand after it; the item that stops or resumes the role closes it.
+            (Domain::Automation, "launch-headcount-set") => {
+                if with.contains_key("refused") {
+                    return Err("the menu's stepper stops at 1 and 10, so it has no refusal to walk — a headcount turned away is the terminal's".to_string());
+                }
+                let n = count(with, "headcount")?;
+                if !(1..=10).contains(&n) {
+                    return Err(format!("`headcount: {n}` is past the stepper, which stops at 1 and 10"));
+                }
+                format!(
+                    "{}. In the menu, under \"Headcount for this run\", press \"More\" or \"Fewer\" until the number between them reads {n}, letting each press land before the next. Confirm \"Defined as …\" beside it has not changed, then press Esc to close the menu.",
+                    desk_menu(req(with, "role")?)
+                )
+            }
+            (Domain::Automation, "launch-headcount-reset") => format!(
+                "{}. In the menu, press \"Back to the defined headcount (…)\", the button under the stepper. Confirm the stepper now reads the number \"Defined as …\" says and the button is gone, then press Esc to close the menu.",
+                desk_menu(req(with, "role")?)
+            ),
+            // While the launch is paused as a whole, the item is shut and says why, rather than being
+            // pressed and turned away.
+            (Domain::Automation, op @ ("launch-role-hold" | "launch-role-release")) if with.contains_key("refused") => format!(
+                "{}. In the menu, find the item \"{}\" shut, saying \"Not available while the whole run is paused.\" under it, and the desk's head already carrying the tag \"Stop after the task\" beside its name. Press Esc to close the menu without pressing anything.",
+                desk_menu(req(with, "role")?),
+                if op == "launch-role-hold" { "Stop after the task" } else { "Resume" }
+            ),
+            (Domain::Automation, "launch-role-hold") => format!(
+                "{}. In the menu, press \"Stop after the task\", the item saying tasks in progress run to the end and no new task is taken. Confirm the menu closes.",
+                desk_menu(req(with, "role")?)
+            ),
+            (Domain::Automation, "launch-role-release") => format!(
+                "{}. In the menu, press \"Resume\", the item saying the stopped seats start taking tasks waiting to be started again. Confirm the menu closes.",
+                desk_menu(req(with, "role")?)
+            ),
             // The press beside a row of the list the sidebar opens — beside it, not inside it, so it
             // starts the run rather than going to the project.
             (Domain::Automation, "start-from-list") => format!(
@@ -6824,6 +6859,63 @@ impl Instructor {
                 };
                 format!("In the workspace, on the header of the pane this run is drawn in — the line over the row of the seat in front — confirm {said}.")
             }
+            // One role of the launch, read off its desk (`app/src/shell/RunPicture.tsx`, `DeskView` and
+            // `deskNotes`): the count of seats working out of the headcount on its head, the two notes
+            // under it, and the tag a role stopped after the task carries. A note is drawn only while
+            // there is something to say, so a road that names the numbers is also saying which notes are
+            // not there.
+            (Domain::Automation, "launch-role") => {
+                let role = req(with, "role")?;
+                let headcount = match with.contains_key("headcount") {
+                    true => Some(count(with, "headcount")?),
+                    false => None,
+                };
+                let under_way = match with.contains_key("under_way") {
+                    true => Some(count(with, "under_way")?),
+                    false => None,
+                };
+                let held = with.get("held").and_then(|v| v.as_bool());
+                let mut said: Vec<String> = Vec::new();
+                match (under_way, headcount) {
+                    (Some(u), Some(h)) => said.push(format!("its head says \"{u} / {h} working\"")),
+                    (None, Some(h)) => said.push(format!("the count on its head ends \"/ {h} working\"")),
+                    (Some(_), None) => return Err("`under_way` is read beside the headcount on the desk's head — name `headcount` too".to_string()),
+                    (None, None) => {}
+                }
+                if with.contains_key("defined") {
+                    let d = count(with, "defined")?;
+                    let h = headcount.ok_or("`defined` is read against the headcount on the desk — name `headcount` too")?;
+                    said.push(match d == h {
+                        true => "no note under its head says the headcount is for this run only".to_string(),
+                        false => format!("a note under its head says \"{h} for this run only (defined as {d})\""),
+                    });
+                }
+                if with.contains_key("to_let_go") {
+                    let k = count(with, "to_let_go")?;
+                    match k {
+                        0 => said.push("no note under its head counts seats still to go".to_string()),
+                        _ if held == Some(true) => {
+                            return Err("a role stopped after the task draws no note of the seats to go — read `to_let_go` at the terminal".to_string())
+                        }
+                        _ => {
+                            let (Some(u), Some(h)) = (under_way, headcount) else {
+                                return Err("the note of the seats to go says the runs under way and the headcount — name `under_way` and `headcount` too".to_string());
+                            };
+                            said.push(format!("a note under its head says \"Cutting {u} → {h}. Seats still to go as their tasks end: {k}\""));
+                        }
+                    }
+                }
+                match held {
+                    Some(true) => said.push("its head carries the tag \"Stop after the task\" beside its name, and each seat at work says \"Stops after this task\"".to_string()),
+                    Some(false) => said.push("no tag saying \"Stop after the task\" stands beside its name".to_string()),
+                    None => {}
+                }
+                let said = match said.is_empty() {
+                    true => "that it stands".to_string(),
+                    false => said.join(", "),
+                };
+                format!("In the workspace, in the pane this run is drawn in, on the desk named \"{role}\", confirm {said}.")
+            }
             // Read by typing, because the screen alone cannot say it: the last lines stay whether or
             // not the program is still there. The wait is the watch's look, a few seconds at most.
             (Domain::Automation, "run-pane-ended") => format!(
@@ -7450,6 +7542,14 @@ fn launch_press(press: &str) -> Result<&'static str, String> {
             return Err(format!("`press` does not know `{other}` on the pane — it is pause / resume / stop / terminal / roles"))
         }
     })
+}
+
+/// **Opening a role's menu** on the pane the run is drawn in: the "⋯" at the right end of its desk's
+/// head, labelled after the role. A step goes on from here inside the menu.
+fn desk_menu(role: &str) -> String {
+    format!(
+        "In the workspace, in the pane this run is drawn in, on the desk named \"{role}\", press the \"⋯\" at the right end of its head — the button labelled \"Actions for {role}\" — so its menu opens under it"
+    )
 }
 
 /// Where a run has got to, said as the row says it.

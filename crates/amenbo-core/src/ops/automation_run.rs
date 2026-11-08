@@ -865,6 +865,54 @@ pub fn incidents_waiting_in_launch(conn: &Connection, launch_id: i64) -> Result<
     Ok(waiting)
 }
 
+/// How many of a launch's failed rounds its pane names, the newest ([`failed_rounds_in_launch`]).
+pub const FAILED_NAMED: usize = 20;
+
+/// **One failed round of a launch** — what the line under the launch's pane says of it
+/// ([`failed_rounds_in_launch`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct LaunchFailedRound {
+    /// The run whose round failed.
+    pub run_id: i64,
+    /// The round that failed.
+    pub run_task_id: i64,
+    /// The round's role. `None` where the round had none, and where it has since been taken out.
+    pub role_id: Option<i64>,
+    /// The task the round was on. `None` where it had taken none, and where it has since been deleted.
+    pub task_id: Option<i64>,
+    /// The task it was filed as.
+    pub incident_task_id: i64,
+    /// When it failed — the end its round was closed with as the task was filed.
+    pub failed_at: Option<Timestamp>,
+    /// The seat it failed in, as written on the round ([`crate::model::AutomationRunTask::seat`]).
+    /// `None` for a run started in no launch, and for a round that failed before the seat was written.
+    pub seat: Option<u32>,
+}
+
+/// **The failed rounds of one launch**, newest first — every round of its runs that was filed as a task
+/// when it failed, whatever has become of that task since, up to the newest [`FAILED_NAMED`]. Each is
+/// one line under the launch's pane: a launch whose rounds fail together loses each of them, not only
+/// the one in front. A launch that has ended answers the same way.
+pub fn failed_rounds_in_launch(conn: &Connection, launch_id: i64) -> Result<Vec<LaunchFailedRound>> {
+    let runs = read::automation_launch_run_ids(conn, launch_id)?;
+    let mut rounds = read::automation_run_tasks_filed_of(conn, &runs)?;
+    rounds.truncate(FAILED_NAMED);
+    let mut failed = Vec::with_capacity(rounds.len());
+    for round in rounds {
+        let Some(incident_task_id) = round.incident_task_id else { continue };
+        failed.push(LaunchFailedRound {
+            run_id: round.run_id,
+            run_task_id: round.id,
+            role_id: round.role_id,
+            task_id: round.task_id,
+            incident_task_id,
+            failed_at: round.ended_at,
+            seat: round.seat.and_then(|n| u32::try_from(n).ok()),
+        });
+    }
+    Ok(failed)
+}
+
 /// **The placements one round reaches** — walked from where it starts, as [`reachable`] walks, but not
 /// on into a placement in `starts` other than its own: that is where another role's round begins, and a line going there has left this round.
 fn round_of(
@@ -1969,6 +2017,24 @@ fn seats_of(conn: &Connection, automation_id: i64, pic: &Picture) -> Result<Vec<
         });
     }
     Ok(seats)
+}
+
+/// **The seat `run` sits in now**, counted from 1 — its place among the runs of its role under way,
+/// oldest first, which is how a launch's pane numbers the seats it draws ([`Seats::under_way`]). Asked
+/// as a round fails, while the run is still in its seat ([`crate::ops::automation_stop::ended`]), and
+/// written on the round: once the run is over, the order it and the runs beside it left in is not
+/// kept to better than the second. `None` for a run started in no launch, which sits in no seat, and
+/// for one no longer under way.
+pub fn seat_of(conn: &Connection, run: &AutomationRun) -> Result<Option<u32>> {
+    if run.launch_id.is_none() {
+        return Ok(None);
+    }
+    let seated = match run.role_id {
+        Some(role_id) => read::automation_run_ids_under_way_as(conn, run.automation_id, role_id)?,
+        None => read::automation_run_ids_under_way(conn, run.automation_id)?,
+    };
+    let at = seated.iter().position(|id| *id == run.id);
+    Ok(at.map(|at| u32::try_from(at).unwrap_or(u32::MAX).saturating_add(1)))
 }
 
 /// **Whether a run in these seats stands about to take a task** — running, its next step the built-in
@@ -7054,5 +7120,97 @@ mod tests {
         let one_set = [seat(None, 3, &[10])];
         assert_eq!(room_of(&one_set, Some(1)), (1, 3), "no role names a start: the one set counts");
         assert_eq!(room_of(&one_set, None), (1, 3));
+    }
+
+    /// **Every failed round of a launch is read, newest first** (`failed_rounds_in_launch`) — each with
+    /// its role, its task, the task it was filed as, when and in which seat it failed, the seat as written
+    /// on the round. Two seats that failed in the same second are each read, the later round first; a
+    /// round that filed nothing and a round of another launch are not.
+    #[test]
+    fn a_launchs_failed_rounds_are_read_newest_first_each_in_its_own_seat() {
+        use crate::ops::test_support::mk_task_in;
+        with_tx(|tx| {
+            let automation = mk_automation(tx, "曲づくり");
+            let composer = born(tx, &automation);
+            let at = |s: &str| Timestamp::parse_rfc3339(s).expect("a time");
+            let launch = |when: Timestamp| {
+                let one = AutomationLaunch {
+                    id: read::next_id(tx.conn(), "automation_launch").expect("id"),
+                    automation_id: automation.id,
+                    project_id: automation.project_id,
+                    status: AutomationLaunchStatus::Running,
+                    started_by_kind: None,
+                    ended_at: None,
+                    created_at: when,
+                    updated_at: when,
+                };
+                emit_create(tx, record::automation_launch(&one)).expect("launch");
+                one.id
+            };
+            // A run of the launch whose one round ended at `ended`, filed as a task in `seat` where it
+            // names one.
+            let round = |launch: i64, ended: Timestamp, seat: Option<i64>| {
+                let filed = seat.is_some();
+                let run = AutomationRun {
+                    id: read::next_id(tx.conn(), "automation_run").expect("id"),
+                    automation_id: automation.id,
+                    project_id: automation.project_id,
+                    launch_id: Some(launch),
+                    status: if filed { AutomationRunStatus::Failed } else { AutomationRunStatus::Completed },
+                    started_at: Some(at("2026-11-08T05:00:00Z")),
+                    ended_at: Some(ended),
+                    role_id: Some(composer.id),
+                    created_at: at("2026-11-08T05:00:00Z"),
+                    updated_at: ended,
+                    ..Default::default()
+                };
+                emit_create(tx, record::automation_run(&run)).expect("run");
+                let task = mk_task_in(tx, "曲", Some(automation.project_id));
+                let incident = filed.then(|| mk_task_in(tx, "障害", Some(automation.project_id)));
+                let stretch = crate::model::AutomationRunTask {
+                    id: read::next_id(tx.conn(), "automation_run_task").expect("id"),
+                    run_id: run.id,
+                    seq: 1,
+                    task_id: Some(task),
+                    started_at: Some(at("2026-11-08T05:00:00Z")),
+                    ended_at: Some(ended),
+                    role_id: Some(composer.id),
+                    incident_task_id: incident,
+                    seat,
+                    created_at: at("2026-11-08T05:00:00Z"),
+                    updated_at: ended,
+                };
+                emit_create(tx, record::automation_run_task(&stretch)).expect("round");
+                (run.id, stretch.id, task, incident)
+            };
+            let on = launch(at("2026-11-08T05:00:00Z"));
+            let early = at("2026-11-08T05:01:00Z");
+            let together = at("2026-11-08T05:05:00Z");
+            let first = round(on, early, Some(1));
+            let left = round(on, at("2026-11-08T05:02:00Z"), None);
+            let seat1 = round(on, together, Some(1));
+            let seat2 = round(on, together, Some(2));
+            let elsewhere = launch(at("2026-11-08T05:00:00Z"));
+            round(elsewhere, together, Some(1));
+
+            let failed = failed_rounds_in_launch(tx.conn(), on).expect("failed rounds");
+            let line = |(run_id, run_task_id, task, incident): (i64, i64, i64, Option<i64>), at, seat| {
+                LaunchFailedRound {
+                    run_id,
+                    run_task_id,
+                    role_id: Some(composer.id),
+                    task_id: Some(task),
+                    incident_task_id: incident.expect("filed"),
+                    failed_at: Some(at),
+                    seat: Some(seat),
+                }
+            };
+            assert_eq!(
+                failed,
+                vec![line(seat2, together, 2), line(seat1, together, 1), line(first, early, 1)],
+                "newest first, each in its own seat; the round that filed nothing is left out",
+            );
+            assert!(failed.iter().all(|one| one.run_id != left.0));
+        });
     }
 }

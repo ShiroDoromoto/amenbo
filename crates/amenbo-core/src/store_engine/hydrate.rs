@@ -934,6 +934,7 @@ pub(super) fn automation_run_task_row(r: &Row) -> rusqlite::Result<AutomationRun
         ended_at: ts_opt(r, C.ended_at)?,
         role_id: get(r, C.role_id)?,
         incident_task_id: get(r, C.incident_task_id)?,
+        seat: get(r, C.seat)?,
         created_at,
         updated_at,
     })

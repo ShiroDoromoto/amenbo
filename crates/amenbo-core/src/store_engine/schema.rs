@@ -1665,6 +1665,11 @@ datasets! {
         // The task filed to whoever the automation sends a failed round to, where this round failed —
         // the round's task waits on it. `SET NULL` for the reason `task_id` is.
         incident_task_id: fk_opt("task", "SET NULL"),
+        // The seat the round failed in, counted from 1 among its role's runs under way as it failed —
+        // written beside `incident_task_id`, since the order runs left their seats in within one second
+        // is not kept anywhere else. NULL for a round that did not fail, one of a run started in no
+        // launch, and one that failed before this was written (v133).
+        seat: col(INT_OPT),
     }
 
     // **One task a round filed for another role to work** — the round (`run_task_id`) whose role

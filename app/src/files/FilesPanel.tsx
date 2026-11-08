@@ -16,7 +16,7 @@
 // binary and the first bytes make it a picture (`crate::folder`); the name decides only whether
 // text is drawn as Markdown, which is a question about rendering rather than about what the file
 // is.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import type { FolderFileDto, GitEntryDto } from "../bindings/bindings";
 import { Markdown } from "../components/Markdown";
@@ -25,7 +25,7 @@ import { confirmDialog } from "../core/dialog";
 import { fileUrl } from "../core/fileUrl";
 import { errText, formatNumber, isErr, t, tf } from "../core/i18n";
 import { pushNotice } from "../core/notice";
-import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
+import { RefNavProvider, useLedgerNav } from "../core/refNav";
 import {
   folderEncodings, folderGitIgnore, folderGitStatus, folderGitUntrack, folderRead, folderSave,
   folderUnwatch, folderWatch, nextWatchTag, onFolderChanged,
@@ -680,18 +680,6 @@ function FileTabs({
       )}
     </div>
   );
-}
-
-/**
- * Following something from this face means leaving it: what a record opens on is the ledger, and a
- * click that selected it behind this face would look like a link that did nothing (`AMB-D-747`).
- */
-function useLedgerNav(onOpenLedger?: () => void): RefNav {
-  const outer = useRefNav();
-  return useMemo(() => ({
-    selectTask: (id: number) => { onOpenLedger?.(); outer.selectTask?.(id); },
-    selectDecision: (id: number | null) => { onOpenLedger?.(); outer.selectDecision?.(id); },
-  }), [outer, onOpenLedger]);
 }
 
 

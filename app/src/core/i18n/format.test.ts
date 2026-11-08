@@ -10,8 +10,8 @@ const snap = { language: null as string | null, dateLocale: null as string | nul
 vi.mock("../snapshot", () => ({ getSnapshot: () => snap }));
 
 import {
-  dueLabel, exactLabel, formatDay, formatDayTime, formatNumber, listLabel, monthLabel, weekdayLabels,
-  whenLabel,
+  dueLabel, exactLabel, formatDay, formatDayTime, formatNumber, formatTimeOfDay, listLabel, monthLabel,
+  weekdayLabels, whenLabel,
 } from "./format";
 import { tf, tn } from "./index";
 import { de } from "./locales/de";
@@ -150,6 +150,11 @@ describe("a date", () => {
     const written = formatDayTime(at, "en-US");
     expect(written).toMatch(/^6\/21, \d{2}:\d{2}/);
     expect(written).not.toContain("2026");
+  });
+
+  it("carries the time of day alone, hours and minutes", () => {
+    expect(formatTimeOfDay(at, "ja-JP")).toBe("15:30");
+    expect(formatTimeOfDay(new Date("nope"), "ja-JP")).toBe("");
   });
 });
 

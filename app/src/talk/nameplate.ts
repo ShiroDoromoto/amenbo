@@ -172,13 +172,19 @@ export type Round = {
   readonly incident?: Incident;
 };
 
-/** The task a failed round was filed as, and who it went to. */
+/** The task a failed round was filed as, who it went to, and when the round failed. */
 export type Incident = {
+  /** The task's id, which the line under the pane opens it by. */
+  readonly id: number;
   readonly ref: string;
   /** The role it was filed to, by its id, or null where it went to a person or the role is gone. */
   readonly role: number | null;
   /** Whether it went to a person rather than a role. */
   readonly person: boolean;
+  /** When the round failed, in milliseconds since the epoch, or null where nothing is written for it. */
+  readonly at: number | null;
+  /** The seat in its launch the round failed in, counted from 1, or null where the run sat in none. */
+  readonly seat: number | null;
 };
 
 /** Who carries a step out, as the step's line says it. */

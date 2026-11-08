@@ -1499,6 +1499,13 @@ pub const STEPS: &[Step] = &[
         // roles names a start, in its draft and its newest saved version. No task is touched.
         apply: Apply::Custom(take_the_entry_off_the_automation),
     },
+    Step {
+        to: 133,
+        name: "add automation_run_task.seat, the seat a failed round failed in",
+        // **Not seeded: NULL on every row.** The order runs left their seats in within one second was
+        // not kept, so no seat can be told for a round that failed before. No task is touched.
+        apply: Apply::Custom(let_a_round_name_its_seat),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -1705,6 +1712,18 @@ fn loosen_the_entry(ctx: &Ctx<'_>) -> Result<()> {
             table: "automation",
             expected: AUTOMATION_ENTRY_PLACEMENT,
         });
+    }
+    Ok(())
+}
+
+/// v133: `automation_run_task.seat`, the seat a failed round failed in.
+///
+/// **Appended only where it is missing**, v68's guard and for v53's reason. The column may be added by
+/// `ALTER TABLE` because it has no default but NULL.
+fn let_a_round_name_its_seat(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_run_task")?.iter().any(|c| c == "seat") {
+        tx.execute_batch("ALTER TABLE automation_run_task ADD COLUMN seat BIGINT;")?;
     }
     Ok(())
 }
@@ -13268,6 +13287,33 @@ mod tests {
         let n: i64 =
             engine.conn().query_row("SELECT COUNT(*) FROM automation_launch_role", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v133: a round written before the step names no seat — the order runs left their seats in was not
+    /// kept — and a seat can be written on it after.
+    #[test]
+    fn a_round_written_before_v133_names_no_seat() {
+        let dir = scratch("automation-run-task-seat");
+        let engine = store_at(&dir, 132);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO task (id, title, status, project_id) VALUES (1, 'work', 'todo', 1), (2, 'incident', 'todo', 1);
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'failed');
+                 INSERT INTO automation_run_task (id, run_id, seq, task_id, incident_task_id) VALUES (1, 1, 1, 1, 2);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let seat: Option<i64> =
+            engine.conn().query_row("SELECT seat FROM automation_run_task WHERE id = 1", [], |r| r.get(0)).unwrap();
+        assert_eq!(seat, None, "no seat was kept before");
+        engine.conn().execute("UPDATE automation_run_task SET seat = 2 WHERE id = 1", []).unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -137,7 +137,7 @@ describe("opening a terminal in a pane with none in it", () => {
 
   it("writes under a failed round's kept screen, as its last lines, how its program ended and where the failure was filed", async () => {
     await pane(
-      { ...FAILED, round: { role: 12, startedAt: null, incident: { ref: "AMB-T-99", role: 14, person: false } } },
+      { ...FAILED, round: { role: 12, startedAt: null, incident: { id: 99, ref: "AMB-T-99", role: 14, person: false, at: null, seat: null } } },
       "uploading v2.4.0\nError: upload failed (HTTP 503)",
       1,
     );
@@ -151,7 +151,7 @@ describe("opening a terminal in a pane with none in it", () => {
 
   it("says the program ended without a code where none was kept", async () => {
     await pane(
-      { ...FAILED, round: { role: 12, startedAt: null, incident: { ref: "AMB-T-99", role: null, person: true } } },
+      { ...FAILED, round: { role: 12, startedAt: null, incident: { id: 99, ref: "AMB-T-99", role: null, person: true, at: null, seat: null } } },
       "Error: upload failed (HTTP 503)",
     );
     expect(hoisted.after).toEqual([[t("face.endedNoCode"), t("auto.run.term.filedPerson")]]);
@@ -159,7 +159,7 @@ describe("opening a terminal in a pane with none in it", () => {
 
   it("says where the failure was filed for a round that has no role, and so no role card", async () => {
     await pane(
-      { ...FAILED, round: { role: null, startedAt: null, incident: { ref: "AMB-T-99", role: 14, person: false } } },
+      { ...FAILED, round: { role: null, startedAt: null, incident: { id: 99, ref: "AMB-T-99", role: 14, person: false, at: null, seat: null } } },
       "Error: upload failed (HTTP 503)",
       0,
     );

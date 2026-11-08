@@ -36,6 +36,7 @@ import type { DiffPick } from "../files/GitDiff";
 import { rootShown, sectionsOf } from "../files/sections";
 import { fileUnderAny } from "../files/fileUnder";
 import { composeStartsOpen } from "../core/composeStartsOpen";
+import { RefNavProvider, useLedgerNav } from "../core/refNav";
 import { isBlankSpaceClose } from "./outsideClose";
 import { useHandDrag } from "../files/handDrag";
 import { Icon } from "../components/Icon";
@@ -281,6 +282,9 @@ export function WorkspaceFace({
   const rootRef = useRef<HTMLDivElement>(null);
   // The reading column itself, so a press can be told apart from one inside it (`isBlankSpaceClose`).
   const sideRef = useRef<HTMLDivElement>(null);
+  // A task pressed in a pane — a run's failed round filed as one, a built-in's card — opens on the
+  // ledger, which is put in front of this face first (`useLedgerNav`).
+  const ledgerNav = useLedgerNav(onOpenLedger);
   // Nothing is open until somebody opens something: a pane is made by opening one (`../talk/layout`),
   // so the face comes up with the way in and no boxes.
   const [layout, setLayout] = useState<Layout>(EMPTY_LAYOUT);
@@ -1837,6 +1841,7 @@ export function WorkspaceFace({
           ? null
           : (
             <>
+              <RefNavProvider value={ledgerNav}>
               {slots.map(({ frame, across, down }, slot) => {
                 // The name the terminal in this place goes by: the place's own, or on a launch's
                 // pane the seat's in front (`../talk/layout`'s `terminalOf`).
@@ -1994,6 +1999,7 @@ export function WorkspaceFace({
                 />
                 );
               })}
+              </RefNavProvider>
               {/* What the corner would leave this pane at, drawn from where the pane stands now.
                   The pane itself is untouched until the press ends: it holds a terminal, and one
                   that was resized on every report of the pointer would be telling the program in

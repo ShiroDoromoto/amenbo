@@ -156,6 +156,12 @@ export function formatDayTime(at: Date, locale: string = dateLocale()): string {
   }).format(at);
 }
 
+/** A time of day, hours and minutes on the reader's clock — for something that happened today or so. */
+export function formatTimeOfDay(at: Date, locale: string = dateLocale()): string {
+  if (!Number.isFinite(at.getTime())) return "";
+  return dateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(at);
+}
+
 /** The calendar's month heading (month is 0..11, as in `getMonth`). */
 export function monthLabel(year: number, month: number, locale: string = dateLocale()): string {
   return dateTimeFormat(locale, { year: "numeric", month: "long", timeZone: "UTC" })

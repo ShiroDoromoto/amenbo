@@ -58,8 +58,11 @@
 // run. It names no other seat: the way to another seat's terminal is back to the roles and that seat
 // pressed. Where a step that may wait for a person turned the pane, the bar says so in one line.
 //
-// **A failed round that was filed as a task is one line under the pane**, naming the role, whom it was
-// filed to and the task (`amenbo_core::ops::automation_stop`).
+// **Each failed round that was filed as a task is one line under the pane**, newest first — every one
+// of the launch's, not only the round in front, for seats that fail together each fall: when it failed,
+// then — in the stop colour — the role, its seat and the task it was on, whom it was filed to and the task
+// it was filed as, which opens that task when pressed (`amenbo_core::ops::automation_stop`). A run kept
+// from before launches names its own failed round alone.
 //
 // **A round that needs a person, out of sight in the room, is named at the room's edge**: one that may
 // wait for a person, one that failed, and one whose terminal has been quiet into the second stage. What
@@ -102,12 +105,14 @@ import {
 } from "../core/automations";
 import { errText, t, tf } from "../core/i18n";
 import { pushNotice } from "../core/notice";
-import { formatNumber } from "../core/i18n/format";
+import { formatNumber, formatTimeOfDay } from "../core/i18n/format";
+import { useRefNav } from "../core/refNav";
 import { Icon } from "../components/Icon";
 import { Menu, MenuItem } from "../components/Menu";
 import { Stepper } from "../components/Stepper";
 import { RoleIcon } from "../screens/AutomationRoles";
-import { clockOf, type Say } from "../talk/nameplate";
+import { clockOf, type Incident, type Say } from "../talk/nameplate";
+import { incidentOf } from "../core/runWords";
 import { quietAt, type Quiet } from "../talk/moving";
 import { runFrameId } from "../talk/layout";
 import { useRunOutputs } from "../talk/runOutputs";
@@ -467,20 +472,92 @@ function UnseenNotice({ attns, up, onPress }: { attns: readonly Attn[]; up: bool
   );
 }
 
+/** **A line under the pane for a failed round**, as {@link filedLine} and {@link filedLines} read it. */
+export type Filed = {
+  /** When the round failed, in milliseconds since the epoch, or null where nothing is written for it. */
+  at: number | null;
+  /** The sentence before the task it was filed as, and after it. */
+  before: string;
+  after: string;
+  /** The task it was filed as, by its id and its reference — the link in the sentence. */
+  id: number;
+  ref: string;
+};
+
+/** Where the filed task's reference stands in the sentence, for it to be cut there. */
+const REF_MARK = "\u0000";
+
+/** **One failed round**, as a line under the pane names it: its role by its id, the task it was on by
+ *  its reference, and the task it was filed as. */
+type FailedRound = { role: number | null; task: string | null; incident: Incident };
+
 /**
- * **The line under the pane for a failed round**, where it was filed: whose round failed — the role by
- * its name, or the automation where the round was under none — whom it was filed to, and the task.
- * Null where the run did not fail or filed nothing.
+ * **The line for one failed round**, where it was filed: when it failed, whose round it was — the role
+ * by its name, or the automation `automation` where the round was under none, the seat in the launch it
+ * failed in and the task it was on, each where there is one — whom it was filed to, and the task. The
+ * seat is the one the round's record names: the run is over by now and has left the seats the launch
+ * reads.
  */
-export function filedLine(run: Say, roles: readonly TaskRoleDto[]): string | null {
+function filedOf(round: FailedRound, automation: string, roles: readonly TaskRoleDto[]): Filed {
+  const { incident } = round;
+  const failed = (round.role === null ? undefined : roles.find((role) => role.id === round.role))?.name ?? automation;
+  const seated =
+    incident.seat === null ? failed : tf("auto.run.roles.filedSeat", { role: failed, n: incident.seat });
+  const who = round.task === null ? seated : tf("auto.run.roles.filedTask", { who: seated, task: round.task });
+  const to = incident.role === null ? undefined : roles.find((role) => role.id === incident.role);
+  const words =
+    to !== undefined
+      ? tf("auto.run.roles.filedRole", { who, to: to.name, ref: REF_MARK })
+      : incident.person
+        ? tf("auto.run.roles.filedPerson", { who, ref: REF_MARK })
+        : tf("auto.run.roles.filed", { who, ref: REF_MARK });
+  const [before = "", after = ""] = words.split(REF_MARK);
+  return { at: incident.at, before, after, id: incident.id, ref: incident.ref };
+}
+
+/**
+ * **The line under the pane of a run kept from before launches**, for its own failed round — which
+ * sits in no launch to read the rest from. Null where the run did not fail or filed nothing.
+ */
+export function filedLine(run: Say, roles: readonly TaskRoleDto[]): Filed | null {
   const incident = run.round?.incident;
   if (incident === undefined || run.state?.status !== "failed") return null;
-  const own = run.round?.role ?? null;
-  const failed = (own === null ? undefined : roles.find((role) => role.id === own))?.name ?? run.automation;
-  const to = incident.role === null ? undefined : roles.find((role) => role.id === incident.role);
-  if (to !== undefined) return tf("auto.run.roles.filedRole", { role: failed, to: to.name, ref: incident.ref });
-  if (incident.person) return tf("auto.run.roles.filedPerson", { role: failed, ref: incident.ref });
-  return tf("auto.run.roles.filed", { role: failed, ref: incident.ref });
+  return filedOf({ role: run.round?.role ?? null, task: run.task?.ref ?? null, incident }, run.automation, roles);
+}
+
+/** **The lines under a launch's pane**, one for each of its failed rounds, newest first. */
+export function filedLines(launch: AutomationLaunchStateDto, roles: readonly TaskRoleDto[]): Filed[] {
+  return launch.failed.map((one) =>
+    filedOf({ role: one.role ?? null, task: one.task ?? null, incident: incidentOf(one.incident) }, launch.automationName, roles),
+  );
+}
+
+/** A line under the pane for a failed round: its time, then what happened, the filed task pressed to
+ *  open it where there is somewhere to open it. */
+function FiledLine({ filed }: { filed: Filed }) {
+  const nav = useRefNav();
+  const at = filed.at !== null && Number.isFinite(filed.at) ? new Date(filed.at) : null;
+  return (
+    <p className="runroles__filed">
+      {at !== null && (
+        <time className="runroles__filedat" dateTime={at.toISOString()}>
+          {formatTimeOfDay(at)}
+        </time>
+      )}
+      <span className="runroles__filedwords">
+        {filed.before}
+        <button
+          type="button"
+          className="runroles__filedref"
+          disabled={!nav.selectTask}
+          onClick={() => nav.selectTask?.(filed.id)}
+        >
+          {filed.ref}
+        </button>
+        {filed.after}
+      </span>
+    </p>
+  );
 }
 
 /** The sentence `key` with its `{n}` drawn bold. */
@@ -882,7 +959,11 @@ export const RunRoles = memo(
       () => (launchState !== null ? desksOf(launchState, run) : reading ? { desks: [], idle: [] } : runDesks(run, roles)),
       [launchState, reading, run, roles],
     );
-    const filed = useMemo(() => filedLine(run, roles), [run, roles]);
+    const filed = useMemo(() => {
+      if (launchState !== null) return filedLines(launchState, roles);
+      const own = reading ? null : filedLine(run, roles);
+      return own === null ? [] : [own];
+    }, [launchState, reading, run, roles]);
     // The one role whose menu is open, and where; one at a time.
     const [menu, setMenu] = useState<{ role: number | null; at: { x: number; y: number } } | null>(null);
     const room = useRef<HTMLDivElement>(null);
@@ -940,10 +1021,12 @@ export const RunRoles = memo(
             ))}
           </div>
         )}
-        {filed !== null && (
-          <p className="runroles__filed" role="status">
-            {filed}
-          </p>
+        {filed.length > 0 && (
+          <div className="runroles__events" role="status">
+            {filed.map((one) => (
+              <FiledLine key={one.id} filed={one} />
+            ))}
+          </div>
         )}
       </div>
     );
@@ -966,7 +1049,10 @@ export const RunRoles = memo(
     before.run.task?.title === after.run.task?.title &&
     before.run.round?.role === after.run.round?.role &&
     before.run.round?.startedAt === after.run.round?.startedAt &&
+    before.run.round?.incident?.id === after.run.round?.incident?.id &&
     before.run.round?.incident?.ref === after.run.round?.incident?.ref &&
+    before.run.round?.incident?.at === after.run.round?.incident?.at &&
+    before.run.round?.incident?.seat === after.run.round?.incident?.seat &&
     before.run.round?.incident?.role === after.run.round?.incident?.role &&
     before.run.round?.incident?.person === after.run.round?.incident?.person &&
     before.run.state?.status === after.run.state?.status &&

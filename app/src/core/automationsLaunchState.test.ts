@@ -40,7 +40,7 @@ describe("counting one launch", () => {
     waiting: 0, firstWaiting: [],
   });
   const state = (over: Partial<AutomationLaunchStateDto> = {}): AutomationLaunchStateDto => ({
-    launch: 3, project: 1, automation: 2, automationName: "Alice", status: "running", maxHeadcount: 10,
+    launch: 3, project: 1, automation: 2, automationName: "Alice", status: "running", maxHeadcount: 10, failed: [],
     roles: [
       role(3, [run({ run: 1 }), run({ run: 2, waiting: true }), run({ run: 3, pauseBeforeNextTask: true })]),
       role(2, [run({ run: 4, status: "paused" })], true),

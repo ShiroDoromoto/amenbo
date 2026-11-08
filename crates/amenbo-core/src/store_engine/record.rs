@@ -974,6 +974,7 @@ pub fn automation_run_task(t: &AutomationRunTask) -> Record {
                 ("ended_at", tsov(&t.ended_at)),
                 ("role_id", kv_opt(&t.role_id)),
                 ("incident_task_id", kv_opt(&t.incident_task_id)),
+                ("seat", t.seat.map(iv).unwrap_or(Value::Null)),
             ],
             &t.created_at,
             &t.updated_at,

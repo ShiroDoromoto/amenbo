@@ -68,7 +68,8 @@ use crate::dto::{
     AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationFailuresToDto, AutomationHeldBackDto,
     AutomationHeldByRecordDto, AutomationHeldByValueDto, AutomationLaunchAsksDto,
     AutomationCarrierDto, AutomationLaunchBlockDto,
-    AutomationLaunchCheckDto, AutomationLaunchIncidentDto, AutomationLaunchRoleStateDto, AutomationLaunchStateDto,
+    AutomationLaunchCheckDto, AutomationLaunchFailedDto, AutomationLaunchIncidentDto, AutomationLaunchRoleStateDto,
+    AutomationLaunchStateDto,
     AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRoleDto, AutomationRolePassDto, AutomationRunCardDto,
     AutomationRunEndingsDto,
@@ -2076,7 +2077,7 @@ fn run_card(
         task: worked_task(store, stretch.as_ref().map(|one| one.id))?,
         role: stretch.as_ref().and_then(|one| one.role_id),
         role_started_at: stretch.as_ref().and_then(|one| one.started_at).map(|at| at.to_rfc3339_z()),
-        incident: incident_of(store, stretch.as_ref().and_then(|one| one.incident_task_id))?,
+        incident: incident_of(store, stretch.as_ref())?,
         passes: passes_of(store, run.id, stretch.as_ref().map(|one| one.id))?,
         report_withheld,
         acknowledged: run.acknowledged_at.is_some(),
@@ -2201,7 +2202,26 @@ pub fn automation_launch_state(launch_id: i64) -> Result<AutomationLaunchStateDt
         status: state.launch.status.as_str(),
         max_headcount: amenbo_core::model::MAX_ROLE_HEADCOUNT,
         roles,
+        failed: failed_in_launch(&store, launch_id)?,
     })
+}
+
+/// **The failed rounds of one launch**, newest first ([`automation_run::failed_rounds_in_launch`]) —
+/// one line each under the launch's pane. A round whose filed task has since been deleted is left out.
+fn failed_in_launch(store: &amenbo_core::Store, launch_id: i64) -> Result<Vec<AutomationLaunchFailedDto>, CmdError> {
+    let conn = store.read_model().conn();
+    let mut out = Vec::new();
+    for round in automation_run::failed_rounds_in_launch(conn, launch_id)? {
+        let Some(incident) = filed_as(store, round.incident_task_id, round.failed_at, round.seat)? else {
+            continue;
+        };
+        let task = match round.task_id {
+            Some(id) => read::task(conn, id)?.map(|_| amenbo_core::idref::task(id)),
+            None => None,
+        };
+        out.push(AutomationLaunchFailedDto { run: round.run_id, role: round.role_id, task, incident });
+    }
+    Ok(out)
 }
 
 /// **What a run's last step left to be read** — what a script printed, once its program has ended
@@ -3071,20 +3091,38 @@ fn worked_task(
     }))
 }
 
-/// **The task a failed round was filed as**, by its id `filed`, and who it went to. Nothing where the
-/// round filed none, or the task has since been deleted.
+/// **The task the round `stretch` was filed as when it failed**, with when it failed — the end the
+/// stretch was closed with as the task was filed — and the seat it failed in, as written on it
+/// ([`amenbo_core::model::AutomationRunTask::seat`]). Nothing where the round filed none, or the task
+/// has since been deleted.
 fn incident_of(
     store: &amenbo_core::Store,
-    filed: Option<i64>,
+    stretch: Option<&amenbo_core::model::AutomationRunTask>,
 ) -> Result<Option<AutomationRunIncidentDto>, CmdError> {
-    let Some(id) = filed else { return Ok(None) };
-    Ok(read::task(store.read_model().conn(), id)?.map(|task| AutomationRunIncidentDto {
+    let Some(round) = stretch else { return Ok(None) };
+    let Some(id) = round.incident_task_id else { return Ok(None) };
+    filed_as(store, id, round.ended_at, round.seat.and_then(|n| u32::try_from(n).ok()))
+}
+
+/// **The task `id` a failed round was filed as**, with when the round failed and the seat it failed in,
+/// as each failed round names it. Nothing where the task has since been deleted.
+fn filed_as(
+    store: &amenbo_core::Store,
+    id: i64,
+    ended: Option<amenbo_core::time::Timestamp>,
+    seat: Option<u32>,
+) -> Result<Option<AutomationRunIncidentDto>, CmdError> {
+    let conn = store.read_model().conn();
+    let Some(task) = read::task(conn, id)? else { return Ok(None) };
+    Ok(Some(AutomationRunIncidentDto {
         id,
         r#ref: amenbo_core::idref::task(id),
         title: task.title,
         role: task.role_id,
         person: task.role_id.is_none()
             && task.assignee_kind == Some(ActorKind::Human),
+        at: ended.map(|at| at.to_rfc3339_z()),
+        seat,
     }))
 }
 
@@ -3671,6 +3709,52 @@ mod tests {
             }),
         );
         assert_eq!(json(ChosenAt::Amenbo)["chosenAt"], serde_json::json!({ "kind": "amenbo" }));
+    }
+
+    /// **A failed round's task goes out with when the round failed** — the end its stretch was closed
+    /// with — for the line under the pane to say the time; a stretch with no end leaves it out.
+    #[test]
+    fn a_failed_rounds_task_goes_out_with_when_it_failed() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("automation-incident-at");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        let mut store = amenbo_core::Store::open().unwrap();
+        let task = store
+            .add_task(amenbo_core::ops::task::NewTask {
+                title: "Fix the build".into(),
+                project_id: None,
+                due: None,
+                start: None,
+                priority: None,
+                notes: String::new(),
+                created_by_kind: Some(ActorKind::Ai),
+                at_binding_id: None,
+                role_id: None,
+                made_in_run_step_id: None,
+                made_in: None,
+            })
+            .unwrap();
+        let ended = amenbo_core::time::Timestamp::parse_rfc3339("2026-11-08T05:05:00Z").expect("a time");
+        let round = amenbo_core::model::AutomationRunTask {
+            ended_at: Some(ended),
+            incident_task_id: Some(task.id),
+            seat: Some(2),
+            ..Default::default()
+        };
+
+        let incident = incident_of(&store, Some(&round)).unwrap().expect("the task");
+        assert_eq!(incident.id, task.id);
+        assert_eq!(incident.at.as_deref(), Some(ended.to_rfc3339_z().as_str()));
+        assert_eq!(incident.seat, Some(2), "the seat written on the round");
+
+        let unseated = amenbo_core::model::AutomationRunTask { ended_at: None, seat: None, ..round.clone() };
+        let json = serde_json::to_value(incident_of(&store, Some(&unseated)).unwrap().expect("the task"))
+            .expect("json");
+        assert!(json.get("at").is_none(), "a stretch with no end says no time");
+        assert!(json.get("seat").is_none(), "nor a seat where none was written");
+        let unfiled = amenbo_core::model::AutomationRunTask { incident_task_id: None, ..round };
+        assert!(incident_of(&store, Some(&unfiled)).unwrap().is_none(), "a round that filed nothing has none");
+        assert!(incident_of(&store, None).unwrap().is_none(), "nor a run with no round");
     }
 
     /// **A role carries what its own round passes on, and nothing of another's** — each to the role it

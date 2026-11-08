@@ -3053,6 +3053,13 @@ pub struct AutomationRunTask {
     /// that did not fail, and where that task has since been deleted.
     #[serde(default)]
     pub incident_task_id: Option<i64>,
+    /// **The seat the round failed in**, counted from 1 — its run's place among the runs of its role
+    /// under way as it failed, oldest first, which is the number the launch's pane gave it while it sat
+    /// there. Written as the failure is filed, beside `incident_task_id`, since nothing read afterwards
+    /// can tell it: the runs ahead of it may have left in the same second. `None` for a round that did
+    /// not fail, for one of a run started in no launch, and for one that failed before this was written.
+    #[serde(default)]
+    pub seat: Option<i64>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

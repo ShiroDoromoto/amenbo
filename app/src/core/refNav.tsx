@@ -5,7 +5,7 @@
 // rather than passing props down the deep React tree where the Markdown is rendered, we supply it from one place
 // via Context.
 // Outside the provider (tests, previews) the default is `{}` and clicking a link is a no-op.
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 
 /** The two tabs of a project's automations that list runs. */
 export type RunsTab = "running" | "history";
@@ -37,4 +37,21 @@ export function RefNavProvider({ value, children }: { value: RefNav; children: R
 
 export function useRefNav(): RefNav {
   return useContext(RefNavContext);
+}
+
+/**
+ * **The navigation for a face beside the ledger** — the workspace's panes and files. Following a record
+ * from there means leaving it: what a record opens on is the ledger, and a press that selected it
+ * behind this face would look like a link that did nothing (`AMB-D-747`). So a task or a decision is
+ * selected with `onOpenLedger` bringing the ledger forward first; the other moves already go to the
+ * ledger themselves and pass through as they are. With no `onOpenLedger` — the window the workspace was
+ * split out into — the moves are the outer ones, which raise the other window (`crate::windows::show_ref`).
+ */
+export function useLedgerNav(onOpenLedger?: () => void): RefNav {
+  const outer = useRefNav();
+  return useMemo(() => ({
+    ...outer,
+    selectTask: (id: number) => { onOpenLedger?.(); outer.selectTask?.(id); },
+    selectDecision: (id: number | null) => { onOpenLedger?.(); outer.selectDecision?.(id); },
+  }), [outer, onOpenLedger]);
 }

@@ -766,6 +766,30 @@ fields: { [key in string]: string }, };
 export type AutomationLaunchCheckDto = { ready: boolean, blocks: Array<AutomationLaunchBlockDto>, };
 
 /**
+ * **One failed round of a launch** ([`amenbo_core::ops::automation_run::LaunchFailedRound`]): whose
+ * round it was, the task it was on, and the task it was filed as.
+ */
+export type AutomationLaunchFailedDto = { 
+/**
+ * The run whose round failed.
+ */
+run: number, 
+/**
+ * The round's role, by its id. Absent where the round had none, and where it has since been taken
+ * out.
+ */
+role?: number, 
+/**
+ * The reference of the task the round was on. Absent where it had taken none, and where the task
+ * has since been deleted.
+ */
+task?: string, 
+/**
+ * The task it was filed as, when it failed and the seat it failed in.
+ */
+incident: AutomationRunIncidentDto, };
+
+/**
  * **One failed round's task waiting in a launch for the role it was filed to**
  * ([`amenbo_core::ops::automation_run::LaunchIncident`]) — what makes that role's card in the run's
  * pane read "an incident has reached it", with or without a round of the role under way. A role's
@@ -875,7 +899,12 @@ maxHeadcount: number,
  * Every role the newest saved version holds, in the order they are defined in — those with no task
  * under way or waiting among them.
  */
-roles: Array<AutomationLaunchRoleStateDto>, };
+roles: Array<AutomationLaunchRoleStateDto>, 
+/**
+ * **The launch's failed rounds that were filed as a task**, newest first, up to the newest
+ * [`amenbo_core::ops::automation_run::FAILED_NAMED`] — one line each under the pane.
+ */
+failed: Array<AutomationLaunchFailedDto>, };
 
 /**
  * **One automation an action is placed on**, with the project it is in — a global action stands on
@@ -1295,7 +1324,19 @@ role?: number,
 /**
  * Whether it went to a person — the human assignee rather than a role.
  */
-person: boolean, };
+person: boolean, 
+/**
+ * **When the round failed**, RFC 3339 — the end its stretch was closed with as the task was filed
+ * (`amenbo_core::ops::automation_stop`). Absent where the stretch holds no end.
+ */
+at?: string, 
+/**
+ * **The seat the round failed in**, counted from 1 among its role's runs under way then, oldest
+ * first — the number the launch's pane gave it while it sat there, written on the round as it
+ * failed ([`amenbo_core::model::AutomationRunTask::seat`]). Absent for a run started in no launch,
+ * and for a round that failed before the seat was written.
+ */
+seat?: number, };
 
 /**
  * **One task a round of a run passed to another role** — the role of the round that filed it, the

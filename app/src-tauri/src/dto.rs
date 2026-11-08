@@ -4731,6 +4731,18 @@ pub struct AutomationRunIncidentDto {
     pub(crate) role: Option<i64>,
     /// Whether it went to a person — the human assignee rather than a role.
     pub(crate) person: bool,
+    /// **When the round failed**, RFC 3339 — the end its stretch was closed with as the task was filed
+    /// (`amenbo_core::ops::automation_stop`). Absent where the stretch holds no end.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) at: Option<String>,
+    /// **The seat the round failed in**, counted from 1 among its role's runs under way then, oldest
+    /// first — the number the launch's pane gave it while it sat there, written on the round as it
+    /// failed ([`amenbo_core::model::AutomationRunTask::seat`]). Absent for a run started in no launch,
+    /// and for a round that failed before the seat was written.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) seat: Option<u32>,
 }
 
 /// **One launch as its pane draws it, read at once** ([`amenbo_core::ops::automation_run::launch_state`])
@@ -4758,6 +4770,32 @@ pub struct AutomationLaunchStateDto {
     /// Every role the newest saved version holds, in the order they are defined in — those with no task
     /// under way or waiting among them.
     pub(crate) roles: Vec<AutomationLaunchRoleStateDto>,
+    /// **The launch's failed rounds that were filed as a task**, newest first, up to the newest
+    /// [`amenbo_core::ops::automation_run::FAILED_NAMED`] — one line each under the pane.
+    pub(crate) failed: Vec<AutomationLaunchFailedDto>,
+}
+
+/// **One failed round of a launch** ([`amenbo_core::ops::automation_run::LaunchFailedRound`]): whose
+/// round it was, the task it was on, and the task it was filed as.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationLaunchFailedDto {
+    /// The run whose round failed.
+    #[ts(type = "number")]
+    pub(crate) run: i64,
+    /// The round's role, by its id. Absent where the round had none, and where it has since been taken
+    /// out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) role: Option<i64>,
+    /// The reference of the task the round was on. Absent where it had taken none, and where the task
+    /// has since been deleted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) task: Option<String>,
+    /// The task it was filed as, when it failed and the seat it failed in.
+    pub(crate) incident: AutomationRunIncidentDto,
 }
 
 /// **One role of a launch** ([`amenbo_core::ops::automation_run::LaunchRoleState`]): what it is, how many

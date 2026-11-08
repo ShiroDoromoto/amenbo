@@ -5,10 +5,10 @@
 // a run's pane says it over the terminal (`../talk/nameplate`). They are the same words because they
 // are the same run: a reader who sees "failed" on the pane and goes to the tab to find out more has to
 // be able to find the line that says the same.
-import type { AutomationRunCardDto } from "../bindings/bindings";
+import type { AutomationRunCardDto, AutomationRunIncidentDto } from "../bindings/bindings";
 import { t } from "./i18n";
 import { builtinWord } from "./builtinWords";
-import type { Round, RunState, Say } from "../talk/nameplate";
+import type { Incident, Round, RunState, Say } from "../talk/nameplate";
 
 /** The name core gives the error way out — `../screens/automationLayout`'s `ERROR_EXIT`. */
 const ERROR_EXIT = "*";
@@ -166,7 +166,21 @@ export function roundOf(run: AutomationRunCardDto | undefined): { round?: Round 
       startedAt: run.roleStartedAt === undefined ? null : Date.parse(run.roleStartedAt),
       ...(run.incident === undefined
         ? {}
-        : { incident: { ref: run.incident.ref, role: run.incident.role ?? null, person: run.incident.person } }),
+        : {
+            incident: incidentOf(run.incident),
+          }),
     },
+  };
+}
+
+/** **The task a failed round was filed as**, as the line under the pane reads it. */
+export function incidentOf(incident: AutomationRunIncidentDto): Incident {
+  return {
+    id: incident.id,
+    ref: incident.ref,
+    role: incident.role ?? null,
+    person: incident.person,
+    at: incident.at === undefined ? null : Date.parse(incident.at),
+    seat: incident.seat ?? null,
   };
 }

@@ -6780,24 +6780,24 @@ impl Instructor {
                     false => "In the workspace, confirm the press stood no new pane up.".to_string(),
                 },
             },
-            // Which face the pane's body is turned to, and on the roles which card stands and what it
-            // says. Whether a role is a card or an icon on the bar is an eye's, so the line asks for the
-            // card to be looked at rather than read.
+            // Which face the pane's body is turned to, and on the roles which desk stands and what it
+            // says. Whether a role is a desk or on the bar is an eye's, so the line asks for the desk to
+            // be looked at rather than read.
             (Domain::Automation, "run-roles") => match req(with, "face")? {
                 "roles" => {
-                    let mut line = "In the workspace, confirm the pane this run is drawn in has \"Roles\" pressed on the line over it, and that its body is the cards of the roles rather than a terminal (where the pane is too small for the cards and draws its roles as a list, press \"Cards\" on the line over it first)".to_string();
+                    let mut line = "In the workspace, confirm the pane this run is drawn in has \"Roles\" pressed on the line over it, and that its body is the desks of the roles rather than a terminal".to_string();
                     if let Some(card) = arg_str(with, "card") {
-                        line.push_str(&format!(". Confirm a card named \"{card}\" stands there"));
+                        line.push_str(&format!(". Confirm a desk named \"{card}\" stands there"));
                         if let Some(step) = arg_str(with, "step") {
-                            line.push_str(&format!(", saying the step \"{step}\" and how long its round has run"));
+                            line.push_str(&format!(", with a seat saying the step \"{step}\" and how long its round has run"));
                         }
                     } else if let Some(step) = arg_str(with, "step") {
-                        line.push_str(&format!(". Confirm the card standing there says the step \"{step}\" and how long its round has run"));
+                        line.push_str(&format!(". Confirm the desk standing there has a seat saying the step \"{step}\" and how long its round has run"));
                     }
                     line.push('.');
                     line
                 }
-                "terminal" => "In the workspace, confirm the pane this run is drawn in has \"Terminal\" pressed on the line over it, and that its body is the terminal — or the card of the built-in under way — rather than the cards of the roles.".to_string(),
+                "terminal" => "In the workspace, confirm the pane this run is drawn in has \"Terminal\" pressed on the line over it, and that its body is the terminal — or the card of the built-in under way — rather than the desks of the roles.".to_string(),
                 other => return Err(format!("`face` does not know `{other}` — it is roles / terminal")),
             },
             // What keeps a waiting run waiting, read off the card its pane stands on. An eye closes it:
@@ -9498,8 +9498,8 @@ steps_gui:
         assert!(lines[2].contains("history tab"), "{}", lines[2]);
     }
 
-    /// A run's pane is read for the face it is turned to, and on the roles for the card that stands and
-    /// the step it says. The two faces are the pane's presses, and never the row's.
+    /// A run's pane is read for the face it is turned to, and on the roles for the desk that stands and
+    /// the step a seat of it says. The two faces are the pane's presses, and never the row's.
     #[test]
     fn a_run_pane_is_read_for_its_face_and_turned_from_its_line() {
         let s = load(r#"
@@ -9526,10 +9526,10 @@ steps_gui:
         let mut ins = Instructor::new();
         let lines: Vec<String> =
             s.steps(Driver::Gui).iter().map(|st| ins.render(st).expect("every step renders")).collect();
-        assert!(lines[0].contains("\"Roles\" pressed") && lines[0].contains("a card named \"review\""), "{}", lines[0]);
+        assert!(lines[0].contains("\"Roles\" pressed") && lines[0].contains("a desk named \"review\""), "{}", lines[0]);
         assert!(lines[0].contains("the step \"wait\""), "{}", lines[0]);
-        assert!(lines[1].contains("\"Terminal\" pressed") && !lines[1].contains("a card named"), "{}", lines[1]);
-        assert!(lines[2].contains("\"Roles\" pressed") && !lines[2].contains("a card named"), "{}", lines[2]);
+        assert!(lines[1].contains("\"Terminal\" pressed") && !lines[1].contains("a desk named"), "{}", lines[1]);
+        assert!(lines[2].contains("\"Roles\" pressed") && !lines[2].contains("a desk named"), "{}", lines[2]);
         assert!(lines[3].contains("line over the pane") && lines[3].contains("press \"Terminal\""), "{}", lines[3]);
 
         let row = load(r#"

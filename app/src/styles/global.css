@@ -565,22 +565,6 @@ input[type="color"] {
 .runacts__one--stop { color: var(--c-stop); }
 .runacts__one--stop:hover:not(:disabled) { background: var(--c-stop-weak); color: var(--c-stop); }
 .runacts__sep { height: 1px; margin: 2px var(--s-1); background: var(--c-rule); }
-/* How the roles are drawn while they are up, on a run's pane — the room's size to decide, cards, or
-   the list (`../shell/RunPicture`): three words joined into one control, the one held filled in. */
-.slot__views {
-  flex: 0 0 auto;
-  display: inline-flex;
-  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
-  overflow: hidden;
-}
-.slot__view {
-  padding: 1px var(--s-2);
-  border: 0; background: transparent;
-  color: var(--c-text-muted); font-size: var(--fs-xs); line-height: 1.4;
-}
-.slot__view + .slot__view { border-inline-start: var(--border-w) var(--border-style) var(--c-rule); }
-.slot__view:hover { color: var(--c-text); }
-.slot__view--on { background: var(--c-accent-faint); color: var(--c-accent); font-weight: 600; }
 /* What the terminal face is — the cards, the terminal, the box a line is written in and the model row.
    It is the frame's column again, with the frame's gap, so the face lays out as it did without it; it
    is a box of its own so that a run's roles have somewhere to be drawn over (`.runroles`). With the
@@ -3125,8 +3109,6 @@ body.dragging-row { user-select: none; }
    state written across "Terminal". Cut across only, so the mark's glow still shows above and below. */
 .slot--run .plate { overflow-x: clip; }
 .slot--run :is(.plate-step, .plate-run) { order: 1; flex: 0 0 100%; min-width: 0; }
-/* With the controls on the right even where the row has nothing to say. */
-.slot--run .slot__views { margin-inline-start: auto; }
 /* The panel drops from a pointer on any of the three lines — the box they were in, which the rule for
    an ordinary pane asks about, is no longer drawn. */
 .slot--run :is(.plate, .plate-step, .plate-run):hover ~ .plate-peek:not([hidden]) { display: block; }
@@ -3269,7 +3251,6 @@ body.dragging-row { user-select: none; }
      left it half a letter, and a name squeezed to nothing reads as no name at all. The controls
      themselves stay whole. */
   .slot--run .plate { padding-inline: var(--s-1) 0; }
-  .slot--run .slot__view { padding-inline: var(--s-1); }
   .slot--run .slot__runacts { margin-inline-start: 0; }
   .slot--run :is(.panesize, .slot__more, .slot__end) { padding-inline: 2px; }
 }

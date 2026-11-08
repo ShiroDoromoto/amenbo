@@ -40,7 +40,7 @@ import { PaneSize } from "./PaneSize";
 import { RunActs } from "./RunActs";
 import { LaunchHead } from "./LaunchHead";
 import { BuiltinCard } from "./BuiltinCard";
-import { RunRoles, RunTermBar, useRoundFellLines, type ViewPin } from "./RunPicture";
+import { RunRoles, RunTermBar, useRoundFellLines } from "./RunPicture";
 import { faceOf, keepFace, onTerminalShown, showTerminalOf, type Face } from "./runFaces";
 import { RunOverCard, RunPausedCard } from "./RunBody";
 import { useBoxNumber } from "../screens/boxNumber";
@@ -87,12 +87,6 @@ async function handOver(session: string, paths: string[]) {
     pushNotice(errText(e));
   }
 }
-
-/**
- * **What each run's roles are held to** — cards, the list, or `auto` for the room's size to decide
- * (`./RunPicture`) — by run, kept the way the face is. A run not in here is on `auto`.
- */
-const pins = new Map<number, ViewPin>();
 
 /**
  * One slot of the workspace: a frame, and the terminal in it when there is one.
@@ -241,14 +235,6 @@ function Pane({
     });
   }, [runId]);
   const onRoles = run !== null && face === "roles";
-  const [pin, setPin] = useState<ViewPin>(() => (run === null ? "auto" : pins.get(run.run) ?? "auto"));
-  useEffect(() => {
-    if (runId !== null) setPin(pins.get(runId) ?? "auto");
-  }, [runId]);
-  const hold = (to: ViewPin) => {
-    if (runId !== null) pins.set(runId, to);
-    setPin(to);
-  };
   const press = async (act: () => Promise<unknown>) => {
     setPressing(true);
     try {
@@ -883,22 +869,6 @@ function Pane({
 
               **Not on a launch's pane**: its moves are the launch's, on the header above
               (`./LaunchHead`), and a seat's own are on the "running" tab's row. */}
-          {/* **Cards, the list, or the room's size to decide** (`./RunPicture`), while the roles are up. */}
-          {onRoles && (
-            <span className="slot__views" role="group" aria-label={t("auto.run.views")}>
-              {(["auto", "cards", "list"] as const).map((one) => (
-                <button
-                  key={one}
-                  type="button"
-                  className={`slot__view${pin === one ? " slot__view--on" : ""}`}
-                  aria-pressed={pin === one}
-                  onClick={() => hold(one)}
-                >
-                  {t(one === "auto" ? "auto.run.viewAuto" : one === "cards" ? "auto.run.viewCards" : "auto.run.viewList")}
-                </button>
-              ))}
-            </span>
-          )}
           {runLive && run !== null && launch === null && (
             <span className="slot__runacts">
               <RunActs
@@ -1094,7 +1064,6 @@ function Pane({
             run={run}
             project={project}
             launch={launch}
-            pin={pin}
             // A seat pressed: the one in front turns this pane to its terminal, and another is put in
             // front in this same place, on its terminal (`onGoToRun`).
             onOpen={(other) => {

@@ -67,6 +67,7 @@ import type {
   AutomationPortDto,
   AutomationStepDto,
 } from "../bindings/bindings";
+import { asTyped } from "../core/keys";
 
 /**
  * One way out of a step, as a card: its mark, what leaving by it hands on with the "＋" that adds one
@@ -281,6 +282,7 @@ function ScriptFields({ step, run }: { step: AutomationStepDto; run: Run }) {
         <span className="autostep__label">{t("auto.step.program")}</span>
         <div className="autostep__field">
           <input
+            {...asTyped}
             className="autostep__mono"
             aria-label={t("auto.step.program")}
             value={program}
@@ -294,6 +296,7 @@ function ScriptFields({ step, run }: { step: AutomationStepDto; run: Run }) {
         <span className="autostep__label">{t("auto.step.args")}</span>
         <div className="autostep__field">
           <textarea
+            {...asTyped}
             className="autostep__mono"
             aria-label={t("auto.step.args")}
             rows={4}
@@ -508,6 +511,7 @@ export function AutomationActionStepPanel({
       {!byScript && (
         <Sec title={t("auto.step.prompt")}>
           <textarea
+            {...asTyped}
             className="autostep__prompt"
             aria-label={t("auto.step.prompt")}
             rows={6}

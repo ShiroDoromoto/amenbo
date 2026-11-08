@@ -34,6 +34,7 @@ import type {
   WakeCandidateDto,
   WakeDto,
 } from "../bindings/bindings";
+import { asTyped } from "../core/keys";
 
 /**
  * Send a write and say whether it was taken. Every control on the panel goes through it, so a refusal
@@ -151,6 +152,7 @@ export function DeclareRow({
   return (
     <div className="autostep__declare">
       <input
+        {...asTyped}
         className="autostep__declname"
         placeholder={what}
         aria-label={what}
@@ -205,6 +207,7 @@ export function DeclEdit({
   return (
     <div className="autostep__decl">
       <input
+        {...asTyped}
         className="autostep__declname"
         aria-label={label}
         value={draft}

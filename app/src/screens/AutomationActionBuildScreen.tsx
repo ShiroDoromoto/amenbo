@@ -170,6 +170,7 @@ function TitleInput({
   const [name, setName] = useDraft(title);
   return (
     <input
+      {...asTyped}
       className="actpanel__titlein"
       aria-label={tf("auto.act.nameOf", { place: label })}
       value={name}

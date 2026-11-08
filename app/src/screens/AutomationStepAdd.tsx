@@ -41,6 +41,7 @@ import {
 import { errText, t } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
 import { RunBy } from "./automationRunBy";
+import { asTyped } from "../core/keys";
 
 /**
  * Where the new step goes: onto a line inside the action, after a way out that says nothing yet, or
@@ -110,7 +111,7 @@ export function AutomationStepAdd({
 
         <label className="autostep__field">
           <span className="autostep__label">{t("auto.step.name")}</span>
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
+          <input {...asTyped} autoFocus value={name} onChange={(e) => setName(e.target.value)} />
         </label>
 
         <div className="autostep__field">
@@ -121,13 +122,19 @@ export function AutomationStepAdd({
         {byScript ? (
           <label className="autostep__field">
             <span className="autostep__label">{t("auto.step.program")}</span>
-            <input className="autostep__mono" value={program} onChange={(e) => setProgram(e.target.value)} />
+            <input
+              {...asTyped}
+              className="autostep__mono"
+              value={program}
+              onChange={(e) => setProgram(e.target.value)}
+            />
             <span className="autostep__hint">{t("auto.step.programHint")}</span>
           </label>
         ) : (
           <label className="autostep__field">
             <span className="autostep__label">{t("auto.step.prompt")}</span>
             <textarea
+              {...asTyped}
               className="autostep__prompt"
               rows={5}
               value={prompt}

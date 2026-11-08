@@ -86,6 +86,7 @@ import type {
   AutomationPortDto,
   WakeCandidateDto,
 } from "../bindings/bindings";
+import { asTyped } from "../core/keys";
 
 /** What one task filter row is called. */
 function rowLabel(key: string): string {
@@ -312,6 +313,7 @@ function CfgRow({ placementId, projectId, builtin, cfg, siblings, run }: {
             </select>
           ) : (
             <input
+              {...asTyped}
               aria-label={shown}
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -332,6 +334,7 @@ function CfgRow({ placementId, projectId, builtin, cfg, siblings, run }: {
 
       {special === undefined && cfg.kind === "text" && (
         <input
+          {...asTyped}
           aria-label={shown}
           value={text}
           onChange={(e) => setText(e.target.value)}

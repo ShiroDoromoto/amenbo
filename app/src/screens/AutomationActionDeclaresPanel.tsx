@@ -48,6 +48,7 @@ import type {
   AutomationExitDto,
   AutomationPortDto,
 } from "../bindings/bindings";
+import { asTyped } from "../core/keys";
 
 /** The choices a `choice` setting was declared with. One that was not readable offers none. */
 function choicesOf(options: string | undefined): string[] {
@@ -207,6 +208,7 @@ function CfgRow({
             <label className="autostep__field">
               <span className="autostep__label">{t("auto.step.choices")}</span>
               <textarea
+                {...asTyped}
                 rows={2}
                 value={choiceText}
                 onChange={(e) => setChoiceText(e.target.value)}

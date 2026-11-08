@@ -57,26 +57,31 @@
 // reader asks for less motion the dot stays lit and does not fade.
 // Nothing else is animated: a pane that changes size moves its cards only by where they stand.
 //
-// **One run is one pane** (`AMB-D-939`), and a run walks one round at a time, so the cards are its
-// round's role or none. A round under no role — a task that names none, on an automation whose roles
-// start nowhere — is drawn as one card named after the automation, its roles all on the bar.
+// **The cards are the run in front's** — the pane's own run, or on a launch's pane the seat in front —
+// and a run walks one round at a time, so the cards are its round's role or none. A round under no
+// role — a task that names none, on an automation whose roles start nowhere — is drawn as one card
+// named after the automation, its roles all on the bar.
 //
 // The role's name and icon are the definition's as it is now (`AMB-D-1015`), read by the project's
 // roles (`../core/projectRoles`) — the run's copy holds only which role its round is under.
 //
-// **A card is pressed to read its round's terminal**, and the terminal has a bar over it: the way back
-// to the roles, whose round it is, and the other rounds of the same automation — each another run, in
-// a pane of its own — as their icons with a dot for how each stands. Pressing one goes to that run's
-// pane, on its terminal. Where a step that may wait for a person turned the pane, the bar says so in
-// one line.
+// **One launch is one pane, and its seats are listed under the room** (`AMB-D-1123`): each role with
+// someone in a seat, and under it a row per seat — its number, the task, the step and how long it has
+// run. A seat is pressed to turn this same pane to that seat's terminal; the seats nobody is in are one
+// row that cannot be pressed. A card is pressed for the terminal of the seat in front.
+//
+// **The terminal has a bar over it**: the way back to the roles, and whose round it is — the role, the
+// seat, the task, the step and how long it has run. It names no other seat: the way to another seat's
+// terminal is back to the roles and that seat pressed. Where a step that may wait for a person turned
+// the pane, the bar says so in one line.
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useProjectRoles } from "../core/projectRoles";
-import { useLiveRuns } from "../core/automations";
+import { useLaunchState } from "../core/automations";
 import { t, tf } from "../core/i18n";
 import { Icon, isIconName, type IconName } from "../components/Icon";
 import { clockOf, type Say } from "../talk/nameplate";
 import { quietAt, type Quiet } from "../talk/moving";
-import type { AutomationRunCardDto, TaskRoleDto } from "../bindings/bindings";
+import type { AutomationLaunchStateDto, AutomationRunCardDto, TaskRoleDto } from "../bindings/bindings";
 
 /** What a role's round is doing, as its card says it. */
 export type RoundState =
@@ -100,8 +105,13 @@ export type RoleCard = {
 };
 
 /** The icon a role is drawn with: the one it was given, where it is one drawn here. */
+function iconOf(icon: string | null | undefined): IconName {
+  return icon !== null && icon !== undefined && isIconName(icon) ? icon : "person";
+}
+
+/** The icon the role `role` is drawn with. */
 function roleIcon(role: TaskRoleDto): IconName {
-  return role.icon !== null && isIconName(role.icon) ? role.icon : "person";
+  return iconOf(role.icon);
 }
 
 /**
@@ -495,9 +505,9 @@ function useStrokes(room: RefObject<HTMLDivElement | null>, hands: readonly Hand
   return strokes;
 }
 
-/** One role's card, pressed to read its round's terminal where `onOpen` is given. */
+/** One role's card, pressed to read its round's terminal — the pane's own run's — where `onOpen` is given. */
 function Card({ card, run, now, silence, away, onOpen }: {
-  card: RoleCard; run: Say; now: number; silence: Silence; away: readonly Hand[]; onOpen?: () => void;
+  card: RoleCard; run: Say; now: number; silence: Silence; away: readonly Hand[]; onOpen?: (run: number) => void;
 }) {
   // The time is the round's, counted while it is under way: a paused or failed round has stopped at
   // a moment the pane does not know.
@@ -519,7 +529,7 @@ function Card({ card, run, now, silence, away, onOpen }: {
           type="button"
           className="runroles__open"
           aria-label={tf("auto.run.roundTerminal", { name: card.name })}
-          onClick={onOpen}
+          onClick={() => onOpen(run.run)}
         />
       )}
       <span className="runroles__top">
@@ -556,7 +566,7 @@ function Card({ card, run, now, silence, away, onOpen }: {
 /** One round as a row of the list: what its card says, on one line, with no dot and no line drawn —
  *  pressed, like the card, to read its round's terminal where `onOpen` is given. */
 function Row({ card, run, now, silence, away, onOpen }: {
-  card: RoleCard; run: Say; now: number; silence: Silence; away: readonly Hand[]; onOpen?: () => void;
+  card: RoleCard; run: Say; now: number; silence: Silence; away: readonly Hand[]; onOpen?: (run: number) => void;
 }) {
   const since = run.round?.startedAt ?? null;
   const ran = since !== null && underWay(card) ? clockOf(now - since) : null;
@@ -574,7 +584,7 @@ function Row({ card, run, now, silence, away, onOpen }: {
           type="button"
           className="runroles__open"
           aria-label={tf("auto.run.roundTerminal", { name: card.name })}
-          onClick={onOpen}
+          onClick={() => onOpen(run.run)}
         />
       )}
       <Icon name={card.icon} />
@@ -618,10 +628,20 @@ function Row({ card, run, now, silence, away, onOpen }: {
  * drawn.
  */
 export const RunRoles = memo(
-  function RunRoles({ run, project, pin = "auto", onOpen, lastOutput }: {
-    run: Say; project: number; pin?: ViewPin; onOpen?: () => void; lastOutput?: () => number | null;
+  function RunRoles({ run, project, launch = null, pin = "auto", onOpen, lastOutput }: {
+    run: Say;
+    project: number;
+    /** The launch the pane draws, whose seats are listed under the room; null for a run kept from
+     *  before launches were, which sits in no seat. */
+    launch?: number | null;
+    pin?: ViewPin;
+    /** Turn the pane to the terminal of the run `run` — its own, or another seat's of its launch. */
+    onOpen?: (run: number) => void;
+    lastOutput?: () => number | null;
   }) {
     const roles = useProjectRoles(project);
+    const launchState = useLaunchState(launch);
+    const seats = useMemo(() => seatsOf(launchState), [launchState]);
     const { cards, idle } = useMemo(() => roleCards(run, roles), [run, roles]);
     const filed = useMemo(() => filedLine(cards, run, roles), [cards, run, roles]);
     const hands = useMemo(() => handsOf(cards, run, roles), [cards, run, roles]);
@@ -636,7 +656,10 @@ export const RunRoles = memo(
     };
     // The clock ticks while a round is under way: for its time, and for how long its terminal has
     // been quiet, which is measured whether or not the round's start was read.
-    const now = useNow(cards.some(underWay));
+    const now = useNow(cards.some(underWay) || seats.some((role) => role.runs.some((one) => {
+      const state = seatStateOf(one, run);
+      return state === "running" || state === "asks";
+    })));
     const last = lastOutput?.() ?? null;
     const expected = run.expectedMinutes ?? null;
     return (
@@ -690,6 +713,9 @@ export const RunRoles = memo(
           <UnseenNotice attns={unseen.up} up onPress={() => jump(true)} />
           <UnseenNotice attns={unseen.down} up={false} onPress={() => jump(false)} />
         </div>
+        {onOpen !== undefined && seats.length > 0 && (
+          <LaunchSeats seats={seats} front={run} now={now} onOpen={onOpen} />
+        )}
         {idle.length > 0 && (
           <div className="runroles__idle">
             <span className="runroles__idlecount">{tf("auto.run.roles.idle", { n: idle.length })}</span>
@@ -714,6 +740,7 @@ export const RunRoles = memo(
   // not compared — only whether there is one.
   (before, after) =>
     before.project === after.project &&
+    before.launch === after.launch &&
     before.pin === after.pin &&
     (before.onOpen === undefined) === (after.onOpen === undefined) &&
     (before.lastOutput === undefined) === (after.lastOutput === undefined) &&
@@ -735,80 +762,187 @@ export const RunRoles = memo(
     (before.run.state?.waiting === true) === (after.run.state?.waiting === true),
 );
 
-/** How a round stands, as the dot beside its icon on the bar over a terminal says it. */
-export type RoundDot = RoundState | "waiting";
+/** How the run in a seat stands, as its row says it. */
+export type SeatState =
+  /** Under way. */
+  | "running"
+  /** Under way on a step that may wait for a person — said of the seat whose terminal is the pane's
+   *  now, the only one whose step the pane reads (`Say.interactive`). */
+  | "asks"
+  /** Before a built-in that waits for something, or an action that takes one run at a time. */
+  | "waiting"
+  /** Held by a pause. */
+  | "paused"
+  /** The run failed. */
+  | "failed";
 
-/** How the run `run` stands, as a live run's row says it — it does not say whether its step asks. */
-function dotOfCard(run: AutomationRunCardDto): RoundDot {
-  if (run.status === "failed") return "failed";
-  if (run.status === "paused") return "paused";
-  return run.waiting || run.waitsForRoom ? "waiting" : "running";
-}
-
-/** How the run whose pane this is stands, read off its own words, which do say whether its step asks. */
-function dotOfSay(run: Say): RoundDot {
-  const status = run.state?.status ?? "running";
-  if (status === "failed") return "failed";
-  if (status === "paused") return "paused";
-  if (run.state?.waiting === true) return "waiting";
-  return run.interactive ? "asks" : "running";
-}
-
-/** One round on the bar over a terminal. */
-export type Round = {
-  readonly run: number;
+/** One role of a launch with runs in its seats, as the roles face lists them. */
+export type RoleSeats = {
+  readonly role: number;
   readonly name: string;
   readonly icon: IconName;
-  readonly dot: RoundDot;
-  /** Which of the rounds this is, where several are under one role: the task it works, by
-   *  reference, or the run's number where it has none. */
-  readonly which: string;
+  /** The runs in its seats, oldest first: seat 1 is the first of them. */
+  readonly runs: readonly AutomationRunCardDto[];
+  /** How many of its seats have no run in them. */
+  readonly free: number;
 };
 
 /**
- * **The rounds on the bar over the run `run`'s terminal**: the live runs `live` of the same
- * automation, this one among them, in the order they were started. Each is drawn by the role its round
- * is under, or by the automation where it has none. Empty where this run is the only one — a bar of
- * one round has nowhere else to go.
+ * **The roles of the launch `launch` that have someone in a seat**, in the order the roles are
+ * defined in. A role with no run in a seat is not listed: it has nothing to press.
  */
-export function roundsOf(run: Say, live: readonly AutomationRunCardDto[], roles: readonly TaskRoleDto[]): Round[] {
-  const byRole = (role: number | null | undefined, otherwise: string) => {
-    const one = role === null || role === undefined ? undefined : roles.find((each) => each.id === role);
-    return one === undefined ? { name: otherwise, icon: "robot" as IconName } : { name: one.name, icon: roleIcon(one) };
-  };
-  const others = live.filter((one) => one.automation === run.automationId && one.run !== run.run);
-  if (others.length === 0) return [];
-  const which = (number: number, task: { readonly ref: string } | null | undefined) => task?.ref ?? `#${number}`;
-  const own: Round = {
-    run: run.run, ...byRole(run.round?.role, run.automation), dot: dotOfSay(run), which: which(run.run, run.task),
-  };
-  return [
-    own,
-    ...others.map((one) => ({
-      run: one.run, ...byRole(one.role, one.automationName), dot: dotOfCard(one), which: which(one.run, one.task),
-    })),
-  ].sort((a, b) => a.run - b.run);
+export function seatsOf(launch: AutomationLaunchStateDto | null): RoleSeats[] {
+  if (launch === null) return [];
+  return launch.roles
+    .filter((role) => role.runs.length > 0)
+    .map((role) => ({
+      role: role.role,
+      name: role.name,
+      icon: iconOf(role.icon),
+      runs: role.runs,
+      free: Math.max(0, role.headcount - role.runs.length),
+    }));
+}
+
+/** **Which seat the run `run` sits in** in the launch `launch` — its role and its number from 1 — or
+ *  null where it sits in none of them. */
+export function seatOf(launch: AutomationLaunchStateDto | null, run: number): { role: string; n: number } | null {
+  for (const role of launch?.roles ?? []) {
+    const at = role.runs.findIndex((one) => one.run === run);
+    if (at >= 0) return { role: role.name, n: at + 1 };
+  }
+  return null;
+}
+
+/** How the run in a seat stands: off its row, and off the pane's own run where it is that one. */
+export function seatStateOf(seat: AutomationRunCardDto, front: Say): SeatState {
+  if (seat.status === "failed") return "failed";
+  if (seat.status === "paused") return "paused";
+  if (seat.waiting || seat.waitsForRoom) return "waiting";
+  return seat.run === front.run && front.interactive ? "asks" : "running";
+}
+
+/** When the round in a seat began, in milliseconds since the epoch, or null where nothing is written. */
+function seatSince(seat: AutomationRunCardDto): number | null {
+  const at = Date.parse(seat.roleStartedAt ?? seat.startedAt ?? "");
+  return Number.isNaN(at) ? null : at;
+}
+
+/** One seat of a role, pressed to turn the pane to its run's terminal. */
+function SeatRow({ role, n, seat, state, front, now, onOpen }: {
+  role: string; n: number; seat: AutomationRunCardDto; state: SeatState; front: boolean; now: number;
+  onOpen: (run: number) => void;
+}) {
+  const task = seat.task === undefined ? null : `${seat.task.ref} ${seat.task.title}`;
+  const since = seatSince(seat);
+  const going = state === "running" || state === "asks";
+  const ran = since !== null && going ? clockOf(now - since) : null;
+  const chip = state === "asks" ? t("auto.run.roles.asks") : state === "failed" ? t("auto.run.roles.failed") : null;
+  return (
+    <li>
+      <button
+        type="button"
+        className="runseat"
+        data-run={seat.run}
+        data-state={state}
+        aria-current={front ? "true" : undefined}
+        aria-label={tf("auto.run.seatOpen", { role, n, task: task ?? seat.stepName ?? "" })}
+        onClick={() => onOpen(seat.run)}
+      >
+        <span className="runseat__n">{n}</span>
+        <span className="runseat__body">
+          {task !== null && <span className="runseat__task" title={task}>{task}</span>}
+          {seat.stepName !== undefined && <span className="runseat__step">{seat.stepName}</span>}
+        </span>
+        <span className="runseat__end">
+          {chip !== null && <span className="runroles__chip" data-state={state}>{chip}</span>}
+          {ran !== null && <span className="runroles__time">{tf("face.elapsed", { time: ran })}</span>}
+          {state === "running" && (
+            <span className="runroles__pulse" role="img" aria-label={t("auto.run.roles.working")} />
+          )}
+        </span>
+      </button>
+    </li>
+  );
 }
 
 /**
- * **The bar over a run's terminal**: the way back to the roles, whose round this is and what step it
- * is on — said to have failed where the run failed on it — the other rounds of the same automation,
- * and — where a step that may wait for a person turned the pane (`byStep`) — the line that says so.
+ * **The seats of a launch, by role** — each a row pressed to turn the pane to that seat's terminal,
+ * and the seats nobody is in as one row that cannot be pressed.
  */
-export function RunTermBar({ run, project, byStep, onBack, onGoTo }: {
+function LaunchSeats({ seats, front, now, onOpen }: {
+  seats: readonly RoleSeats[]; front: Say; now: number; onOpen: (run: number) => void;
+}) {
+  return (
+    <div className="runseats">
+      {seats.map((role) => (
+        <section key={role.role} className="runseats__role" data-role={role.role}>
+          <h3 className="runseats__head">
+            <Icon name={role.icon} />
+            <span className="runseats__name">{role.name}</span>
+          </h3>
+          <ul className="runseats__list">
+            {role.runs.map((seat, at) => (
+              <SeatRow
+                key={seat.run}
+                role={role.name}
+                n={at + 1}
+                seat={seat}
+                state={seatStateOf(seat, front)}
+                front={seat.run === front.run}
+                now={now}
+                onOpen={onOpen}
+              />
+            ))}
+            {role.free > 0 && (
+              <li>
+                <div className="runseat runseat--free">
+                  <span className="runseat__n">{role.free}</span>
+                  <span className="runseat__body">
+                    <span className="runseat__task">{tf("auto.run.seatsFree", { n: role.free })}</span>
+                  </span>
+                </div>
+              </li>
+            )}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * **The bar over a run's terminal**: the way back to the roles, whose round this is — its role, its
+ * seat, its task — what step it is on, said to have failed where the run failed on it, how long the
+ * round has run and, where a step that may wait for a person turned the pane (`byStep`), the line
+ * that says so.
+ */
+export function RunTermBar({ run, project, launch, byStep, onBack }: {
   run: Say;
   project: number;
+  /** The launch the pane draws, which the seat's number is read off; null for a run kept from before
+   *  launches were. */
+  launch: number | null;
   byStep: boolean;
   onBack: () => void;
-  /** Go to the run `run`'s terminal — this one's, or another round's in its own pane. */
-  onGoTo: (run: number) => void;
 }) {
   const roles = useProjectRoles(project);
-  const live = useLiveRuns();
-  const rounds = useMemo(() => roundsOf(run, live, roles), [run, live, roles]);
+  const state = useLaunchState(launch);
+  const seat = useMemo(() => seatOf(state, run.run), [state, run.run]);
   const own = run.round?.role ?? null;
   const role = own === null ? undefined : roles.find((one) => one.id === own);
   const name = role?.name ?? run.automation;
+  // The time is the round's, counted while it is under way, as on its card.
+  const status = run.state?.status ?? "running";
+  const going = status === "running" && run.state?.waiting !== true;
+  const since = run.round?.startedAt ?? run.startedAt;
+  const now = useNow(going && since !== null);
+  const ran = going && since !== null ? clockOf(now - since) : null;
+  const head = [
+    name,
+    seat === null ? null : tf("auto.run.seat", { n: seat.n }),
+    run.task === null ? null : `${run.task.ref} ${run.task.title}`,
+  ].filter((one) => one !== null).join(" ・ ");
   return (
     <div className="runterm">
       <div className="runterm__head">
@@ -817,37 +951,22 @@ export function RunTermBar({ run, project, byStep, onBack, onGoTo }: {
         </button>
         <Icon name={role === undefined ? "robot" : roleIcon(role)} />
         <span className="runterm__body">
-          <span className="runterm__task">
-            {run.task === null ? name : `${name} ・ ${run.task.ref} ${run.task.title}`}
-          </span>
+          <span className="runterm__task">{head}</span>
           {run.step !== "" && (
             <span className="runterm__step">
               {run.state?.status === "failed" ? tf("auto.run.stepFailed", { step: run.step }) : run.step}
             </span>
           )}
         </span>
+        {ran !== null && (
+          <span className="runterm__time">
+            {tf("face.elapsed", { time: ran })}
+            {!run.interactive && (
+              <span className="runroles__pulse" role="img" aria-label={t("auto.run.roles.working")} />
+            )}
+          </span>
+        )}
       </div>
-      {rounds.length > 0 && (
-        <div className="runterm__strip">
-          <span className="runterm__others">{t("auto.run.otherRounds")}</span>
-          {rounds.map((round) => (
-            <button
-              key={round.run}
-              type="button"
-              className="runterm__round"
-              data-run={round.run}
-              data-state={round.dot}
-              aria-current={round.run === run.run ? "true" : undefined}
-              title={`${round.name} ・ ${round.which}`}
-              aria-label={tf("auto.run.roundTerminalOf", { name: round.name, which: round.which })}
-              onClick={() => onGoTo(round.run)}
-            >
-              <Icon name={round.icon} />
-              <span className="runterm__dot" />
-            </button>
-          ))}
-        </div>
-      )}
       {byStep && (
         <p className="runterm__notice" role="status">
           {tf("auto.run.turnedForStep", { role: name })}

@@ -49,6 +49,8 @@ interface Store {
   setAssignee(id: number, kind: Facet | null): void;
   /** Set the role the task is worked under, or null for none (worked in a session). */
   setRole(id: number, roleId: number | null): void;
+  /** Hand the task to `kind` and set its role in one go, the role written once the hand-over has landed. */
+  assignWithRole(id: number, kind: Facet, roleId: number | null): void;
   addComment(taskId: number, text: string): void;
   /** Take back a comment posted by mistake (it is deleted outright). */
   removeComment(commentId: number, taskId: number): void;
@@ -211,6 +213,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setStart(id, start) { run(mut.setStart(id, start)); },
     setAssignee(id, kind) { run(mut.setAssignee(id, kind)); },
     setRole(id, roleId) { run(mut.setTaskRole(id, roleId)); },
+    assignWithRole(id, kind, roleId) { run(mut.setAssignee(id, kind).then(() => mut.setTaskRole(id, roleId))); },
     addComment(taskId, text) { run(mut.addComment(taskId, text)); },
     removeComment(commentId, taskId) { run(mut.removeComment(commentId, taskId)); },
     removeDecisionComment(commentId, decisionId) { run(mut.removeDecisionComment(commentId, decisionId)); },

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type SyntheticEvent } from "react";
 import { Markdown } from "../components/Markdown";
 import { Attachments } from "../components/Attachments";
 import { Commits } from "../components/Commits";
@@ -14,7 +14,7 @@ import { confirmDialog } from "../core/dialog";
 import {
   DateField, DueChip, FacetAvatar, PremiseChangedField, taskProjectId, PriorityDot, StatusSelect, TaskIdChip, When,
 } from "../components/atoms";
-import { errText, eventText, exactLabel, priorityLabel, t, tf } from "../core/i18n";
+import { errText, eventText, exactLabel, listLabel, priorityLabel, t, tf } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { useSingleFlight } from "../core/singleFlight";
 import { invoke } from "../core/ipc";
@@ -173,6 +173,18 @@ export function TaskDetailPane({
   const roster = dataAdapter.listRoster();
   // The roles of the task's project, for the role field drawn while the task is the AI's.
   const roles = useProjectRoles(task ? (placementOf(task)?.project.id ?? task.projectId ?? null) : null);
+  // The automations the roles come from, named in the role field's heading.
+  const roleSources = [...new Set(roles.map((r) => r.automationName))];
+  // A task handed to the AI from a person (or from nobody) in a project that defines a role is not
+  // handed over until a role is chosen, "no role" included: until then the AI is shown as the assignee
+  // with no choice checked, and nothing is written. Reaching for anything else in the pane meanwhile is
+  // a try at saving that, and is answered by the reason under the field. Handing it back to a person,
+  // or opening another task, drops it unwritten.
+  const [pendingAi, setPendingAi] = useState(false);
+  const [roleMissing, setRoleMissing] = useState(false);
+  const rolePartRef = useRef<HTMLDivElement>(null);
+  const assigneeRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { setPendingAi(false); setRoleMissing(false); }, [taskId]);
   // The comment box: a second send before the first has landed is dropped: the box still holds the body, so it would post it again.
   const { busy: commentBusy, run: runComment } = useSingleFlight();
   if (!task) return <div className="rightpane__empty">{t("detail.notFound")}</div>;
@@ -241,6 +253,29 @@ export function TaskDetailPane({
     await mutRemoveComment(commentId, taskId);
     if (inTauri()) setTaskActivity(await loadTaskActivity(taskId));
   };
+  const pickAssignee = (kind: "" | Facet) => {
+    setRoleMissing(false);
+    if (kind === "ai" && task.assignee?.kind !== "ai" && roles.length > 0) { setPendingAi(true); return; }
+    setPendingAi(false);
+    store.setAssignee(taskId, kind === "" ? null : kind);
+  };
+  const pickRole = (v: string) => {
+    const roleId = v === ROLE_NONE ? null : Number(v);
+    setRoleMissing(false);
+    if (pendingAi) { setPendingAi(false); store.assignWithRole(taskId, "ai", roleId); }
+    else store.setRole(taskId, roleId);
+  };
+  // Any control outside the assignee and role fields, reached by pointer or by focus, while the AI is
+  // waiting on a role.
+  const triedElsewhere = (e: SyntheticEvent) => {
+    if (!pendingAi) return;
+    const el = e.target as Element;
+    if (!el.closest?.("button, input, select, textarea, a, [contenteditable]")) return;
+    if (rolePartRef.current?.contains(el) || assigneeRef.current?.contains(el)) return;
+    setRoleMissing(true);
+  };
+  const shownAssignee = pendingAi ? (roster.find((a) => a.kind === "ai") ?? task.assignee ?? null) : (task.assignee ?? null);
+
   const removeTask = async () => {
     if (await confirmDialog(tf("detail.deleteConfirm", { title: task.title }))) {
       store.deleteTask(taskId);
@@ -259,7 +294,7 @@ export function TaskDetailPane({
       </div>
 
       {tab === "detail" && (
-        <div className="detail__body">
+        <div className="detail__body" onPointerDownCapture={triedElsewhere} onFocusCapture={triedElsewhere}>
           <div className="detail__title">
             {editingTitle ? (
               <input
@@ -302,30 +337,37 @@ export function TaskDetailPane({
             <DueChip due={task.due} />
           </div>
 
-          <div className="detail__field">
+          <div className="detail__field" ref={assigneeRef}>
             <span className="detail__flabel">{t("detail.assignee")}</span>
             <span>
-              <AssigneePicker
-                current={task.assignee ?? null}
-                roster={roster}
-                onPick={(kind) => {
-                  if (kind === "") store.setAssignee(taskId, null);
-                  else store.setAssignee(taskId, kind);
-                }}
-              />
+              <AssigneePicker current={shownAssignee} roster={roster} onPick={pickAssignee} />
             </span>
           </div>
-          {/* Asked only of a task the AI holds, in a project that defines a role. A choice writes at
-              once, as every field here does (`AMB-D-32`), so there is no unchosen state to refuse a
-              save over: a task without a role is shown as "no role", which is what it is. */}
-          {task.assignee?.kind === "ai" && roles.length > 0 && (
-            <div className="detail__field">
-              <span className="detail__flabel">{t("detail.role")}</span>
+          {/* Asked only of a task the AI holds (or is being handed to), in a project that defines a role.
+              A task the AI already holds with no role shows "no role" checked, which is what it is;
+              nothing is checked only while a hand-over to the AI waits on the choice. */}
+          {(pendingAi || task.assignee?.kind === "ai") && roles.length > 0 && (
+            <div className="rolepart" ref={rolePartRef}>
+              <div className="rolepart__h">
+                <h3 className="rolepart__title">{t("detail.role")}</h3>
+                <span className="rolepart__req">{t("detail.roleRequiredMark")}</span>
+                <span className="rolepart__hint">{tf("detail.roleFrom", { name: listLabel(roleSources) })}</span>
+              </div>
               <RoleField
                 roles={roles}
-                value={task.roleId ? String(task.roleId) : ROLE_NONE}
-                onChange={(v) => store.setRole(taskId, v === ROLE_NONE ? null : Number(v))}
+                value={pendingAi ? "" : task.roleId ? String(task.roleId) : ROLE_NONE}
+                onChange={pickRole}
               />
+              {/* While the hand-over waits, the reason's line is kept even before it is said, so saying it
+                  moves nothing below: the control being pressed when it appears stays under the pointer. */}
+              {pendingAi && (roleMissing ? (
+                <ErrorNote>{t("detail.roleRequired")}</ErrorNote>
+              ) : (
+                <div className="errortext rolepart__held" aria-hidden="true">
+                  <Icon name="warning" />
+                  <span>{t("detail.roleRequired")}</span>
+                </div>
+              ))}
             </div>
           )}
           <div className="detail__field">

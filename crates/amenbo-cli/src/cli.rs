@@ -2008,16 +2008,6 @@ pub enum AutomationCmd {
         /// automation id
         id: i64,
     },
-    /// Change what a run starts at, to another of the built-ins a run can start at. The lines out of
-    /// the old one go; the placements after it stay
-    EntryReplace {
-        /// automation id
-        id: i64,
-        /// the built-in to start at: take_task, make_task or fetch. make_task comes set to take the
-        /// task it files, the one way a run can start from it
-        #[arg(long, value_name = "KEY")]
-        builtin: String,
-    },
     /// Save the automation as its next version — what a run is launched from. Refused until the launch
     /// check passes; with nothing written since the newest version, nothing is saved
     Save {

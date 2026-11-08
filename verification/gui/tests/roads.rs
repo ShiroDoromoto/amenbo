@@ -97,6 +97,68 @@ fn no_screen_road_opens_a_folder_on_a_face_that_already_has_one() {
     }
 }
 
+/// A run's role takes only the tasks filed with that role, so a screen road that starts an
+/// automation whose round opens at the built-in that takes a task needs one such task in its world.
+/// Without it the seat finds nothing, the run ends at once, and every step after the start reads a
+/// launch that is no longer there. Nothing else catches it: the road renders, lints and walks, and the
+/// operator is the one who finds the run already gone.
+#[test]
+fn every_screen_road_that_starts_on_taking_a_task_has_a_task_filed_with_the_role() {
+    for f in scenario_files() {
+        let scenario = amenbo_scenario::lint_file(&f, None).expect("lints");
+        if !scenario.runs_on(Driver::Gui) {
+            continue;
+        }
+        let takes_first = automations_starting_on_take_task(&scenario.given);
+        let with_role = automations_with_a_task_of_their_role(&scenario.given);
+        for step in scenario.steps(Driver::Gui) {
+            let Step::Action { domain: Domain::Automation, op, with, .. } = step else { continue };
+            if op != "start" {
+                continue;
+            }
+            let Some(target) = with.get("target").and_then(|v| v.as_str()) else { continue };
+            if !takes_first.contains(target) {
+                continue;
+            }
+            assert!(
+                with_role.contains(target),
+                "{} starts `{target}` on the screen, whose round opens at take_task, but its world \
+                 files no task with that automation's role (`task update` with `role_of: {target}`), \
+                 so the seat finds nothing to take and the run ends at once",
+                f.display()
+            );
+        }
+    }
+}
+
+/// The automations, by binding, whose placement marked to start is the built-in that takes a task.
+fn automations_starting_on_take_task(given: &[Step]) -> HashSet<String> {
+    given
+        .iter()
+        .filter_map(|step| {
+            let Step::Action { domain: Domain::Automation, op, with, .. } = step else { return None };
+            let starts = with.get("starts").and_then(|v| v.as_bool()).unwrap_or(false);
+            let take = with.get("builtin").and_then(|v| v.as_str()) == Some("take_task");
+            (op == "place-add" && starts && take)
+                .then(|| with.get("target").and_then(|v| v.as_str()).map(str::to_string))
+                .flatten()
+        })
+        .collect()
+}
+
+/// The automations, by binding, that a task in the world is filed with the role of.
+fn automations_with_a_task_of_their_role(given: &[Step]) -> HashSet<String> {
+    given
+        .iter()
+        .filter_map(|step| {
+            let Step::Action { domain: Domain::Task, op, with, .. } = step else { return None };
+            (op == "update")
+                .then(|| with.get("role_of").and_then(|v| v.as_str()).map(str::to_string))
+                .flatten()
+        })
+        .collect()
+}
+
 /// The projects an operator could find in the list when a road opens: whatever the world raised, and
 /// the one the run is standing in before it raised anything.
 ///

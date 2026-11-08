@@ -6,7 +6,8 @@
 # desk already reads as stopped.
 #
 # The automation is the one pause-a-launch-after-the-current-task-from-its-pane walks. Its one role is
-# the one it was born with, named after it.
+# the one it was born with, named after it, and the task waiting is filed with that role so its seat
+# takes it.
 id: stop-a-role-after-its-task-and-resume-it
 title: A role of a launch is stopped after its task and resumed, its headcount kept, and neither is offered while the launch is paused
 description: >
@@ -39,6 +40,8 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: wait, exit_to: "" } }
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — stop after the task" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_start }
+  # The task is the born role's, whose round starts there: a seat takes only its role's tasks.
+  - { type: action, domain: task, op: update, with: { target: seed, role_of: auto } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: after }, as: at_after }

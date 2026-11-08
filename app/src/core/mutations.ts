@@ -157,6 +157,12 @@ export const ACK_WATCHERS: Readonly<Record<string, AckWatcher>> = {
   // What a launch asks for: read off the entry's settings, and off the axes and values the project
   // has — an edit to those acks with "tasks", as `dimAssign`'s note says.
   automationLaunchAsks: (_k, scopes) => scopes.has("automations") || scopes.has("tasks"),
+  // The roles the task editor offers: a role added, removed or reordered on the build screen acks
+  // with "automations".
+  projectRoles: (_k, scopes) => scopes.has("automations"),
+  // A project's folders: binding one, unbinding one, and raising a project in a folder ack with
+  // "projects".
+  boundFolders: (_k, scopes) => scopes.has("projects"),
 };
 
 /** Browser fallback: mutate the cache in the mock and publish it (with a coarse query refetch). */

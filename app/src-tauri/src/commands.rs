@@ -3080,7 +3080,7 @@ fn raise_project_in(path: &std::path::Path, name: Option<String>) -> Result<Writ
         store.config.language.as_deref(),
         amenbo_core::config::Paths::command_name(),
     );
-    Ok(WriteAck::new(&["tasks"]))
+    Ok(WriteAck::new(&["tasks", "projects"]))
 }
 
 /// Several living projects claim this folder, so which lost pointer to put back is not determined:
@@ -3434,7 +3434,7 @@ pub fn project_bind_folder(project_id: i64, dir: String) -> Result<WriteAck, Cmd
         store.config.language.as_deref(),
         amenbo_core::config::Paths::command_name(),
     );
-    Ok(WriteAck::new(&[]))
+    Ok(WriteAck::new(&["projects"]))
 }
 
 /// Folder management on the project settings screen: unbind this folder (the Tauri path for
@@ -3473,7 +3473,7 @@ pub fn project_unbind_folder(dir: String) -> Result<WriteAck, CmdError> {
             let _ = store.forget_gone_task_folders(project_id);
         }
     }
-    Ok(WriteAck::new(&[]))
+    Ok(WriteAck::new(&["projects"]))
 }
 
 /// Add a dimension (classification axis), scoped to the project and appended at the end. The GUI

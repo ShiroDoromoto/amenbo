@@ -4259,9 +4259,9 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "resume", required: &[], refs: &["target"], strings: &[], binds: false },
     // The other pause: the run stops before it takes its next task, not at the end of the action
     // under way. A terminal asks it of one run, `target`, and a run that takes no task is refused
-    // (`invalid_value`). On a screen it is still the ‖ on the workspace's header, which asks every run
-    // of the project the workspace shows; `project` is that screen's alone.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pause-before-next-task", required: &[], refs: &["target", "project"], strings: &[], binds: false },
+    // (`invalid_value`). A terminal's alone: on a screen the workspace's header has no such pause, and
+    // a run is paused after its task from its row (`press-run`, `press: pause-before-next-task`).
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pause-before-next-task", required: &[], refs: &["target"], strings: &[], binds: false },
     // `stop` is the force-cancel: the run ends `canceled` where it stands, whatever it is in the middle
     // of. `cancel` ends a paused run only — nothing is under way in one — and a run still going is
     // refused (`invalid_value`) with the two ways on: pause it first, or force-cancel it.

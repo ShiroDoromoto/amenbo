@@ -44,15 +44,17 @@
 // **On the build screen it draws one role's round** (`automationGraph` with a role), in one row from
 // left to right inside one frame: "receives" — a failed round's incident, the triggers and the roles
 // that hand this one its task, or people where nothing else does — then the actions the round passes
-// through, each with its steps inside it, laid out across (`layOutAcross`), and "hands on" — the
-// roles it hands on to, or none where it ends at done — with an arrow between each of them. The row
-// never wraps: in a frame too narrow the words of the two ends wrap first, down to their heading on
-// one line, and only then does the picture scroll across inside it. Each box is as big as what it
-// says (`roundSize`), so the actions of a round are seen side by side. How wide the row has to be for
-// the whole picture to be seen is told to the screen (`onRowNeeds`, `rowNeeds`), which gives the row
-// the screen's whole width where the middle of its three places is narrower. A line going back is no
-// line there but a loop under the box it goes back to, saying which box and which way out it comes
-// back from.
+// through, each with its steps inside it, laid out across (`layOutAcross`), and "hands on" — a frame
+// for each role it hands on to, with that role's icon and name and the task it hands on by its title
+// (`PicRound.passes`), or one saying none where it ends at done — with an arrow between each of them,
+// and none between the frames it hands on to. The row never wraps: in a frame too narrow the words of
+// the ends wrap first, down to their heading on one line, and only then does the picture scroll
+// across inside it. A frame handed on to keeps its width, so the role's name and the task's title
+// read whole. Each box is as big as what it says (`roundSize`), so the actions of a round are
+// seen side by side. How wide the row has to be for the whole picture to be seen is told to the
+// screen (`onRowNeeds`, `rowNeeds`), which gives the row the screen's whole width where the middle of
+// its three places is narrower. A line going back is no line there but a loop under the box it goes
+// back to, saying which box and which way out it comes back from.
 //
 // **It scrolls, and it does nothing else.** No zoom, and no folding a stretch away by hand: an
 // automation is tens of steps, and a picture with a state of its own is one more thing to put back
@@ -76,11 +78,13 @@ import {
   type PicLine,
   type PicMark,
   type PicNode,
+  type PicPass,
   type PicRound,
 } from "./automationLayout";
 import { listLabel, t, tf } from "../core/i18n";
 import { kindLabel } from "./automationPortKinds";
 import { cardIo } from "./automationWires";
+import { RoleIcon } from "./AutomationRoles";
 import { Icon } from "../components/Icon";
 
 /** Under a step's name on an action's picture: what it takes in, then what it hands on — a line each,
@@ -105,6 +109,26 @@ function RoundEnd({ head, words }: { head: string; words: string }) {
     <div className="autopic__end">
       <span className="autopic__endhead">{head}</span>
       <span className="autopic__endwords">{words}</span>
+    </div>
+  );
+}
+
+/** One role the round hands on to: the heading, the role's icon and name, and the task by its title —
+ *  marked where it depends on another. A line out to another role's box hands on no task, and has no
+ *  third line. */
+function PassEnd({ pass }: { pass: PicPass }) {
+  return (
+    <div className="autopic__end autopic__end--pass">
+      <span className="autopic__endhead">{t("auto.pic.handsOn")}</span>
+      <span className="autopic__endwords autopic__endrole">
+        <RoleIcon role={pass.role} size={16} />
+        {pass.role.name}
+      </span>
+      {pass.task !== undefined && (
+        <span className="autopic__endtask">
+          {tf(pass.depends ? "auto.pic.passTaskDepends" : "auto.pic.passTask", { title: pass.task })}
+        </span>
+      )}
     </div>
   );
 }
@@ -198,8 +222,9 @@ function Legend({ inAction, inRound }: { inAction: boolean; inRound: boolean }) 
 
 /**
  * How wide a role's row (`.autopic__flow`) has to be for its picture to be seen whole, without
- * scrolling across: its frame, the gaps and arrows, the picture at its own width, and the two ends at
- * their narrowest — the ends give way before the picture does, down to their heading on one line.
+ * scrolling across: its frame, the gaps and arrows, the picture at its own width, each frame it hands
+ * on to at its own width — those do not give way — and the other ends at their narrowest: they give
+ * way before the picture does, down to their heading on one line.
  */
 function rowNeeds(flow: HTMLElement): number {
   const px = (value: string) => Number.parseFloat(value) || 0;
@@ -211,7 +236,7 @@ function rowNeeds(flow: HTMLElement): number {
     if (!(child instanceof HTMLElement)) continue;
     const own = getComputedStyle(child);
     if (child.classList.contains("autopic")) needs += child.scrollWidth + px(own.borderLeftWidth) + px(own.borderRightWidth);
-    else if (child.classList.contains("autopic__end")) {
+    else if (child.classList.contains("autopic__end") && !child.classList.contains("autopic__end--pass")) {
       const head = child.querySelector<HTMLElement>(".autopic__endhead");
       needs +=
         (head?.offsetWidth ?? 0) +
@@ -724,10 +749,11 @@ export function AutomationPicture({
           <span className="autopic__flowarrow" aria-hidden="true">
             →
           </span>
-          <RoundEnd
-            head={t("auto.pic.handsOn")}
-            words={round.handsTo.length === 0 ? t("auto.pic.handsNone") : listLabel([...round.handsTo])}
-          />
+          {round.passes.length === 0 ? (
+            <RoundEnd head={t("auto.pic.handsToNone")} words={t("auto.pic.handsNone")} />
+          ) : (
+            round.passes.map((pass, at) => <PassEnd key={at} pass={pass} />)
+          )}
         </div>
       )}
       {/* Under the picture rather than on its sheet, so it stays in view however far it is scrolled. */}

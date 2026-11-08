@@ -41,6 +41,7 @@ import type {
   AutomationHeldBackDto,
   AutomationLaunchAsksDto,
   AutomationLaunchCheckDto,
+  AutomationLaunchStateDto,
   AutomationPortDto,
   AutomationRunCardDto,
   AutomationRunHistoryDto,
@@ -1312,6 +1313,30 @@ export function useRunCards(runs: readonly number[]): AutomationRunCardDto[] {
     () => fetchRunCards(runs),
   );
   return data ?? [];
+}
+
+/**
+ * **One launch as its pane draws it, read at once** — where the launch stands, and for every role its
+ * headcount beside the definition's, how many are under way and still to go, whether it is held, the
+ * runs in its seats, and its tasks waiting to be taken with the first three of them. Null outside Tauri.
+ */
+export async function fetchLaunchState(launchId: number): Promise<AutomationLaunchStateDto | null> {
+  if (!inTauri()) return null;
+  return invoke<AutomationLaunchStateDto>("automation_launch_state", { launchId });
+}
+
+/**
+ * Subscribing read of one launch. It is read again when a run of it moves or a role's headcount changes
+ * (`automationRuns`), when a task waiting for a role turns up or is taken (`tasks`), and when a role is
+ * renamed (`automations`) (`core/query`'s `launchState`). Null until the first answer lands, and for no
+ * launch.
+ */
+export function useLaunchState(launchId: number | null): AutomationLaunchStateDto | null {
+  const { data } = useQuery<AutomationLaunchStateDto | null>(
+    ["launchState", launchId],
+    () => (launchId === null ? Promise.resolve(null) : fetchLaunchState(launchId)),
+  );
+  return data ?? null;
 }
 
 /** The one ending the "history" tab can be narrowed to, or all three. */

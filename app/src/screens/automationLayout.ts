@@ -66,6 +66,7 @@ import type {
   AutomationExitDto,
   AutomationPlacementStepDto,
   AutomationPortDto,
+  AutomationRoleDto,
   AutomationWireDto,
 } from "../bindings/bindings";
 
@@ -192,12 +193,21 @@ export type PicRound = {
    *  boxes hand on into it, then the actions, where the box it comes from is on no round. None of the
    *  three means only a person files it. */
   receives: { failures: boolean; triggers: readonly string[]; roles: readonly string[] };
-  /** The roles the round hands on to, each once, in the order the lines out of it are. */
-  handsTo: readonly string[];
+  /** Whom the round hands on to, one each: first each task it files for another role (`passes` on the
+   *  role), then each role its lines out of it go to that no such task already names. */
+  passes: readonly PicPass[];
   /** Each line out of the round, by its edge, with the role it hands on to — or the action, where the
    *  box it goes to is on no round. */
   handOff: ReadonlyMap<number, string>;
 };
+
+/**
+ * **One task a role's round hands on to another role** (`AutomationRolePassDto`): the role it goes to,
+ * and the task by its title — the title a run last filed it under, or the action that files it until a
+ * run has — marked where the task is set to depend on another. A line out of the round to another
+ * role's box files no task, and names the role alone.
+ */
+export type PicPass = { role: AutomationRoleDto; task?: string; depends: boolean };
 
 /** One picture, whichever of the two it is: the boxes, the lines, and the box a run opens first. */
 export type PicGraph = {
@@ -224,7 +234,8 @@ export type PicGraph = {
  *
  * Given a role, **only that role's round** (`AutomationPlacementDto::roleId`): received from a failed
  * round, a trigger, another role or a person, the actions it passes through with their steps inside, and
- * handed on to the roles its lines leave for. A role that is gone draws the whole automation.
+ * handed on to the roles it files a task for and the roles its lines leave for. A role that is gone
+ * draws the whole automation.
  * `agentLabel` names the agent a step chose for itself (`stepKind`); absent, its id is written.
  */
 export function automationGraph(
@@ -285,10 +296,16 @@ export function automationGraph(
     const to = roleName(edge.toId) ?? detail.placements.find((one) => one.id === edge.toId)?.name;
     if (to !== undefined) handOff.set(edge.id, to);
   }
-  const handsTo = detail.edges.flatMap((edge) => {
-    const name = handOff.has(edge.id) && edge.toId !== undefined ? roleName(edge.toId) : undefined;
-    return name === undefined ? [] : [name];
+  const passes: PicPass[] = role.passes.flatMap((pass) => {
+    const to = detail.roles.find((one) => one.id === pass.toRole);
+    return to === undefined ? [] : [{ role: to, task: pass.taskTitle ?? pass.name, depends: pass.depends }];
   });
+  for (const edge of detail.edges) {
+    if (!handOff.has(edge.id) || edge.toId === undefined) continue;
+    const at = detail.placements.find((one) => one.id === edge.toId);
+    const to = detail.roles.find((one) => one.id === at?.roleId);
+    if (to !== undefined && !passes.some((one) => one.role.id === to.id)) passes.push({ role: to, depends: false });
+  }
   return {
     entryId: role.entryPlacementId,
     boxes: detail.placements
@@ -303,7 +320,7 @@ export function automationGraph(
         triggers: detail.triggers.filter((one) => one.enabled && one.roleId === role.id).map((one) => one.name),
         roles: [...new Set([...fromRoles, ...fromActions])],
       },
-      handsTo: [...new Set(handsTo)],
+      passes,
       handOff,
     },
   };

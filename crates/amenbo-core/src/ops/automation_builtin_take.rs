@@ -38,7 +38,7 @@
 use rusqlite::Connection;
 
 use crate::error::Result;
-use crate::model::{AutomationCfgKind, AutomationPortKind, AutomationRun, RunDefCfg};
+use crate::model::{AutomationCfgKind, AutomationPortKind, AutomationRun, RunDefCfg, TakeOrder};
 use crate::ops::automation_builtin::{
     answer, Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry, HeldBack, HeldByRecord,
     HeldByValue, Waits, Work,
@@ -249,13 +249,43 @@ fn search(
     limit: usize,
     offset: usize,
 ) -> Result<query::TaskListResult> {
-    let sort = match take_order(conn, run)? {
+    listed(conn, run.project_id, &roles_started(conn, run.id)?, answer, take_order(conn, run)?, limit, offset)
+}
+
+/// **The tasks a seat of `roles` would take at an entry answered `cfg`, as it would take them** — how
+/// many there are, and the first `first` of them in the order it takes them in: that of the role
+/// (`order`), else the one the filter's answer asks for. What a launch's pane reads as a role's tasks
+/// waiting to be taken ([`crate::ops::automation_run::launch_state`]). A task a run has taken is under
+/// way rather than not started, so it is not among them.
+pub(crate) fn waiting_to_be_taken(
+    conn: &Connection,
+    project_id: i64,
+    roles: &[i64],
+    cfg: &[RunDefCfg],
+    order: Option<TakeOrder>,
+    first: usize,
+) -> Result<query::TaskListResult> {
+    listed(conn, project_id, roles, answer(cfg, FILTER), order, first, 0)
+}
+
+/// One page of the tasks the filter answered with lists, of those worked under one of `roles` —
+/// [`search`] and [`waiting_to_be_taken`] read them the same way.
+fn listed(
+    conn: &Connection,
+    project_id: i64,
+    roles: &[i64],
+    answer: Option<&str>,
+    order: Option<TakeOrder>,
+    limit: usize,
+    offset: usize,
+) -> Result<query::TaskListResult> {
+    let sort = match order {
         Some(order) => order.sort().to_string(),
         None => answer.map(taskfilter_sort).unwrap_or_else(|| TASKFILTER_SORT_DEFAULT.to_string()),
     };
     query::list_in_roles(
         conn,
-        Reach::binding(run.project_id),
+        Reach::binding(project_id),
         ListParams {
             filter_expr: Some(expression(answer)),
             sort,
@@ -263,7 +293,7 @@ fn search(
             offset: Some(offset),
             ..Default::default()
         },
-        &roles_started(conn, run.id)?,
+        roles,
     )
 }
 
@@ -1611,6 +1641,34 @@ mod tests {
         });
     }
 
+    /// **A launch read at once names each role's tasks waiting to be taken**: how many there are, and
+    /// the first of them in the order the role takes them in. The tasks the runs have taken are under
+    /// way, and are not among them.
+    #[test]
+    fn a_launch_read_at_once_counts_each_roles_tasks_waiting_to_be_taken() {
+        use crate::ops::automation_run::{launch_headcounts, launch_state, WAITING_NAMED};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = round_picture(tx, project);
+            crate::ops::test_support::room_for(tx, automation.id, 2);
+            let tasks: Vec<i64> = ["a", "b", "c", "d", "e", "f"].iter().map(|t| for_ai(tx, t, project, None)).collect();
+            let (launch, role, _) = two_at_work(tx, &automation);
+
+            let state = launch_state(tx.conn(), launch).expect("read");
+            assert_eq!(state.launch.id, launch);
+            assert_eq!(state.automation_name, "round");
+            assert_eq!(state.roles.len(), 1);
+            let one = &state.roles[0];
+            assert_eq!(one.headcount, launch_headcounts(tx.conn(), launch).expect("read")[0]);
+            assert_eq!(one.headcount.role_id, role);
+            assert_eq!(one.waiting, 4, "the two taken are under way");
+            let first: Vec<i64> = one.first_waiting.iter().map(|w| w.task_id).collect();
+            assert_eq!(first, tasks[2..2 + WAITING_NAMED].to_vec(), "the first three, oldest first");
+            assert_eq!(one.first_waiting[0].title, "c");
+            assert!(one.first_waiting.iter().all(|w| w.from_role_id.is_none()), "none was passed on");
+        });
+    }
+
     /// **Raised again before the seats have gone, the headcount calls the rest off**: the runs under way
     /// keep their seats, and each goes round as before.
     #[test]
@@ -1716,7 +1774,7 @@ mod tests {
 
             assert!(matches!(
                 automation_stop::hold_launch_role(tx, launch, role + 1000),
-                Err(crate::error::Error::Invalid(_))
+                Err(crate::error::Error::NotFound(_))
             ));
             automation_stop::hold_launch_role(tx, launch, role).expect("stop the role");
             automation_stop::pause_launch(tx, launch).expect("pause the launch");
@@ -1763,8 +1821,8 @@ mod tests {
             let most = launch_headcount_set(tx, launch, role, crate::model::MAX_ROLE_HEADCOUNT).expect("ten");
             assert_eq!(most.headcount, crate::model::MAX_ROLE_HEADCOUNT);
             assert!(
-                matches!(launch_headcount_set(tx, launch, role + 1000, 2), Err(crate::error::Error::Invalid(_))),
-                "a role the automation does not hold",
+                matches!(launch_headcount_set(tx, launch, role + 1000, 2), Err(crate::error::Error::NotFound(_))),
+                "a role that does not exist (`AMB-D-986`)",
             );
 
             automation::role_update(tx, role, automation::RoleChange { headcount: Some(3), ..Default::default() })

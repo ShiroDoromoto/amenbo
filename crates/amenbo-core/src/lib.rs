@@ -3,7 +3,7 @@
 //! local-first — and the conceptual model it exposes is one coherent, CLI- and AI-native whole.
 
 // The big `json!` spec in `agent::build` blows past the default macro recursion limit.
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 // Docs are built with `--document-private-items`, so linking from a public API to a private helper is
 // correct here — we only want broken links to warn.
 #![allow(rustdoc::private_intra_doc_links)]

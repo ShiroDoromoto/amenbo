@@ -7726,6 +7726,22 @@ pub fn automation_run_passes_of(
     )
 }
 
+/// **The passes that filed one task for a role**, by every run, newest first — what says which role a
+/// task waiting to be taken came from.
+pub fn automation_run_passes_of_task(
+    conn: &Connection,
+    task_id: i64,
+) -> Result<Vec<crate::model::AutomationRunPass>> {
+    const P: col::automation_run_pass::Cols = col::automation_run_pass::ALL;
+    automation_rows(
+        conn,
+        P.table,
+        &Pred::eq(P.task_id, task_id),
+        &[Sort::by(P.id).desc()],
+        super::hydrate::automation_run_pass_row,
+    )
+}
+
 /// **The tasks passed to another role from these spots of a picture**, by the runs of every version of
 /// it, newest first — what the build screen reads the title a spot last passed on by.
 pub fn automation_run_passes_at(

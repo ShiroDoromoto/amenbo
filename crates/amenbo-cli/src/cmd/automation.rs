@@ -32,7 +32,7 @@ use amenbo_core::model::{AutomationRole, FailuresTo};
 use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep, RoleChange};
 use amenbo_core::ops::automation_report::{Next, Produced};
 use amenbo_core::ops::automation_run::{
-    Carrier, ChosenAt, ForRoom, HandedAtLaunch, HandedFile, Launcher, ReadsFrom, Started, TaskWait,
+    Carrier, ChosenAt, ForRoom, HandedAtLaunch, HandedFile, Launcher, ReadsFrom, RoleHeadcount, Started, TaskWait,
 };
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
 use amenbo_core::ops::automation_view::{
@@ -1365,6 +1365,55 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             write_envelope(flags, "automation.acknowledge", "automation_run", serde_json::to_value(&r).unwrap(), None, false, line);
         }
 
+        AutomationCmd::LaunchShow { launch } => {
+            let roles = store.automation_launch_headcounts(launch).map_err(CliError::from)?;
+            if flags.json {
+                print_json(&json!({
+                    "launch_id": launch,
+                    "count": roles.len(),
+                    "roles": serde_json::to_value(&roles).unwrap(),
+                }));
+            } else {
+                human(flags, format!("Launch {launch} — {} role(s)", roles.len()));
+                for role in &roles {
+                    human(flags, format!("  {}", one_launch_role(role)));
+                }
+            }
+        }
+        AutomationCmd::LaunchHeadcountSet { launch, role, headcount } => {
+            // Refusing none is the core's (`AMB-D-1124`); the way to stop a role is named beside it.
+            let row = store.automation_launch_headcount_set(launch, role, headcount).map_err(|e| {
+                let mut err = CliError::from(e);
+                if headcount == 0 {
+                    err.hint = Some(format!(
+                        "To stop the role taking tasks, `amenbo automation launch-role-hold {launch} --role {role}`."
+                    ));
+                }
+                err
+            })?;
+            let line = format!("✓ Role {} has {} in launch {} — the definition is left as it is", row.role_id, row.headcount, row.launch_id);
+            write_envelope(flags, "automation.launch-headcount-set", "automation_launch_role", serde_json::to_value(&row).unwrap(), None, false, line);
+        }
+        AutomationCmd::LaunchHeadcountReset { launch, role } => {
+            let row = store.automation_launch_headcount_reset(launch, role).map_err(CliError::from)?;
+            let line = format!("✓ Role {} is back at its definition's {} in launch {}", row.role_id, row.headcount, row.launch_id);
+            write_envelope(flags, "automation.launch-headcount-reset", "automation_launch_role", serde_json::to_value(&row).unwrap(), None, false, line);
+        }
+        AutomationCmd::LaunchRoleHold { launch, role } => {
+            // The role's own stop, apart from a run's `pause --before-next-task` (`AMB-D-1019`). It is not
+            // refused from a step: its own run finishes the task it is on first (`AMB-D-1020`).
+            let held = store.automation_launch_role_hold(launch, role).map_err(CliError::from)?;
+            let ended: Vec<i64> = held.runs.iter().map(|r| r.id).collect();
+            let line = format!("✓ Role {} in launch {} stops once its task is done", held.role.role_id, held.role.launch_id);
+            let value = serde_json::to_value(&held.role).unwrap();
+            write_envelope_with(flags, "automation.launch-role-hold", "automation_launch_role", value, None, false, line, &[("runs_ended", json!(ended))]);
+        }
+        AutomationCmd::LaunchRoleRelease { launch, role } => {
+            let row = store.automation_launch_role_release(launch, role).map_err(CliError::from)?;
+            let line = format!("✓ Role {} in launch {} takes tasks again, up to {}", row.role_id, row.launch_id, row.headcount);
+            write_envelope(flags, "automation.launch-role-release", "automation_launch_role", serde_json::to_value(&row).unwrap(), None, false, line);
+        }
+
         AutomationCmd::StepOut { value, file } => {
             let step = speaking_for()?;
             let v = match file {
@@ -1746,6 +1795,25 @@ fn one_role(role: &AutomationRole) -> String {
         (Some(agent), Some(model)) => line.push_str(&format!("  agent {agent} ({model})")),
         (Some(agent), None) => line.push_str(&format!("  agent {agent}")),
         (None, _) => line.push_str("  no agent"),
+    }
+    line
+}
+
+/// One role of a launch: the headcount its definition gives it beside the one this launch holds, the
+/// runs under way, the seats still to go, and whether it stops once its task is done.
+fn one_launch_role(role: &RoleHeadcount) -> String {
+    let mut line = format!(
+        "role {}  defined {}  this launch {}  {} under way",
+        role.role_id,
+        role.defined,
+        role.headcount,
+        role.under_way.len()
+    );
+    if role.to_let_go > 0 {
+        line.push_str(&format!("  {} to let go", role.to_let_go));
+    }
+    if role.held {
+        line.push_str("  stops once its task is done");
     }
     line
 }
@@ -2135,7 +2203,8 @@ fn render_run(
     stretches: &[AutomationRunTask],
     moves: &[AutomationRunStep],
 ) -> Result<(), CliError> {
-    human(flags, format!("Run {}  automation {}", run.id, run.automation_id));
+    let launch = run.launch_id.map(|l| format!("  launch {l}")).unwrap_or_default();
+    human(flags, format!("Run {}  automation {}{launch}", run.id, run.automation_id));
     let stopped = run
         .stopped_reason
         .map(|r| format!(" ({})", r.as_str()))

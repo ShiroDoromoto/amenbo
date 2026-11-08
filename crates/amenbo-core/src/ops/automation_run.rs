@@ -2686,6 +2686,117 @@ pub fn launch_headcounts(conn: &Connection, launch_id: i64) -> Result<Vec<RoleHe
     Ok(found)
 }
 
+/// **How many of a role's tasks waiting to be taken a launch's pane names** — the rest it counts.
+pub const WAITING_NAMED: usize = 3;
+
+/// **One launch as its pane draws it, read at once** ([`launch_state`]): the launch, the automation it
+/// is of, and each of its roles.
+#[derive(Clone, Debug, Serialize)]
+pub struct LaunchState {
+    pub launch: AutomationLaunch,
+    /// The automation's name as it stands now.
+    pub automation_name: String,
+    /// Every role the newest saved version holds, in the order they are defined in — one with no task
+    /// under way and none waiting among them.
+    pub roles: Vec<LaunchRoleState>,
+}
+
+/// **One role of a launch** — what it is, how many are in it ([`RoleHeadcount`]), and the tasks waiting
+/// for it to take.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct LaunchRoleState {
+    pub name: String,
+    /// The icon it is drawn with, by the name the GUI knows it under. `None` for none chosen.
+    pub icon: Option<String>,
+    pub headcount: RoleHeadcount,
+    /// **How many of its tasks are waiting to be taken** — the ones a seat of it would take where its
+    /// round starts now ([`start_of`]): not started, ready, and matching the filter the "take a task"
+    /// built-in placed there is answered with. A task a seat has taken is under way, and not among them.
+    /// None for a role no round starts at, and where its round starts at no "take a task". Where no
+    /// role names where its round starts, the seats start at the entry, and the tasks of every role the
+    /// filter matches are read as the first role's, as its seats are.
+    pub waiting: usize,
+    /// The first [`WAITING_NAMED`] of them, in the order the role takes them in.
+    pub first_waiting: Vec<WaitingTask>,
+}
+
+/// **One task waiting for a role to take it** ([`LaunchRoleState::first_waiting`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct WaitingTask {
+    pub task_id: i64,
+    pub title: String,
+    /// **The role it was passed on from** — the role of the round that last filed it for this role
+    /// ([`crate::model::AutomationRunPass`]). `None` where no round passed it on, and where that round
+    /// had no role or the role has since been taken out.
+    pub from_role_id: Option<i64>,
+}
+
+/// **One launch as its pane draws it** ([`LaunchState`]) — its headcounts as [`launch_headcounts`] reads
+/// them, and each role's tasks waiting to be taken. The tasks are listed as the built-in that takes one
+/// lists them for a seat of the role, in the order the role takes them in. An ended launch answers the
+/// same way, its roles back at their definition, so what is still waiting for them is read.
+pub fn launch_state(conn: &Connection, launch_id: i64) -> Result<LaunchState> {
+    let launch = read::automation_launch(conn, launch_id)?.ok_or_else(|| not_found("launch", launch_id))?;
+    let automation =
+        read::automation(conn, launch.automation_id)?.ok_or_else(|| not_found("automation", launch.automation_id))?;
+    let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+    let on = roles_on(&pic);
+    let mut headcounts = launch_headcounts(conn, launch_id)?.into_iter();
+    let mut roles = Vec::with_capacity(pic.roles().len());
+    for (i, role) in pic.roles().iter().enumerate() {
+        let Some(headcount) = headcounts.next() else { break };
+        // The seats this role's tasks are read for, and the roles a seat of them takes tasks of, as
+        // `Seats::roles` reads them: none for the one set of seats bound to no role, read as the first
+        // role's.
+        let takes = match () {
+            _ if on.contains(&role.id) => Some((Some(role.id), vec![role.id], Some(role.take_order))),
+            _ if on.is_empty() && i == 0 => Some((None, Vec::new(), None)),
+            _ => None,
+        };
+        let start = match &takes {
+            Some((seat, _, _)) => start_builtin(conn, &pic, *seat)?.filter(StartBuiltin::takes_a_task),
+            None => None,
+        };
+        let (waiting, first_waiting) = match (&start, takes) {
+            (Some(e), Some((_, of, order))) => {
+                let found = crate::ops::automation_builtin_take::waiting_to_be_taken(
+                    conn,
+                    launch.project_id,
+                    &of,
+                    &e.cfg,
+                    order,
+                    WAITING_NAMED,
+                )?;
+                let mut first = Vec::with_capacity(found.tasks.len());
+                for task in found.tasks {
+                    first.push(WaitingTask {
+                        from_role_id: passed_from(conn, task.id, role.id)?,
+                        task_id: task.id,
+                        title: task.title,
+                    });
+                }
+                (found.total_matched, first)
+            }
+            _ => (0, Vec::new()),
+        };
+        roles.push(LaunchRoleState {
+            name: role.name.clone(),
+            icon: role.icon.clone(),
+            headcount,
+            waiting,
+            first_waiting,
+        });
+    }
+    Ok(LaunchState { launch, automation_name: automation.name, roles })
+}
+
+/// **The role a task was last passed on to `role_id` from** ([`WaitingTask::from_role_id`]).
+pub(crate) fn passed_from(conn: &Connection, task_id: i64, role_id: i64) -> Result<Option<i64>> {
+    let passes = read::automation_run_passes_of_task(conn, task_id)?;
+    let Some(pass) = passes.iter().find(|p| p.to_role_id == Some(role_id)) else { return Ok(None) };
+    Ok(read::automation_run_task(conn, pass.run_task_id)?.and_then(|round| round.role_id))
+}
+
 /// **Change how many are in one role for this launch alone** — from 1 up to
 /// [`crate::model::MAX_ROLE_HEADCOUNT`] (`AMB-D-1124`); to stop a role taking tasks is another thing
 /// than a headcount of none ([`crate::ops::automation_stop::hold_launch_role`]), and a role stopped
@@ -2765,7 +2876,8 @@ pub fn launch_headcount_reset(tx: &WriteTx<'_>, launch_id: i64, role_id: i64) ->
 }
 
 /// **A launch not ended, and one role of the newest saved version of its automation** — what changing a
-/// headcount on the launch, or stopping the role taking tasks, is asked of.
+/// headcount on the launch, or stopping the role taking tasks, is asked of. A launch or a role that
+/// does not exist is not_found (`AMB-D-986`).
 pub(crate) fn launch_role(
     conn: &Connection,
     launch_id: i64,
@@ -2781,13 +2893,18 @@ pub(crate) fn launch_role(
     let automation =
         read::automation(conn, launch.automation_id)?.ok_or_else(|| not_found("automation", launch.automation_id))?;
     let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
-    let role = pic.roles().iter().find(|r| r.id == role_id).cloned().ok_or_else(|| {
-        Error::invalid(format!(
-            "role '{role_id}' is not one of automation '{}' as it was last saved",
-            automation.name
-        ))
-    })?;
-    Ok((launch, role))
+    if let Some(role) = pic.roles().iter().find(|r| r.id == role_id).cloned() {
+        return Ok((launch, role));
+    }
+    // A role id that names no role at all is not_found (`AMB-D-986`); one that names a role, just not
+    // one of this automation as it was last saved, is refused as invalid.
+    if read::automation_role(conn, role_id)?.is_none() {
+        return Err(not_found("role", role_id));
+    }
+    Err(Error::invalid(format!(
+        "role '{role_id}' is not one of automation '{}' as it was last saved",
+        automation.name
+    )))
 }
 
 /// **Whether a run's seat is one still to go** — the headcount of its role lowered on the launch below

@@ -985,6 +985,11 @@ impl Store {
         crate::ops::automation_run::launch_headcounts(self.engine.conn(), launch_id)
     }
 
+    /// **One launch as its pane draws it, read at once** ([`crate::ops::automation_run::launch_state`]).
+    pub fn automation_launch_state(&self, launch_id: i64) -> Result<crate::ops::automation_run::LaunchState> {
+        crate::ops::automation_run::launch_state(self.engine.conn(), launch_id)
+    }
+
     /// **Whether a run is waiting for room** before an action that takes one run at a time, and whom it
     /// waits behind ([`crate::ops::automation_run::waits_for_room`]). `None` for a run standing before a
     /// built-in that would wait for a task, which ends there rather than wait.

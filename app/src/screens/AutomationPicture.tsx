@@ -42,19 +42,26 @@
 // the same of the action, each input with the number of the box it comes from.
 //
 // **On the build screen it draws one role's round** (`automationGraph` with a role), in one row from
-// left to right inside one frame: "receives" — a failed round's incident, the triggers and the roles
-// that hand this one its task, or people where nothing else does — then the actions the round passes
-// through, each with its steps inside it, laid out across (`layOutAcross`), and "hands on" — a frame
-// for each role it hands on to, with that role's icon and name and the task it hands on by its title
-// (`PicRound.passes`), or one saying none where it ends at done — with an arrow between each of them,
-// and none between the frames it hands on to. The row never wraps: in a frame too narrow the words of
-// the ends wrap first, down to their heading on one line, and only then does the picture scroll
-// across inside it. A frame handed on to keeps its width, so the role's name and the task's title
-// read whole. Each box is as big as what it says (`roundSize`), so the actions of a round are
-// seen side by side. How wide the row has to be for the whole picture to be seen is told to the
-// screen (`onRowNeeds`, `rowNeeds`), which gives the row the screen's whole width where the middle of
-// its three places is narrower. A line going back is no line there but a loop under the box it goes
-// back to, saying which box and which way out it comes back from.
+// left to right inside one frame, as the mock draws a role's lane. No entry common to the automation
+// is drawn, and no box is marked as where a launch enters (`AMB-D-1123`): every role starts from its
+// own waiting tasks. On the left, a box for each place they come from — a failed round's incident,
+// each trigger with when it files, each task another role files for this one, the roles whose lines
+// come in, or a person filing it under the role where nothing else does (`Sources`); then the role's
+// waiting tasks (`.autopic__desk`); then the actions the round passes through from its start, each
+// with its steps inside it, laid out across (`layOutAcross`); then a frame for each role it files a
+// task for, with that role's icon and name and the task by its title (`PicRound.passes`). A task
+// filed for another role is framed in the accent and dashed, on the side that files it and on the
+// side it is filed for, and a dotted line in the accent — the legend's filing — goes into each such
+// frame from the box that files it, down from that box, under the row, and up into the frame
+// (`FilingLines`), so a round filing two tasks says which box files which, and a box filing before
+// the round closes is not read as filing after it. A round that files nothing ends at its last
+// action. The row never wraps: in a frame too narrow the words of the sources wrap first, and only
+// then does the picture scroll across inside it. A frame handed on to keeps its width, so the role's name and the task's title read whole. Each box is
+// as big as what it says (`roundSize`), so the actions of a round are seen side by side. How wide the
+// row has to be for the whole picture to be seen is told to the screen (`onRowNeeds`, `rowNeeds`),
+// which gives the row the screen's whole width where the middle of its three places is narrower. A
+// line going back is no line there but a loop under the box it goes back to, saying which box and
+// which way out it comes back from.
 //
 // **It scrolls, and it does nothing else.** No zoom, and no folding a stretch away by hand: an
 // automation is tens of steps, and a picture with a state of its own is one more thing to put back
@@ -63,7 +70,16 @@
 // sight — the box a run stopped at arrives picked from its pane (`AMB-T-5594`), and a band over the
 // screen can push it out of view. It stops moving once the reader's own hand has moved the screen,
 // so a reader scrolling away from the box that stays picked is not pulled back.
-import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   edgeWord,
   exitWord,
@@ -85,6 +101,7 @@ import { listLabel, t, tf } from "../core/i18n";
 import { kindLabel } from "./automationPortKinds";
 import { cardIo } from "./automationWires";
 import { RoleIcon } from "./AutomationRoles";
+import { whenLine } from "./AutomationTrigger";
 import { Icon } from "../components/Icon";
 
 /** Under a step's name on an action's picture: what it takes in, then what it hands on — a line each,
@@ -103,45 +120,167 @@ function CardIo({ words }: { words: { takes?: string; hands?: string } }) {
   );
 }
 
-/** Either end of a role's round: what it receives, or what it hands on to — the heading, and the words. */
-function RoundEnd({ head, words }: { head: string; words: string }) {
-  return (
-    <div className="autopic__end">
-      <span className="autopic__endhead">{head}</span>
-      <span className="autopic__endwords">{words}</span>
-    </div>
-  );
+/** The words under a filed task's title where it waits for another task to close first. */
+function dependsLine(depends: boolean) {
+  return depends ? <span className="autopic__endtask">{t("auto.pic.dependsWait")}</span> : null;
 }
 
 /** One role the round hands on to: the heading, the role's icon and name, and the task by its title —
- *  marked where it depends on another. A line out to another role's box hands on no task, and has no
- *  third line. */
-function PassEnd({ pass }: { pass: PicPass }) {
+ *  with what it waits for where it depends on another. A task filed is drawn as a filing is, in the
+ *  accent; a line out to another role's box hands on no task, and has no third line. */
+function PassEnd({ pass, filing }: { pass: PicPass; filing?: number }) {
+  const files = pass.task !== undefined;
   return (
-    <div className="autopic__end autopic__end--pass">
-      <span className="autopic__endhead">{t("auto.pic.handsOn")}</span>
+    <div
+      className={files ? "autopic__end autopic__end--pass autopic__end--files" : "autopic__end autopic__end--pass"}
+      data-filing={filing}
+    >
+      <span className="autopic__endhead">{t(files ? "auto.pic.files" : "auto.pic.handsOn")}</span>
       <span className="autopic__endwords autopic__endrole">
         <RoleIcon role={pass.role} size={16} />
-        {pass.role.name}
+        {files ? tf("auto.pic.passRole", { role: pass.role.name }) : pass.role.name}
       </span>
-      {pass.task !== undefined && (
-        <span className="autopic__endtask">
-          {tf(pass.depends ? "auto.pic.passTaskDepends" : "auto.pic.passTask", { title: pass.task })}
-        </span>
-      )}
+      {files && <span className="autopic__endtask">{tf("auto.pic.passTitle", { title: pass.task! })}</span>}
+      {files && dependsLine(pass.depends)}
     </div>
   );
 }
 
-/** Where a role's round receives its task from, in words: a failed round's incident, then the triggers
- *  by name, then the roles — or people, where none of them hands it one. */
-function receivesWords(round: PicRound): string {
-  const all = [
-    ...(round.receives.failures ? [t("auto.pic.fromFailures")] : []),
-    ...round.receives.triggers.map((name) => tf("auto.pic.fromTrigger", { name })),
-    ...round.receives.roles.map((role) => tf("auto.pic.fromRole", { role })),
-  ];
-  return all.length === 0 ? t("auto.pic.fromPeople") : listLabel(all);
+/** How far under the bottom of a role's row the first filing line runs, and how far apart the next ones. */
+const FILING_DROP = 8;
+const FILING_GAP = 6;
+
+/**
+ * The lines into the frames of the roles a round files tasks for, one each, drawn over the whole row
+ * (`.autopic__flow`) and under the picture: from the bottom of the box that files the task, down under
+ * the row, along, and up into the frame — dotted in the accent, as the legend draws a filing. Each is
+ * measured off the elements drawn, as the frames stand outside the picture's sheet and grow with their
+ * words; again as the picture scrolls inside it and as the row changes size. A row too narrow scrolls
+ * across inside itself, its lines with it. A box scrolled out of sight has its line start at the edge
+ * of the picture nearest it. The farther a frame, the lower its
+ * line runs, so the lines to two frames do not cross each other's way along.
+ */
+function FilingLines({
+  filings,
+  laidOut,
+  width,
+}: {
+  filings: readonly PicPass[];
+  laidOut: unknown;
+  width: number;
+}) {
+  const id = useId();
+  const [paths, setPaths] = useState<readonly string[]>([]);
+  // The row is found from the lines' own sheet, not from the row's ref: a child's layout effect runs
+  // before its parent's ref is set, so the row's ref is still empty on the first draw.
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  useLayoutEffect(() => {
+    const flow = svgRef.current?.parentElement;
+    if (flow == null) return;
+    const sheet = flow.querySelector<HTMLElement>(":scope > .autopic");
+    const draw = () => {
+      // The lines are drawn in the row's own coordinates, which scroll with it: from its padding edge,
+      // as far along as it is scrolled.
+      const edge = flow.getBoundingClientRect();
+      const row = {
+        left: edge.left + flow.clientLeft - flow.scrollLeft,
+        top: edge.top + flow.clientTop - flow.scrollTop,
+      };
+      const pic = sheet?.getBoundingClientRect();
+      const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high);
+      setPaths(
+        filings.flatMap((pass, at) => {
+          const frame = flow.querySelector(`:scope > [data-filing="${at}"]`)?.getBoundingClientRect();
+          if (frame === undefined || pic === undefined) return [];
+          const box = flow.querySelector(`.autopic__node[data-box="${pass.placement}"]`)?.getBoundingClientRect();
+          const x = box === undefined ? pic.right : clamp(box.left + box.width / 2, pic.left + 4, pic.right - 4);
+          const y = box === undefined ? pic.bottom : clamp(box.bottom, pic.top, pic.bottom);
+          const lane = Math.max(frame.bottom, pic.bottom) + FILING_DROP + FILING_GAP * at - row.top;
+          const into = frame.left + frame.width / 2 - row.left;
+          return [`M${x - row.left} ${y - row.top} V${lane} H${into} V${frame.bottom - row.top}`];
+        }),
+      );
+    };
+    draw();
+    sheet?.addEventListener("scroll", draw);
+    const sized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(draw);
+    sized?.observe(flow);
+    if (sheet !== null) sized?.observe(sheet);
+    return () => {
+      sheet?.removeEventListener("scroll", draw);
+      sized?.disconnect();
+    };
+  }, [filings, laidOut, width]);
+  return (
+    <svg className="autopic__filings" ref={svgRef} aria-hidden="true">
+      <defs>
+        <marker
+          id={`${id}-files`}
+          viewBox="0 0 10 10"
+          refX={9}
+          refY={5}
+          markerWidth={6}
+          markerHeight={6}
+          orient="auto"
+        >
+          <path className="autopic__arrow autopic__arrow--files" d="M0 0 L10 5 L0 10 z" />
+        </marker>
+      </defs>
+      {paths.map((d, at) => (
+        <path key={at} className="autopic__filing" d={d} markerEnd={`url(#${id}-files)`} />
+      ))}
+    </svg>
+  );
+}
+
+/** One place the role's waiting tasks come from: its heading, and what it says under that. */
+function Source({ head, files, sub, title }: { head: string; files?: boolean; sub?: ReactNode; title?: string }) {
+  return (
+    <div className={files === true ? "autopic__source autopic__source--files" : "autopic__source"} title={title}>
+      <span className="autopic__sourcehead">{head}</span>
+      {sub}
+    </div>
+  );
+}
+
+/**
+ * Where the role's waiting tasks come from, one box each, one under another: a failed round's incident,
+ * each trigger with when it files, each task another role files for this one, then the roles and
+ * actions whose lines come in — or a person filing it under the role, where none of them does.
+ */
+function Sources({ round }: { round: PicRound }) {
+  const { failures, triggers, filed, roles } = round.receives;
+  const none = !failures && triggers.length === 0 && filed.length === 0 && roles.length === 0;
+  return (
+    <div className="autopic__sources">
+      {failures && <Source head={t("auto.pic.fromFailures")} />}
+      {triggers.map((trigger) => (
+        <Source
+          key={`trigger-${trigger.id}`}
+          head={t("auto.pic.byTrigger")}
+          title={trigger.name}
+          sub={<span className="autopic__sourcesub">{whenLine(trigger, round.roles)}</span>}
+        />
+      ))}
+      {filed.map((pass, at) => (
+        <Source
+          key={`filed-${at}`}
+          files
+          head={tf("auto.pic.filedBy", { role: pass.role.name })}
+          sub={
+            <>
+              <span className="autopic__sourcesub">{tf("auto.pic.passTitle", { title: pass.task ?? "" })}</span>
+              {pass.depends && <span className="autopic__sourcesub">{t("auto.pic.dependsWait")}</span>}
+            </>
+          }
+        />
+      ))}
+      {roles.map((role) => (
+        <Source key={`role-${role}`} head={tf("auto.pic.fromRole", { role })} />
+      ))}
+      {none && <Source head={tf("auto.pic.byPeople", { role: round.role.name })} />}
+    </div>
+  );
 }
 
 /** Under the box on a role's picture: the lines that come back into it, each from the box it leaves. */
@@ -184,7 +323,9 @@ function headOf(line: PicLine): Head {
  * drawn with the same classes as on the picture. A line leaving by one of the action's ways out is
  * only ever drawn on an action's picture, so it is listed there alone; a role's picture draws a line
  * going back as a loop under a box, so it lists the loop in its place. The error line's word also says
- * where a box with no such line goes, since the picture does not draw that on every box.
+ * where a box with no such line goes, since the picture does not draw that on every box. The mark of
+ * where a run opens is only an action's picture's: a role's picture marks none (`AMB-D-1123`), and
+ * lists a filing instead, which only it draws.
  */
 function Legend({ inAction, inRound }: { inAction: boolean; inRound: boolean }) {
   const one = (kind: string, word: string) => (
@@ -209,9 +350,13 @@ function Legend({ inAction, inRound }: { inAction: boolean; inRound: boolean }) 
       {inAction && one("leaves", t("auto.pic.legendLeaves"))}
       {one("open", t("auto.pic.legendOpen"))}
       {one("lap", t("auto.pic.lap"))}
-      <span className="autopic__legenditem">
-        <span className="autopic__entry">{t("auto.pic.entry")}</span>
-      </span>
+      {inRound ? (
+        one("files", t("auto.pic.legendFiles"))
+      ) : (
+        <span className="autopic__legenditem">
+          <span className="autopic__entry">{t("auto.pic.entry")}</span>
+        </span>
+      )}
       <span className="autopic__legenditem autopic__unfed">
         <Icon name="warning" />
         {t("auto.pic.legendUnfed")}
@@ -222,9 +367,9 @@ function Legend({ inAction, inRound }: { inAction: boolean; inRound: boolean }) 
 
 /**
  * How wide a role's row (`.autopic__flow`) has to be for its picture to be seen whole, without
- * scrolling across: its frame, the gaps and arrows, the picture at its own width, each frame it hands
- * on to at its own width — those do not give way — and the other ends at their narrowest: they give
- * way before the picture does, down to their heading on one line.
+ * scrolling across: its frame, the gaps and arrows, the waiting tasks, the picture at its own width,
+ * each frame it hands on to at its own width — those do not give way — and the sources at their
+ * narrowest (their `min-width`): they give way before the picture does, their words wrapping.
  */
 function rowNeeds(flow: HTMLElement): number {
   const px = (value: string) => Number.parseFloat(value) || 0;
@@ -236,12 +381,7 @@ function rowNeeds(flow: HTMLElement): number {
     if (!(child instanceof HTMLElement)) continue;
     const own = getComputedStyle(child);
     if (child.classList.contains("autopic")) needs += child.scrollWidth + px(own.borderLeftWidth) + px(own.borderRightWidth);
-    else if (child.classList.contains("autopic__end") && !child.classList.contains("autopic__end--pass")) {
-      const head = child.querySelector<HTMLElement>(".autopic__endhead");
-      needs +=
-        (head?.offsetWidth ?? 0) +
-        px(own.paddingLeft) + px(own.paddingRight) + px(own.borderLeftWidth) + px(own.borderRightWidth);
-    }
+    else if (child.classList.contains("autopic__sources")) needs += px(own.minWidth);
     else needs += child.offsetWidth;
   }
   return Math.ceil(needs);
@@ -297,6 +437,10 @@ export function AutomationPicture({
   // Laid out again only when the graph changes: a draw that leaves it as it was keeps the layout it had.
   const picture = useMemo(() => layOut(graph), [graph]);
   const round = graph?.round;
+  // Whom the round hands on to by a line out of it, and the tasks it files — kept as they are between
+  // two draws, as the filings' lines are measured again whenever theirs change.
+  const outs = useMemo(() => round?.passes.filter((pass) => pass.task === undefined) ?? [], [round]);
+  const filings = useMemo(() => round?.passes.filter((pass) => pass.task !== undefined) ?? [], [round]);
   const flowRef = useRef<HTMLDivElement | null>(null);
   // **A role's sheet is as wide as what is drawn on it.** The layout sizes the sheet from estimates of
   // how wide its words are, and a press or name drawn a few pixels wider than estimated stood past the
@@ -416,15 +560,31 @@ export function AutomationPicture({
     for (const kind of reader) window.addEventListener(kind, stop, true);
     return stop;
   }, [selectedBoxId, drawn]);
+  // A role's waiting tasks, and where they come from, on the left of its row: drawn whether or not
+  // the round reaches anything, since they are filed under the role all the same.
+  const waiting = round !== undefined && (
+    <>
+      <Sources round={round} />
+      <span className="autopic__flowarrow" aria-hidden="true">
+        →
+      </span>
+      <div className="autopic__desk">{t("auto.pic.waiting")}</div>
+    </>
+  );
   if (picture.nodes.length === 0) {
-    // A role whose round reaches nothing, on an automation that has something on it: said in words, so
-    // the middle is not left blank. With nothing on the automation, the screen's "+ first …" says it.
+    // A role whose round reaches nothing — it starts nowhere — on an automation that has something on
+    // it: its waiting tasks with no line on from them, and that said in words, so the middle is not
+    // left blank. With nothing on the automation, the screen's "+ first …" says it.
     return round !== undefined && round.whole.boxes.length > 0 ? (
-      <p className="autopic__roundempty">{t("auto.pic.roundEmpty")}</p>
+      <div className="autopic__flow" ref={flowRef}>
+        {waiting}
+        <p className="autopic__roundempty">{t("auto.pic.roundEmpty")}</p>
+      </div>
     ) : null;
   }
-  // Where a run opens: where the round starts, or on an action's picture the step it opens first.
-  const startId = graph?.entryId;
+  // Where a run opens, on an action's picture: the step it opens first. A role's picture marks none
+  // (`AMB-D-1123`): its round starts at the box its waiting tasks are taken by, drawn first.
+  const startId = round === undefined ? graph?.entryId : undefined;
 
   const drawing = (
     <div className="autopic">
@@ -596,6 +756,7 @@ export function AutomationPicture({
         {picture.nodes.map((node) => (
           <button
             key={node.boxId}
+            data-box={node.boxId}
             ref={node.boxId === selectedBoxId ? pickedRef : undefined}
             type="button"
             className={[
@@ -740,24 +901,41 @@ export function AutomationPicture({
       {round === undefined ? (
         drawing
       ) : (
-        <div className="autopic__flow" ref={flowRef}>
-          <RoundEnd head={t("auto.pic.receives")} words={receivesWords(round)} />
+        <div
+          className="autopic__flow"
+          ref={flowRef}
+          // Room under the row for the filings' lines to run along, one under another.
+          style={
+            filings.length > 0
+              ? { paddingBottom: `calc(var(--s-4) + ${FILING_DROP + FILING_GAP * filings.length}px)` }
+              : undefined
+          }
+        >
+          {waiting}
           <span className="autopic__flowarrow" aria-hidden="true">
             →
           </span>
           {drawing}
-          <span className="autopic__flowarrow" aria-hidden="true">
-            →
-          </span>
-          {round.passes.length === 0 ? (
-            <RoundEnd head={t("auto.pic.handsToNone")} words={t("auto.pic.handsNone")} />
-          ) : (
-            round.passes.map((pass, at) => <PassEnd key={at} pass={pass} />)
+          {/* A line out to another role's box hands on no task: an arrow from the picture into its frame.
+              A task filed comes after them, its frame reached by a line from the box that files it. */}
+          {outs.length > 0 && (
+            <span className="autopic__flowarrow" aria-hidden="true">
+              →
+            </span>
           )}
+          {outs.map((pass, at) => (
+            <PassEnd key={`out-${at}`} pass={pass} />
+          ))}
+          {filings.map((pass, at) => (
+            <PassEnd key={`files-${at}`} pass={pass} filing={at} />
+          ))}
+          {filings.length > 0 && <FilingLines filings={filings} laidOut={picture} width={sheetW} />}
         </div>
       )}
       {/* Under the picture rather than on its sheet, so it stays in view however far it is scrolled. */}
       <Legend inAction={graph?.boundary !== undefined} inRound={round !== undefined} />
+      {/* Who decides what comes next, said once under a role's picture, as the mock says it. */}
+      {round !== undefined && <p className="autopic__roundnote">{t("auto.pic.roundNote")}</p>}
     </>
   );
 }

@@ -2369,13 +2369,17 @@ describe("one role's round, as the build screen draws it", () => {
 
   it("says where the round receives its task from, and whom it hands on to", () => {
     expect(automationGraph(automation, 20)!.round).toMatchObject({
-      receives: { failures: false, triggers: [], roles: ["Research"] },
+      role: { id: 20, name: "Design" },
+      receives: { failures: false, triggers: [], filed: [], roles: ["Research"] },
       passes: [{ role: { id: 30, name: "Build" }, depends: false }],
     });
+    expect(automationGraph(automation, 20)!.round!.roles).toBe(automation.roles);
     // A line out to another role's box files no task, so it names none.
     expect(automationGraph(automation, 20)!.round!.passes[0]!.task).toBeUndefined();
     // Nothing but a person hands Research its task, and no role comes after the last.
-    expect(automationGraph(automation, 10)!.round).toMatchObject({ receives: { failures: false, triggers: [], roles: [] } });
+    expect(automationGraph(automation, 10)!.round).toMatchObject({
+      receives: { failures: false, triggers: [], filed: [], roles: [] },
+    });
     expect(automationGraph(automation, 30)!.round).toMatchObject({ passes: [] });
   });
 
@@ -2402,6 +2406,12 @@ describe("one role's round, as the build screen draws it", () => {
       ["Upkeep", "Report", false],
       ["Build", "Add the tests", true],
     ]);
+    // The role filed for receives each task by the role that files it, by its title or the action.
+    const filed = (roleId: number) =>
+      automationGraph(filing, roleId)!.round!.receives.filed.map((one) => [one.role.name, one.task, one.depends]);
+    expect(filed(30)).toEqual([["Design", "Add the tests", true]]);
+    expect(filed(40)).toEqual([["Design", "Report", false]]);
+    expect(filed(20)).toEqual([]);
   });
 
   it("says the round receives a failed round's incident and the tasks its triggers file", () => {
@@ -2426,12 +2436,11 @@ describe("one role's round, as the build screen draws it", () => {
       ],
     };
     // Only the triggers switched on that file this role's task, in the order they are written.
-    expect(automationGraph(upkept, 40)!.round).toMatchObject({
-      receives: { failures: true, triggers: ["Daily check", "Nightly sweep"], roles: [] },
-    });
-    expect(automationGraph(upkept, 20)!.round).toMatchObject({
-      receives: { failures: false, triggers: ["Top up"], roles: ["Research"] },
-    });
+    const names = (roleId: number) => automationGraph(upkept, roleId)!.round!.receives.triggers.map((one) => one.name);
+    expect(automationGraph(upkept, 40)!.round).toMatchObject({ receives: { failures: true, roles: [] } });
+    expect(names(40)).toEqual(["Daily check", "Nightly sweep"]);
+    expect(automationGraph(upkept, 20)!.round).toMatchObject({ receives: { failures: false, roles: ["Research"] } });
+    expect(names(20)).toEqual(["Top up"]);
     // Failures filed to a person are no role's to receive.
     expect(automationGraph({ ...upkept, failuresTo: { kind: "human" } }, 40)!.round).toMatchObject({
       receives: { failures: false },

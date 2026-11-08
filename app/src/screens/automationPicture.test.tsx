@@ -11,10 +11,11 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { listLabel, t, tf } from "../core/i18n";
+import { t, tf } from "../core/i18n";
 import { AutomationPicture } from "./AutomationPicture";
+import { whenLine } from "./AutomationTrigger";
 import { automationGraph, TAKES_INSET, type PicGraph } from "./automationLayout";
-import type { AutomationDetailDto, AutomationPlacementDto } from "../bindings/bindings";
+import type { AutomationDetailDto, AutomationPlacementDto, AutomationTriggerDto } from "../bindings/bindings";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -679,31 +680,37 @@ describe("one role's round, as the build screen draws it", () => {
     };
   }
 
-  it("says in one row where the round receives its task from, the actions, and whom it hands on to", async () => {
+  const sources = () => [...container.querySelectorAll(".autopic__source")].map((one) => one.textContent);
+  const ends = () => [...container.querySelectorAll(".autopic__end")].map((one) => one.textContent);
+  const row = () => [...container.querySelector(".autopic__flow")!.children].map((one) => one.getAttribute("class"));
+
+  it("says in one row where its waiting tasks come from, the waiting tasks, the actions, and whom it hands on to", async () => {
     await render({ graph: automationGraph(rounds(), 20) });
-    const ends = [...container.querySelectorAll(".autopic__end")].map((one) => one.textContent);
-    expect(ends).toEqual([
-      t("auto.pic.receives") + tf("auto.pic.fromRole", { role: "Research" }),
-      t("auto.pic.handsOn") + "Build",
-    ]);
-    // Receives, then the picture, then hands on, from left to right with an arrow between each, in one
-    // frame; the legend stays under it.
-    const flow = container.querySelector(".autopic__flow")!;
-    expect([...flow.children].map((one) => one.className)).toEqual([
-      "autopic__end",
+    expect(sources()).toEqual([tf("auto.pic.fromRole", { role: "Research" })]);
+    expect(container.querySelector(".autopic__desk")!.textContent).toBe(t("auto.pic.waiting"));
+    expect(ends()).toEqual([t("auto.pic.handsOn") + "Build"]);
+    // Sources, then the waiting tasks, then the picture, then hands on, from left to right with an
+    // arrow between each, in one frame; the legend and the note on who decides stay under it.
+    expect(row()).toEqual([
+      "autopic__sources",
+      "autopic__flowarrow",
+      "autopic__desk",
       "autopic__flowarrow",
       "autopic",
       "autopic__flowarrow",
       "autopic__end autopic__end--pass",
     ]);
+    const flow = container.querySelector(".autopic__flow")!;
     expect(flow.nextElementSibling?.className).toBe("autopic__legend");
+    expect(flow.nextElementSibling?.nextElementSibling?.textContent).toBe(t("auto.pic.roundNote"));
     expect(nodes().map((one) => one.querySelector(".autopic__nodename")!.textContent)).toEqual(["書く", "確かめる"]);
   });
 
-  it("says the round receives from people where nothing else hands it its task, and ends at done where it hands on to nobody", async () => {
+  it("says a person files the role's tasks where nothing else does, and ends at the last action where it hands on to nobody", async () => {
     await render({ graph: automationGraph(rounds({ edges: [] }), 10) });
-    const ends = [...container.querySelectorAll(".autopic__end")].map((one) => one.textContent);
-    expect(ends).toEqual([t("auto.pic.receives") + t("auto.pic.fromPeople"), t("auto.pic.handsToNone") + t("auto.pic.handsNone")]);
+    expect(sources()).toEqual([tf("auto.pic.byPeople", { role: "Research" })]);
+    expect(ends()).toEqual([]);
+    expect(row()).toEqual(["autopic__sources", "autopic__flowarrow", "autopic__desk", "autopic__flowarrow", "autopic"]);
   });
 
   /** Design's round, filing a task for Build that depends on another and one for Upkeep. */
@@ -725,58 +732,84 @@ describe("one role's round, as the build screen draws it", () => {
     };
   }
 
-  it("draws a frame for each role it hands on to, with the role's icon and name and the task's title", async () => {
+  it("draws a filing frame for each role it files a task for, with the role's icon and name and the task's title", async () => {
     await render({ graph: automationGraph(filing(), 20) });
-    const ends = [...container.querySelectorAll(".autopic__end")].map((one) => one.textContent);
-    expect(ends).toEqual([
-      t("auto.pic.receives") + tf("auto.pic.fromRole", { role: "Research" }),
-      t("auto.pic.handsOn") + "Build" + tf("auto.pic.passTaskDepends", { title: "テストを足す" }),
-      t("auto.pic.handsOn") + "Upkeep" + tf("auto.pic.passTask", { title: "直しを起票する" }),
+    expect(ends()).toEqual([
+      t("auto.pic.files") +
+        tf("auto.pic.passRole", { role: "Build" }) +
+        tf("auto.pic.passTitle", { title: "テストを足す" }) +
+        t("auto.pic.dependsWait"),
+      t("auto.pic.files") + tf("auto.pic.passRole", { role: "Upkeep" }) + tf("auto.pic.passTitle", { title: "直しを起票する" }),
     ]);
     // Each frame carries the role's icon beside its name, outside the words.
     const roles = [...container.querySelectorAll(".autopic__endrole")];
     expect(roles.map((one) => one.querySelectorAll(".identicon").length)).toEqual([1, 1]);
-    // One arrow before the frames it hands on to, and none between them.
-    const flow = container.querySelector(".autopic__flow")!;
-    expect([...flow.children].map((one) => one.className)).toEqual([
-      "autopic__end",
+    // No arrow from the picture into the frames it files for: a dotted line into each, from the box
+    // that files it.
+    expect(row()).toEqual([
+      "autopic__sources",
+      "autopic__flowarrow",
+      "autopic__desk",
+      "autopic__flowarrow",
+      "autopic",
+      "autopic__end autopic__end--pass autopic__end--files",
+      "autopic__end autopic__end--pass autopic__end--files",
+      "autopic__filings",
+    ]);
+    expect(container.querySelectorAll(".autopic__filings .autopic__filing")).toHaveLength(2);
+    expect(container.querySelector(".autopic__node[data-box='3']")).not.toBeNull();
+  });
+
+  it("puts a line out to another role's box before the frames it files for, with an arrow into it", async () => {
+    // Design files a task for Upkeep alone, and its line out to Build's box files none.
+    const base = filing();
+    const onlyUpkeep = {
+      ...base,
+      roles: base.roles.map((one) => (one.id === 20 ? { ...one, passes: one.passes.filter((pass) => pass.toRole === 40) } : one)),
+    };
+    await render({ graph: automationGraph(onlyUpkeep, 20) });
+    expect(row()).toEqual([
+      "autopic__sources",
+      "autopic__flowarrow",
+      "autopic__desk",
       "autopic__flowarrow",
       "autopic",
       "autopic__flowarrow",
       "autopic__end autopic__end--pass",
-      "autopic__end autopic__end--pass",
+      "autopic__end autopic__end--pass autopic__end--files",
+      "autopic__filings",
     ]);
+    expect(container.querySelectorAll(".autopic__filings .autopic__filing")).toHaveLength(1);
   });
 
-  it("says a failed round's incident first, then each trigger by name, then the roles, in one row", async () => {
-    await render({
-      graph: automationGraph(
-        rounds({
-          failuresTo: { kind: "role", roleId: 20 },
-          triggers: [
-            {
-              id: 1,
-              enabled: true,
-              name: "Daily check",
-              roleId: 20,
-              when: { kind: "every", minutes: 60 },
-              task: { kind: "fixed", title: "Check", notes: "" },
-              nextAt: "2026-11-07T00:00:00Z",
-            },
-          ],
-        }),
-        20,
-      ),
-    });
-    const ends = [...container.querySelectorAll(".autopic__end")].map((one) => one.textContent);
-    expect(ends[0]).toBe(
-      t("auto.pic.receives") +
-        listLabel([
-          t("auto.pic.fromFailures"),
-          tf("auto.pic.fromTrigger", { name: "Daily check" }),
-          tf("auto.pic.fromRole", { role: "Research" }),
-        ]),
-    );
+  it("says each task another role files for this one among where its waiting tasks come from", async () => {
+    await render({ graph: automationGraph(filing(), 30) });
+    // Design's line into this round is not said again: its filing already names Design.
+    expect(sources()).toEqual([
+      tf("auto.pic.filedBy", { role: "Design" }) + tf("auto.pic.passTitle", { title: "テストを足す" }) + t("auto.pic.dependsWait"),
+    ]);
+    expect(container.querySelectorAll(".autopic__source--files")).toHaveLength(1);
+  });
+
+  it("says a failed round's incident first, then each trigger with when it files, then the roles", async () => {
+    const trigger: AutomationTriggerDto = {
+      id: 1,
+      enabled: true,
+      name: "Daily check",
+      roleId: 20,
+      when: { kind: "every", minutes: 60 },
+      task: { kind: "fixed", title: "Check", notes: "" },
+      nextAt: "2026-11-07T00:00:00Z",
+    };
+    const automation = rounds({ failuresTo: { kind: "role", roleId: 20 }, triggers: [trigger] });
+    await render({ graph: automationGraph(automation, 20) });
+    expect(sources()).toEqual([
+      t("auto.pic.fromFailures"),
+      t("auto.pic.byTrigger") + whenLine(trigger, automation.roles),
+      tf("auto.pic.fromRole", { role: "Research" }),
+    ]);
+    // The trigger's name is read on hover.
+    expect(container.querySelectorAll(".autopic__source")[1]!.getAttribute("title")).toBe("Daily check");
   });
 
   it("writes the steps inside the action, what it takes in and hands on, and the loop back into it", async () => {
@@ -821,37 +854,45 @@ describe("one role's round, as the build screen draws it", () => {
     expect(plusses().length).toBeGreaterThan(0);
   });
 
-  it("marks where the role's own round starts, and no other box on it", async () => {
+  it("marks no box as where a run opens, and lists a filing in the legend in its place", async () => {
     await render({ graph: automationGraph(rounds(), 20) });
-    expect(nodes()[0]!.querySelector(".autopic__entry")).not.toBeNull();
-    expect(nodes()[1]!.querySelector(".autopic__entry")).toBeNull();
-    await render({ graph: automationGraph(rounds(), 10) });
-    expect(nodes()[0]!.querySelector(".autopic__entry")).not.toBeNull();
+    expect(container.querySelector(".autopic__entry")).toBeNull();
+    const legend = container.querySelector(".autopic__legend")!;
+    expect(legend.textContent).not.toContain(t("auto.pic.entry"));
+    expect(legend.querySelector(".autopic__swatch--files")).not.toBeNull();
+    expect(legend.textContent).toContain(t("auto.pic.legendFiles"));
   });
 
-  it("says so in words where the role's round reaches nothing", async () => {
+  it("draws the waiting tasks with no line on from them, and says so in words, where the role's round reaches nothing", async () => {
     await render({ graph: automationGraph(rounds(), 40) });
     expect(nodes()).toHaveLength(0);
-    expect(container.textContent).toBe(t("auto.pic.roundEmpty"));
+    expect(row()).toEqual(["autopic__sources", "autopic__flowarrow", "autopic__desk", "autopic__roundempty"]);
+    expect(container.querySelector(".autopic__roundempty")!.textContent).toBe(t("auto.pic.roundEmpty"));
+    expect(container.querySelector(".autopic__legend")).toBeNull();
   });
 
-  it("tells the screen how wide its row has to be, and that a round with no row needs nothing", async () => {
+  it("draws nothing for a role where nothing is on the automation", async () => {
+    await render({ graph: automationGraph(rounds({ placements: [], edges: [], wires: [] }), 40) });
+    expect(container.textContent).toBe("");
+  });
+
+  it("tells the screen how wide its row has to be, and that a picture with no row needs nothing", async () => {
     const onRowNeeds = vi.fn();
     await render({ graph: automationGraph(rounds(), 20), onRowNeeds });
     expect(onRowNeeds).toHaveBeenCalledTimes(1);
     expect(onRowNeeds).toHaveBeenLastCalledWith(expect.any(Number));
-    await render({ graph: automationGraph(rounds(), 40), onRowNeeds });
+    await render({ graph: automationGraph(rounds({ placements: [], edges: [], wires: [] }), 40), onRowNeeds });
     expect(onRowNeeds).toHaveBeenLastCalledWith(0);
   });
 
   it("counts each frame it hands on to in how wide its row has to be, at its own whole width", async () => {
-    // Every heading of an end 40px wide, every frame handed on to 120px, and nothing else with a width
-    // of its own: the end it receives from gives way down to its heading, a frame handed on to does not.
+    // Every heading of a source 40px wide, every frame handed on to 120px, and nothing else with a width
+    // of its own: the sources give way down to their heading, a frame handed on to does not.
     // Design's round hands on to Build in one frame; filing for Build and Upkeep, it hands on in two.
     const width = vi
       .spyOn(HTMLElement.prototype, "offsetWidth", "get")
       .mockImplementation(function (this: HTMLElement) {
-        if (this.classList.contains("autopic__endhead")) return 40;
+        if (this.classList.contains("autopic__sourcehead")) return 40;
         return this.classList.contains("autopic__end--pass") ? 120 : 0;
       });
     try {

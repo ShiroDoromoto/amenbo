@@ -31,11 +31,12 @@
 // automation's picture has no such boundary, and draws neither.
 //
 // **On the build screen an automation is drawn one role at a time** (`automationGraph` with a role):
-// the boxes that role's round reaches, laid out across from where it receives its task to the roles it
-// hands on to (`layOutAcross`), each depth a column. A line out of the round hangs as one that goes
-// nowhere, naming the role it hands on to, and a line going back is no line but a loop under the box it
-// goes back to — a round that checks and goes round again reads as one action doing its work twice,
-// not as a line back along the picture.
+// the boxes that role's round reaches from its start, laid out across from the role's waiting tasks to
+// the roles it files tasks for (`layOutAcross`), each depth a column. No entry common to the whole
+// automation is drawn (`AMB-D-1123`): every role takes its tasks from its own waiting ones. A line out
+// of the round hangs as one that goes nowhere, naming the role it hands on to, and a line going back
+// is no line but a loop under the box it goes back to — a round that checks and goes round again reads
+// as one action doing its work twice, not as a line back along the picture.
 //
 // **What a box hands on is not drawn** (`AMB-D-1001`). The wires are only read here for the inputs
 // nothing reaches, which a box wears as its "⚠". Drawn as lines they took the whole right margin and
@@ -67,6 +68,7 @@ import type {
   AutomationPlacementStepDto,
   AutomationPortDto,
   AutomationRoleDto,
+  AutomationTriggerDto,
   AutomationWireDto,
 } from "../bindings/bindings";
 
@@ -180,19 +182,29 @@ export function stepKindWord(step: PicStep): string {
 }
 
 /**
- * **One role's round, as the picture of it reads it** (`automationGraph` with a role): what the round
- * receives, what it hands on, and the whole automation it is cut out of.
+ * **One role's round, as the picture of it reads it** (`automationGraph` with a role): the role, where
+ * the tasks waiting for it come from, what it hands on, and the whole automation it is cut out of.
  */
 export type PicRound = {
   /** The whole automation's picture — what an input is fed by and a box is numbered by, which a round
    *  cut out of it cannot answer alone. */
   whole: PicGraph;
-  /** Where the round's task comes from, besides a person filing it: whether a failed round's incident
-   *  is filed to this role (`failuresTo`), the names of the triggers that file it, in the order they
-   *  are written — only those switched on, as one switched off files nothing — and the roles whose
-   *  boxes hand on into it, then the actions, where the box it comes from is on no round. None of the
-   *  three means only a person files it. */
-  receives: { failures: boolean; triggers: readonly string[]; roles: readonly string[] };
+  /** The role this is the round of — what a person files a task under to have it waiting here. */
+  role: AutomationRoleDto;
+  /** Every role of the automation, which a trigger's condition names its role from. */
+  roles: readonly AutomationRoleDto[];
+  /** Where the tasks waiting for the role come from, besides a person filing them: whether a failed
+   *  round's incident is filed to this role (`failuresTo`), the triggers that file one, in the order
+   *  they are written — only those switched on, as one switched off files nothing — each task another
+   *  role's round files for this one (`passes` on that role, `PicPass.role` being the role that files
+   *  it), and the roles whose boxes hand on into it that no such task already names, then the actions,
+   *  where the box it comes from is on no round. None of the four means only a person files them. */
+  receives: {
+    failures: boolean;
+    triggers: readonly AutomationTriggerDto[];
+    filed: readonly PicPass[];
+    roles: readonly string[];
+  };
   /** Whom the round hands on to, one each: first each task it files for another role (`passes` on the
    *  role), then each role its lines out of it go to that no such task already names. */
   passes: readonly PicPass[];
@@ -202,12 +214,14 @@ export type PicRound = {
 };
 
 /**
- * **One task a role's round hands on to another role** (`AutomationRolePassDto`): the role it goes to,
- * and the task by its title — the title a run last filed it under, or the action that files it until a
- * run has — marked where the task is set to depend on another. A line out of the round to another
- * role's box files no task, and names the role alone.
+ * **One task a role's round hands on to another role** (`AutomationRolePassDto`): the role it goes to
+ * — or, among what a round receives (`PicRound.receives.filed`), the role that files it — and the task
+ * by its title — the title a run last filed it under, or the action that files it until a
+ * run has — marked where the task is set to depend on another — and, on a task the round files, the
+ * box that files it (`placement`), which the filing's line is drawn from. A line out of the round to
+ * another role's box files no task, and names the role alone.
  */
-export type PicPass = { role: AutomationRoleDto; task?: string; depends: boolean };
+export type PicPass = { role: AutomationRoleDto; task?: string; depends: boolean; placement?: number };
 
 /** One picture, whichever of the two it is: the boxes, the lines, and the box a run opens first. */
 export type PicGraph = {
@@ -240,10 +254,10 @@ export type PicGraph = {
 /**
  * **One automation as a picture** — its boxes are the actions placed on it.
  *
- * Given a role, **only that role's round** (`AutomationPlacementDto::roleId`): received from a failed
- * round, a trigger, another role or a person, the actions it passes through with their steps inside, and
- * handed on to the roles it files a task for and the roles its lines leave for. A role that is gone
- * draws the whole automation.
+ * Given a role, **only that role's round** (`AutomationPlacementDto::roleId`): its waiting tasks, filed
+ * by a failed round, a trigger, another role or a person, the actions it passes through from its start
+ * with their steps inside, and handed on to the roles it files a task for and the roles its lines
+ * leave for. A role that is gone draws the whole automation.
  * `agentLabel` names the agent a step chose for itself (`stepKind`); absent, its id is written.
  */
 export function automationGraph(
@@ -290,8 +304,18 @@ export function automationGraph(
   }
   const passes: PicPass[] = role.passes.flatMap((pass) => {
     const to = detail.roles.find((one) => one.id === pass.toRole);
-    return to === undefined ? [] : [{ role: to, task: pass.taskTitle ?? pass.name, depends: pass.depends }];
+    return to === undefined
+      ? []
+      : [{ role: to, task: pass.taskTitle ?? pass.name, depends: pass.depends, placement: pass.placement }];
   });
+  // Each task another role's round files for this one, in the order the roles and their passes stand.
+  const filed: PicPass[] = detail.roles.flatMap((from) =>
+    from.id === role.id
+      ? []
+      : from.passes
+          .filter((pass) => pass.toRole === role.id)
+          .map((pass) => ({ role: from, task: pass.taskTitle ?? pass.name, depends: pass.depends })),
+  );
   for (const edge of detail.edges) {
     if (!handOff.has(edge.id) || edge.toId === undefined) continue;
     const at = detail.placements.find((one) => one.id === edge.toId);
@@ -307,10 +331,16 @@ export function automationGraph(
     wires: detail.wires,
     round: {
       whole,
+      role,
+      roles: detail.roles,
       receives: {
         failures: detail.failuresTo?.kind === "role" && detail.failuresTo.roleId === role.id,
-        triggers: detail.triggers.filter((one) => one.enabled && one.roleId === role.id).map((one) => one.name),
-        roles: [...new Set([...fromRoles, ...fromActions])],
+        triggers: detail.triggers.filter((one) => one.enabled && one.roleId === role.id),
+        filed,
+        // A role that already files a task for this one is said once, by that filing.
+        roles: [
+          ...new Set([...fromRoles.filter((name) => !filed.some((one) => one.role.name === name)), ...fromActions]),
+        ],
       },
       passes,
       handOff,
@@ -1127,9 +1157,9 @@ const ACROSS_UNDER = 24;
 const ACROSS_LANE = 20;
 
 /**
- * **Lay one role's round out across** (`PicGraph.round`), as the build screen reads it: what the round
- * receives on its left, the actions it passes through from left to right, and what it hands on on its
- * right — the two ends are the screen's, not the picture's.
+ * **Lay one role's round out across** (`PicGraph.round`), as the build screen reads it: the actions it
+ * passes through from its start, from left to right. Where its waiting tasks come from, on its left,
+ * and what it hands on, on its right, are the screen's, not the picture's.
  *
  * Each depth the walk reaches is a column, its boxes one under another where the round branches. A
  * line to the next column leaves the box's right edge, its name over it, turns where the column's

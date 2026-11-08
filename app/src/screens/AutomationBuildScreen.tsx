@@ -5,8 +5,9 @@
 // right. The two screens are one move a layer apart (`AMB-D-949`), and a reader going between them
 // should not have to learn a second arrangement.
 //
-// **Two places, each named on the screen**: "how it works", the picture of the placements
-// (`./AutomationPicture`), which stands between the picked role's head and its agent and model; and
+// **Two places, each named on the screen**: "how it works", the picked role's round drawn from its
+// waiting tasks, with no entry common to the automation (`./AutomationPicture`, `AMB-D-1123`), which
+// stands between the role's head and its agent and model; and
 // "placement", what the pressed spot holds (`./AutomationStepPanel`), which is the panel's reading of
 // a press on a box. The press that starts a run is not a place of its
 // own: it stands at the far end of the head (`AMB-T-5523`).
@@ -281,7 +282,8 @@ export function AutomationBuildScreen({
       ? undefined
       : automation?.triggers.find((one) => one.id === triggerOpen.id);
   const triggerShown = triggerOpen === "new" || openTrigger !== undefined;
-  // The picture in the middle is that role's round (`automationGraph`), laid out again only when the
+  // The picture in the middle is that role's round from its waiting tasks — where they come from, what
+  // it files for other roles (`automationGraph`) — laid out again only when the
   // definition, the role or the agents change. A step that chose its own agent names it on the
   // picture as the table of carriers does.
   const agents = useAgents(projectId);

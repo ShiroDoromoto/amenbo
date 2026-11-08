@@ -1,8 +1,17 @@
-# An action placed on an automation has a row per step saying who carries that step out, and a step
-# nobody chose for is one the launch check refuses. Before placing wrote anything there, every
-# placement came down with each of those rows reading nobody chosen, and the reader chose again once
-# per step before a run could start. So a placement is born with the answer the reader has already
-# given: the project's, else the agent they last opened a pane with (`amenbo_core::wake::step_agent`).
+# An action placed on an automation has steps, and each is carried out by an agent. A step nobody
+# chose for is one the launch check refuses, so a reader once had to choose again for every step of
+# every placement before a run could start. Nothing is written on a placement now: who carries a step
+# out is decided in order — what the step names, then the role's default, then Amenbo's own
+# (`amenbo_core::wake::step_agent`: the project's answer, else the agent the reader last opened a pane
+# with). So a step nobody chose for is carried out by the agent the reader has already given, and the
+# placement's own line for it stays on nobody chosen.
+#
+# ── Where it is read ────────────────────────────────────────────────────────────────────────────
+# The panel of a pressed placement says only what the step itself names, and this one names nothing.
+# What a step falls back to is drawn in one place: the table under the picture, a row per step the
+# role's round reaches, with the agent and the model it is carried out by
+# (`app/src/screens/AutomationRoleCarriers.tsx`). A cell the step chose is marked ●; one it falls back
+# to is muted and unmarked, which is the reading here.
 #
 # ── Why the answer is given by opening a pane ───────────────────────────────────────────────────
 # Both answers are written by the screen and by nothing else. The last agent is what a press on the
@@ -11,16 +20,17 @@
 # terminal road to either answer, which is why this goal is the screen's alone.
 #
 # ── Why the agent is named ──────────────────────────────────────────────────────────────────────
-# The row reads the agent's own name, and a road reading a name has to have chosen it. The machine is
+# The cell reads the agent's own name, and a road reading a name has to have chosen it. The machine is
 # stood up (`can-start`), which is what lets a road name one at all; two of them, so that nobody has
 # chosen when the frame comes up and the press is the reader's rather than the only thing there was.
 id: find-the-agent-you-open-with-already-chosen-on-a-step-you-place
-title: A step of an action placed on an automation comes down carrying the agent the reader last opened a pane with
+title: A step of an action placed on an automation is carried out by the agent the reader last opened a pane with
 description: >
   Stand a machine up with two agents on it, open a pane in the project on one of them by name, and go
   to the project's automations. On an automation that starts at the built-in that takes a task, put a
-  library action of one step in on the line leaving it and press its box: the row saying who carries
-  that step out already reads the agent the pane was opened with, rather than nobody chosen.
+  library action of one step in on the line leaving it: the table under the picture says that step is
+  carried out by the agent the pane was opened with, muted and unmarked as a value it falls back to
+  rather than one anybody chose on it.
 
 given:
   - type: action
@@ -37,7 +47,7 @@ given:
     with:
       count: 2
 
-  # One step, so the panel draws one row to read and there is no question of which.
+  # One step, so the table draws one row for it and there is no question of which.
   - { type: action, domain: automation, op: action-add, with: { name: draft, project: harbour }, as: draft }
   - { type: action, domain: automation, op: step-add, with: { target: draft, name: write, prompt: write the draft }, as: write }
   - { type: action, domain: automation, op: action-entry, with: { target: draft, step: write } }
@@ -72,7 +82,7 @@ steps_gui:
     domain: workspace
     op: open-start
 
-  # ── And the placement that comes down carrying it ─────────────────────────────────────────────
+  # ── And the placement whose step falls back to it ─────────────────────────────────────────────
   - type: action
     domain: automation
     op: screen
@@ -93,17 +103,14 @@ steps_gui:
       exit: 着手した
       action: draft
 
-  - type: action
-    domain: automation
-    op: pick-box
-    with:
-      name: draft
-
-  # The reading. Nobody chose on this placement, so a build that wrote nothing at placing leaves the
-  # row on nobody chosen, and the agent's name is not in it.
+  # The reading. Nobody chose on this placement, and the role has no default, so the step falls back
+  # to Amenbo's — the agent the pane was opened with. A build that forgot the last agent draws no row
+  # for the step, since nobody carries it out, or names another agent in the cell.
   - type: assert
     domain: automation
-    op: panel-shows
+    op: carrier-shows
     with:
+      step: write
       field: agent
       value: Claude Code
+      marked: false

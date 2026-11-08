@@ -4558,6 +4558,14 @@ const REGISTRY: &[OpSpec] = &[
     // `panel-shows` names at most one, and naming neither asks only that the row is drawn.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "panel-shows", required: &["field"], refs: &[], strings: &["field", "value"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "panel-set", required: &["field"], refs: &[], strings: &["field", "value"], binds: false },
+    // **Who carries a step out, read off the table under an automation's picture** — not off a panel.
+    // A step's own panel inside an action has no row for it: the agent and the model are chosen where
+    // the action is placed, and what a step falls back to when nobody chose there — the
+    // role's default, then Amenbo's — is drawn nowhere but this table. `step` is the row, by the
+    // step's name; `field` the column, `agent` or `model`; `value` what the cell reads. `marked` is
+    // the ● saying the step chose that value itself, and `false` reads a cell drawn muted with no ●,
+    // a value the step fell back to.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "carrier-shows", required: &["step", "field"], refs: &[], strings: &["step", "field", "value"], binds: false },
     // One value pressed on one row of a task filter. The rows are axes and the values are what is on
     // them, which is the whole of how that setting is answered — there is no filter expression to
     // write, and no road here may write one. A setting is answered on a placement, so this is the
@@ -5189,6 +5197,19 @@ impl Scenario {
             self.validate_list(Some(driver), self.steps(driver), &standing, &mut errs);
         }
 
+        // The rows a step's panel draws depend on which build screen it is on, and an action's has no
+        // row for who carries the step out — the road reading one there is reading a row that is not
+        // drawn, and nothing but a run in front of the screen would say so.
+        for (i, field) in carrier_read_inside_an_action(self.steps(Driver::Gui)) {
+            errs.push(ValidationError {
+                driver: Some(Driver::Gui),
+                step: Some(i),
+                message: format!(
+                    "the panel of a step inside an action has no `{field}` row — who carries a step out is chosen where the action is placed, so `open` the automation and `pick-box` the placement, or read `carrier-shows` under its picture"
+                ),
+            });
+        }
+
         // And the one rule that is about where a road has left the screen rather than about a step's
         // own text. A screen's question alone: the CLI's road has no column to draw a file in.
         for (i, op) in rendering_in_the_way(self.steps(Driver::Gui)) {
@@ -5467,6 +5488,17 @@ impl Scenario {
                 }
             }
 
+            // A cell of the table of who carries each step out is a column of two, and the ● on it is a
+            // yes or a no.
+            if step.domain() == Domain::Automation && step.op() == "carrier-shows" {
+                if !matches!(step.with().get("field").and_then(|v| v.as_str()), Some("agent" | "model")) {
+                    errs.push(at(i, "`field` names a column of the table — `agent` or `model`".to_string()));
+                }
+                if step.with().get("marked").is_some_and(|v| v.as_bool().is_none()) {
+                    errs.push(at(i, "`marked` must be a boolean".to_string()));
+                }
+            }
+
             // Which side of the store a step is talking about. It is a word rather than a boolean
             // because an axis has three answers to give — and the reading has two, `both` being a
             // state an axis is in and not a side anything is offered on — so the set is checked
@@ -5569,6 +5601,38 @@ fn rendering_in_the_way(steps: &[Step]) -> Vec<(usize, &str)> {
             // forms (`app/src/files/FilesPanel.tsx`).
             "edit" | "paste-into-editor" | "paste-image" if holding_markdown && !as_source => {
                 found.push((i, step.op()));
+            }
+            _ => {}
+        }
+    }
+    found
+}
+
+/// Every step reading or writing the `agent` or `model` row of a panel while an action's build screen
+/// is in front, with the row it names.
+///
+/// **The step panel inside an action draws no such row**: the agent and the model are
+/// the placement's, chosen on the automation's panel. So the build screen in front is followed through
+/// the presses that change it — an action opened from the list, made there, opened from a placement,
+/// or reached by pressing a reason that opens one — and the ones that leave it: another tab, an
+/// automation opened, the way back, and finishing or giving up one being made. A reason pressed
+/// without `opens` is counted as leaving, since most of them pick a box on the automation; a road
+/// pressing one that opens an action with no step is not caught, and nothing is refused for it.
+fn carrier_read_inside_an_action(steps: &[Step]) -> Vec<(usize, &str)> {
+    let mut inside = false;
+    let mut found = Vec::new();
+    for (i, step) in steps.iter().enumerate() {
+        if step.domain() != Domain::Automation {
+            continue;
+        }
+        match step.op() {
+            "action-open" | "action-make" | "open-placed" => inside = true,
+            "press-reason" => inside = step.with().contains_key("opens"),
+            "screen" | "open" | "action-back" | "action-finish-creating" | "action-abandon" => inside = false,
+            "panel-shows" | "panel-set" if inside => {
+                if let Some(field @ ("agent" | "model")) = step.with().get("field").and_then(|v| v.as_str()) {
+                    found.push((i, field));
+                }
             }
             _ => {}
         }
@@ -5769,6 +5833,66 @@ steps_gui:
                 "id: x\ntitle: y\nsteps_gui:\n{road}  - type: action\n    domain: files\n    op: edit\n    with: {{ types: SCENARIO a line }}\n"
             );
             load_str(&yaml).unwrap().validate().expect("the text is on the screen");
+        }
+    }
+
+    /// The action and the automation the roads below open, named the way a road names them.
+    const WORLD: &str = "given:\n  - { type: action, domain: automation, op: action-add, with: { name: take }, as: take }\n  - { type: action, domain: automation, op: create, with: { name: Morning round }, as: auto }\n";
+
+    /// The road that read the model a step names off the step's panel inside its action. That panel
+    /// has had no row for who carries a step out since the agent and the model became the placement's,
+    /// so the road reads right and stops in front of the screen.
+    #[test]
+    fn reading_who_carries_a_step_out_inside_an_action_is_rejected() {
+        for (open, field) in [
+            ("op: action-open\n    with: { target: take }", "model"),
+            ("op: action-make\n    with: { name: Triage }", "agent"),
+            ("op: open-placed", "model"),
+            ("op: press-reason\n    with: { reason: open_exit, box: claim, opens: take }", "agent"),
+        ] {
+            let yaml = format!(
+                "id: x\ntitle: y\n{WORLD}steps_gui:\n  - type: action\n    domain: automation\n    {open}\n  - type: action\n    domain: automation\n    op: pick-box\n    with: {{ name: claim }}\n  - type: assert\n    domain: automation\n    op: panel-shows\n    with: {{ field: {field}, value: scenario-model-09 }}\n"
+            );
+            let errs = load_str(&yaml).unwrap().validate().expect_err("the row is not drawn");
+            assert!(
+                errs.iter().any(|e| e.step == Some(2) && e.message.contains(&format!("no `{field}` row"))),
+                "{open}: {errs:?}"
+            );
+        }
+    }
+
+    /// And the same rows read where they are drawn: on the automation's panel, once the road has left
+    /// the action for it — and the action's other rows, read inside it.
+    #[test]
+    fn who_carries_a_step_out_is_read_on_the_automation() {
+        for road in [
+            "  - type: action\n    domain: automation\n    op: open\n    with: { target: auto }\n  - type: action\n    domain: automation\n    op: pick-box\n    with: { name: take }\n  - type: assert\n    domain: automation\n    op: panel-shows\n    with: { field: model, value: scenario-model-09 }\n",
+            "  - type: action\n    domain: automation\n    op: action-open\n    with: { target: take }\n  - type: action\n    domain: automation\n    op: screen\n    with: { tab: automations }\n  - type: action\n    domain: automation\n    op: open\n    with: { target: auto }\n  - type: assert\n    domain: automation\n    op: panel-shows\n    with: { field: agent }\n",
+            "  - type: action\n    domain: automation\n    op: open-placed\n  - type: action\n    domain: automation\n    op: action-back\n  - type: action\n    domain: automation\n    op: panel-set\n    with: { field: model, value: scenario-model-01 }\n",
+            "  - type: action\n    domain: automation\n    op: action-open\n    with: { target: take }\n  - type: assert\n    domain: automation\n    op: panel-shows\n    with: { field: prompt, value: take the next task }\n",
+        ] {
+            let yaml = format!("id: x\ntitle: y\n{WORLD}steps_gui:\n{road}");
+            load_str(&yaml).unwrap().validate().unwrap_or_else(|errs| panic!("{road}: {errs:?}"));
+        }
+    }
+
+    /// The table of who carries each step out is read by a column of two, and its ● is a yes or a no.
+    #[test]
+    fn a_carrier_cell_names_its_column_and_its_mark_as_a_boolean() {
+        let road = |with: &str| {
+            format!("id: x\ntitle: y\nsteps_gui:\n  - type: assert\n    domain: automation\n    op: carrier-shows\n    with: {with}\n")
+        };
+        load_str(&road("{ step: write, field: agent, value: Claude Code, marked: false }"))
+            .unwrap()
+            .validate()
+            .expect("a cell read");
+        for (with, says) in [
+            ("{ step: write, field: prompt, value: x }", "`agent` or `model`"),
+            ("{ step: write, field: agent, marked: yes please }", "`marked` must be a boolean"),
+            ("{ field: agent }", "step"),
+        ] {
+            let errs = load_str(&road(with)).unwrap().validate().expect_err("refused");
+            assert!(errs.iter().any(|e| e.message.contains(says)), "{with}: {errs:?}");
         }
     }
 

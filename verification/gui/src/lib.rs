@@ -1238,6 +1238,11 @@ impl Instructor {
             (Domain::Automation, "panel-shows") => {
                 Some(Expectation { text: arg_str(with, "value")?.to_string(), present: present(with) })
             }
+            // One cell of the table of who carries each step out. An agent or a model the road named
+            // is written in it, so a reading finds it there.
+            (Domain::Automation, "carrier-shows") => {
+                Some(Expectation { text: arg_str(with, "value")?.to_string(), present: present(with) })
+            }
             // What the build screen lists under its head as being in the way. The reason itself is the interface's
             // sentence, but what it names is the road's: the input, the setting, the agent. So the
             // reading is taken on that name, and a road that named no `at` leaves the whole line to
@@ -6730,6 +6735,25 @@ impl Instructor {
                     step_field(req(with, "field")?)?
                 ),
             },
+            // One cell of the table under the automation's picture. The ● and the muted colour are drawn,
+            // not written, so whether the step chose the value itself is an eye's.
+            (Domain::Automation, "carrier-shows") => {
+                let column = carrier_column(req(with, "field")?)?;
+                let mark = match step_mark(with, "marked")? {
+                    Some(true) => ", in the colour of a value the step chose itself, with ● beside it",
+                    Some(false) => ", drawn muted with no ● beside it — a value the step falls back to rather than one it chose",
+                    None => "",
+                };
+                let row = req(with, "step")?;
+                match arg_str(with, "value") {
+                    Some(value) => format!(
+                        "On the automation's build screen, in the table under the picture listing who carries out each step, confirm the row for \"{row}\" reads \"{value}\" in its {column} column{mark}."
+                    ),
+                    None => format!(
+                        "On the automation's build screen, in the table under the picture listing who carries out each step, confirm there is a row for \"{row}\" and that its {column} column is filled in{mark}."
+                    ),
+                }
+            }
             // What the build screen's head says: the start press, and under it what keeps it from being
             // pressed — which is where a half-built definition is named as such.
             // A road names core's own code for the reason, so what it walks is the refusal rather
@@ -7368,7 +7392,9 @@ fn way_out(with: &Args) -> String {
 ///
 /// **The rows that are a step's are drawn on both panels.** Inside an action they are the pressed
 /// step's own; on an automation's picture they are the step the placed action opens first — so a
-/// road reads them on either, and the name is the pressed box's.
+/// road reads them on either, and the name is the pressed box's. **But for `agent` and `model`**:
+/// who carries a step out is the placement's, so those two rows are drawn on the automation's panel
+/// alone, and core's lint refuses a road reading them inside an action.
 fn step_field(field: &str) -> Result<&'static str, String> {
     Ok(match field {
         "name" => "the name",
@@ -7389,6 +7415,15 @@ fn step_field(field: &str) -> Result<&'static str, String> {
             ))
         }
     })
+}
+
+/// One column of the table of who carries each step out, named the way the table heads it.
+fn carrier_column(field: &str) -> Result<&'static str, String> {
+    match field {
+        "agent" => Ok("agent"),
+        "model" => Ok("model"),
+        other => Err(format!("`field` does not know `{other}` — the table's columns are agent / model")),
+    }
 }
 
 /// The rows that are a box to tick. Whether one is ticked is a yes or a no (`on`), and no words
@@ -9530,6 +9565,44 @@ steps_gui:
         assert!(lines[n - 3].contains("using it") && lines[n - 3].contains("still takes writes"), "{}", lines[n - 3]);
         assert!(lines[n - 2].contains("opens its pane") && lines[n - 2].contains("pane the run is drawn in"), "{}", lines[n - 2]);
         assert!(lines[n - 1].contains("no band"), "{}", lines[n - 1]);
+    }
+
+    /// A cell of the table of who carries each step out: read for what it says, and for the ● that
+    /// tells a value the step chose from one it falls back to.
+    #[test]
+    fn a_carrier_cell_is_read_for_its_value_and_its_mark() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: automation
+    op: carrier-shows
+    with: { step: write, field: agent, value: Claude Code, marked: false }
+  - type: assert
+    domain: automation
+    op: carrier-shows
+    with: { step: write, field: model, value: scenario-model-09, marked: true }
+  - type: assert
+    domain: automation
+    op: carrier-shows
+    with: { step: write, field: agent }
+"#);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        let fallen = ins.render(&steps[0]).expect("renders");
+        assert!(
+            fallen.contains("row for \"write\" reads \"Claude Code\" in its agent column") && fallen.contains("no ●"),
+            "{fallen}"
+        );
+        let chosen = ins.render(&steps[1]).expect("renders");
+        assert!(chosen.contains("in its model column") && chosen.contains("with ● beside it"), "{chosen}");
+        let drawn = ins.render(&steps[2]).expect("renders");
+        assert!(drawn.contains("its agent column is filled in") && !drawn.contains('●'), "{drawn}");
+
+        let read = |st: &Step| ins.expectation(st).map(|e| e.text);
+        assert_eq!(read(&steps[0]).as_deref(), Some("Claude Code"));
+        assert_eq!(read(&steps[2]), None, "a cell with no value named leaves the reading to an eye");
     }
 
     /// A reason under the build screen's head is pressed by its code and the box it names, and a

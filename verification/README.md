@@ -759,7 +759,7 @@ the store, so its answer is the one thing there is to read. On the screen the sa
 pane beside the picture that steps through that answer (`test-move`, `test-pane`, `test-pane-ended`),
 and what it did not keep is read off the running and history tabs, which name no row for it
 (`rows-name`). **The pictures
-are the screen's** (`pictured`, `line-pictured`, `lap-pictured`, `panel-shows`, `launch`, and the
+are the screen's** (`pictured`, `line-pictured`, `lap-pictured`, `panel-shows`, `carrier-shows`, `launch`, and the
 rest of the screen half): an automation's build screen draws its placements and an action's its
 steps, the ops are named for the box and the panel so one set reads either, and boxes, the lines
 between them and the marks along them are drawn nowhere else — neither face is a gap in the other.

@@ -40,7 +40,7 @@ import { LaunchHanding } from "./LaunchHanding";
 export function useAutomationStart(
   projectId: number | null,
   workspaceOpen: boolean,
-  onGoToRun?: (project: number, run: number) => void,
+  onGoToRun?: (project: number, run: number, launch?: number | null) => void,
 ) {
   const [refused, setRefused] = useState<string | null>(null);
   // A press turned away because the workspace was closed — drawn only while it still is.
@@ -59,7 +59,7 @@ export function useAutomationStart(
     try {
       const started = await launchAutomation(id, projectId, folders, workspaceOpen, handed);
       // No run where the automation waits for a task to take instead: there is nothing to go to yet.
-      if (started !== null && started.run !== null) onGoToRun?.(projectId, started.run);
+      if (started !== null && started.run !== null) onGoToRun?.(projectId, started.run, started.launch);
     } catch (e) {
       setRefused(errText(e));
     } finally {

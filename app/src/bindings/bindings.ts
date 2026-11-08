@@ -3287,7 +3287,12 @@ pane?: string,
  * opens next lands in it rather than in a second pane under the same id
  * (`app/src/talk/layout.ts`).
  */
-run?: number, };
+run?: number, 
+/**
+ * The launch `run` is a seat of, where it is one (`AMB-D-1123`). `pane` is then the launch's, and
+ * the face puts `run` in front in it — or stands it for the launch with `run` in front.
+ */
+launch?: number, };
 
 /**
  * How much of a page one pane takes ([`amenbo_core::frames::PaneSize`]).
@@ -4291,8 +4296,18 @@ composeOpen?: boolean,
  * and nothing of it is written down, because a run does not outlive the app: one under way when
  * the app ended is stopped when it comes back up (`AMB-T-5247`), so a place kept for it would
  * come back holding a run that is over.
+ *
+ * On a launch's pane it is the seat in front — the run whose terminal the pane is drawing.
  */
-run?: number, };
+run?: number, 
+/**
+ * The launch this pane is drawing (`AMB-D-1123`), and absent for any other pane. One launch is
+ * one pane, whose seats are swapped in front in it.
+ *
+ * **It crosses with the run and stops where the run stops.** The store keeps the place by its id,
+ * and the window reads the launch back off it (`app/src/talk/layout.ts`).
+ */
+launch?: number, };
 
 /**
  * The talk window's arrangement, as the window drawing the face has it (`crate::frames`).

@@ -54,7 +54,7 @@ import { RunningTab } from "./RunningTab";
 
 let container: HTMLDivElement;
 let root: Root;
-let went: { project: number; run: number }[];
+let went: { project: number; run: number; launch?: number | null }[];
 
 function run(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto {
   return {
@@ -93,7 +93,9 @@ async function render(runs: AutomationRunCardDto[], projectId: number | null = n
   await act(async () => {
     root.render(createElement(RunningTab, {
       projectId,
-      onGoToRun: (project: number, one: number) => { went.push({ project, run: one }); },
+      onGoToRun: (project: number, one: number, launch?: number | null) => {
+        went.push({ project, run: one, ...(launch == null ? {} : { launch }) });
+      },
     }));
   });
   // A run's moves are behind its mark (`../shell/RunActs`), and the list is drawn on the page's body.
@@ -285,6 +287,12 @@ describe("the running tab", () => {
     expect(hoisted.moved).toEqual(["force-cancel 9"]);
     // The press that moves the run is not also a press on the row it stands in.
     expect(went).toEqual([{ project: 3, run: 9 }]);
+  });
+
+  it("goes to the pane of the run's launch, naming the run to put in front", async () => {
+    await render([run({ run: 9, project: 3, launch: 4 })]);
+    await act(async () => { (container.querySelector(".autorun__go") as HTMLButtonElement).click(); });
+    expect(went).toEqual([{ project: 3, run: 9, launch: 4 }]);
   });
 
   it("says out loud when a press was refused", async () => {

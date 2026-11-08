@@ -29,7 +29,7 @@ const hoisted = vi.hoisted(() => ({
   everywhere: [] as EveryAutomationCardDto[],
   detail: null as AutomationDetailDto | null,
   check: null as AutomationLaunchCheckDto | null,
-  launch: vi.fn(async (..._args: unknown[]) => ({ run: 1 })),
+  launch: vi.fn(async (..._args: unknown[]): Promise<{ run: number; launch?: number }> => ({ run: 1 })),
   stop: vi.fn(async (..._args: unknown[]) => true),
   cancel: vi.fn(async (..._args: unknown[]) => {}),
   save: vi.fn(async (..._args: unknown[]) => {}),
@@ -426,11 +426,11 @@ describe("the automations screen with every project picked", () => {
   it("goes to the pane of the run it started, in the row's project", async () => {
     hoisted.everywhere = [everywhere()];
     hoisted.check = { ready: true, blocks: [] };
-    hoisted.launch.mockResolvedValue({ run: 31 });
+    hoisted.launch.mockResolvedValue({ run: 31, launch: 5 });
     await renderEverywhere();
     await act(async () => { button(t("auto.start")).click(); });
     await handOver();
-    expect(wentToRun).toHaveBeenCalledWith(3, 31);
+    expect(wentToRun).toHaveBeenCalledWith(3, 31, 5);
   });
 
   it("holds the start shut while the check has not said it could start", async () => {
@@ -846,11 +846,11 @@ describe("the press that starts a run", () => {
   });
 
   it("goes to the pane of the run it started", async () => {
-    hoisted.launch.mockResolvedValue({ run: 31 });
+    hoisted.launch.mockResolvedValue({ run: 31, launch: 5 });
     await open({ ready: true, blocks: [] });
     await act(async () => { button(t("auto.start")).click(); });
     await handOver();
-    expect(wentToRun).toHaveBeenCalledWith(1, 31);
+    expect(wentToRun).toHaveBeenCalledWith(1, 31, 5);
   });
 
   it("goes nowhere when the launch is refused", async () => {
@@ -946,7 +946,7 @@ describe("an automation a run is going on (AMB-D-1015)", () => {
     await openHeld();
     expect(container.querySelector(".autoheld")?.textContent).toContain(tf("auto.held.by", { run: 31 }));
     await act(async () => { button(t("auto.held.openPane")).click(); });
-    expect(goToRun).toHaveBeenCalledWith(1, 31);
+    expect(goToRun).toHaveBeenCalledWith(1, 31, undefined);
   });
 
   it("names the version the run is on, and the one it switches to back at the start", async () => {

@@ -16,7 +16,7 @@ import type { AutomationLaunchAsksDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   asks: { reads: "nothing", axes: [] } as AutomationLaunchAsksDto | null,
-  launch: vi.fn(async (..._args: unknown[]) => ({ run: 1 })),
+  launch: vi.fn(async (..._args: unknown[]): Promise<{ run: number; launch?: number }> => ({ run: 1 })),
 }));
 
 vi.mock("../core/automations", () => ({
@@ -151,12 +151,12 @@ describe("the press", () => {
     expect(goToRun).not.toHaveBeenCalled();
   });
 
-  it("goes to the pane of the run it started", async () => {
-    hoisted.launch.mockResolvedValue({ run: 31 });
+  it("goes to the pane of the launch it started, with the run it started in front", async () => {
+    hoisted.launch.mockResolvedValue({ run: 31, launch: 5 });
     await render();
     await act(async () => { button("Morning round").click(); });
     await handOver();
-    expect(goToRun).toHaveBeenCalledWith(1, 31);
+    expect(goToRun).toHaveBeenCalledWith(1, 31, 5);
   });
 
   it("clears the last refusal when the next press is made", async () => {

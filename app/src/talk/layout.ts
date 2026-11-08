@@ -135,8 +135,12 @@ export type SavedLayout = {
     /** The run this pane is drawing (`Frame.run`). It crosses to the window the workspace is split
      *  out into, the way the draft does, and goes no further: the host keeps the places and not the
      *  runs (`app/src-tauri/src/frames.rs`), and a run's place is read back as the run's by its id
-     *  (`runOfFrameId`). */
+     *  (`runOfFrameId`). On a launch's pane it is the seat in front (`Frame.run`). */
     run?: number;
+    /** The launch this pane is drawing (`Frame.launch`). It crosses to the other window beside the
+     *  run and goes no further, for the same reason: a launch's place is read back off its id
+     *  (`launchOfFrameId`). */
+    launch?: number;
   }[];
   /** The pane being worked in when the arrangement was last written. It is what the window split out
    *  of this face comes up on, so the reader lands where they left rather than on the first place of
@@ -241,7 +245,8 @@ export type Frame = {
    */
   readonly composeOpen: boolean;
   /**
-   * The automation run this pane is drawing, or null for an ordinary pane (`AMB-T-5251`).
+   * The automation run this pane is drawing, or null for an ordinary pane (`AMB-T-5251`). On a
+   * launch's pane (`Frame.launch`) it is the seat in front — the run whose terminal is drawn now.
    *
    * **One run is one pane, and the terminal in it is what changes.** A run is a line of steps and
    * each step is a terminal of its own, so a pane per step would have the page rearrange itself
@@ -257,6 +262,20 @@ export type Frame = {
    * failures. What does not come back is what the terminal printed: that died with the process.
    */
   readonly run: number | null;
+  /**
+   * The launch this pane is drawing, or null for an ordinary pane and for a run kept from before
+   * launches were (`AMB-D-1123`).
+   *
+   * **One launch is one pane, and the seat in front is what changes.** A launch keeps a seat per
+   * person of each role, and every seat is a run of its own with a terminal of its own. The pane is
+   * one place for all of them: `run` names the seat being drawn, and pressing for another seat swaps
+   * the terminal in this same place (`seatedIn`) rather than standing a second pane.
+   *
+   * **The pane's id is the launch's, and the terminal's name stays the run's** (`terminalOf`). The id
+   * is where the pane sits and nothing more; what the host keeps an agent's home and a frame's name
+   * against is `run-{run}`, so two seats of one launch never share a home (`crate::pane_home`).
+   */
+  readonly launch: number | null;
 };
 
 /** The arrangement of the workspace, as it stands. */
@@ -573,8 +592,10 @@ export function openedFrame(
     // — this module reads nothing of its own — and a caller that does not say opens the pane folded,
     // which is where `AMB-D-889` starts one.
     composeOpen,
-    // A pane a person opened. The one a run stands in is made by `stoodForRun` and nowhere else.
+    // A pane a person opened. The one a run stands in is made by `stoodForRun` or `stoodForLaunch`
+    // and nowhere else.
     run: null,
+    launch: null,
   };
   // Where that place in this project's own list falls in the one list every project's frames share.
   const places = layout.frames.flatMap((one, i) => (one.project === project ? [i] : []));
@@ -650,16 +671,121 @@ export function stoodForRun(
     // for it (`AMB-D-890`). It starts closed, which is where `AMB-D-889` starts every pane.
     composeOpen: false,
     run,
+    launch: null,
   };
+  return { layout: atTheEnd(layout, project, frame), frame };
+}
+
+/** The arrangement with `frame` put after the last of `project`'s panes. */
+function atTheEnd(layout: Layout, project: number, frame: Frame): Layout {
   const places = layout.frames.flatMap((one, i) => (one.project === project ? [i] : []));
   const into = (places[places.length - 1] ?? layout.frames.length - 1) + 1;
   return {
-    layout: {
-      ...layout,
-      frames: [...layout.frames.slice(0, into), frame, ...layout.frames.slice(into)],
-    },
-    frame,
+    ...layout,
+    frames: [...layout.frames.slice(0, into), frame, ...layout.frames.slice(into)],
   };
+}
+
+/**
+ * The id of the pane a launch is drawn in (`Frame.launch`) — worked out from the launch for the
+ * reason a run's is (`runFrameId`), and spelled apart from it so the one is never read as the other.
+ * It is the pane's place on the screen and nothing else: the terminal in it is named after its run
+ * (`terminalOf`).
+ */
+export function launchFrameId(launch: number): string {
+  return `launch-${launch}`;
+}
+
+/** The pane a launch is drawn in, or null where it has none yet (`Frame.launch`). */
+export function paneOfLaunch(layout: Layout, launch: number): Frame | null {
+  return layout.frames.find((one) => one.launch === launch) ?? null;
+}
+
+/**
+ * The id of the pane a run is drawn in: its launch's, or the run's own where the run was kept from
+ * before launches were.
+ */
+export function paneIdOf(run: number, launch: number | null | undefined): string {
+  return launch == null ? runFrameId(run) : launchFrameId(launch);
+}
+
+/**
+ * **Stand a pane for a launch**, with the seat `run` in front, or answer with the one it already has.
+ *
+ * It is `stoodForRun` for a launch, and goes where that one goes — at the end of the project's panes,
+ * at the size of its last one, moving neither the page nor the pane being worked in (`AMB-D-939`).
+ * **A pane already standing keeps the seat it has in front.** A step arriving on another seat is that
+ * seat's news, and a pane that swapped its terminal for every one of them would change under the
+ * reader at every report; the reader swaps it (`seatedIn`).
+ */
+export function stoodForLaunch(
+  layout: Layout,
+  project: number,
+  launch: number,
+  run: number,
+): { layout: Layout; frame: Frame } {
+  const already = paneOfLaunch(layout, launch);
+  if (already) return { layout, frame: already };
+  const panes = panesOf(layout, project);
+  const frame: Frame = {
+    id: launchFrameId(launch),
+    project,
+    size: panes[panes.length - 1]?.size ?? DEFAULT_SIZE,
+    session: null,
+    folder: null,
+    agent: null,
+    resumes: false,
+    written: "",
+    inserted: [],
+    // Closed, for the reason a run's pane starts closed (`stoodForRun`).
+    composeOpen: false,
+    run,
+    launch,
+  };
+  return { layout: atTheEnd(layout, project, frame), frame };
+}
+
+/** What a seat of a launch is running now: its terminal, and the folder and agent it was started
+ *  with — null where its step has ended or none has come yet. */
+export type Seat = {
+  readonly session: string | null;
+  readonly folder: string | null;
+  readonly agent: string | null;
+};
+
+/**
+ * **Put the seat `run` in front of a launch's pane**, with the terminal it is running now — or none,
+ * where its step has ended. The place stays where it is and is the same place; what it draws is the
+ * other seat's (`Frame.launch`), its folder and agent with it, so nothing of the seat that was in
+ * front is left on the place. Anything but a launch's pane is left as it is.
+ */
+export function seatedIn(layout: Layout, frame: string, run: number, seat: Seat | null): Layout {
+  const was = layout.frames.find((one) => one.id === frame);
+  // Nothing changes — not a launch's pane, or the seat is already in front — so the layout is the same one.
+  if (!was || was.launch === null || was.run === run) return layout;
+  return withFrame(layout, frame, () => ({
+    ...was,
+    run,
+    session: seat?.session ?? null,
+    folder: seat?.folder ?? null,
+    agent: seat?.agent ?? null,
+    // The seat's terminal is taken up where it is, not started again (`openedIn`).
+    resumes: false,
+  }));
+}
+
+/**
+ * **The name the terminal in a pane is known by on the host's side** (`crate::frames`,
+ * `crate::pane_home`) — the pane's id, except on a launch's pane, where it is the seat's run's
+ * (`runFrameId`). A seat's agent keeps a home of its own however many seats share the pane.
+ */
+export function terminalOf(frame: Frame): string {
+  return frame.launch !== null && frame.run !== null ? runFrameId(frame.run) : frame.id;
+}
+
+/** The pane whose terminal is known by `name` (`terminalOf`), or null where none is. */
+export function paneOfTerminal(layout: Layout, name: string): Frame | null {
+  return layout.frames.find((one) => terminalOf(one) === name) ?? null;
 }
 
 /** A terminal has started in a frame. The folder and the agent are the ones the session says it was
@@ -947,6 +1073,8 @@ export function laidOut(layout: Layout): SavedLayout {
       // The run this place is drawing, where it is drawing one. It goes to the other window and no
       // further: the store keeps the place by its id, and the id says the run (`Frame.run`).
       ...(frame.run === null ? {} : { run: frame.run }),
+      // And the launch, the same way: the id says it to the store (`Frame.launch`).
+      ...(frame.launch === null ? {} : { launch: frame.launch }),
     })),
     // The pane being worked in, written down for the window the workspace is split out into: the
     // press says nothing, so where the reader was is theirs to read back out of the shape.
@@ -1002,7 +1130,11 @@ export function restored(saved: SavedLayout, onto: number | null, composeOpen = 
       // after its run (`Frame.run`, `AMB-T-5635`). Brought back without it, the pane would be an
       // empty place with nothing to press for the run, and the run's next step would stand a second
       // pane under the very same id (`stoodForRun`).
+      //
+      // A launch's place carries its seat from the other window, and from the store the seat it was
+      // given on the way in (`seatedOn`).
       run: frame.run ?? runOfFrameId(frame.id),
+      launch: frame.launch ?? launchOfFrameId(frame.id),
     });
   }
   const first = frames[0];
@@ -1026,6 +1158,48 @@ export function restored(saved: SavedLayout, onto: number | null, composeOpen = 
 export function runOfFrameId(id: string): number | null {
   const found = /^run-(\d+)$/.exec(id);
   return found ? Number(found[1]) : null;
+}
+
+/** The launch a pane's id was worked out from (`launchFrameId`), or null for any other pane. */
+export function launchOfFrameId(id: string): number | null {
+  const found = /^launch-(\d+)$/.exec(id);
+  return found ? Number(found[1]) : null;
+}
+
+/**
+ * The launches whose panes came back out of the store, in the order they were kept. A frame carrying
+ * its launch came from the other window, and stays (`runsKept`).
+ */
+export function launchesKept(saved: SavedLayout): number[] {
+  return saved.frames.flatMap((frame) => {
+    if (frame.launch != null) return [];
+    const launch = launchOfFrameId(frame.id);
+    return launch === null ? [] : [launch];
+  });
+}
+
+/**
+ * **What the store kept, with each launch's pane given the seat to draw in front** — and without the
+ * launch's pane where `seats` gives it none (`launchesKept`).
+ *
+ * The store keeps places, so a launch's pane comes out of it naming no seat. A launch's pane drawing
+ * no seat would be a run's pane drawing no run, so the pane goes where there is none to give: a
+ * launch that is over and needs nobody — ended, and every run of it over and needing nobody
+ * (`needsNobody`, `AMB-D-955`) — the way a run's pane goes with its run (`withoutRuns`), and a launch
+ * that could not be read. The next step of a launch still going stands its pane again
+ * (`stoodForLaunch`).
+ */
+export function seatedOn(saved: SavedLayout, seats: ReadonlyMap<number, number>): SavedLayout {
+  return {
+    ...saved,
+    frames: saved.frames.flatMap((frame) => {
+      if (frame.launch != null) return [frame];
+      const launch = launchOfFrameId(frame.id);
+      if (launch === null) return [frame];
+      const run = seats.get(launch);
+      return run === undefined ? [] : [{ ...frame, run }];
+    }),
+  };
 }
 
 /**

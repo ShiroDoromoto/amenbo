@@ -1278,6 +1278,11 @@ pub struct OpenInDto {
     #[ts(type = "number")]
     #[ts(optional)]
     pub(crate) run: Option<i64>,
+    /// The launch `run` is a seat of, where it is one (`AMB-D-1123`). `pane` is then the launch's, and
+    /// the face puts `run` in front in it — or stands it for the launch with `run` in front.
+    #[ts(type = "number")]
+    #[ts(optional)]
+    pub(crate) launch: Option<i64>,
 }
 
 /// One permanent comment on a decision record, for the GUI. Task comments ride in the per-task
@@ -3069,9 +3074,19 @@ pub struct TalkFrameDto {
     /// and nothing of it is written down, because a run does not outlive the app: one under way when
     /// the app ended is stopped when it comes back up (`AMB-T-5247`), so a place kept for it would
     /// come back holding a run that is over.
+    ///
+    /// On a launch's pane it is the seat in front — the run whose terminal the pane is drawing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub(crate) run: Option<i64>,
+    /// The launch this pane is drawing (`AMB-D-1123`), and absent for any other pane. One launch is
+    /// one pane, whose seats are swapped in front in it.
+    ///
+    /// **It crosses with the run and stops where the run stops.** The store keeps the place by its id,
+    /// and the window reads the launch back off it (`app/src/talk/layout.ts`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) launch: Option<i64>,
 }
 
 /// **The store's identity, in the parts a reader has to tell apart** (`AMB-D-856`). It was one string

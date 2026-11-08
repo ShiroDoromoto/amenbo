@@ -240,7 +240,7 @@ export function AutomationBuildScreen({
   /** Go to one library action's own build screen, full screen — the press over the one opened here. */
   onOpenAction: (actionId: number) => void;
   /** Go to the pane a run going on this automation is drawn in. */
-  onGoToRun?: (project: number, run: number) => void;
+  onGoToRun?: (project: number, run: number, launch?: number | null) => void;
 }) {
   const automation = useAutomation(id);
   // Nothing until something is pressed — a definition opens on the picture, and a box picked for the

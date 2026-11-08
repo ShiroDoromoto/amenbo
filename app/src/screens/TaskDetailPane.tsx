@@ -72,7 +72,7 @@ export function TaskDetailPane({
   onGoToPane?: (project: number, pane: string) => void;
   /** Go to the pane a run is drawn in — the run whose failed round this task was filed as. Absent
    *  outside the shell. */
-  onGoToRun?: (project: number, run: number) => void;
+  onGoToRun?: (project: number, run: number, launch?: number | null) => void;
   /** Nonce that focuses the comment box when opened via the reply arrow in the activity feed. Every increment re-focuses, so you can reply to the same task again and again. undefined = an ordinary selection. */
   focusCommentAt?: number;
   /** The comment to open in edit mode when opened via the pencil in the activity feed. The nonce lets the same comment be re-opened; if it is an old comment, the render window (commentLimit) widens to reach its row. */
@@ -553,7 +553,7 @@ export function TaskDetailPane({
                   className="btn"
                   onClick={() => {
                     showTerminalOf(fellIn.run);
-                    onGoToRun(fellIn.project, fellIn.run);
+                    onGoToRun(fellIn.project, fellIn.run, fellIn.launch);
                   }}
                 >
                   <Icon name="keyboard" />

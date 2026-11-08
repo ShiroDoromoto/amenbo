@@ -30,7 +30,7 @@ let root: Root;
 
 /** A failed run whose round was filed as the task `task`. */
 const failedRun = (run: number, task: number, acknowledged = false): AutomationRunCardDto => ({
-  run, project: 1, projectName: "P", automation: 3, automationName: "Nightly", status: "failed",
+  run, project: 1, projectName: "P", automation: 3, automationName: "Nightly", status: "failed", launch: 6,
   pauseRequested: false, pauseBeforeNextTask: false, pausableBeforeNextTask: false, waiting: false, waitsForRoom: false,
   stepsDone: 2, passes: [], reportWithheld: [], acknowledged,
   incident: { id: task, ref: `AMB-T-${task}`, title: `Task ${task}`, person: true },
@@ -40,7 +40,7 @@ async function settle() {
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 }
 
-async function open(taskId: number, onGoToRun?: (project: number, run: number) => void) {
+async function open(taskId: number, onGoToRun?: (project: number, run: number, launch?: number | null) => void) {
   act(() => root.render(createElement(StoreProvider, null, createElement(TaskDetailPane, { taskId, onGoToRun }))));
   await settle();
 }
@@ -66,14 +66,14 @@ afterEach(() => {
 });
 
 describe("the task a failed round was filed as", () => {
-  it("goes to the run's pane, turned to its terminal", async () => {
+  it("goes to its launch's pane with the run in front, turned to its terminal", async () => {
     const id = (await addTask(1, "障害"))!;
     hoisted.filed.set(id, failedRun(81, id));
-    const went: Array<[number, number]> = [];
-    await open(id, (project, run) => went.push([project, run]));
+    const went: Array<[number, number, number | null | undefined]> = [];
+    await open(id, (project, run, launch) => went.push([project, run, launch]));
     expect(container.textContent).toContain(t("auto.run.failedRound"));
     await act(async () => press()!.click());
-    expect(went).toEqual([[1, 81]]);
+    expect(went).toEqual([[1, 81, 6]]);
     expect(faceOf(81)).toBe("terminal");
   });
 

@@ -13,7 +13,8 @@
 // **It asks three things, each in a numbered part**: 1 whether to file a task now (every so many
 // minutes, when no run of it is going, while fewer than N tasks match a filter, or when a script says
 // so), 2 what the task says (fixed words, a file read from its full path, or what a script writes), and
-// 3 the role the task is worked under, or none, which leaves it to a session. Neither 1 nor 2 asks an
+// 3 the role the task is worked under, or none, which leaves it to a session — picked from a list, the
+// picked role's icon drawn beside it as the other screens draw it (`RoleIcon`). Neither 1 nor 2 asks an
 // AI: both are decided mechanically, and the AI works only inside the run the task starts.
 //
 // **It writes the trigger it was opened on**, adding one where it was opened on none, or takes it
@@ -55,6 +56,7 @@ import { asTyped } from "../core/keys";
 import { STATUS_ALL } from "../core/status";
 import { ErrorNote } from "../components/ErrorNote";
 import { filterValueLabel } from "./automationParts";
+import { RoleIcon } from "./AutomationRoles";
 import type {
   AutomationDetailDto,
   AutomationScriptInputDto,
@@ -260,31 +262,47 @@ function ScriptBoxesField({
   );
 }
 
-/** A row of chips, one of them pressed — the role the task is worked under. */
-function Chips<K extends string | number>({
-  label,
-  options,
-  picked,
+/**
+ * The role the task is worked under, picked from a list: the automation's roles in their order, then
+ * none. The picked role's icon stands before the list; with none picked, an empty space of the same
+ * size stands there, so the list does not move. A role since taken away stays picked under its number,
+ * so opening and saving the trigger does not change it.
+ */
+function RolePick({
+  automation,
+  roleId,
   onPick,
 }: {
-  label: string;
-  options: { id: K; label: string }[];
-  picked: K;
-  onPick: (id: K) => void;
+  automation: AutomationDetailDto;
+  roleId: number | null;
+  onPick: (roleId: number | null) => void;
 }) {
+  const picked = automation.roles.find((one) => one.id === roleId);
+  const options: { value: string; label: string }[] = automation.roles.map((one) => ({
+    value: String(one.id),
+    label: one.name,
+  }));
+  if (roleId !== null && picked === undefined) options.push({ value: String(roleId), label: String(roleId) });
+  options.push({ value: "", label: t("auto.trigger.roleNone") });
+
   return (
-    <div className="buttonrow" role="group" aria-label={label}>
-      {options.map((one) => (
-        <button
-          key={one.id}
-          type="button"
-          className={picked === one.id ? "actchip actchip--on" : "actchip"}
-          aria-pressed={picked === one.id}
-          onClick={() => onPick(one.id)}
-        >
-          {one.label}
-        </button>
-      ))}
+    <div className="trigcard__cond trigcard__role">
+      {picked === undefined ? (
+        <span className="trigcard__noicon" aria-hidden="true" />
+      ) : (
+        <RoleIcon role={picked} size={16} />
+      )}
+      <select
+        aria-label={t("auto.trigger.role")}
+        value={roleId === null ? "" : String(roleId)}
+        onChange={(e) => onPick(e.target.value === "" ? null : Number(e.target.value))}
+      >
+        {options.map((one) => (
+          <option key={one.value} value={one.value}>
+            {one.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -766,15 +784,7 @@ export function AutomationTrigger({
           </Part>
 
           <Part no={3} title={t("auto.trigger.role")}>
-            <Chips<number | "none">
-              label={t("auto.trigger.role")}
-              options={[
-                ...automation.roles.map((one) => ({ id: one.id as number | "none", label: one.name })),
-                { id: "none", label: t("auto.trigger.roleNone") },
-              ]}
-              picked={form.roleId ?? "none"}
-              onPick={(id) => put({ roleId: id === "none" ? null : id })}
-            />
+            <RolePick automation={automation} roleId={form.roleId} onPick={(roleId) => put({ roleId })} />
           </Part>
 
           <div className="trigcard__mach">

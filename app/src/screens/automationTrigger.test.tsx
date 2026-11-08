@@ -39,6 +39,7 @@ vi.mock("../core/dialog", () => ({ confirmDialog: hoisted.confirm }));
 import { dueLabel, errText, t, tf } from "../core/i18n";
 import { filterValueLabel } from "./automationParts";
 import { AutomationTrigger, formOf, inputOf, joinFilter, nowThen, splitFilter } from "./AutomationTrigger";
+import { RoleIcon } from "./AutomationRoles";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -320,7 +321,7 @@ describe("the card", () => {
     await type(box(t("auto.trigger.minutes")), "1440");
     await type(box(t("auto.trigger.taskTitle")), "Check the reports");
     await type(box(t("auto.trigger.taskNotes")), "Read the new ones.");
-    await press(buttonNamed("Alice"));
+    await pick(t("auto.trigger.role"), "1");
     await press(buttonNamed(t("auto.trigger.save")));
 
     expect(hoisted.add).toHaveBeenCalledWith(7, {
@@ -345,7 +346,46 @@ describe("the card", () => {
     expect(selectNamed(t("auto.trigger.condRolePick"))?.value).toBe("");
     expect((box(t("auto.trigger.below")) as HTMLInputElement).value).toBe("3");
     expect((box(t("auto.trigger.taskPath")) as HTMLInputElement).value).toBe("/Users/alice/next.md");
-    expect(buttonNamed("Bob")?.getAttribute("aria-pressed")).toBe("true");
+    expect(selectNamed(t("auto.trigger.role"))?.value).toBe("2");
+  });
+
+  it("picks the role from a list, the picked role's icon before it", async () => {
+    const automation = detail();
+    await draw(automation);
+    const roles = [...selectNamed(t("auto.trigger.role"))!.options].map((one) => one.textContent);
+    expect(roles).toEqual(["Alice", "Bob", t("auto.trigger.roleNone")]);
+    const row = () => selectNamed(t("auto.trigger.role"))!.parentElement!;
+    const iconOf = (name: string) => {
+      const drawn = document.createElement("div");
+      const role = automation.roles.find((one) => one.name === name)!;
+      const inner = createRoot(drawn);
+      act(() => inner.render(createElement(RoleIcon, { role, size: 16 })));
+      const html = drawn.innerHTML;
+      act(() => inner.unmount());
+      return html;
+    };
+
+    // None is picked on a new trigger: no icon, an empty space of the icon's size in its place.
+    expect(selectNamed(t("auto.trigger.role"))?.value).toBe("");
+    expect(row().querySelector(".identicon")).toBeNull();
+    expect(row().querySelector(".trigcard__noicon")).not.toBeNull();
+
+    await pick(t("auto.trigger.role"), "1");
+    expect(row().querySelector(".identicon")?.outerHTML).toBe(iconOf("Alice"));
+    expect(row().querySelector(".trigcard__noicon")).toBeNull();
+
+    await pick(t("auto.trigger.role"), "2");
+    expect(row().querySelector(".identicon")?.outerHTML).toBe(iconOf("Bob"));
+  });
+
+  it("keeps a role taken away since picked under its number, with no icon", async () => {
+    const gone: AutomationTriggerDto = { ...written, roleId: 9 };
+    await draw(detail(gone), gone);
+    const select = selectNamed(t("auto.trigger.role"))!;
+    expect(select.value).toBe("9");
+    const roles = [...select.options].map((one) => one.textContent);
+    expect(roles).toEqual(["Alice", "Bob", "9", t("auto.trigger.roleNone")]);
+    expect(select.parentElement!.querySelector(".identicon")).toBeNull();
   });
 
   it("rewrites the trigger it is opened on under its id, leaving the others", async () => {
@@ -457,7 +497,7 @@ describe("the card", () => {
 
     await type(box(t("auto.trigger.name")), "Morning check");
     await type(box(t("auto.trigger.taskTitle")), "Check the reports");
-    await press(buttonNamed("Bob"));
+    await pick(t("auto.trigger.role"), "2");
     expect(previewTitle()).toBe("Check the reports");
     expect(previewLine()).toBe(tf("auto.trigger.previewLine", { role: "Bob", trigger: "Morning check" }));
 

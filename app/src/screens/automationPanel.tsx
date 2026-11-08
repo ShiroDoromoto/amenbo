@@ -34,7 +34,7 @@ import type {
   WakeCandidateDto,
   WakeDto,
 } from "../bindings/bindings";
-import { asTyped } from "../core/keys";
+import { asTyped, isEnterSubmit } from "../core/keys";
 
 /**
  * Send a write and say whether it was taken. Every control on the panel goes through it, so a refusal
@@ -160,7 +160,7 @@ export function DeclareRow({
         autoFocus={autoFocus}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && name.trim() !== "") press();
+          if (isEnterSubmit(e) && name.trim() !== "") press();
           if (e.key === "Escape" && onCancel !== undefined) onCancel();
         }}
       />

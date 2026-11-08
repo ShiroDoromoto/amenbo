@@ -284,7 +284,7 @@ export const th: Translation = {
     "detail.notFound": "ไม่พบงาน",
     "detail.unassign": "ปลดผู้รับผิดชอบ", "detail.assignAi": "มอบให้ AI",
     "detail.assignee": "ผู้รับผิดชอบ", "detail.unassigned": "ยังไม่มอบหมาย",
-    "detail.role": "บทบาท", "detail.roleNone": "ไม่มีบทบาท (จัดการในเซสชัน)", "detail.rolePick": "เลือกหนึ่งรายการ…",
+    "detail.role": "บทบาท", "detail.roleNone": "ไม่มีบทบาท (จัดการในเซสชัน)", "detail.roleRequiredMark": "จำเป็น", "detail.roleFrom": "เลือกจากบทบาทของ {name}",
     "detail.roleRequired": "เลือกบทบาท หากไม่ให้รอบของออโตเมชันจัดการ ให้เลือก “ไม่มีบทบาท”",
     "detail.project": "โปรเจกต์", "detail.none": "ไม่มี",
     "detail.blockedBy": "กำลังรอ", "detail.blockedByHint": "ติดขัด (การพึ่งพา)",

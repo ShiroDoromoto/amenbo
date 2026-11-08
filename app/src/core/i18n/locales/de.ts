@@ -282,7 +282,7 @@ export const de: Translation = {
     "detail.notFound": "Aufgabe nicht gefunden",
     "detail.unassign": "Zuständigkeit aufheben", "detail.assignAi": "An die KI übergeben",
     "detail.assignee": "Zuständig", "detail.unassigned": "Niemand",
-    "detail.role": "Rolle", "detail.roleNone": "Keine Rolle (in einer Sitzung bearbeitet)", "detail.rolePick": "Bitte wählen…",
+    "detail.role": "Rolle", "detail.roleNone": "Keine Rolle (in einer Sitzung bearbeitet)", "detail.roleRequiredMark": "Pflichtfeld", "detail.roleFrom": "Aus den Rollen von {name} wählen",
     "detail.roleRequired": "Wähle eine Rolle. Soll keine Runde einer Automatisierung sie übernehmen, wähle „Keine Rolle“.",
     "detail.project": "Projekt", "detail.none": "Keins",
     "detail.blockedBy": "Wartet auf", "detail.blockedByHint": "blockiert (Abhängigkeit)",

@@ -302,7 +302,7 @@ const ui = {
   "detail.notFound": "Task not found",
   "detail.unassign": "Unassign", "detail.assignAi": "Delegate to AI",
   "detail.assignee": "Assignee", "detail.unassigned": "Unassigned",
-  "detail.role": "Role", "detail.roleNone": "No role (worked in a session)", "detail.rolePick": "Choose one…",
+  "detail.role": "Role", "detail.roleNone": "No role (worked in a session)", "detail.roleRequiredMark": "Required", "detail.roleFrom": "Choose from the roles of {name}",
   "detail.roleRequired": "Choose a role. If no automation round should take it, choose “No role”.",
   "detail.project": "Project", "detail.none": "None",
   "detail.blockedBy": "Waiting on", "detail.blockedByHint": "blocked (dependency)",

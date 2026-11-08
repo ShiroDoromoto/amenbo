@@ -284,7 +284,7 @@ export const id: Translation = {
     "detail.notFound": "Tugas tidak ditemukan",
     "detail.unassign": "Lepaskan penanggung jawab", "detail.assignAi": "Serahkan ke AI",
     "detail.assignee": "Penanggung jawab", "detail.unassigned": "Belum ada penanggung jawab",
-    "detail.role": "Peran", "detail.roleNone": "Tanpa peran (dikerjakan dalam sesi)", "detail.rolePick": "Pilih satu…",
+    "detail.role": "Peran", "detail.roleNone": "Tanpa peran (dikerjakan dalam sesi)", "detail.roleRequiredMark": "Wajib", "detail.roleFrom": "Pilih dari peran {name}",
     "detail.roleRequired": "Pilih peran. Jika tidak ada putaran otomasi yang menanganinya, pilih “Tanpa peran”.",
     "detail.project": "Proyek", "detail.none": "Tidak ada",
     "detail.blockedBy": "Menunggu", "detail.blockedByHint": "terhambat (ketergantungan)",

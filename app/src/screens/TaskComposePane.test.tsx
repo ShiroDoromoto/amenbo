@@ -4,7 +4,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { t } from "../core/i18n";
+import { listLabel, t, tf } from "../core/i18n";
 import type { BoundFolderDto, TaskRoleDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
@@ -76,7 +76,14 @@ function choose(select: HTMLSelectElement, value: string) {
 
 const create = () =>
   [...container.querySelectorAll<HTMLButtonElement>("button")].find((x) => x.textContent === t("compose.create"))!;
-const byLabel = (label: string) => container.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`);
+/** The role field's grid of choices, or null while it is not drawn. */
+const rolePicker = () => container.querySelector<HTMLElement>(`[role="radiogroup"][aria-label="${t("detail.role")}"]`);
+/** Each choice of the role field, as the label it is read by and whether it is checked. */
+const roleChoices = () =>
+  [...rolePicker()!.querySelectorAll<HTMLLabelElement>("label")].map((l) => ({
+    name: l.textContent, checked: l.querySelector("input")!.checked, icon: l.querySelector(".identicon") !== null,
+  }));
+const pickRole = (value: string) => rolePicker()!.querySelector<HTMLInputElement>(`input[value="${value}"]`)!.click();
 /** The assignee's button for a person or the AI. */
 const owner = (facet: "human" | "ai") =>
   [...container.querySelectorAll<HTMLButtonElement>(`[role="group"][aria-label="${t("detail.assignee")}"] button`)]
@@ -144,31 +151,44 @@ describe("the role a new task is worked under", () => {
   it("is asked for once the task is handed to the AI, and a create without it says why under the field", async () => {
     hoisted.roles = [role(11, "実装係"), role(12, "レビュー係")];
     await open();
-    expect(byLabel(t("detail.role"))).toBeNull();
+    expect(rolePicker()).toBeNull();
 
     await act(async () => { owner("ai").click(); });
-    const picker = byLabel(t("detail.role"))!;
-    expect(picker).not.toBeNull();
-    expect(picker.value).toBe("");
-    expect([...picker.options].map((o) => o.textContent)).toEqual(
-      [t("detail.rolePick"), "実装係", "レビュー係", t("detail.roleNone")],
-    );
+    expect(rolePicker()).not.toBeNull();
+    expect(roleChoices()).toEqual([
+      { name: "実装係", checked: false, icon: true },
+      { name: "レビュー係", checked: false, icon: true },
+      { name: t("detail.roleNone"), checked: false, icon: false },
+    ]);
+    const heading = container.querySelector(".rolepart__h")!.textContent;
+    expect(heading).toContain(t("detail.roleRequiredMark"));
+    expect(heading).toContain(tf("detail.roleFrom", { name: "開発" }));
 
     await act(async () => { create().click(); });
     expect(hoisted.filed).toEqual([]);
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(t("detail.roleRequired"));
 
-    act(() => choose(picker, "12"));
+    act(() => pickRole("12"));
     expect(container.querySelector('[role="alert"]')).toBeNull();
+    expect(roleChoices().map((c) => c.checked)).toEqual([false, true, false]);
     await act(async () => { create().click(); });
     expect(hoisted.handed).toEqual([{ assignee: "ai", roleId: 12 }]);
+  });
+
+  it("names every automation the roles come from, and each role with its automation", async () => {
+    hoisted.roles = [role(11, "実装係"), { ...role(21, "実装係"), automationId: 2, automationName: "保守" }];
+    await open();
+    await act(async () => { owner("ai").click(); });
+    expect(container.querySelector(".rolepart__h")!.textContent)
+      .toContain(tf("detail.roleFrom", { name: listLabel(["開発", "保守"]) }));
+    expect(roleChoices().map((c) => c.name)).toEqual(["開発 · 実装係", "保守 · 実装係", t("detail.roleNone")]);
   });
 
   it("takes no role as a choice of its own", async () => {
     hoisted.roles = [role(11, "実装係")];
     await open();
     await act(async () => { owner("ai").click(); });
-    act(() => choose(byLabel(t("detail.role"))!, "none"));
+    act(() => pickRole("none"));
     await act(async () => { create().click(); });
     expect(hoisted.handed).toEqual([{ assignee: "ai", roleId: null }]);
   });
@@ -177,14 +197,14 @@ describe("the role a new task is worked under", () => {
     hoisted.roles = [role(11, "実装係")];
     await open();
     await act(async () => { owner("human").click(); });
-    expect(byLabel(t("detail.role"))).toBeNull();
+    expect(rolePicker()).toBeNull();
 
     act(() => root.unmount());
     root = createRoot(container);
     hoisted.roles = [];
     await open();
     await act(async () => { owner("ai").click(); });
-    expect(byLabel(t("detail.role"))).toBeNull();
+    expect(rolePicker()).toBeNull();
     await act(async () => { create().click(); });
     expect(hoisted.handed).toEqual([{ assignee: "ai", roleId: null }]);
   });

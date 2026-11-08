@@ -287,7 +287,7 @@ export const ru: Translation = {
     "detail.notFound": "Задача не найдена",
     "detail.unassign": "Снять ответственного", "detail.assignAi": "Передать ИИ",
     "detail.assignee": "Ответственный", "detail.unassigned": "Без ответственного",
-    "detail.role": "Роль", "detail.roleNone": "Без роли (в сеансе)", "detail.rolePick": "Выберите…",
+    "detail.role": "Роль", "detail.roleNone": "Без роли (в сеансе)", "detail.roleRequiredMark": "Обязательно", "detail.roleFrom": "Выберите из ролей: {name}",
     "detail.roleRequired": "Выберите роль. Если ни один цикл автоматизации не должен её брать, выберите «Без роли».",
     "detail.project": "Проект", "detail.none": "Нет",
     "detail.blockedBy": "Ждёт", "detail.blockedByHint": "заблокировано (зависимость)",

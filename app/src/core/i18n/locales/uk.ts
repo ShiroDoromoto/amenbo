@@ -287,7 +287,7 @@ export const uk: Translation = {
     "detail.notFound": "Завдання не знайдено",
     "detail.unassign": "Зняти відповідального", "detail.assignAi": "Передати ШІ",
     "detail.assignee": "Відповідальний", "detail.unassigned": "Без відповідального",
-    "detail.role": "Роль", "detail.roleNone": "Без ролі (у сеансі)", "detail.rolePick": "Виберіть…",
+    "detail.role": "Роль", "detail.roleNone": "Без ролі (у сеансі)", "detail.roleRequiredMark": "Обов’язково", "detail.roleFrom": "Виберіть із ролей: {name}",
     "detail.roleRequired": "Виберіть роль. Якщо жоден цикл автоматизації не має її брати, виберіть «Без ролі».",
     "detail.project": "Проєкт", "detail.none": "Немає",
     "detail.blockedBy": "Чекає на", "detail.blockedByHint": "заблоковано (залежність)",

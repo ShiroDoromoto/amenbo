@@ -282,7 +282,7 @@ export const nl: Translation = {
     "detail.notFound": "Taak niet gevonden",
     "detail.unassign": "Toewijzing opheffen", "detail.assignAi": "Aan AI overdragen",
     "detail.assignee": "Verantwoordelijke", "detail.unassigned": "Niet toegewezen",
-    "detail.role": "Rol", "detail.roleNone": "Geen rol (in een sessie behandeld)", "detail.rolePick": "Kies er een…",
+    "detail.role": "Rol", "detail.roleNone": "Geen rol (in een sessie behandeld)", "detail.roleRequiredMark": "Verplicht", "detail.roleFrom": "Kies uit de rollen van {name}",
     "detail.roleRequired": "Kies een rol. Moet geen ronde van een automatisering hem oppakken, kies dan ‘Geen rol’.",
     "detail.project": "Project", "detail.none": "Geen",
     "detail.blockedBy": "Wacht op", "detail.blockedByHint": "geblokkeerd (afhankelijkheid)",

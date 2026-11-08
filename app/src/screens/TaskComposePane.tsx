@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useStore } from "../store/store";
 import { DateField } from "../components/atoms";
 import { parseSchedule } from "../core/calendar";
-import { t } from "../core/i18n";
+import { listLabel, t, tf } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { useSingleFlight } from "../core/singleFlight";
 import { useBoundFolders } from "../core/boundFolders";
@@ -49,6 +49,8 @@ export function TaskComposePane({
   // rather than greying the button, so the press is answered.
   const roles = useProjectRoles(projectId);
   const askingRole = assignee === "ai" && roles.length > 0;
+  // The automations the roles come from, named in the heading — one as a rule, several run together.
+  const roleSources = [...new Set(roles.map((r) => r.automationName))];
   const [role, setRole] = useState("");
   const [roleMissing, setRoleMissing] = useState(false);
   const pickAssignee = (next: Facet) => { setAssignee(next); setRole(""); setRoleMissing(false); };
@@ -135,13 +137,15 @@ export function TaskComposePane({
           </span>
         </div>
         {askingRole && (
-          <>
-            <div className="detail__field">
-              <span className="detail__flabel">{t("detail.role")}</span>
-              <RoleField roles={roles} value={role} onChange={(v) => { setRole(v); setRoleMissing(false); }} />
+          <div className="rolepart">
+            <div className="rolepart__h">
+              <h3 className="rolepart__title">{t("detail.role")}</h3>
+              <span className="rolepart__req">{t("detail.roleRequiredMark")}</span>
+              <span className="rolepart__hint">{tf("detail.roleFrom", { name: listLabel(roleSources) })}</span>
             </div>
+            <RoleField roles={roles} value={role} onChange={(v) => { setRole(v); setRoleMissing(false); }} />
             {roleMissing && role === "" && <ErrorNote>{t("detail.roleRequired")}</ErrorNote>}
-          </>
+          </div>
         )}
         {choosing && (
           <div className="detail__field">

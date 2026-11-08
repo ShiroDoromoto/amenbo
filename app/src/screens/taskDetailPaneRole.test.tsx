@@ -34,7 +34,12 @@ let container: HTMLDivElement;
 let root: Root;
 
 const role = (id: number, name: string): TaskRoleDto => ({ id, name, icon: null, automationId: 1, automationName: "開発" });
-const roleField = () => container.querySelector<HTMLSelectElement>(`select[aria-label="${t("detail.role")}"]`);
+const roleField = () => container.querySelector<HTMLElement>(`[role="radiogroup"][aria-label="${t("detail.role")}"]`);
+/** The field's choices, each as its value and whether it is checked. */
+const choices = () =>
+  [...roleField()!.querySelectorAll<HTMLInputElement>('input[type="radio"]')].map((i) => ({
+    name: i.closest("label")!.textContent, value: i.value, checked: i.checked,
+  }));
 
 async function settle() {
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
@@ -69,14 +74,15 @@ afterEach(() => {
 describe("TaskDetailPane role field", () => {
   it("offers the project's roles and no role for a task the AI holds, and writes the choice", async () => {
     const id = await open("ai");
-    const field = roleField()!;
-    expect(field).not.toBeNull();
-    expect([...field.options].map((o) => o.textContent)).toEqual(["実装係", "レビュー係", t("detail.roleNone")]);
-    expect(field.value).toBe("none"); // A task with no role is one worked in a session
+    expect(roleField()).not.toBeNull();
+    expect(choices()).toEqual([
+      { name: "実装係", value: "11", checked: false },
+      { name: "レビュー係", value: "12", checked: false },
+      { name: t("detail.roleNone"), value: "none", checked: true }, // A task with no role is one worked in a session
+    ]);
 
     await act(async () => {
-      field.value = "12";
-      field.dispatchEvent(new Event("change", { bubbles: true }));
+      roleField()!.querySelector<HTMLInputElement>('input[value="12"]')!.click();
     });
     expect(hoisted.asked).toEqual([`${id}:12`]);
   });

@@ -22,7 +22,7 @@ use rusqlite::types::Value;
 use crate::model::{
     ActorKind, Attachment, Automation, AutomationAction, AutomationActionVersion, AutomationCfg,
     AutomationEdge, AutomationExit, AutomationPlacement, AutomationPlacementStep, AutomationPort,
-    AutomationLaunch, AutomationRole, AutomationRun, AutomationRunDef,
+    AutomationLaunch, AutomationLaunchRole, AutomationRole, AutomationRun, AutomationRunDef,
     AutomationRunPass, AutomationRunStep, AutomationRunTask, AutomationRunValue,
     AutomationStep, AutomationTrigger, AutomationVersion, TriggerTask, TriggerWhen,
     AutomationWire, Database, Decision, DecisionComment, DecisionDimensionValue,
@@ -854,6 +854,18 @@ pub fn automation_launch(l: &AutomationLaunch) -> Record {
                 ("started_by_kind", kov(&l.started_by_kind)),
                 ("ended_at", tsov(&l.ended_at)),
             ],
+            &l.created_at,
+            &l.updated_at,
+        ),
+    )
+}
+
+pub fn automation_launch_role(l: &AutomationLaunchRole) -> Record {
+    Record::new(
+        "automation_launch_role",
+        l.id,
+        with_audit(
+            vec![("launch_id", kv(l.launch_id)), ("role_id", kv(l.role_id)), ("headcount", iv(i64::from(l.headcount)))],
             &l.created_at,
             &l.updated_at,
         ),

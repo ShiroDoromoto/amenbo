@@ -87,6 +87,12 @@ pub enum Opened {
     /// ended here, completed with the step never opened, and its automation waits for a task in its
     /// place ([`super::automation_run::wait_for_a_task`]).
     LeftToWait { run: AutomationRun },
+    /// **The step takes a task, and the run's seat is one still to go** — the headcount of its role was
+    /// lowered on the launch below the runs under way in it
+    /// ([`super::automation_run::over_headcount`]). The run ended here, completed with the step never
+    /// opened and no task taken, so the seat goes as its run finishes a task and none under way is
+    /// stopped.
+    LetGo { run: AutomationRun },
     /// **The step is the first of an action that takes one run at a time, and the action is not free**
     /// — another run is inside it, or came to it first and goes in before this one
     /// ([`super::automation_run::room_for`]). Nothing was written, so the run still stands before this
@@ -259,6 +265,16 @@ fn open_as(
     {
         let run = super::automation_stop::settle(tx, run, AutomationPauseKind::BeforeNextTask)?.run;
         return Ok(Opened::Waiting { run });
+    }
+    // **A seat still to go is let go here, before the run takes its next task**, so the seats go in the
+    // order their runs finish a task and no task under way is stopped. Nothing is recorded of it: a
+    // headcount raised again before then leaves the run in its seat.
+    if !rehearsing
+        && super::automation_stop::takes_a_task(&def)
+        && super::automation_run::over_headcount(conn, &run)?
+    {
+        let ended = super::automation_stop::ended(tx, run, super::automation_stop::Ending::Completed)?;
+        return Ok(Opened::LetGo { run: ended.run });
     }
 
     // **The first step the run opens reads what was handed over at launch** (`AMB-D-970`), and no step
@@ -1188,7 +1204,7 @@ mod tests {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
-            Opened::Carried { .. } | Opened::Waiting { .. } | Opened::LeftToWait { .. } | Opened::Holding { .. } => panic!("not a built-in"),
+            Opened::Carried { .. } | Opened::Waiting { .. } | Opened::LeftToWait { .. } | Opened::LetGo { .. } | Opened::Holding { .. } => panic!("not a built-in"),
             Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             Opened::Script(_) => panic!("not a script"),
             Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
@@ -1721,7 +1737,7 @@ mod tests {
                     );
                 }
                 Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
-                Opened::Carried { .. } | Opened::Waiting { .. } | Opened::LeftToWait { .. } | Opened::Holding { .. } => panic!("not a built-in"),
+                Opened::Carried { .. } | Opened::Waiting { .. } | Opened::LeftToWait { .. } | Opened::LetGo { .. } | Opened::Holding { .. } => panic!("not a built-in"),
                 Opened::LeftTaskOpen { .. } => panic!("left a task open"),
                 Opened::Script(_) => panic!("not a script"),
                 Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
@@ -1749,7 +1765,7 @@ mod tests {
             let here = ["codex".to_string()];
             match open(tx, run.id, def_of(tx, &run, &p.first).id, Some(&here)).expect("open") {
                 Opened::Ready(_) => panic!("nothing here can start claude"),
-                Opened::Carried { .. } | Opened::Waiting { .. } | Opened::LeftToWait { .. } | Opened::Holding { .. } => panic!("not a built-in"),
+                Opened::Carried { .. } | Opened::Waiting { .. } | Opened::LeftToWait { .. } | Opened::LetGo { .. } | Opened::Holding { .. } => panic!("not a built-in"),
                 Opened::LeftTaskOpen { .. } => panic!("left a task open"),
                 Opened::Script(_) => panic!("not a script"),
                 Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),

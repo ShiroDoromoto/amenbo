@@ -976,6 +976,15 @@ impl Store {
         crate::ops::automation_run::task_wait(self.engine.conn(), automation_id)
     }
 
+    /// **How many are in each role for one launch, beside its definition**
+    /// ([`crate::ops::automation_run::launch_headcounts`]).
+    pub fn automation_launch_headcounts(
+        &self,
+        launch_id: i64,
+    ) -> Result<Vec<crate::ops::automation_run::RoleHeadcount>> {
+        crate::ops::automation_run::launch_headcounts(self.engine.conn(), launch_id)
+    }
+
     /// **Whether a run is waiting for room** before an action that takes one run at a time, and whom it
     /// waits behind ([`crate::ops::automation_run::waits_for_room`]). `None` for a run standing before a
     /// built-in that would wait for a task, which ends there rather than wait.

@@ -36,7 +36,8 @@ use crate::model::{
     AutomationActionVersion, AutomationCfg, AutomationCfgKind, AutomationCfgOwner, AutomationEdge,
     AutomationEnds,
     AutomationExit, AutomationOwner, AutomationPictureOwner, AutomationPlacement,
-    AutomationLaunch, AutomationLaunchStatus, AutomationPauseKind, AutomationPlacementStep, AutomationRole,
+    AutomationLaunch, AutomationLaunchRole, AutomationLaunchStatus, AutomationPauseKind, AutomationPlacementStep,
+    AutomationRole,
     AutomationPort, AutomationPortDirection, AutomationPortKind,
     AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunPass, AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
@@ -827,6 +828,22 @@ pub(super) fn automation_launch_row(r: &Row) -> rusqlite::Result<AutomationLaunc
         status: enum_req(r, C.status, AutomationLaunchStatus::parse)?,
         started_by_kind: enum_opt(r, C.started_by_kind, ActorKind::parse)?,
         ended_at: ts_opt(r, C.ended_at)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn automation_launch_role_row(r: &Row) -> rusqlite::Result<AutomationLaunchRole> {
+    const C: col::automation_launch_role::Cols = col::automation_launch_role::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationLaunchRole {
+        id: get(r, C.id)?,
+        launch_id: get(r, C.launch_id)?,
+        role_id: get(r, C.role_id)?,
+        headcount: {
+            let n: i64 = get(r, C.headcount)?;
+            u32::try_from(n).map_err(|_| bad(format!("bad headcount {n}")))?
+        },
         created_at,
         updated_at,
     })

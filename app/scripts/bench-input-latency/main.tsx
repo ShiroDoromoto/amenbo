@@ -32,12 +32,12 @@ function at(i: number) {
   return { gridColumn: `${(i % 2) * 6 + 1} / span 6`, gridRow: `${Math.floor(i / 2) + 1} / span 1` };
 }
 
-/** Whether every pane has its box, and every roles pane its roles with the round's card in them. */
+/** Whether every pane has its box, and every roles pane its roles with the desk of the round in them. */
 function drawn(): boolean {
   if (document.querySelectorAll(".compose__box").length < PANES) return false;
   if (!ROLES) return true;
   return document.querySelectorAll(".runroles").length === PANES
-    && document.querySelectorAll(".runroles .runroles__card").length === PANES;
+    && document.querySelectorAll(".runroles .runroles__desk").length === PANES;
 }
 
 function Page() {

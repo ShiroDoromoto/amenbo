@@ -2083,6 +2083,11 @@ fn run_card(
     let exit_name = last_def.as_ref().and_then(|def| left_by(def, steps.last()?.exit_id));
     let builtin = last_def.as_ref().and_then(|def| def.builtin.clone());
     let placement = last_def.as_ref().and_then(|def| def.placement_id);
+    // Whether the step under way may wait for a person: read only of a step still open on a run still
+    // going, for a step that has left or a run that has stopped waits for nobody.
+    let interactive = run.status == amenbo_core::model::AutomationRunStatus::Running
+        && steps.last().is_some_and(|last| last.ended_at.is_none())
+        && last_def.as_ref().is_some_and(|def| def.interactive);
     let step_name = last_def.map(|def| def.name);
     // The version it goes on from: the newest copy of its entry, which a run back at its entry has
     // taken afresh before its first step is opened (`take_up_newer`).
@@ -2121,6 +2126,7 @@ fn run_card(
         stopped_reason: run.stopped_reason.map(|one| one.as_str()),
         version,
         step_name,
+        interactive,
         builtin,
         action_name,
         placement,
@@ -2130,7 +2136,7 @@ fn run_card(
         role: stretch.as_ref().and_then(|one| one.role_id),
         role_started_at: stretch.as_ref().and_then(|one| one.started_at).map(|at| at.to_rfc3339_z()),
         incident: incident_of(store, stretch.as_ref().and_then(|one| one.incident_task_id))?,
-        passes: passes_of(store, run.id)?,
+        passes: passes_of(store, run.id, stretch.as_ref().map(|one| one.id))?,
         report_withheld,
         acknowledged: run.acknowledged_at.is_some(),
         acknowledged_by: run.acknowledged_by_kind.map(|by| by.as_str()),
@@ -3140,8 +3146,13 @@ fn incident_of(
     }))
 }
 
-/// **The tasks one run's rounds passed to another role**, each with its task's reference and title.
-fn passes_of(store: &amenbo_core::Store, run_id: i64) -> Result<Vec<AutomationRunPassDto>, CmdError> {
+/// **The tasks one run's rounds passed to another role**, each with its task's reference and title, and
+/// whether the round `now` — the one the run is in now — passed it.
+fn passes_of(
+    store: &amenbo_core::Store,
+    run_id: i64,
+    now: Option<i64>,
+) -> Result<Vec<AutomationRunPassDto>, CmdError> {
     let conn = store.read_model().conn();
     let mut out = Vec::new();
     for pass in automation_run::passes_of_run(conn, run_id)? {
@@ -3156,6 +3167,7 @@ fn passes_of(store: &amenbo_core::Store, run_id: i64) -> Result<Vec<AutomationRu
             task,
             task_ref: task.map(amenbo_core::idref::task),
             task_title: title,
+            current: now == Some(pass.run_task_id),
         });
     }
     Ok(out)
@@ -3778,14 +3790,23 @@ mod tests {
             task: Some(7),
             task_ref: Some("AMB-T-7".into()),
             task_title: Some("Add the tests".into()),
+            current: true,
         };
         assert_eq!(
             serde_json::to_value(&whole).expect("json"),
             serde_json::json!({
                 "fromRole": 1, "toRole": 2, "task": 7, "taskRef": "AMB-T-7", "taskTitle": "Add the tests",
+                "current": true,
             }),
         );
-        let gone = AutomationRunPassDto { from_role: None, to_role: Some(2), task: None, task_ref: None, task_title: None };
+        let gone = AutomationRunPassDto {
+            from_role: None,
+            to_role: Some(2),
+            task: None,
+            task_ref: None,
+            task_title: None,
+            current: false,
+        };
         assert_eq!(serde_json::to_value(&gone).expect("json"), serde_json::json!({ "toRole": 2 }));
     }
 

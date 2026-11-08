@@ -4854,7 +4854,7 @@ pub struct AutomationLaunchIncidentDto {
 
 /// **One task a round of a run passed to another role** — the role of the round that filed it, the
 /// role it was filed under, and the task ([`amenbo_core::ops::automation_run::RunPass`]). What the
-/// run's pane draws a line between two role cards by, labelled with the task's title.
+/// run's pane writes under the seat of the round that passed it, as the role it went to.
 #[derive(Serialize, TS, Clone, PartialEq)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -4880,6 +4880,10 @@ pub struct AutomationRunPassDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) task_title: Option<String>,
+    /// **Passed by the round the run is in now** — what the run's pane writes under that round's seat as
+    /// "→ role". Absent for a task an earlier round passed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) current: bool,
 }
 
 /// **One thing standing in the way of a launch**, as core named it
@@ -5026,6 +5030,12 @@ pub struct AutomationRunCardDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) step_name: Option<String>,
+    /// **The step under way now may stop and wait for a person**, as the run's copy of it says
+    /// (`automation_action_step.interactive`) — what the run's pane marks the seat by. Whether it is
+    /// waiting is not read (`AMB-D-858`). Absent where the run is not running, where its last step has
+    /// ended, and where that step says no such thing.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) interactive: bool,
     /// **The built-in that step is**, by its key (`AMB-D-964`) — what the row turns its words into the
     /// screen's language by. Absent for an agent's step, and before the first step has opened.
     #[serde(skip_serializing_if = "Option::is_none")]

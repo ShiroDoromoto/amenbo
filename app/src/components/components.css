@@ -1951,7 +1951,7 @@ button.feed__target:hover { color: var(--c-accent); }
    than one more role. */
 .rolepart {
   display: flex; flex-direction: column; gap: var(--s-2);
-  margin-top: var(--s-2); padding-top: var(--s-3); border-top: var(--border-w) solid var(--c-rule);
+  margin-top: var(--s-2); padding-top: var(--s-3); border-top: var(--border-w) var(--border-style) var(--c-rule);
 }
 .rolepart__h { display: flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap; }
 .rolepart__title { margin: 0; font-size: var(--fs-md); font-weight: var(--fw-bold); }
@@ -1961,7 +1961,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .rolepick { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
 .rolepick__one {
   display: flex; align-items: center; gap: var(--s-2); min-width: 0;
-  border: var(--border-w) solid var(--c-rule); border-radius: var(--r-sm);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
   padding: 6px 8px; font-size: var(--fs-xs); cursor: pointer; background: var(--c-surface-pic) var(--c-surface);
 }
 .rolepick__one:has(input:checked) { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); }
@@ -2665,19 +2665,17 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__markname { font-weight: var(--fw-bold); }
 .autopic__markports { color: var(--c-text); }
 .autopic__line--leaves { stroke: var(--c-accent); }
-/* **A run's pane, shown by its roles** (`../shell/RunPicture`). It is drawn over the pane's body on the
-   frame's ground, whole: the cards in a room that scrolls up and down inside it, and the bar of the
-   roles with no round under them. A card is never narrower than 150px nor shorter than 118px, and the
-   cards stand in as many columns as fit; where they do not all fit, each round is a row of a list. */
+/* **A launch's pane, shown by its roles** (`../shell/RunPicture`). It is drawn over the pane's body,
+   whole: the desks of the roles with a task in a room that scrolls up and down inside it, then the bar
+   of the roles with none. The desks stand across the whole width and wrap, none narrower than 300px. */
 .runroles {
   position: absolute; inset: 0; z-index: 1;
-  container: runroles / inline-size;
   display: flex; flex-direction: column;
-  background: var(--c-pane-frame);
+  background: var(--c-surface-pic) var(--c-surface);
 }
 /* The room and, laid over its top and bottom edges, the notices of a round needing a person out of sight. */
 .runroles__view { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.runroles__room { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: var(--s-2); }
+.runroles__room { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 12px; background: var(--c-sunken); }
 .runroles__unseen {
   position: absolute; left: 50%; transform: translateX(-50%); z-index: 3;
   max-width: calc(100% - 16px); padding: 1px 10px; border: 1px solid var(--c-human); border-radius: 999px;
@@ -2688,160 +2686,144 @@ button.feed__target:hover { color: var(--c-accent); }
 .runroles__unseen[data-edge="bottom"] { bottom: 6px; }
 .runroles__unseen[data-stop] { border-color: var(--c-stop); color: var(--c-stop); }
 .runroles__unseen:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
-/* The cards, and over them the lines between two of them: a hand-on, or where a failure was filed. */
-.runroles__desk { position: relative; }
-.runroles__strokes { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-.runroles__strokes path { fill: none; stroke: var(--c-text-muted); stroke-width: 1.5; }
-.runroles__strokes g[data-filed] path { stroke: var(--c-stop); stroke-dasharray: 4 3; }
-.runroles__cards {
+.runroles__desks {
   list-style: none; margin: 0; padding: 0;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s-2);
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; align-items: start;
 }
-.runroles__card {
-  position: relative;
-  min-width: 0; min-height: 118px; box-sizing: border-box;
-  display: flex; flex-direction: column; gap: 2px;
-  padding: var(--s-2);
+/* One role with a task. A seat that may wait for a person draws its border in the person's colour,
+   twice as heavy — inset, so nothing moves; one whose terminal has gone quiet, in the heed colour. A
+   role that takes no new task is dashed. */
+.runroles__desk {
+  min-width: 0; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px;
   border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-md);
   background: var(--c-surface-pic) var(--c-surface);
 }
-/* The press that opens a round's terminal, laid over the whole of its card or its row. */
-.runroles__open {
-  position: absolute; inset: 0; z-index: 1;
-  padding: 0; border: 0; border-radius: inherit; background: transparent; cursor: pointer;
+.runroles__desk[data-state="asks"] { border-color: var(--c-human); box-shadow: 0 0 0 1px var(--c-human) inset; }
+.runroles__desk[data-state="stall"] { border-color: var(--c-heed); }
+.runroles__desk[data-held] { border-style: dashed; }
+/* The head, on one line within the desk whatever the width. The count gives up its room first, down to
+   its leading figure and an ellipsis ("2 /…"); its shrink factor dwarfs the chip's, so the "stops after the
+   task" chip keeps its whole wording and gives way only once the count can shrink no further, never the
+   name, the squares or the "⋯", which stay inside the desk. */
+.runroles__head { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; }
+.runroles__head > .identicon { flex: none; }
+.runroles__name { flex: none; font-weight: var(--fw-bold); white-space: nowrap; }
+.runroles__held {
+  flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 0 8px; border-radius: 999px; line-height: 20px;
+  background: var(--c-heed-weak); color: var(--c-heed); font-size: var(--fs-xs); white-space: nowrap;
 }
-.runroles__open:hover { background: color-mix(in srgb, var(--c-accent) 6%, transparent); }
-.runroles__open:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
-.runroles__card[data-state="asks"] { border-color: var(--c-human); }
-.runroles__card[data-state="failed"] { border-color: var(--c-stop); }
-/* A round whose terminal has gone quiet (`../shell/RunPicture`): past the first stage the border takes
-   the heed colour; past the second, the border is drawn twice as heavy — inset, so nothing moves — and
-   the ground takes the stop colour. */
-.runroles__card[data-quiet="1"] { border-color: var(--c-heed); }
-.runroles__card[data-quiet="2"] {
-  border-color: var(--c-stop); box-shadow: 0 0 0 1px var(--c-stop) inset; background: var(--c-stop-weak);
+.runroles__staff {
+  flex: 0 1000 auto; margin-inline-start: auto; min-width: 2.5em;
+  font-size: var(--fs-xs); color: var(--c-text-muted); font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.runroles__top { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
-.runroles__top > .icon { flex: none; }
-.runroles__name { font-weight: var(--fw-bold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* The dot on a card whose round is under way: the one thing in the pane that moves. It stays lit,
-   still, where the reader asks for less motion. */
+/* A square per seat: filled in the accent where it is at work, in the person's colour where it may
+   wait for one, in the heed colour where its terminal has gone quiet, framed in the stop colour where its
+   round failed, and left empty where it is free, paused or waiting. */
+.runroles__squares { flex: none; display: inline-flex; gap: 3px; margin-inline-start: -6px; }
+.runroles__squares > i { width: 8px; height: 8px; box-sizing: border-box; border-radius: 2px; border: 1px solid var(--c-edge); }
+.runroles__squares > i[data-state="on"] { background: var(--c-accent); border-color: var(--c-accent); }
+.runroles__squares > i[data-state="asks"] { background: var(--c-human); border-color: var(--c-human); }
+.runroles__squares > i[data-state="stall"] { background: var(--c-heed); border-color: var(--c-heed); }
+.runroles__squares > i[data-state="failed"] { border-color: var(--c-stop); }
+.runroles__more {
+  flex: none; width: 28px; height: 28px; padding: 0;
+  display: grid; place-items: center;
+  border: 1px solid transparent; border-radius: var(--r-sm); background: none; color: var(--c-text-muted); cursor: pointer;
+}
+.runroles__more > svg { width: 16px; height: 16px; }
+.runroles__more:hover { background: var(--c-hover); color: var(--c-text); }
+.runroles__more:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+/* The dot on a seat at work: the one thing in the pane that moves. It stays lit, still, where the
+   reader asks for less motion. */
 .runroles__pulse {
-  flex: none; margin-left: auto;
+  flex: none; display: inline-block; margin-left: 6px; vertical-align: middle;
   width: 7px; height: 7px; border-radius: 50%;
   background: var(--c-accent);
   animation: runroles-pulse 2.4s ease-in-out infinite;
 }
 @keyframes runroles-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) { .runroles__pulse { animation: none; } }
-.runroles__task {
-  font-size: var(--fs-xs);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-}
-.runroles__step { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.runroles__foot { margin-top: auto; display: flex; align-items: center; gap: var(--s-1); min-width: 0; overflow: hidden; }
-.runroles__time { flex: none; font-size: var(--fs-xs); color: var(--c-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.runroles__chip {
-  flex: none; padding: 0 var(--s-1); border-radius: var(--r-sm);
-  font-size: var(--fs-xs); white-space: nowrap;
-  border: var(--border-w) var(--border-style) var(--c-rule); color: var(--c-text-muted);
-}
-.runroles__chip[data-state="asks"] { border-color: var(--c-human); color: var(--c-human); }
-.runroles__chip[data-state="failed"] { border-color: var(--c-stop); color: var(--c-stop); }
-/* The clock on a quiet round, in the colour of the stage it is at. */
-.runroles__quiet { display: inline-flex; align-items: center; gap: 2px; font-variant-numeric: tabular-nums; }
-.runroles__quiet[data-quiet="1"] { border-color: var(--c-heed); color: var(--c-heed); background: var(--c-heed-weak); }
-.runroles__quiet[data-quiet="2"] { border-color: var(--c-stop); color: var(--c-on-stop); background: var(--c-stop); }
-/* "→ role": the other end of a line whose role has no card. Cut where a narrow card runs out. */
-.runroles__hand { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-/* A round as a row of the list: the role, what it is on, and what its card says at its foot, on one
-   line. A row that waits for a person or failed is marked at its left edge in the colour its card's
-   border is drawn in. */
-.runroles__rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.runroles__row {
-  position: relative;
-  min-width: 0; min-height: 40px; box-sizing: border-box;
-  display: grid; grid-template-columns: auto minmax(0, 7rem) minmax(0, 1fr) auto; align-items: center; gap: var(--s-2);
-  padding: var(--s-1) var(--s-2);
-  border-bottom: var(--border-w) var(--border-style) var(--c-rule);
-}
-.runroles__row[data-state="asks"] { box-shadow: 3px 0 0 var(--c-human) inset; }
-.runroles__row[data-state="failed"] { box-shadow: 3px 0 0 var(--c-stop) inset; }
-.runroles__row[data-quiet="1"] { box-shadow: 3px 0 0 var(--c-heed) inset; }
-.runroles__row[data-quiet="2"] { box-shadow: 3px 0 0 var(--c-stop) inset; background: var(--c-stop-weak); }
-.runroles__rowname { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.runroles__rowbody { min-width: 0; display: flex; flex-direction: column; }
-.runroles__rowbody > .runroles__task { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.runroles__rowend { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
-/* "→ role" under the role's name, where the row is too narrow to say it at its end. */
-.runroles__to { display: none; margin-inline-start: var(--s-1); font-size: var(--fs-xs); color: var(--c-text-muted); }
-/* A narrow list puts a row on two lines: the role over what it is on, and the end beside both. */
-@container runroles (max-width: 380px) {
-  .runroles__row { grid-template-columns: auto minmax(0, 1fr) auto; row-gap: 0; }
-  .runroles__row > .icon { grid-row: 1 / span 2; }
-  .runroles__rowname { grid-column: 2; grid-row: 1; }
-  .runroles__rowbody { grid-column: 2; grid-row: 2; }
-  .runroles__rowend { grid-column: 3; grid-row: 1 / span 2; flex-direction: column; align-items: flex-end; gap: 2px; }
-  .runroles__rowend > .runroles__hand { display: none; }
-  .runroles__to { display: inline; }
-}
-.runroles__none { margin: 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
-/* **The seats of a launch** (`../shell/RunPicture`), under the room: each role with someone in a seat,
-   and a row per seat pressed for its terminal. The room keeps the most of the pane; the seats scroll
-   inside themselves past half of it. */
-.runseats {
-  flex: none; max-height: 50%; overflow-y: auto;
-  display: flex; flex-direction: column; gap: var(--s-2);
-  padding: var(--s-2);
-  border-top: var(--border-w) var(--border-style) var(--c-rule);
-}
-.runseats__head { display: flex; align-items: center; gap: var(--s-1); margin: 0 0 var(--s-1); font-size: var(--fs-xs); font-weight: var(--fw-bold); }
-.runseats__head > .icon { flex: none; }
-.runseats__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.runseats__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s-1); }
+/* The seats of a role: a row per seat at work, pressed for its terminal, with a band at its left edge
+   in the colour of how it stands; the free seats as one dashed row that cannot be pressed. */
+.runroles__seats { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
 .runseat {
   position: relative; width: 100%; box-sizing: border-box;
-  display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: var(--s-2); align-items: start;
-  padding: var(--s-1) var(--s-2);
+  display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: start;
+  padding: 6px 8px;
   border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
-  background: var(--c-surface-pic) var(--c-surface); color: var(--c-text); font: inherit; text-align: left; cursor: pointer;
+  background: var(--c-bg); color: var(--c-text); font: inherit; text-align: left;
 }
-.runseat:hover { background: var(--c-accent-faint); }
+button.runseat { cursor: pointer; }
+button.runseat:hover { background: var(--c-hover); }
+button.runseat:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 .runseat::before {
   content: ""; position: absolute; left: -1px; top: -1px; bottom: -1px; width: 3px;
   border-radius: var(--r-sm) 0 0 var(--r-sm); background: var(--c-accent);
 }
-.runseat[data-state="asks"] { border-color: var(--c-human); }
+.runseat[data-state="asks"] { border-color: var(--c-human); background: color-mix(in srgb, var(--c-human) 12%, var(--c-surface)); }
 .runseat[data-state="asks"]::before { background: var(--c-human); }
-.runseat:is([data-state="paused"], [data-state="waiting"]) { border-color: var(--c-heed); }
-.runseat:is([data-state="paused"], [data-state="waiting"])::before { background: var(--c-heed); }
-.runseat[data-state="failed"] { border-color: var(--c-stop); }
-.runseat[data-state="failed"]::before { background: var(--c-stop); }
-.runseat--free { grid-template-columns: 22px minmax(0, 1fr); border-style: dashed; background: transparent; color: var(--c-text-muted); cursor: default; }
-.runseat--free:hover { background: transparent; }
+.runseat:is([data-state="paused"], [data-state="waiting"], [data-quiet="1"]) { border-color: var(--c-heed); }
+.runseat:is([data-state="paused"], [data-state="waiting"], [data-quiet="1"])::before { background: var(--c-heed); }
+.runseat:is([data-state="failed"], [data-quiet="2"]) { border-color: var(--c-stop); }
+.runseat:is([data-state="failed"], [data-quiet="2"])::before { background: var(--c-stop); }
+.runseat--free { grid-template-columns: 22px minmax(0, 1fr); border-style: dashed; background: transparent; color: var(--c-text-faint); }
 .runseat--free::before { display: none; }
 .runseat__n {
   width: 22px; height: 22px; box-sizing: border-box; border-radius: 50%;
   display: grid; place-items: center;
-  border: var(--border-w) var(--border-style) var(--c-rule);
+  border: var(--border-w) var(--border-style) var(--c-rule); background: var(--c-sunken);
   font-size: var(--fs-xs); color: var(--c-text-muted); font-variant-numeric: tabular-nums;
 }
 .runseat__body { min-width: 0; display: flex; flex-direction: column; }
-.runseat__task { font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runseat__task { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .runseat__step { font-size: var(--fs-xs); color: var(--c-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runseat__hand { font-size: var(--fs-xs); color: var(--c-accent-text); }
+.runseat__last { font-size: var(--fs-xs); color: var(--c-heed); }
 .runseat__end { display: inline-flex; align-items: center; gap: 6px; }
-.runseat__end > .runroles__pulse { margin-left: 0; }
-/* The roles with no round: their icons alone, in one line that scrolls sideways inside the bar. */
+.runseat__time { font-size: var(--fs-xs); color: var(--c-text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* What a seat says where its time would be: in the person's colour, filled, where it may wait for one;
+   that it failed; and the clock of a quiet terminal, in the colour of the stage it is at. */
+.runseat__chip {
+  display: inline-flex; align-items: center; gap: 2px; padding: 0 8px; border-radius: 999px; line-height: 20px;
+  font-size: var(--fs-xs); white-space: nowrap; font-variant-numeric: tabular-nums;
+  border: var(--border-w) var(--border-style) var(--c-rule); color: var(--c-text-muted);
+}
+.runseat__chip[data-state="asks"] { border-color: var(--c-human); background: var(--c-human); color: var(--c-surface); }
+.runseat__chip[data-state="failed"] { border-color: var(--c-stop); color: var(--c-stop); }
+.runseat__chip[data-quiet="1"] { border-color: var(--c-heed); color: var(--c-heed); background: var(--c-heed-weak); }
+.runseat__chip[data-quiet="2"] { border-color: var(--c-stop); color: var(--c-on-stop); background: var(--c-stop); }
+/* The tasks waiting for the role, under its seats: how many, and the first three on a line each. */
+.runroles__stack { display: flex; flex-direction: column; gap: 2px; padding-top: 6px; border-top: 1px dashed var(--c-rule); }
+.runroles__stackhead { display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--c-text-muted); }
+.runroles__stackhead b { color: var(--c-text); font-variant-numeric: tabular-nums; }
+.runroles__waiting {
+  padding-left: 4px; font-size: var(--fs-xs); color: var(--c-text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.runroles__waiting[data-from] { color: var(--c-accent-text); }
+/* Two sheets, one over the other: what the count of tasks waiting is drawn beside. */
+.runroles__sheets { position: relative; flex: none; width: 14px; height: 12px; }
+.runroles__sheets::before, .runroles__sheets::after {
+  content: ""; position: absolute; width: 11px; height: 9px; box-sizing: border-box;
+  border: 1px solid var(--c-edge); border-radius: 1px; background: var(--c-surface);
+}
+.runroles__sheets::before { left: 3px; top: 0; }
+.runroles__sheets::after { left: 0; top: 3px; }
+.runroles__none { margin: 0; font-size: var(--fs-xs); color: var(--c-text-muted); }
+/* The roles with no task: each by its icon, its name and its headcount, wrapping onto more lines. */
 .runroles__idle {
-  flex: none; display: flex; align-items: center; gap: var(--s-2);
-  padding: var(--s-1) var(--s-2);
+  flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+  padding: 8px 12px;
   border-top: var(--border-w) var(--border-style) var(--c-rule);
-  overflow-x: auto; white-space: nowrap;
+  background: var(--c-surface-pic) var(--c-surface);
   font-size: var(--fs-xs); color: var(--c-text-muted);
 }
-.runroles__idlecount { flex: none; }
-.runroles__idlelist { flex: none; display: flex; gap: var(--s-1); list-style: none; margin: 0; padding: 0; }
-.runroles__idlelist > li { flex: none; display: flex; }
+.runroles__idleone { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px dashed var(--c-rule); border-radius: var(--r-sm); }
+.runroles__idleone > .identicon { flex: none; opacity: .6; }
+.runroles__idlecountone { font-variant-numeric: tabular-nums; }
 /* The line under the pane for a failed round that was filed as a task: one line, cut where it runs out. */
 .runroles__filed {
   flex: none; margin: 0; padding: var(--s-1) var(--s-2);

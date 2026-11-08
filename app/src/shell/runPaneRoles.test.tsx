@@ -8,18 +8,18 @@
 // so the program in it is not ended by looking away. An ordinary pane has no roles and no control for
 // them.
 //
-// **A role with a round is a card, and the rest are icons on the bar** — the cards in the order the
-// roles are defined in, whatever the round is doing. **A card draws a line only to a role it touches**,
-// and where that role has no card it says "→ role" instead. **Where the cards do not all fit in the
-// room, each round is a row of a list**, unless the reader holds the room to one or the other.
+// **A role with a task is a desk, and the rest are on the bar** — the desks in the order the roles are
+// defined in, whatever their seats are doing. A desk's head says the role, how many seats are at work
+// out of its headcount and a square per seat; under it a row per seat at work, the free seats as one
+// row, and the tasks waiting for it. There is no choice between cards and a list.
 //
 // **A round that needs a person, out of sight in the room, is named at the room's edge**, and the
 // notice scrolls the room to it when pressed — never by itself. It is read again as the room scrolls.
 //
-// **A card or a row is pressed to read its round's terminal**, and **a seat of a launch's pane is
-// pressed to read that seat's**, in the same pane. The terminal has a bar over it: the way back to the
-// roles — the only way, the row above has no control for it — the role, the seat, the task, the step,
-// how long it has run, and — where a step turned the pane — why. It names no other seat.
+// **A seat is pressed to read its round's terminal**, in the same pane. The terminal has a bar over
+// it: the way back to the roles — the only way, the row above has no control for it — the role, the
+// seat, the task, the step, how long it has run, and — where a step turned the pane — why. It names no
+// other seat.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,8 +29,7 @@ import type { BuiltinRun } from "../talk/automationStep";
 import { TerminalPane } from "./TerminalPane";
 import { t, tf } from "../core/i18n";
 import {
-  attnOf, cardsFit, filedLine, fitOf, handsAway, handsOf, noticeOf, roleCards, seatOf, seatStateOf, seatsOf, silenceOf, unseenOf,
-  type RoleCard,
+  attnOf, desksOf, filedLine, minutesOf, noticeOf, runDesks, seatOf, seatStateOf, silenceOf, unseenOf,
 } from "./RunPicture";
 import { showTerminalOf } from "./runFaces";
 
@@ -145,14 +144,14 @@ async function pane(
 const shown = () => container.querySelector(".runroles");
 /** The face the pane is turned to: the roles while they are drawn, and the terminal otherwise. */
 const pressed = () => (shown() === null ? "terminal" : "roles");
-/** Turn the pane to the terminal, as a reader does: the first card or row pressed. */
-const toTerminal = () => container.querySelector<HTMLButtonElement>(".runroles__open")!.click();
+/** Turn the pane to the terminal, as a reader does: the first seat pressed. */
+const toTerminal = () => container.querySelector<HTMLButtonElement>("button.runseat")!.click();
 /** Turn the pane back to the roles, as a reader does: the way back on the bar over the terminal. */
 const toRoles = () => container.querySelector<HTMLButtonElement>(".runterm__back")!.click();
-const cards = () => [...container.querySelectorAll<HTMLElement>(".runroles__card")];
-const idle = () => [...container.querySelectorAll<HTMLElement>(".runroles__idlelist > li")];
-const views = () => [...container.querySelectorAll<HTMLButtonElement>(".slot__view")];
-const rows = () => [...container.querySelectorAll<HTMLElement>(".runroles__row")];
+const desks = () => [...container.querySelectorAll<HTMLElement>(".runroles__desk")];
+const idle = () => [...container.querySelectorAll<HTMLElement>(".runroles__idleone")];
+/** The seats at work, as rows pressed for their terminal. */
+const seats = () => [...container.querySelectorAll<HTMLButtonElement>("button.runseat")];
 
 describe("the face a run's pane is turned to", () => {
   it("opens on the roles, with the terminal face kept behind them", async () => {
@@ -242,145 +241,255 @@ describe("a step that may wait for a person", () => {
   });
 });
 
-/// A role with a round is a card, and the rest are icons on the bar.
-describe("the roles of a run", () => {
-  const RUNNING: Say = {
+/// A role with a task is a desk, and the rest are on the bar.
+describe("the desks of a launch", () => {
+  const FRONT: Say = {
     ...FAILED,
-    run: 41,
+    run: 31,
     step: "write the tests",
     task: { ref: "AMB-T-7", title: "Fix the search filter", seq: 1 },
     round: { role: 12, startedAt: Date.now() - 65_000 },
     state: { ...FAILED.state!, status: "running", word: "Running" },
   };
-
-  it("draws the role with a round as a card, and the rest on the bar, in the order they are defined in", async () => {
-    roles = [role(11, "Alice"), role(12, "Bob", 3, "robot"), role(13, "Carol"), role(21, "Elsewhere", 9)];
-    await pane(RUNNING);
-    expect(cards().map((one) => one.dataset.role)).toEqual(["12"]);
-    const card = cards()[0]!;
-    expect(card.querySelector(".runroles__name")?.textContent).toBe("Bob");
-    expect(card.querySelector("[data-icon]")?.getAttribute("data-icon")).toBe("robot");
-    expect(card.querySelector(".runroles__task")?.textContent).toBe("AMB-T-7 Fix the search filter");
-    expect(card.querySelector(".runroles__step")?.textContent).toBe("write the tests");
-    expect(card.querySelector(".runroles__time")?.textContent).toMatch(/1:0\d/);
-    expect(card.querySelector(".runroles__pulse")?.getAttribute("aria-label")).toBe(t("auto.run.roles.working"));
-    // Another automation's role is not this run's.
-    expect(idle().map((one) => one.dataset.role)).toEqual(["11", "13"]);
-    expect(idle()[0]!.querySelector("[aria-label]")?.getAttribute("aria-label")).toBe(tf("auto.run.roles.idleOne", { name: "Alice" }));
-    expect(container.querySelector(".runroles__idlecount")?.textContent).toBe(tf("auto.run.roles.idle", { n: 2 }));
+  const started = new Date(Date.now() - 65_000).toISOString();
+  const task = (id: number, title: string) => ({ id, ref: `AMB-T-${id}`, title, seq: 1 });
+  const waiting = (id: number, title: string, fromRole?: number) => ({
+    task: id, taskRef: `AMB-T-${id}`, title, ...(fromRole === undefined ? {} : { fromRole }),
   });
 
-  it("says a round that may wait for a person, and one that failed, on its card, and moves the dot of neither", async () => {
-    roles = [role(12, "Bob")];
-    await pane({ ...RUNNING, interactive: true, run: 42 });
-    // The pane is turned to the terminal while such a step runs; the roles are turned to by hand.
-    await act(async () => toRoles());
-    expect(cards()[0]!.dataset.state).toBe("asks");
-    expect(cards()[0]!.querySelector(".runroles__chip")?.textContent).toBe(t("auto.run.roles.asks"));
-    expect(cards()[0]!.querySelector(".runroles__pulse"), "a round that may wait has the dot").toBeNull();
+  /** A launch of four roles: the first with two at work and a seat free, the second with nobody at
+   *  work and tasks waiting, the third with nothing, and the fourth, held, with one at work. */
+  const busy = (): AutomationLaunchStateDto => launchOf([
+    {
+      ...launchRole(12, "Bob", [
+        liveRun(31, { role: 12, task: task(7, "Fix the search filter"), stepName: "write the tests", roleStartedAt: started,
+          passes: [
+            { fromRole: 12, toRole: 13, task: 8, taskRef: "AMB-T-8", taskTitle: "Review the filter", current: true },
+            { fromRole: 12, toRole: 14, task: 2, taskRef: "AMB-T-2", taskTitle: "Earlier", current: false },
+          ] }),
+        liveRun(32, { role: 12, task: task(9, "Tidy the logs"), stepName: "pick an option", interactive: true, roleStartedAt: started }),
+      ], 3),
+      icon: "seed-bob",
+    },
+    {
+      ...launchRole(13, "Carol", [], 1),
+      waiting: 5,
+      firstWaiting: [waiting(8, "Review the filter", 12), waiting(10, "Check the docs"), waiting(11, "Read the plan")],
+    },
+    launchRole(14, "山田", [], 2),
+    { ...launchRole(15, "さくら", [liveRun(33, { role: 15, task: task(20, "Draw the icon"), stepName: "sketch", roleStartedAt: started })], 2), held: true },
+  ]);
 
-    await pane({ ...RUNNING, run: 43, state: FAILED.state });
-    expect(cards()[0]!.dataset.state).toBe("failed");
-    expect(cards()[0]!.querySelector(".runroles__chip")?.textContent).toBe(t("auto.run.roles.failed"));
-    expect(cards()[0]!.querySelector(".runroles__time"), "a failed round went on counting").toBeNull();
-    expect(cards()[0]!.querySelector(".runroles__pulse"), "a failed round has the dot").toBeNull();
-    expect(container.querySelector(".runroles__filed"), "a round that filed nothing has a line").toBeNull();
-
-    await pane({ ...RUNNING, run: 44, state: { ...FAILED.state!, status: "paused", word: "Paused" } });
-    expect(cards()[0]!.dataset.state).toBe("paused");
-    expect(cards()[0]!.querySelector(".runroles__pulse"), "a paused round has the dot").toBeNull();
+  it("draws a desk per role with a task, in the order they are defined in, and the rest on the bar with their headcount", async () => {
+    launched = busy();
+    await pane(FRONT, { launch: 5 });
+    expect(desks().map((one) => one.dataset.role)).toEqual(["12", "13", "15"]);
+    expect(idle().map((one) => [one.dataset.role, one.textContent])).toEqual([
+      ["14", `山田${tf("auto.run.roles.headcount", { n: 2 })}`],
+    ]);
+    expect(idle()[0]!.querySelector("svg.identicon"), "a role on the bar is drawn by its seed").not.toBeNull();
+    expect(container.querySelector(".runroles__idlecount")?.textContent).toBe(tf("auto.run.roles.idle", { n: 1 }));
+    expect(container.querySelector(".slot__views"), "the room offers cards or a list").toBeNull();
   });
 
-  it("puts one line under the pane for a failed round that was filed", async () => {
-    roles = [role(12, "Bob"), role(14, "Dave")];
-    await pane({
-      ...RUNNING,
-      run: 45,
-      round: { role: 12, startedAt: null, incident: { ref: "AMB-T-99", role: 14, person: false } },
-      state: FAILED.state,
-    });
-    expect(container.querySelector(".runroles__filed")?.textContent).toBe(
-      tf("auto.run.roles.filedRole", { role: "Bob", to: "Dave", ref: "AMB-T-99" }),
-    );
-    // Dave has no card, so the failed card names him instead of drawing a line to him.
-    const hands = cards()[0]!.querySelectorAll<HTMLElement>(".runroles__hand");
-    expect([...hands].map((one) => [one.dataset.to, one.textContent])).toEqual([["14", "→ Dave"]]);
-    expect(container.querySelector(".runroles__strokes")).toBeNull();
+  it("heads a desk with the role, how many are at work of its headcount, a square per seat and its menu", async () => {
+    launched = busy();
+    await pane(FRONT, { launch: 5 });
+    const bob = desks()[0]!;
+    expect(bob.querySelector(".runroles__head > svg.identicon")).not.toBeNull();
+    expect(bob.querySelector(".runroles__name")?.textContent).toBe("Bob");
+    expect(bob.querySelector(".runroles__staff")?.textContent).toBe(tf("auto.run.roles.staff", { n: 2, m: 3 }));
+    expect([...bob.querySelectorAll<HTMLElement>(".runroles__squares > i")].map((one) => one.dataset.state ?? "free"))
+      .toEqual(["on", "asks", "free"]);
+    const more = bob.querySelector<HTMLButtonElement>(".runroles__more")!;
+    expect([more.getAttribute("aria-haspopup"), more.getAttribute("aria-label")]).toEqual(["dialog", tf("auto.run.roles.menu", { name: "Bob" })]);
+    expect(bob.querySelector(".runroles__held"), "a role taking tasks says it stops").toBeNull();
   });
 
-  it("names nobody on the card where the failure went to a person", async () => {
-    roles = [role(12, "Bob"), role(14, "Dave")];
-    await pane({
-      ...RUNNING,
-      run: 46,
-      round: { role: 12, startedAt: null, incident: { ref: "AMB-T-99", role: null, person: true } },
-      state: FAILED.state,
-    });
-    expect(cards()[0]!.querySelector(".runroles__hand")).toBeNull();
+  it("counts no failed or paused seat as at work, and frames a failed seat's square in the stop colour", async () => {
+    launched = launchOf([launchRole(12, "Bob", [
+      liveRun(31, { role: 12, status: "failed" }),
+      liveRun(32, { role: 12, status: "paused" }),
+      liveRun(33, { role: 12 }),
+    ], 3)]);
+    await pane(FRONT, { launch: 5 });
+    const bob = desks()[0]!;
+    expect(bob.querySelector(".runroles__staff")?.textContent).toBe(tf("auto.run.roles.staff", { n: 1, m: 3 }));
+    expect([...bob.querySelectorAll<HTMLElement>(".runroles__squares > i")].map((one) => one.dataset.state ?? "free"))
+      .toEqual(["failed", "free", "on"]);
   });
 
-  it("draws no card for a run that is over, or waiting for its next task", async () => {
-    roles = [role(11, "Alice"), role(12, "Bob")];
-    await pane({ ...RUNNING, run: 44, state: { ...FAILED.state!, status: "completed", word: "Completed" } });
-    expect(cards()).toHaveLength(0);
+  it("says each seat at work, marks the one that may wait for a person, and the role it passed a task on to", async () => {
+    launched = busy();
+    await pane(FRONT, { launch: 5 });
+    const bob = desks()[0]!;
+    expect(bob.dataset.state, "a desk with a seat that may wait is not marked").toBe("asks");
+    const [first, second] = [...bob.querySelectorAll<HTMLElement>("button.runseat")];
+    expect(first!.querySelector(".runseat__task")?.textContent).toBe("AMB-T-7 Fix the search filter");
+    expect(first!.querySelector(".runseat__step")?.textContent).toBe("write the tests");
+    expect([...first!.querySelectorAll(".runseat__hand")].map((one) => one.textContent), "only this round's passes are said")
+      .toEqual([tf("auto.run.roles.handsTo", { role: "Carol" })]);
+    expect(first!.querySelector(".runseat__time")?.textContent).toBe(tf("face.elapsed", { time: minutesOf(65_000) }));
+    expect(first!.querySelector(".runroles__pulse")?.getAttribute("aria-label")).toBe(t("auto.run.roles.working"));
+
+    // Another seat's step that may wait for a person is read off its own row.
+    expect(second!.dataset.state).toBe("asks");
+    expect(second!.querySelector(".runseat__chip")?.textContent).toBe(t("auto.run.roles.asks"));
+    expect(second!.querySelector(".runseat__time"), "a seat that may wait counted its time").toBeNull();
+    expect(second!.querySelector(".runroles__pulse"), "a seat that may wait has the dot").toBeNull();
+
+    const free = bob.querySelector(".runseat--free");
+    expect(free?.tagName).toBe("DIV");
+    expect(free?.textContent).toBe(`1${tf("auto.run.seatsFree", { n: 1 })}`);
+  });
+
+  it("counts the tasks waiting for a role, the first three of them and how many more, and says which was passed on", async () => {
+    launched = busy();
+    await pane(FRONT, { launch: 5 });
+    const carol = desks()[1]!;
+    expect(carol.querySelector(".runroles__staff")?.textContent).toBe(tf("auto.run.roles.staff", { n: 0, m: 1 }));
+    expect(carol.querySelectorAll("button.runseat")).toHaveLength(0);
+    expect(carol.querySelector(".runseat--free")?.textContent).toBe(`1${tf("auto.run.seatsFree", { n: 1 })}`);
+    const head = carol.querySelector(".runroles__stackhead")!;
+    expect(head.textContent).toBe(tf("auto.run.roles.waiting", { n: 5 }));
+    expect(head.querySelector("b")?.textContent).toBe("5");
+    const lines = [...carol.querySelectorAll<HTMLElement>(".runroles__waiting")];
+    expect(lines.map((one) => one.textContent)).toEqual([
+      `AMB-T-8 Review the filter　${tf("auto.run.roles.from", { role: "Bob" })}`,
+      "AMB-T-10 Check the docs",
+      "AMB-T-11 Read the plan",
+      tf("auto.run.roles.more", { n: 2 }),
+    ]);
+    expect(lines.map((one) => one.dataset.from ?? null)).toEqual(["true", null, null, null]);
+  });
+
+  it("says a held role stops after the task, on its head, its seats at work and its free seats", async () => {
+    launched = busy();
+    await pane(FRONT, { launch: 5 });
+    const sakura = desks()[2]!;
+    expect(sakura.dataset.held).toBe("true");
+    expect(sakura.querySelector(".runroles__held")?.textContent).toBe(t("auto.run.roles.held"));
+    expect(sakura.querySelector("button.runseat .runseat__last")?.textContent).toBe(t("auto.run.roles.lastTask"));
+    expect(sakura.querySelector(".runseat--free")?.textContent).toBe(`1${tf("auto.run.seatsFreeHeld", { n: 1 })}`);
+    expect(desks()[0]!.querySelector(".runseat__last"), "a role taking tasks said it stops").toBeNull();
+  });
+
+  it("draws every role as held while the launch is paused", async () => {
+    launched = { ...busy(), status: "paused" };
+    await pane(FRONT, { launch: 5 });
+    expect(desks().map((one) => one.dataset.held)).toEqual(["true", "true", "true"]);
+  });
+
+  it("says no role has a task where none has, and nothing while the launch is read", async () => {
+    launched = launchOf([launchRole(12, "Bob", [], 1)]);
+    await pane(FRONT, { launch: 5 });
+    expect(desks()).toHaveLength(0);
     expect(container.querySelector(".runroles__none")?.textContent).toBe(t("auto.run.roles.none"));
-    expect(idle()).toHaveLength(2);
+
+    launched = null;
+    await pane({ ...FRONT, run: 34 }, { launch: 5 });
+    expect(desks(), "a launch not read yet drew the run alone").toHaveLength(0);
+    expect(container.querySelector(".runroles__none")).toBeNull();
   });
 });
 
-describe("roleCards", () => {
+describe("desksOf", () => {
+  const FRONT: Say = { ...FAILED, run: 5, interactive: true, state: { ...FAILED.state!, status: "running", word: "Running" } };
+
+  it("makes a desk of a role with a run in a seat or a task waiting, and puts the rest on the bar", () => {
+    const got = desksOf(launchOf([
+      launchRole(1, "A", [liveRun(4)], 2),
+      launchRole(2, "B", [], 3),
+      { ...launchRole(3, "C", [], 1), waiting: 1, firstWaiting: [{ task: 9, taskRef: "AMB-T-9", title: "T", fromRole: 1 }] },
+      { ...launchRole(4, "D", [liveRun(6), liveRun(7)], 1), icon: "seed" },
+    ]), FRONT);
+    expect(got.desks.map((one) => [one.role, one.icon, one.seats.map((seat) => seat.run), one.free, one.waiting])).toEqual([
+      [1, null, [4], 1, 0],
+      [3, null, [], 1, 1],
+      [4, "seed", [6, 7], 0, 0],
+    ]);
+    expect(got.desks[1]!.first).toEqual([{ task: 9, ref: "AMB-T-9", title: "T", from: "A" }]);
+    expect(got.idle).toEqual([{ role: 2, name: "B", icon: null, headcount: 3 }]);
+  });
+
+  it("names the roles a seat's round passed a task on to once each, leaving out an earlier round's and a role gone", () => {
+    const pass = (toRole: number | undefined, current: boolean) => ({ fromRole: 1, ...(toRole === undefined ? {} : { toRole }), current });
+    const got = desksOf(launchOf([
+      launchRole(1, "A", [liveRun(4, { passes: [pass(2, true), pass(2, true), pass(3, false), pass(99, true), pass(undefined, true)] })]),
+      launchRole(2, "B", []),
+      launchRole(3, "C", []),
+    ]), FRONT);
+    expect(got.desks[0]!.seats[0]!.to).toEqual(["B"]);
+  });
+});
+
+describe("runDesks", () => {
   const RUNNING: Say = {
     ...FAILED,
-    round: { role: 2, startedAt: null },
+    task: { ref: "AMB-T-7", title: "Fix", seq: 1 },
+    round: { role: 2, startedAt: 1000 },
     state: { ...FAILED.state!, status: "running", word: "Running" },
   };
 
-  it("keeps the cards and the bar in the order the roles are defined in", () => {
-    const got = roleCards(RUNNING, [role(3, "C"), role(2, "B"), role(1, "A")]);
-    expect(got.cards.map((one) => one.role)).toEqual([2]);
-    expect(got.idle.map((one) => one.id)).toEqual([3, 1]);
+  it("draws the run's role as a desk with the run its one seat, and the rest on the bar, in the order they are defined in", () => {
+    const got = runDesks(RUNNING, [role(3, "C"), role(2, "B", 3, "seed"), role(1, "A"), role(9, "Elsewhere", 9)]);
+    expect(got.desks).toEqual([{
+      role: 2, name: "B", icon: "seed", headcount: 1, held: false, free: 0, waiting: 0, first: [],
+      seats: [{ run: 15, task: "AMB-T-7 Fix", step: "check", state: "running", since: 1000, to: [] }],
+    }]);
+    expect(got.idle.map((one) => [one.role, one.headcount])).toEqual([[3, null], [1, null]]);
   });
 
-  it("draws the round of an automation with no role as one card named after the automation", () => {
-    const got = roleCards({ ...RUNNING, round: { role: null, startedAt: null } }, []);
-    expect(got.cards).toEqual([{ role: null, name: "Nightly", icon: "robot", state: "running" }]);
-    expect(got.idle).toEqual([]);
+  it("draws a round under no role as one desk named after the automation, its roles on the bar", () => {
+    const got = runDesks({ ...RUNNING, round: { role: null, startedAt: null } }, [role(2, "B"), role(3, "C")]);
+    expect(got.desks.map((one) => [one.role, one.name])).toEqual([[null, "Nightly"]]);
+    expect(got.idle.map((one) => one.role)).toEqual([2, 3]);
   });
 
-  it("draws a round under no role as one card named after the automation, its roles on the bar", () => {
-    const got = roleCards({ ...RUNNING, round: { role: null, startedAt: null } }, [role(2, "Nightlyの係")]);
-    expect(got.cards).toEqual([{ role: null, name: "Nightly", icon: "robot", state: "running" }]);
-    expect(got.idle.map((one) => one.id)).toEqual([2]);
+  it("draws a round under no role at its automation's one role, where it has only one, and leaves the bar empty", () => {
+    const failed = runDesks({ ...RUNNING, round: { role: null, startedAt: null }, state: FAILED.state }, [role(2, "B")]);
+    expect(failed.desks.map((one) => [one.role, one.name])).toEqual([[2, "B"]]);
+    expect(failed.idle).toEqual([]);
   });
 
-  it("draws no card while the run waits for its next task", () => {
-    const got = roleCards({ ...RUNNING, state: { ...RUNNING.state!, waiting: true } }, [role(2, "B")]);
-    expect(got.cards).toEqual([]);
-    expect(got.idle.map((one) => one.id)).toEqual([2]);
+  it("draws no desk while the run waits for its next task, or once it is over", () => {
+    expect(runDesks({ ...RUNNING, state: { ...RUNNING.state!, waiting: true } }, [role(2, "B")]).desks).toEqual([]);
+    expect(runDesks({ ...RUNNING, state: { ...RUNNING.state!, status: "completed" } }, [role(2, "B")]).desks).toEqual([]);
   });
 
-  it("draws the icon a role was given only where it is one drawn here", () => {
-    expect(roleCards(RUNNING, [role(2, "B", 3, "nothing-like-it")]).cards[0]!.icon).toBe("person");
+  it("says how the run stands on its seat", () => {
+    const state = (run: Say) => runDesks(run, [role(2, "B")]).desks[0]!.seats[0]!.state;
+    expect(state({ ...RUNNING, interactive: true })).toBe("asks");
+    expect(state({ ...RUNNING, state: FAILED.state })).toBe("failed");
+    expect(state({ ...RUNNING, state: { ...RUNNING.state!, status: "paused" } })).toBe("paused");
+  });
+});
+
+describe("minutesOf", () => {
+  it("counts a round's time in whole minutes", () => {
+    expect(minutesOf(59_000)).toBe(minutesOf(0));
+    expect(minutesOf(6 * 60_000 + 59_000)).toBe(minutesOf(6 * 60_000));
+    expect(minutesOf(41 * 60_000)).toContain("41");
+    expect(minutesOf(-1000)).toBe(minutesOf(0));
   });
 });
 
 describe("silenceOf", () => {
   const at = 100_000_000;
   const min = 60_000;
-  const card = (state: RoleCard["state"]): RoleCard => ({ role: 2, name: "B", icon: "person", state });
 
   it("measures a round under way, the one that may wait for a person included", () => {
-    expect(silenceOf(card("running"), at - 6 * min, at, 10)).toEqual({ stage: 1, for: 6 * min });
-    expect(silenceOf(card("asks"), at - 21 * min, at, 10)).toEqual({ stage: 2, for: 21 * min });
+    expect(silenceOf("running", at - 6 * min, at, 10)).toEqual({ stage: 1, for: 6 * min });
+    expect(silenceOf("asks", at - 21 * min, at, 10)).toEqual({ stage: 2, for: 21 * min });
   });
 
   it("says no time while the silence is short of the first stage", () => {
-    expect(silenceOf(card("running"), at - min, at, 10)).toEqual({ stage: 0, for: null });
+    expect(silenceOf("running", at - min, at, 10)).toEqual({ stage: 0, for: null });
   });
 
   it("does not measure a round that is paused or failed", () => {
-    expect(silenceOf(card("paused"), at - 60 * min, at, 10)).toEqual({ stage: 0, for: null });
-    expect(silenceOf(card("failed"), at - 60 * min, at, 10)).toEqual({ stage: 0, for: null });
+    expect(silenceOf("paused", at - 60 * min, at, 10)).toEqual({ stage: 0, for: null });
+    expect(silenceOf("failed", at - 60 * min, at, 10)).toEqual({ stage: 0, for: null });
   });
 });
 
@@ -390,129 +499,29 @@ describe("filedLine", () => {
     ...FAILED,
     round: { role: 2, startedAt: null, ...(incident === undefined ? {} : { incident }) },
   });
-  const line = (run: Say) => filedLine(roleCards(run, roles).cards, run, roles);
 
   it("names the role the failure was filed to", () => {
-    expect(line(failed({ ref: "AMB-T-9", role: 4, person: false }))).toBe(
+    expect(filedLine(failed({ ref: "AMB-T-9", role: 4, person: false }), roles)).toBe(
       tf("auto.run.roles.filedRole", { role: "B", to: "D", ref: "AMB-T-9" }),
     );
   });
 
   it("says a person where it went to one, and names nobody where the role is gone", () => {
-    expect(line(failed({ ref: "AMB-T-9", role: null, person: true }))).toBe(
+    expect(filedLine(failed({ ref: "AMB-T-9", role: null, person: true }), roles)).toBe(
       tf("auto.run.roles.filedPerson", { role: "B", ref: "AMB-T-9" }),
     );
-    expect(line(failed({ ref: "AMB-T-9", role: 77, person: false }))).toBe(
+    expect(filedLine(failed({ ref: "AMB-T-9", role: 77, person: false }), roles)).toBe(
       tf("auto.run.roles.filed", { role: "B", ref: "AMB-T-9" }),
     );
   });
 
   it("has no line where the round filed nothing, or did not fail", () => {
-    expect(line(failed(undefined))).toBeNull();
+    expect(filedLine(failed(undefined), roles)).toBeNull();
     const running: Say = {
       ...failed({ ref: "AMB-T-9", role: 4, person: false }),
       state: { ...FAILED.state!, status: "running", word: "Running" },
     };
-    expect(line(running)).toBeNull();
-  });
-});
-
-describe("handsOf and handsAway", () => {
-  const roles = [role(2, "B"), role(4, "D")];
-  const failed = (incident: { ref: string; role: number | null; person: boolean } | undefined): Say => ({
-    ...FAILED,
-    round: { role: 2, startedAt: null, ...(incident === undefined ? {} : { incident }) },
-  });
-  const hands = (run: Say) => handsOf(roleCards(run, roles).cards, run, roles);
-
-  it("draws a line from a failed card to the role it was filed to", () => {
-    expect(hands(failed({ ref: "AMB-T-9", role: 4, person: false }))).toEqual([{ from: 2, to: 4, name: "D", filed: true }]);
-  });
-
-  it("draws none where the failure went to a person, to a role since gone, or nowhere", () => {
-    expect(hands(failed({ ref: "AMB-T-9", role: null, person: true }))).toEqual([]);
-    expect(hands(failed({ ref: "AMB-T-9", role: 77, person: false }))).toEqual([]);
-    expect(hands(failed(undefined))).toEqual([]);
-  });
-
-  it("names the other end only where it has no card, and every end on a row of the list", () => {
-    const one = { from: 2, to: 4, name: "D", filed: true } as const;
-    const card = (id: number) => ({ role: id, name: "", icon: "person", state: "running" }) as const;
-    expect(handsAway(2, [one], [card(2)])).toEqual([one]);
-    expect(handsAway(2, [one], [card(2), card(4)])).toEqual([]);
-    expect(handsAway(2, [one], [])).toEqual([one]);
-    expect(handsAway(4, [one], [])).toEqual([]);
-  });
-});
-
-describe("cards or the list", () => {
-  const RUNNING: Say = {
-    ...FAILED,
-    run: 51,
-    step: "write the tests",
-    task: { ref: "AMB-T-7", title: "Fix the search filter", seq: 1 },
-    round: { role: 12, startedAt: Date.now() - 65_000 },
-    state: { ...FAILED.state!, status: "running", word: "Running" },
-  };
-
-  afterEach(() => vi.restoreAllMocks());
-
-  /** Rooms measured at `width` by `height`, as a laid-out page would measure them. */
-  const room = (width: number, height: number) => {
-    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(width);
-    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(height);
-  };
-
-  it("is the room's to decide until the reader holds it, and is offered only while the roles are up", async () => {
-    roles = [role(12, "Bob")];
-    await pane(RUNNING);
-    expect(views().map((one) => one.textContent)).toEqual([t("auto.run.viewAuto"), t("auto.run.viewCards"), t("auto.run.viewList")]);
-    expect(views().find((one) => one.getAttribute("aria-pressed") === "true")?.textContent).toBe(t("auto.run.viewAuto"));
-    expect(cards()).toHaveLength(1);
-
-    await act(async () => toTerminal());
-    expect(views(), "the terminal face offers a layout of the roles").toHaveLength(0);
-  });
-
-  it("draws a row of the list for a round where the cards do not fit the room", async () => {
-    roles = [role(12, "Bob"), role(14, "Dave")];
-    room(140, 100);
-    await pane({
-      ...RUNNING,
-      run: 52,
-      round: { role: 12, startedAt: null, incident: { ref: "AMB-T-99", role: 14, person: false } },
-      state: FAILED.state,
-    });
-    expect(cards()).toHaveLength(0);
-    expect(rows().map((one) => [one.dataset.role, one.dataset.state])).toEqual([["12", "failed"]]);
-    const row = rows()[0]!;
-    expect(row.querySelector(".runroles__name")?.textContent).toBe("Bob");
-    expect(row.querySelector(".runroles__task")?.textContent).toBe("AMB-T-7 Fix the search filter");
-    expect(row.querySelector(".runroles__chip")?.textContent).toBe(t("auto.run.roles.failed"));
-    expect(row.querySelector(".runroles__hand")?.textContent).toBe("→ Dave");
-    expect(row.querySelector(".runroles__pulse"), "a row has the dot").toBeNull();
-  });
-
-  it("holds to what the reader pressed, and keeps it for that run's pane", async () => {
-    roles = [role(12, "Bob")];
-    await pane({ ...RUNNING, run: 53 });
-    await act(async () => views()[2]!.click());
-    expect(rows()).toHaveLength(1);
-    expect(cards()).toHaveLength(0);
-
-    act(() => root.unmount());
-    root = createRoot(container);
-    await pane({ ...RUNNING, run: 53 });
-    expect(rows(), "a pane back up for the same run forgot the layout it was held to").toHaveLength(1);
-
-    await pane({ ...RUNNING, run: 54 });
-    expect(views().find((one) => one.getAttribute("aria-pressed") === "true")?.textContent).toBe(t("auto.run.viewAuto"));
-
-    // Held to cards, a room too small for them still draws them.
-    room(140, 100);
-    await act(async () => views()[1]!.click());
-    expect(cards()).toHaveLength(1);
-    expect(rows()).toHaveLength(0);
+    expect(filedLine(running, roles)).toBeNull();
   });
 });
 
@@ -525,22 +534,22 @@ describe("a round out of sight", () => {
     round: { role: 12, startedAt: null },
   };
 
-  /** Where the mark — the card's chip — stands on the page, and where the card does; the room shows
+  /** Where the mark — the seat's chip — stands on the page, and where the seat does; the room shows
    *  from 0 to 100. */
   let at = { top: 150, bottom: 250 };
-  let card = { top: 0, bottom: 0 };
+  let seat = { top: 0, bottom: 0 };
   const scrollBy = vi.fn();
   const box = (top: number, bottom: number) =>
     ({ top, bottom, left: 0, right: 100, width: 100, height: bottom - top, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
 
   beforeEach(() => {
     at = { top: 150, bottom: 250 };
-    card = { top: 0, bottom: 0 };
+    seat = { top: 0, bottom: 0 };
     scrollBy.mockReset();
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
       if (this.classList.contains("runroles__room")) return box(0, 100);
       if (this.dataset.attn !== undefined) return box(at.top, at.bottom);
-      if (this.classList.contains("runroles__card")) return box(card.top, card.bottom);
+      if (this.classList.contains("runseat")) return box(seat.top, seat.bottom);
       return box(0, 0);
     });
     (HTMLElement.prototype as unknown as { scrollBy: unknown }).scrollBy = scrollBy;
@@ -557,8 +566,8 @@ describe("a round out of sight", () => {
   it("says what is below the room at its bottom edge, and scrolls to it only when pressed", async () => {
     roles = [role(12, "Bob")];
     await pane(FAILING);
-    expect(cards()[0]!.dataset.attn, "the card itself was the mark").toBeUndefined();
-    expect(marks().map((one) => [one.className, one.dataset.attn])).toEqual([["runroles__chip", "failed"]]);
+    expect(seats()[0]!.dataset.attn, "the seat itself was the mark").toBeUndefined();
+    expect(marks().map((one) => [one.className, one.dataset.attn])).toEqual([["runseat__chip", "failed"]]);
     const what = tf("auto.run.roles.attn.failed", { n: 1 });
     expect(notices().map((one) => [one.dataset.edge, one.textContent, one.dataset.stop])).toEqual([["bottom", `↓ ${what}`, "true"]]);
     expect(notices()[0]!.getAttribute("aria-label")).toBe(tf("auto.run.roles.unseenDown", { what }));
@@ -595,9 +604,9 @@ describe("a round out of sight", () => {
     expect(notices()).toHaveLength(0);
   });
 
-  it("says a mark is below where the card is in sight but its mark is cut off at the room's bottom", async () => {
+  it("says a mark is below where the seat is in sight but its mark is cut off at the room's bottom", async () => {
     roles = [role(12, "Bob")];
-    card = { top: 10, bottom: 120 };
+    seat = { top: 10, bottom: 120 };
     at = { top: 95, bottom: 113 };
     await pane({ ...FAILING, run: 74 });
     expect(notices().map((one) => one.dataset.edge)).toEqual(["bottom"]);
@@ -613,14 +622,12 @@ describe("a round out of sight", () => {
 });
 
 describe("attnOf, unseenOf and noticeOf", () => {
-  const card = (state: RoleCard["state"]): RoleCard => ({ role: 2, name: "B", icon: "person", state });
-
   it("marks a round that may wait, one that failed, and one quiet into the second stage", () => {
-    expect(attnOf(card("asks"), { stage: 0, for: null })).toBe("asks");
-    expect(attnOf(card("failed"), { stage: 0, for: null })).toBe("failed");
-    expect(attnOf(card("running"), { stage: 2, for: 1 })).toBe("stalled");
-    expect(attnOf(card("running"), { stage: 1, for: 1 })).toBeNull();
-    expect(attnOf(card("paused"), { stage: 0, for: null })).toBeNull();
+    expect(attnOf("asks", { stage: 0, for: null })).toBe("asks");
+    expect(attnOf("failed", { stage: 0, for: null })).toBe("failed");
+    expect(attnOf("running", { stage: 2, for: 1 })).toBe("stalled");
+    expect(attnOf("running", { stage: 1, for: 1 })).toBeNull();
+    expect(attnOf("paused", { stage: 0, for: null })).toBeNull();
   });
 
   it("counts a mark as out of sight once any of it is more than 1px past the room's edge", () => {
@@ -649,43 +656,6 @@ describe("attnOf, unseenOf and noticeOf", () => {
   });
 });
 
-describe("cardsFit and fitOf", () => {
-  it("counts the cards a room holds, its padding and the gaps between them taken out", () => {
-    expect(cardsFit(166, 134)).toBe(1);
-    expect(cardsFit(165, 134)).toBe(0);
-    expect(cardsFit(166, 133)).toBe(0);
-    expect(cardsFit(324, 260)).toBe(4);
-    expect(cardsFit(0, 0)).toBe(0);
-  });
-
-  it("turns to the list as soon as the cards do not fit, and back only once the room has grown 40px past it", () => {
-    const first = fitOf(null, 166, 134, 1);
-    expect(first.view).toBe("cards");
-    const down = fitOf(first, 165, 134, 1);
-    expect(down).toEqual({ view: "list", width: 165, height: 134 });
-    expect(fitOf(down, 166, 134, 1).view, "the list turned back the moment the card fit").toBe("list");
-    expect(fitOf(down, 204, 134, 1).view).toBe("list");
-    expect(fitOf(down, 205, 134, 1).view).toBe("cards");
-    expect(fitOf(down, 166, 174, 1).view).toBe("cards");
-    // Grown, but still too small for the cards.
-    expect(fitOf(down, 165, 300, 1).view).toBe("list");
-  });
-
-  it("starts on the list where the cards do not fit, and leaves it as soon as they do", () => {
-    const first = fitOf(null, 160, 134, 1);
-    expect(first.view).toBe("list");
-    expect(fitOf(first, 166, 134, 1).view).toBe("cards");
-  });
-
-  it("turns to the list where more rounds come than the room holds", () => {
-    const cards = fitOf(null, 324, 134, 2);
-    expect(cards.view).toBe("cards");
-    expect(fitOf(cards, 324, 134, 3).view).toBe("list");
-    expect(fitOf(null, 10, 10, 0).view).toBe("cards");
-  });
-});
-
-/// A card is pressed to read its round's terminal, and the terminal has a bar over it.
 describe("the terminal of a round", () => {
   const RUNNING: Say = {
     ...FAILED,
@@ -698,14 +668,13 @@ describe("the terminal of a round", () => {
   const bar = () => container.querySelector<HTMLElement>(".runterm");
   const back = () => container.querySelector<HTMLButtonElement>(".runterm__back")!;
   const notice = () => container.querySelector(".runterm__notice");
-  const seats = () => [...container.querySelectorAll<HTMLButtonElement>("button.runseat")];
 
-  it("turns to the terminal when a card is pressed, and back to the roles from the bar", async () => {
+  it("turns to the terminal when a seat is pressed, and back to the roles from the bar", async () => {
     roles = [role(12, "Bob")];
     await pane(RUNNING);
     expect(pressed()).toBe("roles");
-    const open = cards()[0]!.querySelector<HTMLButtonElement>(".runroles__open")!;
-    expect(open.getAttribute("aria-label")).toBe(tf("auto.run.roundTerminal", { name: "Bob" }));
+    const open = seats()[0]!;
+    expect(open.getAttribute("aria-label")).toBe(tf("auto.run.seatOpen", { role: "Bob", n: 1, task: "AMB-T-7 Fix the search filter" }));
     await act(async () => open.click());
     expect(pressed()).toBe("terminal");
     expect(shown()).toBeNull();
@@ -719,26 +688,6 @@ describe("the terminal of a round", () => {
     expect(pressed()).toBe("roles");
     expect(shown()).not.toBeNull();
     expect(bar(), "the bar left the layout under the roles").not.toBeNull();
-  });
-
-  it("turns to the terminal when a row of the list is pressed, and back to the list from the bar", async () => {
-    roles = [role(12, "Bob")];
-    // A room too small for a card, so the round is a row.
-    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(140);
-    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(100);
-    try {
-      await pane({ ...RUNNING, run: 68 });
-      expect(cards()).toHaveLength(0);
-      const open = rows()[0]!.querySelector<HTMLButtonElement>(".runroles__open")!;
-      expect(open.getAttribute("aria-label")).toBe(tf("auto.run.roundTerminal", { name: "Bob" }));
-      await act(async () => open.click());
-      expect(pressed()).toBe("terminal");
-
-      await act(async () => back().click());
-      expect(rows(), "the way back did not come back to the list").toHaveLength(1);
-    } finally {
-      vi.restoreAllMocks();
-    }
   });
 
   it("says why in one line where a step that may wait for a person turned it", async () => {
@@ -785,8 +734,8 @@ describe("the terminal of a round", () => {
     const went: number[] = [];
     await pane({ ...RUNNING, run: 64 }, { launch: 5, onGoToRun: (run) => went.push(run) });
     expect(pressed()).toBe("roles");
-    expect([...container.querySelectorAll<HTMLElement>(".runseats__role")].map((one) => one.dataset.role),
-      "a role with nobody in a seat is listed").toEqual(["12"]);
+    expect(desks().map((one) => one.dataset.role), "a role with no task has a desk").toEqual(["12"]);
+    expect(idle().map((one) => one.dataset.role)).toEqual(["13"]);
     expect(seats().map((one) => [one.dataset.run, one.dataset.state, one.getAttribute("aria-current")])).toEqual([
       ["64", "running", "true"],
       ["66", "failed", null],
@@ -819,7 +768,8 @@ describe("the terminal of a round", () => {
     roles = [role(12, "Bob")];
     launched = launchOf([launchRole(12, "Bob", [liveRun(63, { role: 12 }), liveRun(64, { role: 12 })])]);
     await pane({ ...RUNNING, run: 64, round: { role: 12, startedAt: Date.now() - 65_000 } }, { launch: 5 });
-    await act(async () => toTerminal());
+    await act(async () => seats().find((one) => one.dataset.run === "64")!.click());
+    expect(pressed()).toBe("terminal");
     expect(container.querySelector(".runterm__task")?.textContent)
       .toBe(`Bob ・ ${tf("auto.run.seat", { n: 2 })} ・ AMB-T-7 Fix the search filter`);
     const time = container.querySelector(".runterm__time")?.textContent;
@@ -836,28 +786,17 @@ describe("the terminal of a round", () => {
     expect(container.querySelector(".runterm__time")).toBeNull();
   });
 
-  it("lists no seats on a run kept from before launches", async () => {
+  it("draws a run kept from before launches as one desk, the run its one seat", async () => {
     roles = [role(12, "Bob")];
     await pane({ ...RUNNING, run: 69 });
-    expect(container.querySelector(".runseats")).toBeNull();
+    expect(desks().map((one) => one.dataset.role)).toEqual(["12"]);
+    expect(seats().map((one) => one.dataset.run)).toEqual(["69"]);
+    expect(container.querySelector(".runseat--free")).toBeNull();
   });
 });
 
 describe("the seats of a launch", () => {
   const FRONT: Say = { ...FAILED, run: 5, interactive: true, state: { ...FAILED.state!, status: "running", word: "Running" } };
-
-  it("lists the roles with someone in a seat, in the order they are defined in, with their free seats", () => {
-    const got = seatsOf(launchOf([
-      launchRole(1, "A", [liveRun(4)], 2),
-      launchRole(2, "B", []),
-      { ...launchRole(3, "C", [liveRun(5), liveRun(6)], 1), icon: "robot" },
-    ]));
-    expect(got.map((one) => [one.role, one.icon, one.runs.map((run) => run.run), one.free])).toEqual([
-      [1, "person", [4], 1],
-      [3, "robot", [5, 6], 0],
-    ]);
-    expect(seatsOf(null)).toEqual([]);
-  });
 
   it("numbers a run by its place among its role's seats", () => {
     const launch = launchOf([launchRole(1, "A", [liveRun(4)]), launchRole(2, "B", [liveRun(7), liveRun(5)])]);
@@ -866,9 +805,10 @@ describe("the seats of a launch", () => {
     expect(seatOf(null, 5)).toBeNull();
   });
 
-  it("says how a seat stands, and that it may wait for a person only of the pane's own run", () => {
+  it("says how a seat stands, and that it may wait for a person off its own step or the pane's own run", () => {
     expect(seatStateOf(liveRun(5), FRONT)).toBe("asks");
     expect(seatStateOf(liveRun(6), FRONT)).toBe("running");
+    expect(seatStateOf(liveRun(6, { interactive: true }), FRONT)).toBe("asks");
     expect(seatStateOf(liveRun(6, { waitsForRoom: true }), FRONT)).toBe("waiting");
     expect(seatStateOf(liveRun(6, { status: "paused" }), FRONT)).toBe("paused");
     expect(seatStateOf(liveRun(6, { status: "failed" }), FRONT)).toBe("failed");

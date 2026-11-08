@@ -1,204 +1,241 @@
-// **A run's pane, shown by its roles.**
+// **A launch's pane, shown by its roles.**
 //
-// An automation is split into roles, and a run works a round per task under the role the task names
-// (`amenbo_core::model::AutomationRunTask`). What a reader watching a run wants to know is which role
-// is doing what, and the automation's picture did not say it: it drew where the run had been, not who
-// was at work. So the pane's body draws the roles instead.
+// An automation is split into roles, each with a headcount: so many seats, each taking the tasks
+// under that role one at a time (`AMB-D-1123`). One launch is one pane, and what a reader watching it
+// wants to know is which role is doing what, and what is waiting for it. So the pane's body draws the
+// roles.
 //
-// **A role with a round is a card**, and a card says the role, the task the round is on, the step
-// under way and how long the round has run. A round that may wait for a person, and one that failed,
-// say so on the card. **A failed round that was filed as a task is one line under the pane**, naming the
-// role, whom it was filed to and the task (`amenbo_core::ops::automation_stop`). **A role with no
-// round is an icon on the bar at the bottom**, and nothing else:
-// the bar scrolls sideways inside itself where the roles do not fit, so it never pushes the cards out
-// of the pane.
+// **A role with a task is a desk**: one with a run in a seat, or with a task waiting for it to take.
+// The desks stand across the whole width of the pane and wrap onto as many lines as they need, in the
+// order the roles are defined in, and never move for what they are doing — a desk that jumped to the
+// top when a seat asked for a person would be a desk the reader has to look for again. Only the room
+// the desks are in scrolls; the pane's own place on the page stays.
 //
-// **The cards stand in the order the roles are defined in**, and never move for what they are doing:
-// a card that jumped to the top when its round asked for a person would be a card the reader has to
-// look for again. Only the room the cards are in scrolls — the pane's own place on the page stays.
+// **A desk's head is one line, never wrapped**: the role's icon and name, "stops after the task" where
+// the role is held, how many seats are at work out of its headcount, a small square per seat, and the
+// role's "⋯". What the "⋯" opens is not drawn here. The count leads with its figures ("2 / 3 working"),
+// so where the line is short of room it is cut down to its first figure and an ellipsis before anything
+// else gives way; the head stays inside the desk, its squares and "⋯" with it.
+//
+// A seat whose round failed, is paused or waits holds its place but is not counted as at work, and its
+// square is not filled as one at work.
+//
+// **Under the head, a row per seat at work**: its number, the task, the step and how long it has run,
+// in whole minutes.
+// A seat on a step that may wait for a person is in the person's colour, its border, its band and a
+// chip saying so where the time would be; a desk with such a seat has its border in that colour too.
+// A seat whose round passed a task on to another role says "→ role" under its step. Where the role is
+// held — by itself, or the whole launch paused — each seat at work says it stops after this task. **The
+// free seats are one row**, which cannot be pressed. **The tasks waiting** for the role are counted
+// under the seats, with the first three of them by reference and title; one passed on from another
+// role says which.
+//
+// **A role with no task is on the bar at the bottom**, by its icon, its name and its headcount.
+//
+// **A seat is pressed to turn this same pane to its terminal.** The terminal has a bar over it: the way
+// back to the roles, and whose round it is — the role, the seat, the task, the step and how long it has
+// run. It names no other seat: the way to another seat's terminal is back to the roles and that seat
+// pressed. Where a step that may wait for a person turned the pane, the bar says so in one line.
+//
+// **A failed round that was filed as a task is one line under the pane**, naming the role, whom it was
+// filed to and the task (`amenbo_core::ops::automation_stop`).
 //
 // **A round that needs a person, out of sight in the room, is named at the room's edge**: one that may
 // wait for a person, one that failed, and one whose terminal has been quiet into the second stage. What
-// is read is the mark that says so on the card or row, not the card: a card partly in sight whose mark
-// is cut off counts. Where such a mark is above what the room shows, a notice at its top says what is
-// there and how many — "↑ Waiting for input 1" — and one at its bottom says what is below. Pressing it
+// is read is the mark that says so on the seat, not the seat: a seat partly in sight whose mark is cut
+// off counts. Where such a mark is above what the room shows, a notice at its top says what is there
+// and how many — "↑ Waiting for input 1" — and one at its bottom says what is below. Pressing it
 // scrolls the room to the nearest of them; nothing scrolls by itself. The notices are read again only
-// when the room scrolls or changes size, so a notice does not come and go under the reader's eye while
-// they read the cards.
-//
-// **The cards are a list where they do not fit.** Whether every card fits is read off the room the
-// cards are drawn in, as large as it is now — a pane is narrowed by the window, by the panel at the
-// right and by splitting the page (`AMB-D-939`), and all three are the same room getting smaller. A
-// card needs 150px by 118px; where the room holds fewer cards than there are rounds, each round is one
-// row of a list instead, and a narrow list puts a row on two lines. The list turns back to cards only
-// once the room has grown 40px past where it turned, so a pane on the edge does not flip back and forth
-// while it is being dragged. The reader can hold it to cards or to the list in the row above; it is on
-// its own until they do.
-//
-// **A card draws only the lines that touch it**: what it hands on to another role, and the role its
-// failure was filed to. A line is drawn only where both cards are in the room; where the other role
-// has no card, the card says "→ role" instead, and so does a row of the list, which draws no line.
-// The roles' own definitions say nothing of which role hands on to which — the next role is the one
-// the handed task names when it is handed — so what the run carries today is the filing alone.
+// when the room scrolls or changes size, so a notice does not come and go under the reader's eye.
 //
 // **A round whose terminal has gone quiet is marked, in two stages**, and only by what was measured:
-// how long it has been since anything came out of its terminal (`../talk/moving`). Past five minutes
-// the card says so with a clock and its border takes the heed colour; past twice the time its step is
-// expected to take, its border and its ground take the stop colour. The time on the clock counts every
-// second, and the card's look changes only where the stage does. Nothing is done about it — no round is
-// stopped or turned for a silence (`AMB-D-748`) — and it is the same for every agent, because what is
-// read is the stream and not anything the agent says. A paused or failed round is not measured.
+// how long it has been since anything came out of its terminal (`../talk/moving`). It is read of the
+// seat in front — the pane's own run — whose terminal the pane holds. Past five minutes the seat says
+// so with a clock in place of its time and takes the heed colour; past twice the time its step is
+// expected to take, it takes the stop colour. Nothing is done about it — no round is stopped or turned
+// for a silence (`AMB-D-748`). A paused or failed round is not measured.
 //
-// **The only thing that moves is a small dot on a card whose round is under way**: it fades in and
-// out, slowly, so the eye finds which role is at work without the pane moving at the edge of sight all
-// day. A card that waits for a person, is paused or failed says so in words and stays still, and so
-// does a row of the list. A card whose terminal has gone quiet loses its dot too: the clock says what
-// the stream shows, and a dot would say something is happening that the stream does not. Where the
-// reader asks for less motion the dot stays lit and does not fade.
-// Nothing else is animated: a pane that changes size moves its cards only by where they stand.
+// **The only thing that moves is a small dot on a seat at work**: it fades in and out, slowly, so the
+// eye finds which seat is working without the pane moving at the edge of sight all day. A seat that
+// waits for a person, is paused, failed or quiet says so in words and stays still. Where the reader
+// asks for less motion the dot stays lit and does not fade.
 //
-// **The cards are the run in front's** — the pane's own run, or on a launch's pane the seat in front —
-// and a run walks one round at a time, so the cards are its round's role or none. A round under no
-// role — a task that names none, on an automation whose roles start nowhere — is drawn as one card
-// named after the automation, its roles all on the bar.
+// **A run kept from before launches were** sits in no seat: it is drawn as one desk of the role its
+// round is under — or of the automation's one role, where the round wrote none down and the automation
+// has only one; or of the automation, where it has more — with that run its one seat, and every other
+// role of the automation on the bar.
 //
-// The role's name and icon are the definition's as it is now (`AMB-D-1015`), read by the project's
-// roles (`../core/projectRoles`) — the run's copy holds only which role its round is under.
-//
-// **One launch is one pane, and its seats are listed under the room** (`AMB-D-1123`): each role with
-// someone in a seat, and under it a row per seat — its number, the task, the step and how long it has
-// run. A seat is pressed to turn this same pane to that seat's terminal; the seats nobody is in are one
-// row that cannot be pressed. A card is pressed for the terminal of the seat in front.
-//
-// **The terminal has a bar over it**: the way back to the roles, and whose round it is — the role, the
-// seat, the task, the step and how long it has run. It names no other seat: the way to another seat's
-// terminal is back to the roles and that seat pressed. Where a step that may wait for a person turned
-// the pane, the bar says so in one line.
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
+// The role's name and icon are the definition's as it is now (`AMB-D-1015`) — the launch's, read with
+// it, or the project's roles (`../core/projectRoles`) for a run kept from before launches. The icon is
+// drawn from its seed (`AMB-D-686`).
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useProjectRoles } from "../core/projectRoles";
 import { useLaunchState } from "../core/automations";
 import { t, tf } from "../core/i18n";
-import { Icon, isIconName, type IconName } from "../components/Icon";
+import { formatNumber } from "../core/i18n/format";
+import { Icon } from "../components/Icon";
+import { RoleIcon } from "../screens/AutomationRoles";
 import { clockOf, type Say } from "../talk/nameplate";
 import { quietAt, type Quiet } from "../talk/moving";
 import type { AutomationLaunchStateDto, AutomationRunCardDto, TaskRoleDto } from "../bindings/bindings";
 
-/** What a role's round is doing, as its card says it. */
-export type RoundState =
+/** How the run in a seat stands, as its row says it. */
+export type SeatState =
   /** Under way. */
   | "running"
-  /** Under way on a step that may stop and wait for a person (`Say.interactive`). Whether it is
-   *  waiting is not something the app reads (`AMB-D-858`); the step's own flag is what it goes by. */
+  /** Under way on a step that may stop and wait for a person (`AutomationRunCardDto.interactive`).
+   *  Whether it is waiting is not something the app reads (`AMB-D-858`); the step's own flag is what
+   *  it goes by. */
   | "asks"
+  /** Before a built-in that waits for something, or an action that takes one run at a time. */
+  | "waiting"
   /** Held by a pause. */
   | "paused"
-  /** The run failed in it. */
+  /** The run failed. */
   | "failed";
 
-/** One card: the role, or the automation where its round is under none, and what its round is doing. */
-export type RoleCard = {
+/** One seat at work, as its row says it. */
+export type Seat = {
+  readonly run: number;
+  /** The task, as its reference and title; null before the round has taken one. */
+  readonly task: string | null;
+  /** The step it is on; null before the first has opened. */
+  readonly step: string | null;
+  readonly state: SeatState;
+  /** When its round began, in milliseconds since the epoch; null where nothing is written. */
+  readonly since: number | null;
+  /** The roles its round passed a task on to, by name. */
+  readonly to: readonly string[];
+};
+
+/** One task waiting for a role to take it. */
+export type Waiting = {
+  readonly task: number;
+  readonly ref: string;
+  readonly title: string;
+  /** The role it was passed on from, by name; null where none passed it on. */
+  readonly from: string | null;
+};
+
+/** One role with a task: its seats at work, its free seats and the tasks waiting for it. */
+export type Desk = {
   /** The role's id, or null for a round under no role. */
   readonly role: number | null;
   readonly name: string;
-  readonly icon: IconName;
-  readonly state: RoundState;
+  /** The role's icon seed; null for none written, where it is drawn from its name. */
+  readonly icon: string | null;
+  readonly headcount: number;
+  /** Whether it takes no new task — held itself, or the whole launch paused. */
+  readonly held: boolean;
+  readonly seats: readonly Seat[];
+  readonly free: number;
+  /** How many tasks are waiting for it, and the first three of them. */
+  readonly waiting: number;
+  readonly first: readonly Waiting[];
 };
 
-/** The icon a role is drawn with: the one it was given, where it is one drawn here. */
-function iconOf(icon: string | null | undefined): IconName {
-  return icon !== null && icon !== undefined && isIconName(icon) ? icon : "person";
+/** One role with no task, on the bar at the bottom. */
+export type IdleRole = {
+  readonly role: number;
+  readonly name: string;
+  readonly icon: string | null;
+  /** Its headcount; null for a run kept from before launches, which holds none. */
+  readonly headcount: number | null;
+};
+
+/** How the run in a seat stands: off its row, and off the pane's own run where it is that one. */
+export function seatStateOf(seat: AutomationRunCardDto, front: Say): SeatState {
+  if (seat.status === "failed") return "failed";
+  if (seat.status === "paused") return "paused";
+  if (seat.waiting || seat.waitsForRoom) return "waiting";
+  return seat.interactive === true || (seat.run === front.run && front.interactive) ? "asks" : "running";
 }
 
-/** The icon the role `role` is drawn with. */
-function roleIcon(role: TaskRoleDto): IconName {
-  return iconOf(role.icon);
+/** When the round in a seat began, in milliseconds since the epoch, or null where nothing is written. */
+function seatSince(seat: AutomationRunCardDto): number | null {
+  const at = Date.parse(seat.roleStartedAt ?? seat.startedAt ?? "");
+  return Number.isNaN(at) ? null : at;
 }
 
 /**
- * **Which roles are cards and which are on the bar**, for the run `run` and the project's roles
- * `roles`, each in the order the roles are defined in.
+ * **The desks of the launch `launch` and the roles on the bar**, each in the order the roles are
+ * defined in, with `front` the pane's own run. A role is a desk where a run is in one of its seats or
+ * a task is waiting for it.
+ */
+export function desksOf(launch: AutomationLaunchStateDto, front: Say): { desks: Desk[]; idle: IdleRole[] } {
+  const names = new Map(launch.roles.map((role) => [role.role, role.name]));
+  const nameOf = (role: number | undefined) => (role === undefined ? undefined : names.get(role));
+  const desks: Desk[] = [];
+  const idle: IdleRole[] = [];
+  for (const role of launch.roles) {
+    if (role.runs.length === 0 && role.waiting === 0) {
+      idle.push({ role: role.role, name: role.name, icon: role.icon ?? null, headcount: role.headcount });
+      continue;
+    }
+    desks.push({
+      role: role.role,
+      name: role.name,
+      icon: role.icon ?? null,
+      headcount: role.headcount,
+      held: role.held || launch.status === "paused",
+      seats: role.runs.map((seat) => ({
+        run: seat.run,
+        task: seat.task === undefined ? null : `${seat.task.ref} ${seat.task.title}`,
+        step: seat.stepName ?? null,
+        state: seatStateOf(seat, front),
+        since: seatSince(seat),
+        to: [...new Set(seat.passes.flatMap((pass) => {
+          const to = pass.current === true ? nameOf(pass.toRole) : undefined;
+          return to === undefined ? [] : [to];
+        }))],
+      })),
+      free: Math.max(0, role.headcount - role.runs.length),
+      waiting: role.waiting,
+      first: role.firstWaiting.map((task) => ({
+        task: task.task,
+        ref: task.taskRef,
+        title: task.title,
+        from: nameOf(task.fromRole) ?? null,
+      })),
+    });
+  }
+  return { desks, idle };
+}
+
+/**
+ * **The desk of a run kept from before launches**, and its automation's other roles on the bar, from
+ * the run `run` and the project's roles `roles`. Its one seat is the run itself.
  *
  * A run over has no round going, and nor does one waiting for its next task: what it still carries is
  * the round it closed before.
  */
-export function roleCards(run: Say, roles: readonly TaskRoleDto[]): { cards: RoleCard[]; idle: TaskRoleDto[] } {
+export function runDesks(run: Say, roles: readonly TaskRoleDto[]): { desks: Desk[]; idle: IdleRole[] } {
   const status = run.state?.status ?? "running";
   const going = status !== "completed" && status !== "canceled" && run.state?.waiting !== true;
-  const state: RoundState =
-    status === "failed" ? "failed" : status === "paused" ? "paused" : run.interactive ? "asks" : "running";
   const own = roles.filter((role) => role.automationId === run.automationId);
-  const at = going ? run.round?.role ?? null : null;
+  // A round that wrote no role down is still under its automation's one role, where it has only one.
+  const at = going ? run.round?.role ?? (own.length === 1 ? own[0]!.id : null) : null;
+  const seat: Seat = {
+    run: run.run,
+    task: run.task === null ? null : `${run.task.ref} ${run.task.title}`,
+    step: run.step === "" ? null : run.step,
+    state: status === "failed" ? "failed" : status === "paused" ? "paused" : run.interactive ? "asks" : "running",
+    since: run.round?.startedAt ?? null,
+    to: [],
+  };
+  const deskOf = (role: number | null, name: string, icon: string | null): Desk => ({
+    role, name, icon, headcount: 1, held: false, seats: [seat], free: 0, waiting: 0, first: [],
+  });
+  const idleOf = (role: TaskRoleDto): IdleRole => ({ role: role.id, name: role.name, icon: role.icon, headcount: null });
   if (at === null) {
     // A pane no step has arrived in, on a run that has not read back yet, has no round to draw.
     const drawn = going && (run.round !== undefined || run.step !== "");
-    return { cards: drawn ? [{ role: null, name: run.automation, icon: "robot", state }] : [], idle: own };
+    return { desks: drawn ? [deskOf(null, run.automation, null)] : [], idle: own.map(idleOf) };
   }
   return {
-    cards: own
-      .filter((role) => role.id === at)
-      .map((role) => ({ role: role.id, name: role.name, icon: roleIcon(role), state })),
-    idle: own.filter((role) => role.id !== at),
+    desks: own.filter((role) => role.id === at).map((role) => deskOf(role.id, role.name, role.icon)),
+    idle: own.filter((role) => role.id !== at).map(idleOf),
   };
-}
-
-/** How the room shows its rounds: a card each, or a row each of one list. */
-export type RoomView = "cards" | "list";
-
-/** What the reader holds the room to, or `auto` for the room's size to decide. */
-export type ViewPin = "auto" | RoomView;
-
-/** The least a card is drawn at, and the room between the cards and around them (`--s-2`). */
-const CARD_W = 150;
-const CARD_H = 118;
-const GAP = 8;
-const PAD = 8;
-/** How far the room grows past where it turned to the list before it turns back to cards. */
-const BACK = 40;
-
-/** **How many cards a room of `width` by `height` holds**, the room's padding included in both. */
-export function cardsFit(width: number, height: number): number {
-  const across = Math.max(0, Math.floor((width - PAD * 2 + GAP) / (CARD_W + GAP)));
-  const down = Math.max(0, Math.floor((height - PAD * 2 + GAP) / (CARD_H + GAP)));
-  return across * down;
-}
-
-/** What the room is showing, and the size it was when it turned to the list; null before it did. */
-export type Fit = { readonly view: RoomView; readonly width: number | null; readonly height: number | null };
-
-/**
- * **What the room shows for `need` rounds at `width` by `height`**, where it showed `before`. Cards
- * that no longer all fit turn to the list at once; the list turns back only once they fit and the room
- * is `BACK` wider or taller than where it turned.
- */
-export function fitOf(before: Fit | null, width: number, height: number, need: number): Fit {
-  const fits = cardsFit(width, height) >= need;
-  if (before === null) return { view: fits ? "cards" : "list", width: null, height: null };
-  if (before.view === "cards") return fits ? before : { view: "list", width, height };
-  if (!fits) return before;
-  const grown =
-    before.width === null || before.height === null || width >= before.width + BACK || height >= before.height + BACK;
-  return grown ? { view: "cards", width: null, height: null } : before;
-}
-
-/** What the room `room` shows for `need` rounds, measured again as it changes size. */
-function useFit(room: RefObject<HTMLDivElement | null>, need: number): RoomView {
-  const [fit, setFit] = useState<Fit | null>(null);
-  useLayoutEffect(() => {
-    const at = room.current;
-    if (at === null) return;
-    const measure = () => {
-      const width = at.clientWidth, height = at.clientHeight;
-      // A room not laid out yet — a pane on a page not shown — says nothing of what fits.
-      if (width === 0 || height === 0) return;
-      setFit((before) => fitOf(before, width, height, need));
-    };
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const watch = new ResizeObserver(measure);
-    watch.observe(at);
-    return () => watch.disconnect();
-  }, [room, need]);
-  return fit?.view ?? "cards";
 }
 
 /** The clock, read again each second while `ticking`. */
@@ -213,30 +250,33 @@ function useNow(ticking: boolean): number {
   return now;
 }
 
-/** Whether the round of `card` is under way, and so has a time counted and a silence measured. */
-function underWay(card: RoleCard): boolean {
-  return card.state === "running" || card.state === "asks";
+/** Whether a seat standing at `state` is under way, and so has a time counted and a silence measured. */
+function underWay(state: SeatState): boolean {
+  return state === "running" || state === "asks";
 }
 
-/** How a round's silence stands, as its card and its row draw it. */
+/** How a round's silence stands, as its seat draws it. */
 export type Silence = {
   readonly stage: Quiet;
   /** How long the terminal has been quiet, in milliseconds, where `stage` is past 0. */
   readonly for: number | null;
 };
 
+/** No silence measured. */
+const UNMEASURED: Silence = { stage: 0, for: null };
+
 /**
- * **How the silence of `card`'s round stands at `now`**, for a terminal whose last output was at
- * `lastOutput` on a step expected to take `expectedMinutes`. A round not under way is not measured: a
- * pause or a failure is what it is, and a quiet terminal says nothing more about it.
+ * **How the silence of a round standing at `state` stands at `now`**, for a terminal whose last output
+ * was at `lastOutput` on a step expected to take `expectedMinutes`. A round not under way is not
+ * measured: a pause or a failure is what it is, and a quiet terminal says nothing more about it.
  */
 export function silenceOf(
-  card: RoleCard,
+  state: SeatState,
   lastOutput: number | null,
   now: number,
   expectedMinutes: number | null,
 ): Silence {
-  if (!underWay(card)) return { stage: 0, for: null };
+  if (!underWay(state)) return UNMEASURED;
   const stage = quietAt(lastOutput, now, expectedMinutes);
   return { stage, for: stage === 0 || lastOutput === null ? null : now - lastOutput };
 }
@@ -255,12 +295,12 @@ const ATTN_KEY = {
 } as const;
 
 /**
- * **What `card`'s round needs a person for**, with its silence at `silence`: one that may wait for a
- * person, one that failed, or one quiet into the second stage. Null for the rest.
+ * **What a round standing at `state` needs a person for**, with its silence at `silence`: one that may
+ * wait for a person, one that failed, or one quiet into the second stage. Null for the rest.
  */
-export function attnOf(card: RoleCard, silence: Silence): Attn | null {
-  if (card.state === "asks") return "asks";
-  if (card.state === "failed") return "failed";
+export function attnOf(state: SeatState, silence: Silence): Attn | null {
+  if (state === "asks") return "asks";
+  if (state === "failed") return "failed";
   return silence.stage === 2 ? "stalled" : null;
 }
 
@@ -307,9 +347,8 @@ function marksIn(at: HTMLElement): Mark[] {
   });
 }
 
-/** What is out of sight above and below the room `room`, read again only as it scrolls or changes
- *  size — and as it turns between cards and the list, which only a change of size or a press does. */
-function useUnseen(room: RefObject<HTMLDivElement | null>, view: RoomView): { up: Attn[]; down: Attn[] } {
+/** What is out of sight above and below the room `room`, read again only as it scrolls or changes size. */
+function useUnseen(room: RefObject<HTMLDivElement | null>): { up: Attn[]; down: Attn[] } {
   const [unseen, setUnseen] = useState<{ up: Attn[]; down: Attn[] }>({ up: [], down: [] });
   useLayoutEffect(() => {
     const at = room.current;
@@ -332,7 +371,7 @@ function useUnseen(room: RefObject<HTMLDivElement | null>, view: RoomView): { up
       at.removeEventListener("scroll", measure);
       watch.disconnect();
     };
-  }, [room, view]);
+  }, [room]);
   return unseen;
 }
 
@@ -365,367 +404,310 @@ function UnseenNotice({ attns, up, onPress }: { attns: readonly Attn[]; up: bool
   );
 }
 
-/** The clock a quiet round is marked with: how long its terminal has printed nothing. It is the mark the
- *  notice at the room's edge reads where `attn` is a stall. */
-function QuietChip({ silence, attn }: { silence: Silence; attn: Attn | null }) {
+/**
+ * **The line under the pane for a failed round**, where it was filed: whose round failed — the role by
+ * its name, or the automation where the round was under none — whom it was filed to, and the task.
+ * Null where the run did not fail or filed nothing.
+ */
+export function filedLine(run: Say, roles: readonly TaskRoleDto[]): string | null {
+  const incident = run.round?.incident;
+  if (incident === undefined || run.state?.status !== "failed") return null;
+  const own = run.round?.role ?? null;
+  const failed = (own === null ? undefined : roles.find((role) => role.id === own))?.name ?? run.automation;
+  const to = incident.role === null ? undefined : roles.find((role) => role.id === incident.role);
+  if (to !== undefined) return tf("auto.run.roles.filedRole", { role: failed, to: to.name, ref: incident.ref });
+  if (incident.person) return tf("auto.run.roles.filedPerson", { role: failed, ref: incident.ref });
+  return tf("auto.run.roles.filed", { role: failed, ref: incident.ref });
+}
+
+/** The sentence `key` with its `{n}` drawn bold. */
+function withBold(key: string, n: number): ReactNode {
+  const [before, after = ""] = t(key).split("{n}");
+  return (
+    <>
+      {before}
+      <b>{n}</b>
+      {after}
+    </>
+  );
+}
+
+/** What a seat says where its time would be, where its round is doing more than working. */
+function SeatChip({ state, silence }: { state: SeatState; silence: Silence }) {
+  const attn = attnOf(state, silence);
+  if (state === "asks" || state === "failed") {
+    return (
+      <span className="runseat__chip" data-state={state} data-attn={attn ?? undefined}>
+        {t(state === "asks" ? "auto.run.roles.asks" : "auto.run.roles.failed")}
+      </span>
+    );
+  }
   if (silence.stage === 0 || silence.for === null) return null;
   return (
-    <span
-      className="runroles__chip runroles__quiet"
-      data-quiet={silence.stage}
-      data-attn={attn === "stalled" ? attn : undefined}
-    >
+    <span className="runseat__chip" data-quiet={silence.stage} data-attn={attn ?? undefined}>
       <Icon name="clock" />
       {tf("auto.run.roles.quiet", { time: clockOf(silence.for) })}
     </span>
   );
 }
 
-/** The chip a card or row says `chipOf` in. It is the mark the notice at the room's edge reads where
- *  `attn` is a wait or a failure. */
-function Chip({ state, attn, children }: { state: RoleCard["state"]; attn: Attn | null; children: string }) {
-  return (
-    <span
-      className="runroles__chip"
-      data-state={state}
-      data-attn={attn === "asks" || attn === "failed" ? attn : undefined}
-    >
-      {children}
-    </span>
-  );
+/** How long a seat's round has run, in whole minutes, the way the locale writes a number of minutes. */
+export function minutesOf(ms: number): string {
+  return formatNumber(Math.max(0, Math.floor(ms / 60_000)), { style: "unit", unit: "minute", unitDisplay: "narrow" });
 }
 
-/** What a card says under the time, where its round is doing more than working. */
-function chipOf(card: RoleCard, run: Say): string | null {
-  if (card.state === "asks") return t("auto.run.roles.asks");
-  if (card.state === "failed") return t("auto.run.roles.failed");
-  if (card.state === "paused") return run.state?.word ?? null;
-  return null;
-}
-
-/**
- * **The line under the pane for a failed round**, where it was filed: whose round failed, whom it was
- * filed to — the role by its name, or a person — and the task. Null where no failed card was filed.
- */
-export function filedLine(cards: readonly RoleCard[], run: Say, roles: readonly TaskRoleDto[]): string | null {
-  const incident = run.round?.incident;
-  const failed = cards.find((card) => card.state === "failed");
-  if (incident === undefined || failed === undefined) return null;
-  const to = incident.role === null ? undefined : roles.find((role) => role.id === incident.role);
-  if (to !== undefined) return tf("auto.run.roles.filedRole", { role: failed.name, to: to.name, ref: incident.ref });
-  if (incident.person) return tf("auto.run.roles.filedPerson", { role: failed.name, ref: incident.ref });
-  return tf("auto.run.roles.filed", { role: failed.name, ref: incident.ref });
-}
-
-/** One line out of a card: to the role it hands on to, or to the role its failure was filed to. */
-export type Hand = {
-  /** The card's role, or null for a round under no role. */
-  readonly from: number | null;
-  readonly to: number;
-  /** The name of the role at the other end. */
-  readonly name: string;
-  /** Where the failure was filed, drawn in the stop colour; otherwise a hand-on. */
-  readonly filed: boolean;
-};
-
-/**
- * **The lines out of the cards `cards`**: the role each failed round was filed to, where it was filed
- * to a role of the project. A failure filed to a person, or to a role since gone, has no line.
- */
-export function handsOf(cards: readonly RoleCard[], run: Say, roles: readonly TaskRoleDto[]): Hand[] {
-  const incident = run.round?.incident;
-  if (incident === undefined || incident.role === null) return [];
-  const to = roles.find((role) => role.id === incident.role);
-  if (to === undefined) return [];
-  return cards
-    .filter((card) => card.state === "failed")
-    .map((card) => ({ from: card.role, to: to.id, name: to.name, filed: true }));
-}
-
-/**
- * **The roles a card or a row writes as "→ role"**: the ends of the lines out of the role `from` that
- * have no card among `shown`. A row of the list passes no card, and so writes every end.
- */
-export function handsAway(from: number | null, hands: readonly Hand[], shown: readonly RoleCard[]): Hand[] {
-  return hands.filter((hand) => hand.from === from && !shown.some((card) => card.role === hand.to));
-}
-
-/** One line drawn between two cards, in the room's own coordinates. */
-type Stroke = { key: string; path: string; head: string; filed: boolean };
-
-/** A card's box within the room. */
-type Box = { l: number; t: number; r: number; b: number; cx: number };
-
-/**
- * **The line from the card at `a` to the card at `b`**: straight across where they stand side by
- * side, and otherwise down or up from the middle of one to the middle of the other, turning halfway.
- */
-function strokeOf(a: Box, b: Box): { path: string; head: string } {
-  if (Math.abs(a.t - b.t) < 4) {
-    const y = a.t + 24;
-    const [x0, x1, d] = b.l >= a.r ? [a.r, b.l - 2, -6] : [a.l, b.r + 2, 6];
-    return { path: `M${x0} ${y} H${x1}`, head: `M${x1 + d} ${y - 4} L${x1} ${y} L${x1 + d} ${y + 4}` };
-  }
-  const down = b.t > a.t;
-  const [y0, y1, d] = down ? [a.b, b.t - 2, -6] : [a.t, b.b + 2, 6];
-  const ym = (y0 + y1) / 2;
-  return {
-    path: `M${a.cx} ${y0} V${ym} H${b.cx} V${y1}`,
-    head: `M${b.cx - 4} ${y1 + d} L${b.cx} ${y1} L${b.cx + 4} ${y1 + d}`,
-  };
-}
-
-/** The lines between the cards in `room`, measured again as the room changes size. */
-function useStrokes(room: RefObject<HTMLDivElement | null>, hands: readonly Hand[], view: RoomView): Stroke[] {
-  const [strokes, setStrokes] = useState<Stroke[]>([]);
-  useLayoutEffect(() => {
-    const at = room.current;
-    if (at === null) return;
-    const measure = () => {
-      const box = (role: number | null): Box | null => {
-        const card = at.querySelector<HTMLElement>(`.runroles__card[data-role="${role}"]`);
-        if (card === null) return null;
-        const l = card.offsetLeft, t = card.offsetTop;
-        return { l, t, r: l + card.offsetWidth, b: t + card.offsetHeight, cx: l + card.offsetWidth / 2 };
-      };
-      const next: Stroke[] = [];
-      for (const hand of hands) {
-        const a = box(hand.from), b = box(hand.to);
-        if (a === null || b === null || hand.from === hand.to) continue;
-        next.push({ key: `${hand.from}-${hand.to}-${hand.filed}`, filed: hand.filed, ...strokeOf(a, b) });
-      }
-      setStrokes((before) => (before.length === 0 && next.length === 0 ? before : next));
-    };
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const watch = new ResizeObserver(measure);
-    watch.observe(at);
-    return () => watch.disconnect();
-  }, [room, hands, view]);
-  return strokes;
-}
-
-/** One role's card, pressed to read its round's terminal — the pane's own run's — where `onOpen` is given. */
-function Card({ card, run, now, silence, away, onOpen }: {
-  card: RoleCard; run: Say; now: number; silence: Silence; away: readonly Hand[]; onOpen?: (run: number) => void;
+/** One seat at work of the role `role`, pressed to turn the pane to its run's terminal where `onOpen` is given. */
+function SeatRow({ role, n, seat, held, front, now, silence, onOpen }: {
+  role: string; n: number; seat: Seat; held: boolean; front: boolean; now: number; silence: Silence;
+  onOpen?: (run: number) => void;
 }) {
-  // The time is the round's, counted while it is under way: a paused or failed round has stopped at
-  // a moment the pane does not know.
-  const since = run.round?.startedAt ?? null;
-  const ran = since !== null && underWay(card) ? clockOf(now - since) : null;
-  const chip = chipOf(card, run);
-  const attn = attnOf(card, silence);
   const quiet = silence.stage > 0;
-  return (
-    <li
-      className="runroles__card"
-      data-role={card.role ?? undefined}
-      data-state={card.state}
-      data-quiet={quiet ? silence.stage : undefined}
-    >
-      {/* The whole card is the press, laid over it so that what the card says stays read as text. */}
-      {onOpen !== undefined && (
-        <button
-          type="button"
-          className="runroles__open"
-          aria-label={tf("auto.run.roundTerminal", { name: card.name })}
-          onClick={() => onOpen(run.run)}
-        />
-      )}
-      <span className="runroles__top">
-        <Icon name={card.icon} />
-        <span className="runroles__name">{card.name}</span>
-        {/* A quiet terminal is not drawn as one at work: the dot would say something is happening
-            that the stream does not show. */}
-        {card.state === "running" && !quiet && (
-          <span className="runroles__pulse" role="img" aria-label={t("auto.run.roles.working")} />
+  const going = underWay(seat.state);
+  const ran = seat.since !== null && going && !quiet && seat.state !== "asks" ? minutesOf(now - seat.since) : null;
+  const body = (
+    <>
+      <span className="runseat__n">{n}</span>
+      <span className="runseat__body">
+        {seat.task !== null && <span className="runseat__task" title={seat.task}>{seat.task}</span>}
+        {seat.step !== null && <span className="runseat__step">{seat.step}</span>}
+        {seat.to.map((to) => (
+          <span key={to} className="runseat__hand">{tf("auto.run.roles.handsTo", { role: to })}</span>
+        ))}
+        {held && going && <span className="runseat__last">{t("auto.run.roles.lastTask")}</span>}
+      </span>
+      <span className="runseat__end">
+        <SeatChip state={seat.state} silence={silence} />
+        {ran !== null && (
+          <span className="runseat__time">
+            {tf("face.elapsed", { time: ran })}
+            {seat.state === "running" && (
+              <span className="runroles__pulse" role="img" aria-label={t("auto.run.roles.working")} />
+            )}
+          </span>
         )}
       </span>
-      {run.task !== null && (
-        <span className="runroles__task" title={`${run.task.ref} ${run.task.title}`}>
-          {run.task.ref} {run.task.title}
-        </span>
-      )}
-      {run.step !== "" && <span className="runroles__step">{run.step}</span>}
-      {(ran !== null || chip !== null || quiet || away.length > 0) && (
-        <span className="runroles__foot">
-          {ran !== null && <span className="runroles__time">{tf("face.elapsed", { time: ran })}</span>}
-          {chip !== null && <Chip state={card.state} attn={attn}>{chip}</Chip>}
-          <QuietChip silence={silence} attn={attn} />
-          {away.map((hand) => (
-            <span key={`${hand.to}-${hand.filed}`} className="runroles__hand" data-to={hand.to}>
-              → {hand.name}
-            </span>
-          ))}
-        </span>
+    </>
+  );
+  const shared = {
+    className: "runseat",
+    "data-run": seat.run,
+    "data-state": seat.state,
+    "data-quiet": quiet ? silence.stage : undefined,
+  };
+  return (
+    <li>
+      {onOpen === undefined ? (
+        <div {...shared}>{body}</div>
+      ) : (
+        <button
+          type="button"
+          {...shared}
+          aria-current={front ? "true" : undefined}
+          aria-label={tf("auto.run.seatOpen", { role, n, task: seat.task ?? seat.step ?? "" })}
+          onClick={() => onOpen(seat.run)}
+        >
+          {body}
+        </button>
       )}
     </li>
   );
 }
 
-/** One round as a row of the list: what its card says, on one line, with no dot and no line drawn —
- *  pressed, like the card, to read its round's terminal where `onOpen` is given. */
-function Row({ card, run, now, silence, away, onOpen }: {
-  card: RoleCard; run: Say; now: number; silence: Silence; away: readonly Hand[]; onOpen?: (run: number) => void;
+/** How the square of a seat holding `seat` is filled: empty where it is free, or its round is paused or
+ *  waiting; in the stop colour where it failed. */
+function squareOf(seat: Seat | undefined, silence: Silence | undefined): "on" | "asks" | "stall" | "failed" | undefined {
+  if (seat === undefined) return undefined;
+  if (seat.state === "failed") return "failed";
+  if (!underWay(seat.state)) return undefined;
+  if (seat.state === "asks") return "asks";
+  return (silence?.stage ?? 0) > 0 ? "stall" : "on";
+}
+
+/** The "⋯" at the end of a desk's head: three dots, drawn. */
+function Dots() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <circle cx="3.5" cy="8" r="1.4" fill="currentColor" />
+      <circle cx="8" cy="8" r="1.4" fill="currentColor" />
+      <circle cx="12.5" cy="8" r="1.4" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** One role with a task: its head, a row per seat at work, its free seats, and the tasks waiting for it. */
+function DeskView({ desk, front, now, silenceAt, onOpen }: {
+  desk: Desk; front: number; now: number; silenceAt: (seat: Seat) => Silence; onOpen?: (run: number) => void;
 }) {
-  const since = run.round?.startedAt ?? null;
-  const ran = since !== null && underWay(card) ? clockOf(now - since) : null;
-  const chip = chipOf(card, run);
-  const attn = attnOf(card, silence);
+  const silences = desk.seats.map(silenceAt);
+  const asks = desk.seats.some((seat) => seat.state === "asks");
+  const stalled = silences.some((one) => one.stage > 0);
+  // At work is under way: a seat failed, paused or waiting holds its place but is not counted.
+  const working = desk.seats.filter((seat) => underWay(seat.state)).length;
+  // A square per seat: as many as the headcount, or as many as are at work where that is more.
+  const squares = Array.from({ length: Math.max(desk.headcount, desk.seats.length) }, (_, at) => desk.seats[at]);
   return (
     <li
-      className="runroles__row"
-      data-role={card.role ?? undefined}
-      data-state={card.state}
-      data-quiet={silence.stage > 0 ? silence.stage : undefined}
+      className="runroles__desk"
+      data-role={desk.role ?? undefined}
+      data-state={asks ? "asks" : stalled ? "stall" : undefined}
+      data-held={desk.held || undefined}
     >
-      {onOpen !== undefined && (
+      <div className="runroles__head">
+        <RoleIcon role={desk} size={22} />
+        <span className="runroles__name">{desk.name}</span>
+        {desk.held && <span className="runroles__held">{t("auto.run.roles.held")}</span>}
+        <span className="runroles__staff">
+          {tf("auto.run.roles.staff", { n: working, m: desk.headcount })}
+        </span>
+        <span className="runroles__squares" aria-hidden="true">
+          {squares.map((seat, at) => (
+            <i
+              key={at}
+              data-state={squareOf(seat, silences[at])}
+            />
+          ))}
+        </span>
         <button
           type="button"
-          className="runroles__open"
-          aria-label={tf("auto.run.roundTerminal", { name: card.name })}
-          onClick={() => onOpen(run.run)}
-        />
+          className="runroles__more"
+          aria-haspopup="dialog"
+          aria-expanded={false}
+          aria-label={tf("auto.run.roles.menu", { name: desk.name })}
+        >
+          <Dots />
+        </button>
+      </div>
+      {(desk.seats.length > 0 || desk.free > 0) && (
+        <ul className="runroles__seats">
+          {desk.seats.map((seat, at) => (
+            <SeatRow
+              key={seat.run}
+              role={desk.name}
+              n={at + 1}
+              seat={seat}
+              held={desk.held}
+              front={seat.run === front}
+              now={now}
+              silence={silences[at]!}
+              onOpen={onOpen}
+            />
+          ))}
+          {desk.free > 0 && (
+            <li>
+              <div className="runseat runseat--free">
+                <span className="runseat__n">{desk.free}</span>
+                <span className="runseat__body">
+                  <span className="runseat__task">
+                    {tf(desk.held ? "auto.run.seatsFreeHeld" : "auto.run.seatsFree", { n: desk.free })}
+                  </span>
+                </span>
+              </div>
+            </li>
+          )}
+        </ul>
       )}
-      <Icon name={card.icon} />
-      <span className="runroles__rowname">
-        <span className="runroles__name">{card.name}</span>
-        {away.map((hand) => (
-          <span key={`${hand.to}-${hand.filed}`} className="runroles__to">
-            → {hand.name}
+      {desk.waiting > 0 && (
+        <div className="runroles__stack">
+          <span className="runroles__stackhead">
+            <span className="runroles__sheets" aria-hidden="true" />
+            <span>{withBold("auto.run.roles.waiting", desk.waiting)}</span>
           </span>
-        ))}
-      </span>
-      <span className="runroles__rowbody">
-        {run.task !== null && (
-          <span className="runroles__task" title={`${run.task.ref} ${run.task.title}`}>
-            {run.task.ref} {run.task.title}
-          </span>
-        )}
-        {run.step !== "" && <span className="runroles__step">{run.step}</span>}
-      </span>
-      <span className="runroles__rowend">
-        {chip !== null && <Chip state={card.state} attn={attn}>{chip}</Chip>}
-        <QuietChip silence={silence} attn={attn} />
-        {away.map((hand) => (
-          <span key={`${hand.to}-${hand.filed}`} className="runroles__hand" data-to={hand.to}>
-            → {hand.name}
-          </span>
-        ))}
-        {ran !== null && <span className="runroles__time">{tf("face.elapsed", { time: ran })}</span>}
-      </span>
+          {desk.first.map((task) => (
+            <span
+              key={task.task}
+              className="runroles__waiting"
+              data-from={task.from === null ? undefined : true}
+              title={`${task.ref} ${task.title}`}
+            >
+              {task.ref} {task.title}
+              {task.from !== null && `　${tf("auto.run.roles.from", { role: task.from })}`}
+            </span>
+          ))}
+          {desk.waiting > desk.first.length && (
+            <span className="runroles__waiting">{tf("auto.run.roles.more", { n: desk.waiting - desk.first.length })}</span>
+          )}
+        </div>
+      )}
     </li>
   );
 }
 
 /**
  * Drawn again only when what it reads of the run changes: the run's words are built afresh on each
- * draw of the workspace, and drawing every pane's cards again on each of those would slow the typing
+ * draw of the workspace, and drawing every pane's desks again on each of those would slow the typing
  * in the panes around it.
  *
  * `lastOutput` reads when the run's terminal last printed (`../talk/plate`). It is read at each tick
- * rather than handed in as a value, because the terminal prints far more often than the cards are
+ * rather than handed in as a value, because the terminal prints far more often than the desks are
  * drawn.
  */
 export const RunRoles = memo(
-  function RunRoles({ run, project, launch = null, pin = "auto", onOpen, lastOutput }: {
+  function RunRoles({ run, project, launch = null, onOpen, lastOutput }: {
     run: Say;
     project: number;
-    /** The launch the pane draws, whose seats are listed under the room; null for a run kept from
-     *  before launches were, which sits in no seat. */
+    /** The launch the pane draws; null for a run kept from before launches were, which sits in no seat. */
     launch?: number | null;
-    pin?: ViewPin;
     /** Turn the pane to the terminal of the run `run` — its own, or another seat's of its launch. */
     onOpen?: (run: number) => void;
     lastOutput?: () => number | null;
   }) {
     const roles = useProjectRoles(project);
     const launchState = useLaunchState(launch);
-    const seats = useMemo(() => seatsOf(launchState), [launchState]);
-    const { cards, idle } = useMemo(() => roleCards(run, roles), [run, roles]);
-    const filed = useMemo(() => filedLine(cards, run, roles), [cards, run, roles]);
-    const hands = useMemo(() => handsOf(cards, run, roles), [cards, run, roles]);
+    // A launch not read back yet draws nothing rather than the run alone, which it would then take back.
+    const reading = launch !== null && launchState === null;
+    const { desks, idle } = useMemo(
+      () => (launchState !== null ? desksOf(launchState, run) : reading ? { desks: [], idle: [] } : runDesks(run, roles)),
+      [launchState, reading, run, roles],
+    );
+    const filed = useMemo(() => filedLine(run, roles), [run, roles]);
     const room = useRef<HTMLDivElement>(null);
-    const fit = useFit(room, cards.length);
-    const view = pin === "auto" ? fit : pin;
-    const desk = useRef<HTMLDivElement>(null);
-    const strokes = useStrokes(desk, hands, view);
-    const unseen = useUnseen(room, view);
+    const unseen = useUnseen(room);
     const jump = (up: boolean) => {
       if (room.current !== null) scrollToUnseen(room.current, up);
     };
-    // The clock ticks while a round is under way: for its time, and for how long its terminal has
-    // been quiet, which is measured whether or not the round's start was read.
-    const now = useNow(cards.some(underWay) || seats.some((role) => role.runs.some((one) => {
-      const state = seatStateOf(one, run);
-      return state === "running" || state === "asks";
-    })));
+    // The clock ticks while a seat is at work: for its time, and for how long the terminal in front
+    // has been quiet, which is measured whether or not the round's start was read.
+    const now = useNow(desks.some((desk) => desk.seats.some((seat) => underWay(seat.state))));
     const last = lastOutput?.() ?? null;
     const expected = run.expectedMinutes ?? null;
+    // Only the terminal in front is the pane's to hear; another seat's silence is not measured here.
+    const silenceAt = (seat: Seat) => (seat.run === run.run ? silenceOf(seat.state, last, now, expected) : UNMEASURED);
     return (
-      <div className="runroles" data-view={view} aria-label={t("auto.run.faceRoles")} role="region">
+      <div className="runroles" aria-label={t("auto.run.faceRoles")} role="region">
         <div className="runroles__view">
           <div className="runroles__room" ref={room}>
-            {cards.length === 0 ? (
-              <p className="runroles__none">{t("auto.run.roles.none")}</p>
-            ) : view === "list" ? (
-              <ul className="runroles__rows">
-                {cards.map((card) => (
-                  <Row
-                    key={card.role ?? "run"}
-                    card={card}
-                    run={run}
+            {desks.length === 0 ? (
+              !reading && <p className="runroles__none">{t("auto.run.roles.none")}</p>
+            ) : (
+              <ul className="runroles__desks">
+                {desks.map((desk) => (
+                  <DeskView
+                    key={desk.role ?? "run"}
+                    desk={desk}
+                    front={run.run}
                     now={now}
-                    silence={silenceOf(card, last, now, expected)}
-                    away={handsAway(card.role, hands, [])}
+                    silenceAt={silenceAt}
                     onOpen={onOpen}
                   />
                 ))}
               </ul>
-            ) : (
-              <div className="runroles__desk" ref={desk}>
-                <ul className="runroles__cards">
-                  {cards.map((card) => (
-                    <Card
-                      key={card.role ?? "run"}
-                      card={card}
-                      run={run}
-                      now={now}
-                      silence={silenceOf(card, last, now, expected)}
-                      away={handsAway(card.role, hands, cards)}
-                      onOpen={onOpen}
-                    />
-                  ))}
-                </ul>
-                {strokes.length > 0 && (
-                  <svg className="runroles__strokes" aria-hidden="true">
-                    {strokes.map((stroke) => (
-                      <g key={stroke.key} data-filed={stroke.filed || undefined}>
-                        <path d={stroke.path} />
-                        <path d={stroke.head} />
-                      </g>
-                    ))}
-                  </svg>
-                )}
-              </div>
             )}
           </div>
           <UnseenNotice attns={unseen.up} up onPress={() => jump(true)} />
           <UnseenNotice attns={unseen.down} up={false} onPress={() => jump(false)} />
         </div>
-        {onOpen !== undefined && seats.length > 0 && (
-          <LaunchSeats seats={seats} front={run} now={now} onOpen={onOpen} />
-        )}
         {idle.length > 0 && (
           <div className="runroles__idle">
             <span className="runroles__idlecount">{tf("auto.run.roles.idle", { n: idle.length })}</span>
-            <ul className="runroles__idlelist">
-              {idle.map((role) => (
-                <li key={role.id} data-role={role.id} title={role.name}>
-                  <Icon name={roleIcon(role)} label={tf("auto.run.roles.idleOne", { name: role.name })} />
-                </li>
-              ))}
-            </ul>
+            {idle.map((role) => (
+              <span key={role.role} className="runroles__idleone" data-role={role.role}>
+                <RoleIcon role={role} size={18} />
+                {role.name}
+                {role.headcount !== null && (
+                  <span className="runroles__idlecountone">{tf("auto.run.roles.headcount", { n: role.headcount })}</span>
+                )}
+              </span>
+            ))}
           </div>
         )}
         {filed !== null && (
@@ -741,7 +723,6 @@ export const RunRoles = memo(
   (before, after) =>
     before.project === after.project &&
     before.launch === after.launch &&
-    before.pin === after.pin &&
     (before.onOpen === undefined) === (after.onOpen === undefined) &&
     (before.lastOutput === undefined) === (after.lastOutput === undefined) &&
     before.run.run === after.run.run &&
@@ -762,48 +743,6 @@ export const RunRoles = memo(
     (before.run.state?.waiting === true) === (after.run.state?.waiting === true),
 );
 
-/** How the run in a seat stands, as its row says it. */
-export type SeatState =
-  /** Under way. */
-  | "running"
-  /** Under way on a step that may wait for a person — said of the seat whose terminal is the pane's
-   *  now, the only one whose step the pane reads (`Say.interactive`). */
-  | "asks"
-  /** Before a built-in that waits for something, or an action that takes one run at a time. */
-  | "waiting"
-  /** Held by a pause. */
-  | "paused"
-  /** The run failed. */
-  | "failed";
-
-/** One role of a launch with runs in its seats, as the roles face lists them. */
-export type RoleSeats = {
-  readonly role: number;
-  readonly name: string;
-  readonly icon: IconName;
-  /** The runs in its seats, oldest first: seat 1 is the first of them. */
-  readonly runs: readonly AutomationRunCardDto[];
-  /** How many of its seats have no run in them. */
-  readonly free: number;
-};
-
-/**
- * **The roles of the launch `launch` that have someone in a seat**, in the order the roles are
- * defined in. A role with no run in a seat is not listed: it has nothing to press.
- */
-export function seatsOf(launch: AutomationLaunchStateDto | null): RoleSeats[] {
-  if (launch === null) return [];
-  return launch.roles
-    .filter((role) => role.runs.length > 0)
-    .map((role) => ({
-      role: role.role,
-      name: role.name,
-      icon: iconOf(role.icon),
-      runs: role.runs,
-      free: Math.max(0, role.headcount - role.runs.length),
-    }));
-}
-
 /** **Which seat the run `run` sits in** in the launch `launch` — its role and its number from 1 — or
  *  null where it sits in none of them. */
 export function seatOf(launch: AutomationLaunchStateDto | null, run: number): { role: string; n: number } | null {
@@ -812,103 +751,6 @@ export function seatOf(launch: AutomationLaunchStateDto | null, run: number): { 
     if (at >= 0) return { role: role.name, n: at + 1 };
   }
   return null;
-}
-
-/** How the run in a seat stands: off its row, and off the pane's own run where it is that one. */
-export function seatStateOf(seat: AutomationRunCardDto, front: Say): SeatState {
-  if (seat.status === "failed") return "failed";
-  if (seat.status === "paused") return "paused";
-  if (seat.waiting || seat.waitsForRoom) return "waiting";
-  return seat.run === front.run && front.interactive ? "asks" : "running";
-}
-
-/** When the round in a seat began, in milliseconds since the epoch, or null where nothing is written. */
-function seatSince(seat: AutomationRunCardDto): number | null {
-  const at = Date.parse(seat.roleStartedAt ?? seat.startedAt ?? "");
-  return Number.isNaN(at) ? null : at;
-}
-
-/** One seat of a role, pressed to turn the pane to its run's terminal. */
-function SeatRow({ role, n, seat, state, front, now, onOpen }: {
-  role: string; n: number; seat: AutomationRunCardDto; state: SeatState; front: boolean; now: number;
-  onOpen: (run: number) => void;
-}) {
-  const task = seat.task === undefined ? null : `${seat.task.ref} ${seat.task.title}`;
-  const since = seatSince(seat);
-  const going = state === "running" || state === "asks";
-  const ran = since !== null && going ? clockOf(now - since) : null;
-  const chip = state === "asks" ? t("auto.run.roles.asks") : state === "failed" ? t("auto.run.roles.failed") : null;
-  return (
-    <li>
-      <button
-        type="button"
-        className="runseat"
-        data-run={seat.run}
-        data-state={state}
-        aria-current={front ? "true" : undefined}
-        aria-label={tf("auto.run.seatOpen", { role, n, task: task ?? seat.stepName ?? "" })}
-        onClick={() => onOpen(seat.run)}
-      >
-        <span className="runseat__n">{n}</span>
-        <span className="runseat__body">
-          {task !== null && <span className="runseat__task" title={task}>{task}</span>}
-          {seat.stepName !== undefined && <span className="runseat__step">{seat.stepName}</span>}
-        </span>
-        <span className="runseat__end">
-          {chip !== null && <span className="runroles__chip" data-state={state}>{chip}</span>}
-          {ran !== null && <span className="runroles__time">{tf("face.elapsed", { time: ran })}</span>}
-          {state === "running" && (
-            <span className="runroles__pulse" role="img" aria-label={t("auto.run.roles.working")} />
-          )}
-        </span>
-      </button>
-    </li>
-  );
-}
-
-/**
- * **The seats of a launch, by role** — each a row pressed to turn the pane to that seat's terminal,
- * and the seats nobody is in as one row that cannot be pressed.
- */
-function LaunchSeats({ seats, front, now, onOpen }: {
-  seats: readonly RoleSeats[]; front: Say; now: number; onOpen: (run: number) => void;
-}) {
-  return (
-    <div className="runseats">
-      {seats.map((role) => (
-        <section key={role.role} className="runseats__role" data-role={role.role}>
-          <h3 className="runseats__head">
-            <Icon name={role.icon} />
-            <span className="runseats__name">{role.name}</span>
-          </h3>
-          <ul className="runseats__list">
-            {role.runs.map((seat, at) => (
-              <SeatRow
-                key={seat.run}
-                role={role.name}
-                n={at + 1}
-                seat={seat}
-                state={seatStateOf(seat, front)}
-                front={seat.run === front.run}
-                now={now}
-                onOpen={onOpen}
-              />
-            ))}
-            {role.free > 0 && (
-              <li>
-                <div className="runseat runseat--free">
-                  <span className="runseat__n">{role.free}</span>
-                  <span className="runseat__body">
-                    <span className="runseat__task">{tf("auto.run.seatsFree", { n: role.free })}</span>
-                  </span>
-                </div>
-              </li>
-            )}
-          </ul>
-        </section>
-      ))}
-    </div>
-  );
 }
 
 /**
@@ -932,7 +774,7 @@ export function RunTermBar({ run, project, launch, byStep, onBack }: {
   const own = run.round?.role ?? null;
   const role = own === null ? undefined : roles.find((one) => one.id === own);
   const name = role?.name ?? run.automation;
-  // The time is the round's, counted while it is under way, as on its card.
+  // The time is the round's, counted while it is under way, as on its seat.
   const status = run.state?.status ?? "running";
   const going = status === "running" && run.state?.waiting !== true;
   const since = run.round?.startedAt ?? run.startedAt;
@@ -949,7 +791,7 @@ export function RunTermBar({ run, project, launch, byStep, onBack }: {
         <button type="button" className="runterm__back" onClick={onBack}>
           {t("auto.run.backToRoles")}
         </button>
-        <Icon name={role === undefined ? "robot" : roleIcon(role)} />
+        {role === undefined ? <Icon name="robot" /> : <RoleIcon role={role} size={18} />}
         <span className="runterm__body">
           <span className="runterm__task">{head}</span>
           {run.step !== "" && (
@@ -996,8 +838,8 @@ export function useRoundFellLines(run: Say | null, project: number, code: number
 /**
  * **Where Amenbo filed a failed round, as its terminal's last line says it** — to the role it was filed
  * to, to a person, or to neither where that role is gone. Null where the run filed nothing. It is read
- * off the round's incident alone, not off the role cards: a round of an automation that gives it no
- * role has no card, and is filed all the same.
+ * off the round's incident alone, not off the desks: a round of an automation that gives it no role
+ * sits at no role's desk, and is filed all the same.
  */
 function filedInTerminal(run: Say, roles: readonly TaskRoleDto[]): string | null {
   const incident = run.round?.incident;

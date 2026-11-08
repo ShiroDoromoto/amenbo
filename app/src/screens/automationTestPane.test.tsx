@@ -3,7 +3,7 @@
 // and the pane it opens, so what is guarded is the press and the stepping rather than the build
 // screen's drawing of them.
 //
-// What these guard: **the press asks in the launch's own dialog, less the files**, and hands the test
+// What these guard: **the press asks in a dialog of its own what the entry reads**, and hands the test
 // run what the dialog was given; **the pane steps through what came back** — the step, who would do it,
 // the prompt an agent would get, the way out it leaves by — marking the box the step was opened from;
 // **past the last step it says how the walk ended**; and **a refusal is core's sentence**, with no
@@ -20,10 +20,9 @@ const hoisted = vi.hoisted(() => ({
 
 vi.mock("../core/automations", () => ({
   useLaunchAsks: () => hoisted.asks,
-  NOTHING_HANDED: { files: [], title: "", notes: "", classification: [] },
+  NOTHING_HANDED: { title: "", notes: "", classification: [] },
   testRunAutomation: hoisted.walk,
 }));
-vi.mock("../core/dialog", () => ({ pickFiles: async () => [] }));
 
 import { errText, t, tf } from "../core/i18n";
 import { AutomationTestPane, useAutomationTestRun } from "./AutomationTestPane";
@@ -107,16 +106,15 @@ async function walk() {
 }
 
 describe("a test run on the build screen", () => {
-  it("asks in the launch's dialog without the files, and hands the test run what it was given", async () => {
+  it("asks in its own dialog, and hands the test run what it was given", async () => {
     hoisted.walk.mockResolvedValue(WALKED);
     await click(container.querySelector<HTMLButtonElement>(".press")!);
     expect(document.body.textContent).toContain(tf("auto.test.title", { name: "Article" }));
-    expect(document.body.textContent).not.toContain(t("auto.hand.files"));
     await type(document.body.querySelector<HTMLInputElement>(".launchhand__title")!, "Rainy season");
     await type(document.body.querySelector<HTMLTextAreaElement>("textarea")!, "chores");
     await click(button(t("auto.test.run")));
     expect(hoisted.walk).toHaveBeenCalledWith(7, 1, ["/w/blog"], {
-      files: [], title: "Rainy season", notes: "chores", classification: [],
+      title: "Rainy season", notes: "chores", classification: [],
     });
     expect(walked).toHaveBeenCalledOnce();
   });

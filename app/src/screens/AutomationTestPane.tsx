@@ -9,8 +9,8 @@
 // opened from. Asking core again for each step would be a second walk, and nothing it does between
 // two presses would be any different.
 //
-// **It asks what a launch asks, in the launch's own dialog** (`../components/LaunchHanding`): a test
-// run walks from what the entry would be handed, so the two are asked the same way.
+// **It asks what the entry reads, in a dialog of its own** (`../components/LaunchHanding`): a test run
+// walks from the task the entry would take. A launch asks nothing (`AMB-D-1123`).
 //
 // **The head says no agent is running**, on every step: the prompt under it is what one would be
 // started on, and a reader who took it for a pane at work would wait for an answer that never comes.
@@ -47,7 +47,6 @@ export function useAutomationTestRun(projectId: number | null, onWalked: () => v
     <LaunchHanding
       id={asking.id}
       name={asking.name}
-      testing
       onClose={() => setAsking(null)}
       onStart={(handed) => {
         setAsking(null);

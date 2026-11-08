@@ -4511,22 +4511,20 @@ impl Instructor {
             // **Saving it as its next version**, pressed on the same head. The head then says the
             // version it saved, and the press is not offered again until something else is written.
             (Domain::Automation, "save") => "On the build screen's head, press the button that saves it. Confirm the head then says which version was saved, and the button cannot be pressed again.".to_string(),
-            // The press that makes a run. It is the build screen's, and the two other ways in below
-            // make the same run without handing anything over either.
-            // A closed workspace is refused at the press itself, before the dialog asks what to hand
-            // over, so there is no dialog to answer on that road.
-            (Domain::Automation, "start") if arg_str(with, "refused") == Some("workspace_closed") => {
+            // **The press that makes a run**, the build screen's. It only opens the run and hands it
+            // nothing: work reaches a run as a task filed under one of its roles, so no
+            // dialog opens, and a road naming something to hand over is refused rather than said. A
+            // closed workspace is refused at the same press.
+            (Domain::Automation, "start") => {
+                hands_nothing_at_start(with)?;
                 "On the build screen's head, press the button that starts a run.".to_string()
             }
-            (Domain::Automation, "start") => {
-                format!("On the build screen's head, press the button that starts a run. {}", handing(with))
-            }
-            // **A test run**, pressed on the same head. It asks in the launch's own dialog, which says
-            // no agent is started and nothing is kept, and asks for no file — so the handing is said the
-            // way a start's is, bar that. What comes back opens beside the picture.
+            // **A test run**, pressed on the same head. It asks in a dialog of its own, which says no
+            // agent is started and nothing is kept, and asks for no file. What comes back opens beside
+            // the picture.
             (Domain::Automation, "test-run") => format!(
                 "On the build screen's head, press the button that walks it as a test run. Confirm the dialog that opens says no agent is started and nothing is kept, and asks for no file. {} Confirm a pane opens beside the picture, its head saying no agent is running.",
-                handing(with).replace("press its start button", "press its test run button")
+                test_handing(with)
             ),
             // Moving along the walk, by the pane's own buttons.
             (Domain::Automation, "test-move") => format!(
@@ -4725,10 +4723,13 @@ impl Instructor {
             ),
             // The press beside a row of the list the sidebar opens — beside it, not inside it, so it
             // starts the run rather than going to the project.
-            (Domain::Automation, "start-from-list") => format!(
-                "On the automations tab the sidebar opened, press the button beside the row for \"{}\" that starts it. {HAND_NOTHING}",
-                self.target_label(with)
-            ),
+            (Domain::Automation, "start-from-list") => {
+                hands_nothing_at_start(with)?;
+                format!(
+                    "On the automations tab the sidebar opened, press the button beside the row for \"{}\" that starts it.",
+                    self.target_label(with)
+                )
+            }
             // The row itself opens the automation here, in its own project, whichever the pulldown has
             // picked — the screen does not move to the project.
             (Domain::Automation, "every-open") => format!(
@@ -7288,24 +7289,28 @@ fn builtin_note(with: &Args, builtin_key: &str) -> &'static str {
 /// (`app/src/shell/RunPicture.tsx`). A step that may wait for a person has turned it there already.
 const TO_ITS_TERMINAL: &str = "turned to the terminal of this run's seat (where the desks of its roles are up, press the seat this run sits in — the one carrying its task — and the bar over the terminal names its role and seat)";
 
-/// **What every start asks before it starts**: a dialog for what the entry reads — a title, notes, a
-/// value per axis and files for the built-in that files a task, nothing for any other. A road that
-/// hands nothing answers it empty, which starts the run as a press did before the dialog was there.
-const HAND_NOTHING: &str =
-    "In the dialog that opens asking what to hand the run, leave anything it asks for empty and press its start button.";
-
-/// **What a start hands the run**, said as what to put in that dialog, which asks only for the task the
-/// entry files: its `title` and `notes` typed in, a value chosen on each axis `dim` names (one
-/// `axis=value` a line), and the road's `file` added to attach to it — the operator's to bring, of
-/// which only the name crosses, as with `attach`. There is no text to type: the dialog has no field
-/// for one. A road that names none of them hands nothing ([`HAND_NOTHING`]).
-fn handing(with: &Args) -> String {
-    let file = arg_str(with, "file");
-    let (title, notes, dim) = (arg_str(with, "title"), arg_str(with, "notes"), arg_str(with, "dim"));
-    if file.is_none() && title.is_none() && notes.is_none() && dim.is_none() {
-        return HAND_NOTHING.to_string();
+/// **A start hands the run nothing**: its press only opens the run, with no dialog
+/// asking what to hand over. Work reaches a run as a task filed under one of its roles, so a road that
+/// names a `title`, `notes`, `dim` or `file` on a start is refused rather than said.
+fn hands_nothing_at_start(with: &Args) -> Result<(), String> {
+    match ["title", "notes", "dim", "file"].into_iter().find(|key| arg_str(with, key).is_some()) {
+        Some(key) => Err(format!(
+            "a start hands the run nothing, so `{key}` has nowhere to go — file a task under one of its roles instead"
+        )),
+        None => Ok(()),
     }
-    let mut said = "In the dialog that opens asking what to hand the run,".to_string();
+}
+
+/// **What a test run is handed**, said as what to put in its dialog, which asks only for the task the
+/// entry files: its `title` and `notes` typed in, and a value chosen on each axis `dim` names (one
+/// `axis=value` a line). It asks for no file: nothing a test run writes is kept. There is no text to
+/// type: the dialog has no field for one. A road that names none of them leaves the dialog empty.
+fn test_handing(with: &Args) -> String {
+    let (title, notes, dim) = (arg_str(with, "title"), arg_str(with, "notes"), arg_str(with, "dim"));
+    if title.is_none() && notes.is_none() && dim.is_none() {
+        return "In that dialog, leave anything it asks for empty and press its test run button.".to_string();
+    }
+    let mut said = "In that dialog,".to_string();
     if let Some(title) = title {
         said.push_str(&format!(" type \"{title}\" as the title of the task to file,"));
     }
@@ -7320,10 +7325,7 @@ fn handing(with: &Args) -> String {
             None => said.push_str(&format!(" choose \"{line}\",")),
         }
     }
-    if let Some(file) = file {
-        said.push_str(&format!(" add a file named \"{file}\" to attach to the task,"));
-    }
-    said.push_str(" and press its start button.");
+    said.push_str(" and press its test run button.");
     said
 }
 
@@ -12851,8 +12853,46 @@ steps_gui:
         );
     }
 
-    /// A start refused because the workspace is closed is turned away at the press, before the dialog
-    /// that asks what to hand over opens — so the line asks for no dialog to be answered.
+    /// A start only opens the run, so no line for it asks for a dialog to be answered —
+    /// neither the build screen's press nor the one beside a row of the list.
+    #[test]
+    fn a_start_answers_no_dialog() {
+        for (op, with) in [
+            ("start", vec![]),
+            ("start-from-list", vec![("target", "auto")]),
+        ] {
+            let step = Step::Action {
+                domain: Domain::Automation,
+                op: op.to_string(),
+                with: with
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), serde_yaml::Value::from(v)))
+                    .collect(),
+                bind: None,
+                window: None,
+            };
+            let said = Instructor::new().render(&step).unwrap();
+            assert!(said.contains("starts"), "got: {said}");
+            assert!(!said.contains("dialog"), "got: {said}");
+        }
+    }
+
+    /// A road naming something to hand a start is refused: there is nowhere for it to go.
+    #[test]
+    fn a_start_handing_something_over_is_refused() {
+        for key in ["title", "notes", "dim", "file"] {
+            let step = Step::Action {
+                domain: Domain::Automation,
+                op: "start".to_string(),
+                with: [(key.to_string(), serde_yaml::Value::from("x"))].into_iter().collect(),
+                bind: None,
+                window: None,
+            };
+            assert!(Instructor::new().render(&step).is_err(), "{key}");
+        }
+    }
+
+    /// A start refused because the workspace is closed is turned away at the press.
     #[test]
     fn a_start_refused_for_a_closed_workspace_answers_no_dialog() {
         let step = Step::Action {

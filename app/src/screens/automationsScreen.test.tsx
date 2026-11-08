@@ -50,9 +50,6 @@ vi.mock("../core/automations", () => ({
   launchAutomation: hoisted.launch,
   saveAutomation: hoisted.save,
   discardAutomation: hoisted.discard,
-  // An agent's step as the entry: the dialog every start opens asks for a text and files.
-  useLaunchAsks: () => ({ reads: "nothing", axes: [] }),
-  NOTHING_HANDED: { files: [], title: "", notes: "", classification: [] },
   forceCancelRun: hoisted.stop,
   cancelRun: hoisted.cancel,
   pauseRun: async () => {},
@@ -155,10 +152,10 @@ function button(label: string): HTMLButtonElement {
 const blocks = () => [...container.querySelectorAll(".autolaunch__blocks li")].map((li) => li.textContent);
 
 
-/** Answer the dialog every start opens (`../components/LaunchHanding`) with nothing handed over. */
-async function handOver() {
+/** Press start, and let the launch it sends land. */
+async function pressStart() {
   await act(async () => {
-    document.body.querySelector<HTMLButtonElement>(".modal__card .btn--primary")!.click();
+    button(t("auto.start")).click();
     await new Promise((r) => setTimeout(r, 0));
   });
 }
@@ -228,9 +225,8 @@ describe("the automations screen", () => {
     const rows = [...container.querySelectorAll(".autolist__row")].map((one) => one.textContent ?? "");
     expect(rows[0]).toContain("Morning round");
     expect(rows[0]).toContain(tf("auto.stepCount", { count: 3 }));
-    await act(async () => { button(t("auto.start")).click(); });
-    await handOver();
-    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], true, { files: [], title: "", notes: "", classification: [] });
+    await pressStart();
+    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], true);
   });
 
   it("marks a row whose draft holds changes not saved, beside the version saved last", async () => {
@@ -418,9 +414,8 @@ describe("the automations screen with every project picked", () => {
     hoisted.everywhere = [everywhere()];
     hoisted.check = { ready: true, blocks: [] };
     await renderEverywhere();
-    await act(async () => { button(t("auto.start")).click(); });
-    await handOver();
-    expect(hoisted.launch).toHaveBeenCalledWith(7, 3, [], true, { files: [], title: "", notes: "", classification: [] });
+    await pressStart();
+    expect(hoisted.launch).toHaveBeenCalledWith(7, 3, [], true);
   });
 
   it("goes to the pane of the run it started, in the row's project", async () => {
@@ -428,8 +423,7 @@ describe("the automations screen with every project picked", () => {
     hoisted.check = { ready: true, blocks: [] };
     hoisted.launch.mockResolvedValue({ run: 31, launch: 5 });
     await renderEverywhere();
-    await act(async () => { button(t("auto.start")).click(); });
-    await handOver();
+    await pressStart();
     expect(wentToRun).toHaveBeenCalledWith(3, 31, 5);
   });
 
@@ -822,16 +816,14 @@ describe("the press that starts a run", () => {
     // The workspace is the shell's to know, and core refuses a launch without one — so a press that
     // did not carry the answer would be refused on a guess made here (`AMB-D-753`).
     await open({ ready: true, blocks: [] });
-    await act(async () => { button(t("auto.start")).click(); });
-    await handOver();
-    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], true, { files: [], title: "", notes: "", classification: [] });
+    await pressStart();
+    expect(hoisted.launch).toHaveBeenCalledWith(7, 1, [], true);
   });
 
-  it("refuses a press while the workspace is closed, before asking what to hand over", async () => {
-    // Refused after the dialog, what was written there would be thrown away (`AMB-T-5590`).
+  it("refuses a press while the workspace is closed, before sending the launch", async () => {
+    // Refused at the press, with the way to the workspace beside the line (`AMB-T-5590`).
     await open({ ready: true, blocks: [] }, false);
     await act(async () => { button(t("auto.start")).click(); });
-    expect(document.body.querySelector(".modal__card")).toBeNull();
     expect(hoisted.launch).not.toHaveBeenCalled();
     expect(container.textContent).toContain(errText({ code: "invalid_automation_workspace_closed", message_en: "" }));
   });
@@ -840,24 +832,21 @@ describe("the press that starts a run", () => {
     // What a launch looks like is the pane arriving, which is the workspace's and not this screen's
     // (`../talk/automationStep`) — the press goes there (below). Nothing here stands in for it.
     await open({ ready: true, blocks: [] });
-    await act(async () => { button(t("auto.start")).click(); });
-    await handOver();
+    await pressStart();
     expect(container.querySelector(".auto__notready")).toBeNull();
   });
 
   it("goes to the pane of the run it started", async () => {
     hoisted.launch.mockResolvedValue({ run: 31, launch: 5 });
     await open({ ready: true, blocks: [] });
-    await act(async () => { button(t("auto.start")).click(); });
-    await handOver();
+    await pressStart();
     expect(wentToRun).toHaveBeenCalledWith(1, 31, 5);
   });
 
   it("goes nowhere when the launch is refused", async () => {
     hoisted.launch.mockRejectedValue({ code: "invalid", message_en: "no" });
     await open({ ready: true, blocks: [] });
-    await act(async () => { button(t("auto.start")).click(); });
-    await handOver();
+    await pressStart();
     expect(wentToRun).not.toHaveBeenCalled();
   });
 
@@ -865,8 +854,7 @@ describe("the press that starts a run", () => {
   async function refusedWith(err: unknown) {
     hoisted.launch.mockRejectedValue(err);
     await open({ ready: true, blocks: [] });
-    await act(async () => { button(t("auto.start")).click(); });
-    await handOver();
+    await pressStart();
   }
 
   it("puts a refusal in front of the reader in their own language, not core's English", async () => {

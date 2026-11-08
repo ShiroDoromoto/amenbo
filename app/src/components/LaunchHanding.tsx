@@ -1,70 +1,44 @@
-// **What a person hands a run as they start it** (`AMB-D-970`), asked in a dialog that opens on every
-// press that starts an automation, before the run exists.
+// **What a test run is handed to walk from** (`AMB-T-5804`), asked in a dialog that opens on the
+// build screen's "test run" press, before anything is walked.
 //
-// **It asks for what the entry reads, and nothing else.** Core answers what that is
-// (`automation_launch_asks`): the built-in that files a task reads the task's title, its notes, a
-// value on each axis offered and files, which go onto the task it files (`AMB-D-981`); any other
-// entry reads nothing. A launch handing an entry what it does not read is refused, so a field the
-// entry would not read is one the person could only be refused over. There is no field for words on
-// their own: words for the task go in its notes, so there is one place to write them, not two.
+// **A launch asks nothing.** Work reaches a run as a task filed under one of its roles, and the
+// launch's press only opens the run (`AMB-D-1123`, `./StartAutomation`). This dialog is the test
+// run's alone.
 //
-// **Before the launch, not in the run's pane.** What is handed over is written onto the run in the
-// launch's own transaction (`amenbo_core::ops::automation_run::HandedAtLaunch`), so the first step
-// never opens on a run it has not reached yet — and there is no run to draw a pane for until then.
+// **It asks for what core says the entry reads, and nothing else** (`automation_launch_asks`). Where
+// that is a task, it asks the task's title, its notes and a value on each axis offered; where it is
+// nothing, it says so and the press walks at once. There is no field for words on their own: words for
+// the task go in its notes, so there is one place to write them, not two. No files are asked: nothing
+// a test run writes is kept, so there is no task for them to go onto.
 //
-// **Handing nothing is a start like any other** where the entry reads nothing: most automations take
-// their task from the list and are handed nothing, so the press that starts is live from the first.
 // **A task cannot be filed without a title**, nor without a value on an axis the project requires, so
-// for the entry that files one the press waits for both — the same two things the launch would refuse
+// where the entry reads a task the press waits for both — the same two things the walk would refuse
 // over.
-//
-// **A file is named by its path**, picked in the machine's own panel, the way an attachment is: the
-// host reads it at the press, checks it against the per-file cap and keeps it (`crate::automation`).
-//
-// **A test run is asked in the same dialog** (`AMB-T-5804`): it is walked from what a launch would be
-// handed, so it asks the same fields, and a reader who tried one knows the other. Only the files are
-// not asked — nothing a test run writes is kept, so there is no task for them to go onto.
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import type { AutomationLaunchAsksDto } from "../bindings/bindings";
 import { NOTHING_HANDED, useLaunchAsks, type Handed } from "../core/automations";
-import { pickFiles } from "../core/dialog";
 import { t, tf } from "../core/i18n";
 import { asTyped } from "../core/keys";
-import { Icon } from "./Icon";
-
-/** The last part of a path, which is what a reader knows a file by. */
-function baseName(path: string): string {
-  return path.split(/[\\/]/).filter((part) => part !== "").pop() ?? path;
-}
 
 export function LaunchHanding({
   id,
   name,
-  testing = false,
   onStart,
   onClose,
 }: {
-  /** The automation about to be started. */
+  /** The automation about to be walked. */
   id: number;
   /** Its name, as its row names it. */
   name: string;
-  /** Asking for a test run rather than a launch: no files, and the press says which it is. */
-  testing?: boolean;
   onStart: (handed: Handed) => void;
   onClose: () => void;
 }) {
   const asks = useLaunchAsks(id);
-  const [files, setFiles] = useState<string[]>([]);
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   // The value chosen on each axis, by the axis's name. An axis left out is not chosen.
   const [chosen, setChosen] = useState<Record<string, string>>({});
-
-  const add = async () => {
-    const picked = await pickFiles();
-    if (picked.length > 0) setFiles((had) => [...had, ...picked.filter((one) => !had.includes(one))]);
-  };
 
   // What the press hands over: only what the entry reads.
   const handed = (reads: AutomationLaunchAsksDto["reads"]): Handed => {
@@ -75,7 +49,6 @@ export function LaunchHanding({
           title: title.trim(),
           notes: notes.trim(),
           classification: Object.entries(chosen).filter(([, value]) => value !== ""),
-          files,
         };
       case "nothing":
         return NOTHING_HANDED;
@@ -98,9 +71,9 @@ export function LaunchHanding({
         }}
       >
         <h2 className="autodlg__title" id="launch-hand-title">
-          {tf(testing ? "auto.test.title" : "auto.hand.title", { name })}
+          {tf("auto.test.title", { name })}
         </h2>
-        {testing && <p className="autostep__said">{t("auto.test.about")}</p>}
+        <p className="autostep__said">{t("auto.test.about")}</p>
 
         {asks?.reads === "task" && (
           <>
@@ -152,31 +125,6 @@ export function LaunchHanding({
                 </select>
               </label>
             ))}
-
-            {!testing && <div className="autostep__field">
-              <span className="autostep__label">{t("auto.hand.files")}</span>
-              {files.length > 0 && (
-                <ul className="launchhand__files">
-                  {files.map((one) => (
-                    <li key={one} className="launchhand__file" title={one}>
-                      <Icon name="paperclip" />
-                      <span className="launchhand__name">{baseName(one)}</span>
-                      <button
-                        type="button"
-                        className="launchhand__drop"
-                        aria-label={tf("auto.hand.fileRemove", { name: baseName(one) })}
-                        onClick={() => setFiles((had) => had.filter((path) => path !== one))}
-                      >
-                        <Icon name="close" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <button type="button" className="btn launchhand__add" onClick={() => void add()}>
-                {t("auto.hand.fileAdd")}
-              </button>
-            </div>}
           </>
         )}
 
@@ -191,7 +139,7 @@ export function LaunchHanding({
               if (asks !== null) onStart(handed(asks.reads));
             }}
           >
-            {t(testing ? "auto.test.run" : "auto.start")}
+            {t("auto.test.run")}
           </button>
           <button type="button" className="btn" onClick={onClose}>
             {t("auto.add.cancel")}

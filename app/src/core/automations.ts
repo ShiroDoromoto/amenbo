@@ -1171,17 +1171,20 @@ async function startableAgents(
     .catch(() => null);
 }
 
-/** What a person hands a run as they start it, as the launch takes it. Empty is nothing handed. */
+/**
+ * What a test run is handed to walk from, as the test run takes it. Empty is nothing handed.
+ *
+ * A launch is handed nothing: work reaches a run as a task filed under a role, by a person or a
+ * trigger, and the launch only opens the run (`AMB-D-1123`).
+ */
 export type Handed = {
-  /** Paths on this machine, attached to the task the entry files. */
-  files: readonly string[];
   title: string;
   notes: string;
   /** (axis, value) by name, one per axis. */
   classification: readonly (readonly [string, string])[];
 };
 
-export const NOTHING_HANDED: Handed = { files: [], title: "", notes: "", classification: [] };
+export const NOTHING_HANDED: Handed = { title: "", notes: "", classification: [] };
 
 /**
  * **Start a run of this automation.** Answers the run's id.
@@ -1200,23 +1203,10 @@ export async function launchAutomation(
   projectId: number,
   folders: readonly string[],
   workspaceOpen: boolean,
-  /**
-   * What the person hands the run as it starts (`AMB-D-970`): a title, notes, a value per axis and
-   * files by their paths, for the built-in that files a task (`AMB-D-981`).
-   */
-  handed: Handed = NOTHING_HANDED,
 ): Promise<AutomationRunStartedDto | null> {
   if (!inTauri()) return null;
   const agents = await startableAgents(projectId, folders);
-  return invoke<AutomationRunStartedDto>("automation_launch", {
-    id,
-    agents,
-    workspaceOpen,
-    files: handed.files.length === 0 ? null : [...handed.files],
-    title: handed.title === "" ? null : handed.title,
-    notes: handed.notes === "" ? null : handed.notes,
-    classification: handed.classification.length === 0 ? null : [...handed.classification],
-  });
+  return invoke<AutomationRunStartedDto>("automation_launch", { id, agents, workspaceOpen });
 }
 
 /**
@@ -1224,8 +1214,8 @@ export async function launchAutomation(
  * step opened on the road a run takes, with no agent started, no built-in carried out and nothing
  * kept. Answers every step it opened and how it ended; a launch the check would refuse is refused.
  *
- * It is handed what a launch is, less the files — nothing is kept, so there is no task for a file to
- * go onto — and the machine is asked what it can start the way the launch asks it.
+ * It is handed a title, notes and a value per axis for the task it walks from, and the machine is
+ * asked what it can start the way the launch asks it.
  */
 export async function testRunAutomation(
   id: number,
@@ -1245,10 +1235,9 @@ export async function testRunAutomation(
 }
 
 /**
- * **What a launch of this automation asks for** — what its entry reads at launch (`AMB-D-970`): a
- * title, notes, a value on each axis and files for the built-in that files a task (`AMB-D-981`),
- * nothing for any other. `null` until it is answered. Outside the app it is nothing: no launch is
- * sent from there, so the press starts at once.
+ * **What the test run's dialog asks for** (`../components/LaunchHanding`), as core answers it for
+ * this automation. A launch asks nothing (`AMB-D-1123`), so core answers nothing for every one, and
+ * the dialog then only says so. `null` until it is answered; outside the app it is nothing.
  */
 export function useLaunchAsks(id: number): AutomationLaunchAsksDto | null {
   const { data } = useQuery<AutomationLaunchAsksDto | null>(["automationLaunchAsks", id], () =>

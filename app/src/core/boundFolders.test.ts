@@ -23,11 +23,15 @@ vi.mock("./mutations", () => ({
 }));
 
 import { useBoundFolders, type BoundFolders } from "./boundFolders";
+import { invalidateScopes } from "./query";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const folder = (path: string, exists: boolean): BoundFolderDto =>
   ({ path, exists, mismatch: null, legacy: false, pointerMissing: false, foreign: null });
+
+// The answers are cached by project across tests, so each test asks about a project no other one has.
+let nextProject = 100;
 
 let container: HTMLDivElement;
 let root: Root;
@@ -38,10 +42,11 @@ function Probe({ projectId }: { projectId: number }) {
   return null;
 }
 
-const render = (projectId = 7) =>
+const render = (projectId = nextProject) =>
   act(async () => { root.render(createElement(Probe, { projectId })); });
 
 beforeEach(() => {
+  nextProject += 1;
   hoisted.folders = [];
   hoisted.fails = false;
   hoisted.asked = [];
@@ -57,9 +62,9 @@ afterEach(() => {
 
 describe("the folders a project is bound to", () => {
   it("asks about the project on screen, and once", async () => {
-    await render(7);
+    await render();
 
-    expect(hoisted.asked).toEqual([7]);
+    expect(hoisted.asked).toEqual([nextProject]);
     expect(seen.answered).toBe(true);
   });
 
@@ -97,5 +102,26 @@ describe("the folders a project is bound to", () => {
 
     expect(seen.answered).toBe(true);
     expect(seen.all).toEqual([]);
+  });
+
+  // A binding written while the board is up — the workspace binding a project's first folder on the way
+  // to a pane — has to reach the answer, or the next press goes back to the folder picker.
+  it("reads again when a binding moves", async () => {
+    await render();
+    hoisted.folders = [folder("/w/here", true)];
+
+    await act(async () => { invalidateScopes(new Set(["projects"])); });
+
+    expect(hoisted.asked).toEqual([nextProject, nextProject]);
+    expect(seen.live.map((one) => one.path)).toEqual(["/w/here"]);
+  });
+
+  // The reason for the change: every other write in the store used to send this read out again.
+  it("does not read again when something else in the store moves", async () => {
+    await render();
+
+    await act(async () => { invalidateScopes(new Set(["tasks", "automations", "decisions"])); });
+
+    expect(hoisted.asked).toEqual([nextProject]);
   });
 });

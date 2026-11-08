@@ -10,11 +10,15 @@
 // nothing. A read that fails is treated as answered-with-none, since the invitation to link one is the
 // safe half of being wrong.
 //
-// It is re-read whenever the store moves, because a binding is exactly the kind of thing that happens
-// while this is on screen — the settings screen links one, and the workspace binds a project's
+// It is re-read when the "projects" scope moves, because a binding is exactly the kind of thing that
+// happens while this is on screen — the settings screen links one, and the workspace binds a project's
 // first folder on the way to opening a pane. Held from the first read, the answer would send the next
-// press back to the folder picker for a project that has just been given one.
-import { useEffect, useState } from "react";
+// press back to the folder picker for a project that has just been given one. A binding folds to that
+// scope (`core/changes`), and a write anywhere else in the store leaves it alone.
+//
+// Whether a folder is still there is read off the disk, not the store, so a folder moved away while
+// this is on screen shows up only on the next read: a binding written, or a whole reload of the store.
+import { useQuery } from "./query";
 import { fetchBoundFolders } from "./mutations";
 import type { BoundFolderDto } from "../bindings/bindings";
 
@@ -27,39 +31,19 @@ export type BoundFolders = {
   answered: boolean;
 };
 
+const NONE: BoundFolderDto[] = [];
+
 /** `projectId` is nullable for the workspace, which asks before it has been told which project it
  *  is on. A read for nothing comes back answered-with-none: there is no project whose folders could be
  *  missing, so there is nothing to warn about and nothing to wait for. */
 export function useBoundFolders(projectId: number | null): BoundFolders {
-  const [all, setAll] = useState<BoundFolderDto[]>([]);
-  const [answered, setAnswered] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    setAll([]);
-    setAnswered(false);
-    if (projectId === null) {
-      setAnswered(true);
-      return;
-    }
-    const read = () => {
-      fetchBoundFolders(projectId)
-        .then((folders) => {
-          if (!alive) return;
-          setAll(folders);
-          setAnswered(true);
-        })
-        .catch(() => { if (alive) setAnswered(true); });
-    };
-    read();
-    let off: (() => void) | null = null;
-    void import("@tauri-apps/api/event")
-      .then(({ listen }) => listen("store-changed", read))
-      .then((stop) => { if (alive) off = stop; else stop(); })
-      // Outside Tauri (browser iteration) nothing writes to a store and nothing announces one.
-      .catch(() => {});
-    return () => { alive = false; off?.(); };
-  }, [projectId]);
-
-  return { all, live: all.filter((one) => one.exists), answered };
+  const { data, error } = useQuery(["boundFolders", projectId], () =>
+    projectId === null ? Promise.resolve(NONE) : fetchBoundFolders(projectId),
+  );
+  const all = data ?? NONE;
+  return {
+    all,
+    live: all.filter((one) => one.exists),
+    answered: projectId === null || data !== undefined || error !== undefined,
+  };
 }

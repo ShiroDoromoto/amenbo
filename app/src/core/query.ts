@@ -184,6 +184,12 @@ export const SCOPE_WATCHERS: Readonly<Record<string, readonly string[]>> = {
   automationTriggerCount: ["tasks", "automations"],
   // What a launch asks for: the entry's settings, and the project's axes and their values.
   automationLaunchAsks: ["automations", "tasks"],
+  // The roles a project's tasks can be worked under, read off its automations' roles — every row of
+  // which folds to this scope.
+  projectRoles: ["automations"],
+  // The folders a project is bound to. A binding folds to "projects"; whether the folder is still on
+  // disk is not on the feed at all.
+  boundFolders: ["projects"],
 };
 
 function setState(e: Entry, next: QueryState<unknown>): void {

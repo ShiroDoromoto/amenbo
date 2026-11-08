@@ -72,6 +72,7 @@ import { filterValueLabel } from "./automationParts";
 import { RoleIcon } from "./AutomationRoles";
 import type {
   AutomationDetailDto,
+  AutomationRoleDto,
   AutomationScriptInputDto,
   AutomationStepScriptDto,
   AutomationTriggerConditionDto,
@@ -374,7 +375,7 @@ function everyLine(minutes: number): string {
  * (`filterValueLabel`): the values one key takes are joined by "/", the keys and the role the tasks
  * are worked under stand side by side. Empty where every task is counted.
  */
-function countedWords(condition: AutomationTriggerConditionDto, roles: AutomationDetailDto["roles"]): string {
+function countedWords(condition: AutomationTriggerConditionDto, roles: readonly AutomationRoleDto[]): string {
   const groups: string[] = [];
   for (const part of condition.filter.split(/\s+/)) {
     const at = part.indexOf(":");
@@ -389,7 +390,7 @@ function countedWords(condition: AutomationTriggerConditionDto, roles: Automatio
 }
 
 /** How few of what the condition counts it waits for, naming what it counts where it says. */
-function belowLine(condition: AutomationTriggerConditionDto, roles: AutomationDetailDto["roles"]): string {
+function belowLine(condition: AutomationTriggerConditionDto, roles: readonly AutomationRoleDto[]): string {
   const counted = countedWords(condition, roles);
   return counted === ""
     ? tf("auto.side.below", { below: condition.below })
@@ -397,7 +398,7 @@ function belowLine(condition: AutomationTriggerConditionDto, roles: AutomationDe
 }
 
 /** When the trigger files a task, in the words of the card's part 1, with what its condition counts. */
-export function whenLine(trigger: AutomationTriggerDto, roles: AutomationDetailDto["roles"]): string {
+export function whenLine(trigger: AutomationTriggerDto, roles: readonly AutomationRoleDto[]): string {
   const when =
     trigger.when.kind === "every"
       ? everyLine(trigger.when.minutes)

@@ -1430,6 +1430,8 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__swatch--branch { border-top-color: var(--c-heed); }
 .autopic__swatch--error { border-top-color: var(--c-stop); }
 .autopic__swatch--leaves { border-top-color: var(--c-accent); }
+/* A filing: dotted in the accent, apart from the dashed way out nothing has been decided for. */
+.autopic__swatch--files { border-top-color: var(--c-accent); border-top-style: dotted; }
 /* The span of one task: a small dashed outline, as the picture draws it round the boxes. */
 .autopic__swatch--lap { width: 14px; height: 10px; border: 1px dashed var(--c-rule); border-radius: 3px; }
 /* One placement. A button because that is what it is: pressing it is what puts the spot's contents in
@@ -1499,23 +1501,59 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__loop { font-size: 11px; line-height: 16px; color: var(--c-heed); }
 .autopic__loop .autopic__iopart { min-width: 0; }
 .autopic__loopmark { color: var(--c-heed); }
-/* A role's round in one row inside one frame, as the mock draws it: what it receives, the picture of
-   its actions, and whom it hands on to, from left to right with an arrow between each. The row never
-   wraps: a wrapped row left an arrow at the end of a line pointing at nothing. The picture comes
-   first: it takes its own width, and the two ends grow into what is left, up to their own. Where the
-   row is too narrow, the ends give way first, their words wrapping down to their heading on one
-   line, and only then does the picture narrow and scroll across inside it. An end that hands on to
-   a role does not give way (`.autopic__end--pass`). On the build screen the
-   row is given the screen's whole width before that (`.actbuild__body--stacked`). */
+/* A role's round in one row inside one frame, as the mock draws a role's lane: where its waiting tasks
+   come from, the waiting tasks, the picture of its actions, and whom it hands on to, from left to
+   right with an arrow between each — but into a frame it files a task for, a line from the box that
+   files it (`.autopic__filings`). The row never wraps: a wrapped row left an arrow at the end of a
+   line pointing at nothing. The picture comes first: it takes its own width, and the sources take
+   theirs, up to their `max-width`. Where the row is too narrow, the sources give way first, their
+   words wrapping down to their `min-width`, and only then does the picture narrow and scroll
+   across inside it. The waiting tasks and an end that hands on to a role do not give way
+   (`.autopic__end--pass`). On the build screen the row is given the screen's whole width before that
+   (`.actbuild__body--stacked`). Narrower still, the row scrolls across inside its own ground, the
+   frames it files into with it, so the screen's column never does. */
 .autopic__flow {
-  display: flex; align-items: stretch; gap: 10px;
+  display: flex; align-items: stretch; gap: 10px; overflow-x: auto;
   padding: var(--s-4); background: var(--c-sunken-pic) var(--c-sunken);
   border: 1px solid var(--c-rule); border-radius: var(--r-md);
 }
 .autopic__flow > .autopic { flex: 0 1 auto; min-width: 160px; }
 .autopic__flowarrow { align-self: center; color: var(--c-text-faint); font-size: 14px; }
-/* Either end of a role's round: where it receives its task from, and whom it hands on to. Dashed, as
-   the mock draws them: they stand for something outside the round, not a box on it. */
+/* The lines into the frames of the roles the round files tasks for, over the whole row and under the
+   picture: dotted in the accent, as the legend draws a filing. The picture stands over them, so a line
+   down from a box passes behind the boxes under it. */
+.autopic__flow:has(> .autopic__filings) { position: relative; }
+.autopic__flow:has(> .autopic__filings) > .autopic { position: relative; z-index: 1; }
+.autopic__filings { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.autopic__filing { fill: none; stroke: var(--c-accent); stroke-width: 1.6; stroke-dasharray: 1.5 3.5; stroke-linecap: round; }
+.autopic__arrow--files { fill: var(--c-accent); }
+/* Where the role's waiting tasks come from, one box each, one under another — in the AI's colours, as
+   the mock draws them: they file the tasks, and are not boxes on the round. As wide as their longest
+   words up to a limit, past which the words wrap inside the box; they give way down to `min-width`. */
+.autopic__sources {
+  display: flex; flex-direction: column; justify-content: center; gap: 8px;
+  flex: 0 1 auto; width: max-content; min-width: 96px; max-width: 200px;
+}
+.autopic__source {
+  display: flex; flex-direction: column; gap: 2px; padding: 6px 10px;
+  background: var(--c-ai-weak); border: 1px solid var(--c-ai); border-radius: var(--r-md);
+  font-size: var(--fs-xs); color: var(--c-text);
+}
+/* A task another role files for this one: a filing, in the accent and dashed. */
+.autopic__source--files { background: var(--c-surface-pic) var(--c-surface); border: 1px dashed var(--c-accent); }
+/* A heading longer than the box wraps inside it, never past its edge (a long role's name). */
+.autopic__sourcehead { overflow-wrap: anywhere; font-weight: var(--fw-medium); }
+.autopic__sourcesub { color: var(--c-text-muted); overflow-wrap: anywhere; }
+/* The role's waiting tasks, which every round starts from (`AMB-D-1123`): in the accent, as the mock
+   draws them. */
+.autopic__desk {
+  flex: none; align-self: center; padding: 8px 14px; white-space: nowrap;
+  background: var(--c-accent-weak); color: var(--c-accent-text);
+  border: 1.5px solid var(--c-accent); border-radius: var(--r-md);
+  font-size: var(--fs-md); font-weight: var(--fw-medium);
+}
+/* The far end of a role's round: whom it hands on to. Dashed, as the mock draws it: it stands for
+   something outside the round, not a box on it. */
 .autopic__end {
   display: flex; flex-direction: column; justify-content: center; gap: 4px;
   flex: 1 1 0; min-width: min-content; max-width: 180px; padding: 8px 10px;
@@ -1535,7 +1573,12 @@ button.feed__target:hover { color: var(--c-accent); }
    not give way: the role's name and the task's title read whole, and the picture beside it narrows
    and scrolls across instead. */
 .autopic__end--pass { flex: none; width: max-content; }
-.autopic__roundempty { font-size: var(--fs-md); color: var(--c-text-muted); }
+/* A task filed for another role: a filing, its frame dashed in the accent, as the line into it is dotted in it. */
+.autopic__end--files { border-color: var(--c-accent); }
+.autopic__end--files > .autopic__endhead { color: var(--c-accent-text); }
+.autopic__roundempty { align-self: center; font-size: var(--fs-md); color: var(--c-text-muted); }
+/* Who decides what comes next, under a role's picture and its legend. */
+.autopic__roundnote { margin: 0; text-align: center; font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* A box that takes the next task, said over its top-right — where a stretch begins. */
 .autopic__takes {
   position: absolute; transform: translate(-100%, calc(-100% - 2px));

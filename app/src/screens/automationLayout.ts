@@ -388,9 +388,9 @@ const NODE_H = 46;
 const STEP_H = 62;
 /** An action's box on a role's picture (`layOutAcross`), sized to what it says (`roundSize`): under
  *  its name the steps inside it, then what it takes in, what it hands on, and the loop back into it — a
- *  line each. As narrow as its name and its steps on one row let it be, between `ROUND_MIN_W` and
- *  `ROUND_MAX_W`; steps that do not fit on one row go on to the next, and the lines past what the box
- *  can hold are cut short, and said whole on hover. */
+ *  line each. As narrow as its name with the marks after it and its steps on one row let it be,
+ *  between `ROUND_MIN_W` and `ROUND_MAX_W`; steps that do not fit on one row go on to the next, and the
+ *  lines past what the box can hold are cut short, and said whole on hover. */
 const ROUND_MIN_W = 132;
 const ROUND_MAX_W = 440;
 const ROUND_HEAD_H = 22;
@@ -403,6 +403,10 @@ const ROUND_INSET_W = 18;
  *  name — is drawn than the words on its lines. */
 const ROUND_NO_W = 22;
 const ROUND_SMALL = 11 / 12;
+/** The gap between the things in a box's head, and the room the warning's icon takes with the gap
+ *  after it, before the count of what the box is missing. The screen sets the same. */
+const HEAD_GAP = 4;
+const MARK_ICON_W = 18;
 /** A step inside an action's box, as the mock draws it: its name over its kind, never wider than
  *  `STEP_CARD_MAX_W`, and the arrow between two of them. `STEP_CARD_PAD_W` is its padding and border
  *  across. Its kind goes on to the next line where it does not fit, and the card stands taller by
@@ -1033,6 +1037,30 @@ function tonesOf(
   );
 }
 
+/** The marks a box's head carries after its name: what it is missing, and what it is. */
+type HeadMarks = Pick<PicNode, "empty" | "draft" | "behind" | "unfed">;
+
+/**
+ * **The marks after each box's name**, as `nodeMaker` draws them and `roundSize` makes room for them.
+ * On a role's picture an input is fed as the whole automation has it, and a box is reached by the
+ * whole automation's walk.
+ */
+function marksMaker(graph: PicGraph, live: ReadonlySet<number>): (box: PicBox) => HeadMarks {
+  const round = graph.round;
+  const feeds = round?.whole ?? graph;
+  const reached = round === undefined ? live : walk(round.whole).live;
+  return (box) => ({
+    empty: box.draft !== true && box.builtin === undefined && box.steps !== undefined && box.steps.length === 0,
+    draft: box.draft === true,
+    behind: behindOf(box),
+    unfed: !reached.has(box.id)
+      ? []
+      : box.inputs
+          .filter((port) => port.required && !fed(feeds, box.id, port.name))
+          .map((port) => builtinWord(box.builtin, port.name)),
+  });
+}
+
 /**
  * What each box of a picture is drawn as, wherever it stands: its name, its number, and its marks.
  *
@@ -1048,8 +1076,7 @@ function nodeMaker(
 ): (box: PicBox, place: PicRect, no: number) => PicNode {
   const round = graph.round;
   const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
-  const feeds = round?.whole ?? graph;
-  const reached = round === undefined ? live : walk(round.whole).live;
+  const marksOf = marksMaker(graph, live);
   const numberOf = round === undefined ? undefined : pictureOrder(round.whole).numberOf;
   const roundOf = (box: PicBox): Pick<PicNode, "steps" | "returns"> => {
     const returns = graph.edges
@@ -1071,14 +1098,7 @@ function nodeMaker(
     takes: takesTask(box),
     global: box.global,
     builtin: box.builtin,
-    empty: box.draft !== true && box.builtin === undefined && box.steps !== undefined && box.steps.length === 0,
-    draft: box.draft === true,
-    behind: behindOf(box),
-    unfed: !reached.has(box.id)
-      ? []
-      : box.inputs
-          .filter((port) => port.required && !fed(feeds, box.id, port.name))
-          .map((port) => builtinWord(box.builtin, port.name)),
+    ...marksOf(box),
     ...(round === undefined ? {} : roundOf(box)),
   });
 }
@@ -1124,14 +1144,27 @@ function stepRowsH(cards: readonly PicStep[], wide: number): number {
   return rows.reduce((sum, one, nth) => sum + (nth > 0 ? STEP_GAP : 0) + Math.max(one, ROUND_LINE_H), 0);
 }
 
-/** How big an action's box is on a role's picture: as wide as its name or its steps on one row,
- *  between `ROUND_MIN_W` and `ROUND_MAX_W`, and as tall as the rows its steps take and the lines it
- *  has besides. */
-function roundSize(box: PicBox, returns: boolean): { w: number; h: number } {
+/** How wide the marks after a box's name are written, each past the head's gap: the words in the
+ *  screen's smallest size, and the warning's icon before the count of what it is missing. */
+export function marksW(marks: HeadMarks): number {
+  const words = [
+    marks.unfed.length > 0 ? MARK_ICON_W + wordW(String(marks.unfed.length)) : undefined,
+    marks.empty === true ? wordW(t("auto.pic.emptyMark")) : undefined,
+    marks.draft === true ? wordW(t("chip.draft")) : undefined,
+    marks.behind !== undefined ? wordW(tf("auto.pic.behindMark", { version: marks.behind.version })) : undefined,
+  ];
+  return words.reduce<number>((sum, one) => (one === undefined ? sum : sum + HEAD_GAP + one), 0);
+}
+
+/** How big an action's box is on a role's picture: as wide as its name and the marks after it, or its
+ *  steps on one row, between `ROUND_MIN_W` and `ROUND_MAX_W`, and as tall as the rows its steps take
+ *  and the lines it has besides. */
+function roundSize(box: PicBox, returns: boolean, marks: HeadMarks): { w: number; h: number } {
   const name =
     ROUND_NO_W +
     Math.ceil(wordW(t("auto.pic.actionWord")) * ROUND_SMALL) +
-    Math.ceil(wordW(builtinWord(box.builtin, box.name)) * ROUND_SMALL);
+    Math.ceil(wordW(builtinWord(box.builtin, box.name)) * ROUND_SMALL) +
+    marksW(marks);
   const cards = box.stepCards ?? [];
   const row = cards.reduce((sum, step, nth) => sum + (nth > 0 ? 2 * STEP_GAP + STEP_ARROW_W : 0) + stepCardW(step), 0);
   const w = Math.min(ROUND_MAX_W, Math.max(ROUND_MIN_W, Math.max(name, row) + ROUND_PAD_W));
@@ -1174,6 +1207,7 @@ function layOutAcross(graph: PicGraph, round: PicRound): Picture {
   const boxes = new Map(graph.boxes.map((box) => [box.id, box]));
   const { laps, live, back: goesBack } = walk(graph);
   const nodeOf = nodeMaker(graph, live, goesBack);
+  const marksOf = marksMaker(graph, live);
   // The lines that are drawn: one going back is a loop under its box instead, and keeps the way out it
   // leaves by decided.
   const edges = graph.edges.filter((edge) => !goesBack.has(edge.id));
@@ -1211,7 +1245,7 @@ function layOutAcross(graph: PicGraph, round: PicRound): Picture {
   });
   const pressW = wordW(openWord(false)) + 28;
   const sizeOf = (box: PicBox) =>
-    roundSize(box, graph.edges.some((edge) => goesBack.has(edge.id) && edge.toId === box.id));
+    roundSize(box, graph.edges.some((edge) => goesBack.has(edge.id) && edge.toId === box.id), marksOf(box));
   /** How far under a box what hangs from it reaches, and how far past its right edge its names run. */
   const hangOf = (box: PicBox): { down: number; right: number } => {
     const boxW = sizeOf(box).w;

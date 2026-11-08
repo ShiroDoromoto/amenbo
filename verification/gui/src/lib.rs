@@ -1276,9 +1276,14 @@ impl Instructor {
                         .to_string(),
                 )
             }
-            (Domain::Task, "create") => {
-                format!("Create a task titled \"{}\" on the board.", req(with, "title")?)
-            }
+            // The board's one way to add a card is the "＋" on the todo column's head, which composes
+            // the task in the right pane. A board with no task on it draws the first loop in place of
+            // its columns, so there is no head to press there: a road that files its task from the
+            // screen stands a task up in its world first.
+            (Domain::Task, "create") => format!(
+                "On the board, press the \"＋\" on the head of the todo column, and in the pane that opens on the right, create a task titled \"{}\".",
+                req(with, "title")?
+            ),
             // The same task, typed at a shell inside a pane — the twin of the decision's, and written
             // out for the same reason: what the band under the pane counts, and what the record keeps
             // of where it came from, are written only where the line ran with the pane's own variables
@@ -10387,7 +10392,7 @@ steps_gui:
         let s = load(SCENARIO);
         let mut ins = Instructor::new();
         let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
-        assert!(lines[0].contains("Create a task titled \"SEED\""));
+        assert!(lines[0].contains("the head of the todo column") && lines[0].contains("a task titled \"SEED\""));
         assert!(lines[1].contains("\"SEED\"") && lines[1].contains("me-ai"));
         assert!(lines[2].contains("\"SEED\"") && lines[2].contains("present in"));
     }

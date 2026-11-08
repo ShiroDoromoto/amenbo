@@ -12,6 +12,24 @@ description: >
   the reason the command insists on, and read that the store closed it without claiming it was
   carried out. On the screen, finish a task through the dialog that asks for its report, and read the
   report on its timeline.
+# One card of ordinary work, and the only premise either road has. The screen's road files the task it
+# finishes from a column head, and a board with nothing on it draws the first loop where the columns
+# would be — so the world puts the columns there and nothing else. Neither road asks anything of it:
+# every line below names the task it filed itself.
+given:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO WORLD — work this board already carried
+    as: standing
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: standing
+
 steps_cli:
   - type: action
     domain: task

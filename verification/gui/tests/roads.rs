@@ -131,6 +131,78 @@ fn every_screen_road_that_starts_on_taking_a_task_has_a_task_filed_with_the_role
     }
 }
 
+/// The board's one way to add a card is the "＋" on the todo column's head, and a board with no task on
+/// it draws the first loop in place of its columns. So a screen road whose first task is filed from the
+/// board needs a task already standing in its world, or the operator is told to press a head that is
+/// not drawn. Nothing else catches it: the road renders, lints and walks, and the operator is the one
+/// who finds the board bare.
+#[test]
+fn every_screen_road_that_files_a_task_from_the_board_has_a_task_in_its_world() {
+    for f in scenario_files() {
+        let scenario = amenbo_scenario::lint_file(&f, None).expect("lints");
+        assert!(
+            !files_a_task_on_a_bare_board(&scenario),
+            "{} files a task from the board on the screen, but its world stands no task up, so the \
+             board draws the first loop and no column head to press — file one in `given:` first",
+            f.display()
+        );
+    }
+}
+
+/// Held here as well as in the scan above, so the rule is reached even while every road in
+/// `verification/scenarios/` keeps to it.
+#[test]
+fn a_task_filed_from_a_board_with_nothing_on_it_is_caught() {
+    let road = |given: &str| {
+        amenbo_scenario::load_str(&format!(
+            r#"
+id: x
+title: y
+{given}
+steps_gui:
+  - {{ type: action, domain: task, op: create, with: {{ title: seed }}, as: seed }}
+"#
+        ))
+        .expect("loads")
+    };
+    assert!(files_a_task_on_a_bare_board(&road("")), "no world, no columns");
+    assert!(
+        !files_a_task_on_a_bare_board(&road(
+            "given:\n  - { type: action, domain: task, op: create, with: { title: standing }, as: standing }"
+        )),
+        "a task in the world puts the columns there"
+    );
+    assert!(
+        files_a_task_on_a_bare_board(&road(
+            "given:\n  - { type: action, domain: task, op: create, with: { title: standing }, as: standing }\n  - { type: action, domain: store, op: nothing-raised }"
+        )),
+        "a premise that empties the device takes the task with it"
+    );
+}
+
+/// Whether a screen road files a task from the board while no task stands in its world, so the first
+/// card it files goes onto a board drawn without columns.
+fn files_a_task_on_a_bare_board(scenario: &Scenario) -> bool {
+    if !scenario.runs_on(Driver::Gui) {
+        return false;
+    }
+    let mut standing = false;
+    for step in &scenario.given {
+        if let Step::Action { domain, op, .. } = step {
+            match (*domain, op.as_str()) {
+                (Domain::Task, "create") => standing = true,
+                (Domain::Store, "nothing-raised") => standing = false,
+                _ => {}
+            }
+        }
+    }
+    let files_one = scenario
+        .steps(Driver::Gui)
+        .iter()
+        .any(|step| matches!(step, Step::Action { domain: Domain::Task, op, .. } if op == "create"));
+    files_one && !standing
+}
+
 /// The automations, by binding, whose placement marked to start is the built-in that takes a task.
 fn automations_starting_on_take_task(given: &[Step]) -> HashSet<String> {
     given

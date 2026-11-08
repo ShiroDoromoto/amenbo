@@ -11,6 +11,24 @@ description: >
   Register a task, comment on it, and read the shared timeline for that task — whole, then narrowed
   to the system events and to what was written. The system side is fed by the store itself, so an
   empty answer there means the stream is not being written, not that nothing happened.
+# One card of ordinary work, and the only premise either road has. The screen's road files the task
+# whose history it reads from a column head, and a board with nothing on it draws the first loop where
+# the columns would be — so the world puts the columns there and nothing else. Neither road asks
+# anything of it: every line below names the task it filed itself.
+given:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO WORLD — work this board already carried
+    as: standing
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: standing
+
 steps_cli:
   - type: action
     domain: task

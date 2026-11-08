@@ -1,18 +1,20 @@
 # A reader watching a run wants to know which role is doing what, which a terminal's output does not
-# say. So a run's pane opens on its roles: a role whose round is under way is a card, saying the task,
-# the step under way and how long the round has run. A step that may wait for a person turns the pane
-# to its terminal while it runs, so the question it asks is not left behind the cards; once it is over,
-# the pane goes back to its roles. The line over the pane turns it either way by hand.
+# say. So the pane of a launch opens on its roles: a role whose round is under way is a desk, with a
+# seat saying the task, the step under way and how long the round has run. A step that may wait for a
+# person turns the pane to its terminal while it runs, so the question it asks is not left behind the
+# desks; once it is over, the pane goes back to its roles. By hand, a seat pressed turns the pane to
+# that seat's terminal, and "← Back to the roles" on the bar over the terminal is the one way back.
 #
-# The automation is the one hold-a-run-from-its-pane walks, with its first step made one that may wait
-# for a person. Its one role, the one it was born with, starts at the built-in that takes a task and
-# the task is that role's, so its round is one card named after the role.
+# The automation is the one pause-a-launch-after-the-current-task-from-its-pane walks, with its first
+# step made one that may wait for a person. Its one role, the one it was born with, starts at the
+# built-in that takes a task and the task is that role's, so its round is one desk named after the role.
 id: see-a-run-by-its-roles
-title: A run's pane shows its round as a card, and turns to the terminal while a step may wait for a person
+title: A launch's pane shows its round as a desk, and turns to the terminal while a step may wait for a person
 description: >
   Start a run whose first step may wait for a person, and read its pane: turned to the terminal while
-  that step runs. Report the step, and the pane is back on its roles, with the round's card saying the
-  next step. Turn it to the terminal and back from the line over the pane.
+  that step runs. Report the step, and the pane is back on its roles, with a seat of the round's desk
+  saying the next step. Press that seat to turn the pane to its terminal, and go back to the roles
+  from the bar over it.
 given:
   # Two rather than one because the terminal's premise stands its programs up in front of the
   # machine's own and cannot make a row shorter than two; the step names the first of them either way.
@@ -93,8 +95,8 @@ steps_gui:
     with:
       face: workspace
 
-  # The first step may wait for a person, so its pane is on the terminal, though a run's pane opens on
-  # its roles.
+  # The first step may wait for a person, so its pane is on the terminal, though a launch's pane opens
+  # on its roles.
   - type: assert
     domain: automation
     op: run-roles
@@ -110,17 +112,18 @@ steps_gui:
       exit: got one
       report: worked the task, and the pane goes back to its roles
 
-  # The step after does not wait for a person, so the pane is back on its roles: the round's card,
-  # named after the role, says the step it went on to.
+  # The step after does not wait for a person, so the pane is back on its roles: a seat of the round's
+  # desk, named after the role, says the step it went on to.
   - type: assert
     domain: automation
     op: run-roles
     with:
       target: run
       face: roles
-      card: "SCENARIO SEED — one watched by its rolesの係"
+      desk: "SCENARIO SEED — one watched by its rolesの係"
       step: wait
 
+  # The seat pressed turns the pane to its terminal.
   - type: action
     domain: automation
     op: press-run
@@ -136,6 +139,7 @@ steps_gui:
       target: run
       face: terminal
 
+  # And the bar over the terminal takes it back.
   - type: action
     domain: automation
     op: press-run
@@ -150,5 +154,5 @@ steps_gui:
     with:
       target: run
       face: roles
-      card: "SCENARIO SEED — one watched by its rolesの係"
+      desk: "SCENARIO SEED — one watched by its rolesの係"
       step: wait

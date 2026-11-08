@@ -1646,7 +1646,7 @@ fn only_a_failed_run_is_acknowledged() {
     assert!(!shown.contains("acknowledged:"), "a cancel is not waiting on anyone: {shown}");
 }
 
-/// **A start with nothing to take makes no run** where the entry is set to wait for a task: the
+/// **A start with nothing to take makes no run** where the round starts at a take_task set to wait for a task: the
 /// automation waits instead, `show` says since when and what for, and `stop-waiting` ends the wait.
 #[test]
 fn a_start_with_nothing_to_take_waits_and_stop_waiting_ends_it() {
@@ -1697,7 +1697,7 @@ fn run_show_says_when_a_run_is_waiting_for_room() {
     let t = id_str(&cli.json(&["task", "add", "--title", "two", "--project", &project, "--role", &born, "--json"])["task"]["id"]);
     cli.finish_creating(&t);
     let second = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
-    // No watch opens a step here, so each run's entry — the built-in that takes a task — is opened on
+    // No watch opens a step here, so where each run's round starts — the built-in that takes a task — is opened on
     // the store, as the app's watch would. Both then stand before the action.
     {
         let paths = amenbo_core::config::Paths::at(cli.home.clone());
@@ -1857,7 +1857,8 @@ fn a_save_is_refused_while_a_way_out_has_nothing_after_it() {
 fn a_start_is_refused_until_somebody_is_named_to_file_a_failed_round_to() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
-    let (a, _, _) = a_saved_launchable(&cli);
+    let (a, _, _, take) = a_picture(&cli, true);
+    saved(&cli, &a);
 
     let shown = cli.json(&["automation", "show", &a, "--json"]);
     assert_eq!(shown["automation"]["failures_to"]["kind"].as_str(), Some("human"), "{shown}");
@@ -1879,7 +1880,11 @@ fn a_start_is_refused_until_somebody_is_named_to_file_a_failed_round_to() {
     let (_, code) = cli.run_err(&["automation", "update", &a, "--failures-to", "human", "--no-failures-to"]);
     assert_ne!(code, 0, "saying it and leaving it unsaid at once is refused");
 
-    let role = id_of(&cli.json(&["automation", "role-add", &a, "--name", "Review", "--json"]), "automation_role");
+    // Every role says where its round starts, or the save is refused (`AMB-D-1123`).
+    let role = id_of(
+        &cli.json(&["automation", "role-add", &a, "--name", "Review", "--entry", &take, "--json"]),
+        "automation_role",
+    );
     let set = cli.json(&["automation", "update", &a, "--failures-to", &role, "--json"]);
     assert_eq!(set["automation"]["failures_to"]["kind"].as_str(), Some("role"), "{set}");
     assert_eq!(id_str(&set["automation"]["failures_to"]["role_id"]), role, "{set}");

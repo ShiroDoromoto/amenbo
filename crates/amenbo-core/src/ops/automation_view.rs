@@ -408,7 +408,7 @@ pub fn detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>> {
 /// What belongs to a placement itself — the answers to its settings and who carries out its steps — is
 /// read off the version. The action standing on it is read the way [`detail`] reads it.
 pub fn saved_detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>> {
-    let Some(mut automation) = read::automation(conn, id)? else { return Ok(None) };
+    let Some(automation) = read::automation(conn, id)? else { return Ok(None) };
     let Some(version) = read::automation_version_latest(conn, id)? else {
         return Err(Error::conflict(format!("automation '{id}' has no saved version")));
     };

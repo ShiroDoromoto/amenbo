@@ -1289,6 +1289,42 @@ button.feed__target:hover { color: var(--c-accent); }
 /* The item that is not the kind of the ones above it, held off from them. The gap is the whole of
    the separation: a rule would draw a heading over a group of one. */
 .menu__item--apart { margin-top: var(--s-1); border-top: var(--border-w) var(--border-style) var(--c-rule); padding-top: var(--s-2); }
+/* A menu that is a panel rather than a list (`Menu`'s `kind="dialog"`): a head, then sections parted by
+   a rule, each a label, a row of controls, a line of help, or an item said in two lines — what it does,
+   and under it what that means. The role's menu on a launch's pane (`app/src/shell/RunPicture.tsx`). */
+.menu--panel {
+  width: min(300px, calc(100vw - 32px)); padding: 0;
+  border-radius: 10px; box-shadow: 0 1px 2px rgba(0, 0, 0, .08), 0 10px 28px rgba(0, 0, 0, .16);
+}
+.menu__head {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  border-bottom: var(--border-w) var(--border-style) var(--c-rule);
+  font-size: 13px; font-weight: var(--fw-bold);
+}
+.menu__head > .identicon { flex: none; }
+.menu__sec { display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+.menu__sec + .menu__sec { border-top: var(--border-w) var(--border-style) var(--c-rule); }
+.menu__label { font-size: 11px; font-weight: var(--fw-bold); letter-spacing: .04em; color: var(--c-text-muted); }
+.menu__row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.menu__hint { font-size: var(--fs-xs); color: var(--c-text-muted); }
+.menu__help { margin: 0; font-size: var(--fs-xs); line-height: 1.5; color: var(--c-text-muted); }
+.menu__reset {
+  align-self: flex-start; padding: 0; border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: var(--fs-xs); color: var(--c-accent-text);
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.menu__reset:disabled { color: var(--c-text-faint); cursor: default; }
+.menu__reset:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.menu--panel .menu__item {
+  display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 2px 10px; align-items: start;
+  width: calc(100% + 8px); margin: -4px -4px 0; padding: 8px; border-radius: 6px;
+  font: inherit; white-space: normal;
+}
+.menu--panel .menu__item--off { color: var(--c-text-faint); }
+.menu--panel .menu__item:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+.menu--panel .menu__item > svg { width: 16px; height: 16px; margin-top: 2px; color: var(--c-text-muted); }
+.menu__title { font-size: 13px; font-weight: var(--fw-bold); }
+.menu__desc { grid-column: 2; font-size: var(--fs-xs); font-weight: normal; color: var(--c-text-muted); }
 
 /* ---------- the automations screen (`app/src/screens/AutomationsScreen.tsx`) ---------- */
 /* The screen's own frame: the four lists take the whole width the main column has, with no cap. They
@@ -2184,6 +2220,9 @@ button.feed__target:hover { color: var(--c-accent); }
 .stepper > button:disabled { color: var(--c-text-faint); cursor: default; }
 .stepper > button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
 .stepper__value { min-width: 48px; text-align: center; font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; }
+/* The same, smaller, inside a menu (the role's menu on a launch's pane). */
+.stepper--s > button { width: 26px; height: 24px; }
+.stepper--s > .stepper__value { min-width: 40px; font-size: var(--fs-xs); }
 /* The same, where the picked role's round does not fit the middle beside the two sides
    (`useStacked` in `../screens/AutomationBuildScreen`): the round then has the screen's whole width. */
 .actbuild__body--stacked { flex-direction: column; }
@@ -2736,8 +2775,12 @@ button.feed__target:hover { color: var(--c-accent); }
   border: 1px solid transparent; border-radius: var(--r-sm); background: none; color: var(--c-text-muted); cursor: pointer;
 }
 .runroles__more > svg { width: 16px; height: 16px; }
-.runroles__more:hover { background: var(--c-hover); color: var(--c-text); }
+.runroles__more:hover, .runroles__more[aria-expanded="true"] { background: var(--c-hover); color: var(--c-text); }
+.runroles__more[aria-expanded="true"] { border-color: var(--c-rule); }
 .runroles__more:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+/* The line in the heed colour under a desk's head: a headcount for this launch alone, and a cut still
+   letting seats go. Both, where both hold, side by side. */
+.runroles__notes { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--fs-xs); color: var(--c-heed); }
 /* The dot on a seat at work: the one thing in the pane that moves. It stays lit, still, where the
    reader asks for less motion. */
 .runroles__pulse {

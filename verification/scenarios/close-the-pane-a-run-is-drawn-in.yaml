@@ -1,12 +1,13 @@
 # The pane a run is drawn in cannot be taken away while the run is going. A pane is an ordinary thing
 # to take away, and a press that also stopped the run was one a reader made meaning only to tidy the
 # page — so the control is drawn and cannot be pressed until the run is over, and stopping is its own
-# press beside the run's state. Once the run is stopped, the pane goes like any other.
+# press, on the header of the launch the pane is drawn for. Once the run is stopped, the pane goes
+# like any other.
 id: close-the-pane-a-run-is-drawn-in
 title: The pane a run is drawn in is taken away only once the run is over, and stops nothing going
 description: >
   Start a run and read its pane: the run is under way, and the control that takes the pane away
-  cannot be pressed. Stop the run from the line over the pane, then take the pane away, and read what
+  cannot be pressed. Stop the launch from the header of the pane, then take the pane away, and read what
   is left: the pane is gone, and the run's row on the history tab says it was canceled — by the stop,
   not by the pane going.
 given:
@@ -81,7 +82,8 @@ steps_gui:
       state: running
       present: true
 
-  # Stopped from the line over the pane, which keeps the pane.
+  # Stopped from the pane's header, which keeps the pane. The stop is the launch's, so it ends the
+  # one run the launch has.
   - type: action
     domain: automation
     op: press-run
@@ -97,6 +99,14 @@ steps_gui:
       target: run
       state: canceled
       present: true
+
+  # The launch is over with it: its header draws no move left to make.
+  - type: assert
+    domain: automation
+    op: launch-head
+    with:
+      target: run
+      state: ended
 
   # And now the pane goes, the way any other does.
   - type: action

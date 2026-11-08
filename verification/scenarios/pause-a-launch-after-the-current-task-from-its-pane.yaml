@@ -1,23 +1,26 @@
-# A reader watching a run is in the pane it is drawn in, and the line over that pane carries the same
-# controls as the running tab's row: hold the run, pick it up again, force-cancel it. This is the road
-# that presses them there. Force-cancelling from the line keeps the pane — the control that takes the pane
-# away cannot be pressed while the run is going or held, so this is the one way to end it from here.
+# A reader watching a run is in the pane it is drawn in, and that pane is its launch's: one launch,
+# one pane, however many seats its roles have. So the header over it carries the launch's moves, not
+# any one run's: pause after the current task — every role finishes the task it is on and takes no
+# new one — pick it up again, and stop it. This is the road that presses them there. The run's own
+# pause, at the end of the action under way, is on its row on the running tab
+# (`pause-a-run-at-the-end-of-the-action-under-way`).
 #
-# The picture is the one hold-a-run-and-let-it-go-again walks, for the reason given there: a hold
-# settles only when a step reports and the run has somewhere to go on to.
-id: hold-a-run-from-its-pane
-title: A run is held, picked up again and stopped from the line over its pane, and the pane stays
+# Stopping from the header keeps the pane — the control that takes the pane away cannot be pressed
+# while the run is going or held, so this is the one way to end it from here.
+id: pause-a-launch-after-the-current-task-from-its-pane
+title: A launch is paused after the current task, picked up again and stopped from its pane's header, and the pane stays
 description: >
-  Start a run, then from the line over the pane it is drawn in hold it, let the step report, pick it
-  up again and stop it, reading the run's state on that line after each. Once it is stopped the pane
-  is still up, saying the run was canceled.
+  Start a run, then from the header of the pane it is drawn in pause the launch after the current
+  task, let the step report, pick the launch up again and stop it, reading the header after each.
+  Paused, the run goes on with the task it has. Once it is stopped the pane is still up, saying the
+  run was canceled, and its header has no move left.
 given:
   # Two rather than one because the terminal's premise stands its programs up in front of the
   # machine's own and cannot make a row shorter than two; the step names the first of them either way.
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
-  # The task the built-in takes on the screen. A hold settles only when a step reports and the run
-  # has somewhere to go on to, so the screen road works the first step to its end.
-  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the run held from its pane works }, as: seed }
+  # The task the built-in takes on the screen. The pause after the current task leaves it with the
+  # run, so the screen road works the first step to its end under the pause.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the run paused from its pane works }, as: seed }
   - { type: action, domain: task, op: assign, with: { target: seed, assignee: me-ai } }
   - { type: action, domain: task, op: finish-creating, with: { target: seed } }
   # The action the run opens once the built-in has taken the task, holding the one step it runs. Its
@@ -30,13 +33,12 @@ given:
   - { type: action, domain: automation, op: exit-add, with: { action: take, name: got one }, as: got_one }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit: got one, exit_to: got one } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: claim, exit_to: "" } }
-  # The action the run goes on to. It is what makes the hold settle: a step that reports with nothing
-  # after it closes the run, and a closed run is not a held one.
+  # The action the run goes on to, so the task is still the run's once the first step has reported.
   - { type: action, domain: automation, op: action-add, with: { name: after }, as: after }
   - { type: action, domain: automation, op: step-add, with: { target: after, name: wait, prompt: carry on with the task }, as: wait }
   - { type: action, domain: automation, op: action-entry, with: { target: after, step: wait } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: wait, exit_to: "" } }
-  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one to hold from its pane" }, as: auto }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one to pause from its pane" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_start }
   # The task is the born role's, whose round starts there: a run takes only its role's tasks.
   - { type: action, domain: task, op: update, with: { target: seed, role_of: auto } }
@@ -95,11 +97,18 @@ steps_gui:
     op: run-pane
     with:
       target: run
+      task: seed
       state: running
 
-  # Holding while the first step is open. The action under way is not cut in half, so the line says
-  # the run will hold when that action ends, not that it already has. The action here is one step, so
-  # that is when the step reports (`pause-a-run-at-the-end-of-the-action-under-way` walks two).
+  - type: assert
+    domain: automation
+    op: launch-head
+    with:
+      target: run
+      state: running
+
+  # Paused after the current task while the first step is open. The task under way is not cut off:
+  # the header says the launch is paused, and the run is still working it.
   - type: action
     domain: automation
     op: press-run
@@ -110,26 +119,36 @@ steps_gui:
 
   - type: assert
     domain: automation
-    op: run-pane
+    op: launch-head
     with:
       target: run
-      state: pausing
-
-  # The step's agent finishing, typed in the same pane. Reporting is what lets the hold settle.
-  - type: action
-    domain: automation
-    op: done-in-pane
-    with:
-      target: run
-      exit: got one
-      report: worked the task and stopped where the hold asked
+      state: paused
 
   - type: assert
     domain: automation
     op: run-pane
     with:
       target: run
-      state: paused
+      task: seed
+
+  # The step's agent finishing, typed in the same pane. The run goes on to the next action of the
+  # same task: the pause waits for the task to be over, not for the step.
+  - type: action
+    domain: automation
+    op: done-in-pane
+    with:
+      target: run
+      exit: got one
+      report: worked the task and went on under the pause
+
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: run
+      step: wait
+      action: after
+      task: seed
 
   - type: action
     domain: automation
@@ -141,13 +160,13 @@ steps_gui:
 
   - type: assert
     domain: automation
-    op: run-pane
+    op: launch-head
     with:
       target: run
       state: running
 
-  # Force-cancelling from the line is final, and it asks first, as on the tab's row — the road goes
-  # through with it.
+  # Stopping from the header is final, and it asks first — the road goes through with it. It
+  # force-cancels every run of the launch, which is this one.
   - type: action
     domain: automation
     op: press-run
@@ -156,10 +175,18 @@ steps_gui:
       press: stop
       on: pane
 
-  # The pane is still up, saying how the run ended — the stop was the run's, not the pane's.
+  # The pane is still up, saying how the run ended — the stop was the launch's, not the pane's — and
+  # the header has no move left to make.
   - type: assert
     domain: automation
     op: run-pane
     with:
       target: run
       state: canceled
+
+  - type: assert
+    domain: automation
+    op: launch-head
+    with:
+      target: run
+      state: ended

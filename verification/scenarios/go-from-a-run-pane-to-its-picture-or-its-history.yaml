@@ -11,10 +11,11 @@ id: go-from-a-run-pane-to-its-picture-or-its-history
 title: A run's pane goes to the history once the run is over, and to the box it stopped at when it failed
 description: >
   Start an automation whose built-in that takes a task closes the run when there is none and stops for
-  a person when it took one. With nothing handed to the AI the run is over; its pane's "see the
-  history" opens the history tab with the run on it. Split the workspace into its own window, hand a
-  task to the AI and start the automation again: the run fails at the built-in, and its band's "see the
-  picture" brings the ledger forward on the build screen with that box picked out.
+  a person when it took one. With nothing handed to the AI the run is over; stop its launch from the
+  pane's header, and the pane's "see the history" opens the history tab with the run on it. Split the
+  workspace into its own window, hand a task to the AI and start the automation again: the run fails
+  at the built-in, and its band's "see the picture" brings the ledger forward on the build screen with
+  that box picked out.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
 
@@ -70,6 +71,24 @@ steps_gui:
       target: empty_handed
       state: completed
       present: true
+
+  # The run is over, and its launch is not: a launch outlasts its runs and waits for the next task to
+  # take until somebody stops it. Left standing, it would take the task handed on below by itself,
+  # and the second start would join it. So it is stopped from its pane's header first.
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: empty_handed
+      press: stop
+      on: pane
+
+  - type: assert
+    domain: automation
+    op: launch-head
+    with:
+      target: empty_handed
+      state: ended
 
   - type: action
     domain: automation

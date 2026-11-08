@@ -2506,8 +2506,8 @@ pub enum AutomationCmd {
         /// --in-action only: an automation's picture has nothing outside it
         #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "", conflicts_with_all = ["done", "halt"])]
         exit_to: Option<String>,
-        /// close the run — or, in a run whose entry is take_task, the round whose task it closed, which
-        /// goes round to the entry
+        /// close the run — or, in a run whose role's round starts at take_task, the round whose task it
+        /// closed, which goes round to where the round starts
         #[arg(long, conflicts_with = "halt")]
         done: bool,
         /// end the run failed (halted): its task goes back to todo, keeping its assignee and role, and waits on a task filed to whoever the automation sends a failed round to (--failures-to), carrying why it failed and the step's report
@@ -2532,8 +2532,8 @@ pub enum AutomationCmd {
         /// --in-action only: an automation's picture has nothing outside it
         #[arg(long, value_name = "NAME", num_args = 0..=1, default_missing_value = "", conflicts_with_all = ["done", "halt"])]
         exit_to: Option<String>,
-        /// close the run — or, in a run whose entry is take_task, the round whose task it closed, which
-        /// goes round to the entry
+        /// close the run — or, in a run whose role's round starts at take_task, the round whose task it
+        /// closed, which goes round to where the round starts
         #[arg(long, conflicts_with = "halt")]
         done: bool,
         /// end the run failed (halted): its task goes back to todo, keeping its assignee and role, and waits on a task filed to whoever the automation sends a failed round to (--failures-to), carrying why it failed and the step's report

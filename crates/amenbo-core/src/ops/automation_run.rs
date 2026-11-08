@@ -4051,7 +4051,7 @@ pub(crate) fn current_defs(conn: &Connection, run_id: i64) -> Result<Vec<Automat
     let mut defs = read::automation_run_defs_of(conn, run_id)?;
     let Some(role) = run.role_id else { return Ok(defs) };
     let starts = |def: &AutomationRunDef| def.role_ids().contains(&role);
-    if defs.iter().filter(|def| starts(*def)).count() > 1 {
+    if defs.iter().filter(|def| starts(def)).count() > 1 {
         if let Some(from) = defs.iter().rposition(starts) {
             defs.drain(..from);
         }

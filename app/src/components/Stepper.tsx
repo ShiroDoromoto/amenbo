@@ -1,5 +1,6 @@
 // **A number stepped one at a time between two bounds**: "−", the number, "+". Used for how many a
-// role has, on the build screen; the run's pane steps the same number for one run alone.
+// role has, on the build screen; the run's pane steps the same number for one launch alone, in the
+// role's menu, drawn smaller (`small`).
 //
 // **The press keeps the focus.** A button pressed with the pointer is not focused in every web view
 // (WebKit leaves it), so the press gives it the focus itself: a reader stepping with the keyboard or
@@ -19,6 +20,7 @@ export function Stepper({
   lessLabel,
   moreLabel,
   onStep,
+  small = false,
 }: {
   value: number;
   min: number;
@@ -30,13 +32,15 @@ export function Stepper({
   lessLabel: string;
   moreLabel: string;
   onStep: (next: number) => void;
+  /** Drawn smaller, for a stepper inside a menu. */
+  small?: boolean;
 }) {
   const step = (by: number) => (e: MouseEvent<HTMLButtonElement>) => {
     e.currentTarget.focus();
     onStep(value + by);
   };
   return (
-    <span className="stepper" role="group" aria-label={label} data-saved-field="">
+    <span className={small ? "stepper stepper--s" : "stepper"} role="group" aria-label={label} data-saved-field="">
       <button type="button" aria-label={lessLabel} disabled={value <= min} onClick={step(-1)}>
         −
       </button>

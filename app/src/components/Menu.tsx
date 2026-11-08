@@ -1,5 +1,7 @@
-// The shell every small menu opened at a point wears: the file row's (`../files/FilesPanel`) and
-// the pane row's are the same box with different items in it.
+// The shell every small menu opened at a point wears: the file row's (`../files/FilesPanel`), the
+// pane row's, and the role's menu on a launch's pane (`../shell/RunPicture`) are the same box with
+// different things in it. The last is a panel rather than a list (`kind="dialog"`), hung under the
+// right end of the button that opened it (`align="end"`).
 //
 // **What is shared is the machinery, not the items.** A menu is a box placed where the pointer was,
 // closed by anything outside it and by Escape, walked with the arrows, and handed back to whatever
@@ -9,11 +11,14 @@
 // **The items are the caller's, but the class on them is not.** The arrows find what to walk by the
 // item class, so a caller who spelt it themselves would lose the keyboard without anything looking
 // wrong. `MenuItem` is how the class stays out of their hands.
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject } from "react";
 
 /** What the arrows walk. The one string both halves of this file agree on. */
 const ITEM = "menu__item";
+
+/** Which kind of box an item is in: a `menuitem` belongs in a menu, and in a dialog it is a plain button. */
+const Kind = createContext<"menu" | "dialog">("menu");
 
 /**
  * How close to the window's edge the box may come.
@@ -48,6 +53,20 @@ function fit(point: number, size: number, room: number): number {
 }
 
 /**
+ * Where the left edge of the box goes for a box whose **right** edge is asked to stand at `point`.
+ *
+ * The mirror of `fit`: the box ends at the point while there is room for it before it, and starts there
+ * where there is not.
+ */
+function fitEnd(point: number, size: number, room: number): number {
+  const start = point - size >= EDGE ? point - size : point;
+  return Math.min(Math.max(start, EDGE), Math.max(room - size - EDGE, EDGE));
+}
+
+/** What the first focus stands on in a box that is a dialog: the first thing in it that can be pressed. */
+const PRESSABLE = "button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled)";
+
+/**
  * A menu box at a point, holding whatever items it is given.
  *
  * Placed where the pointer was and above everything, because it is about the row it was opened on
@@ -59,8 +78,27 @@ function fit(point: number, size: number, room: number): number {
  * placed against what it actually came out as — the items are the caller's, and how tall a list of
  * them ends up is not a number this side can be told in advance.
  */
-export function Menu({ at, face, onClose, children }: {
+export function Menu({ at, align = "start", kind = "menu", label, from: opener, face, className, onClose, children }: {
   at: { x: number; y: number };
+  /**
+   * Which corner of the box stands at `at`: its top left (`start`, the pointer's menu), or its top
+   * right (`end`), for a box hung under the right end of the button that opened it.
+   */
+  align?: "start" | "end";
+  /**
+   * `dialog` for a box that holds more than items — a stepper, a link — and is read as one panel
+   * rather than walked as a list. It stands on the first thing in it that can be pressed.
+   */
+  kind?: "menu" | "dialog";
+  /** What the box is called, read out for it. */
+  label?: string;
+  /**
+   * The button that opens and closes it. A press on it is not a press outside: it is the button's own
+   * toggle, and closing here first would have its click open the box again straight after.
+   */
+  from?: RefObject<HTMLElement | null>;
+  /** A class added to the box's own. */
+  className?: string;
   /**
    * What the items are showing, where a menu has more than one face to show. Focus returns to the
    * first item whenever this changes, because the items under the reader have just been replaced
@@ -82,10 +120,10 @@ export function Menu({ at, face, onClose, children }: {
     const drawn = box.current?.getBoundingClientRect();
     if (drawn === undefined) return;
     setPlace({
-      left: fit(at.x, drawn.width, room.w),
+      left: align === "end" ? fitEnd(at.x, drawn.width, room.w) : fit(at.x, drawn.width, room.w),
       top: fit(at.y, drawn.height, room.h),
     });
-  }, [at.x, at.y, face, room.w, room.h]);
+  }, [at.x, at.y, align, face, room.w, room.h]);
 
   useEffect(() => {
     // Anything the person does **outside** the menu closes it: one that outlived the next click
@@ -94,6 +132,7 @@ export function Menu({ at, face, onClose, children }: {
     // it, so the item never fires at all.
     const away = (event: Event) => {
       if (event.target instanceof Node && box.current?.contains(event.target)) return;
+      if (event.target instanceof Node && opener?.current?.contains(event.target)) return;
       onClose();
     };
     // **Escape and nothing else.** This listened for every key once, which read as "any key means
@@ -108,10 +147,11 @@ export function Menu({ at, face, onClose, children }: {
       document.removeEventListener("keydown", key);
       window.removeEventListener("blur", away);
     };
-  }, [onClose]);
+  }, [onClose, opener]);
 
-  // The first item, once there is one. A menu opened from a row the arrows reached is a menu the
-  // arrows have to be able to walk, and a list nothing is standing on is one every key falls out of.
+  // The first item, once there is one — in a dialog, the first thing that can be pressed. A menu
+  // opened from a row the arrows reached is a menu the arrows have to be able to walk, and a list
+  // nothing is standing on is one every key falls out of.
   //
   // **And the row it was opened on, once it closes.** Focus left where the menu used to be is a
   // reader standing on nothing: the next arrow reaches no tree and the panel goes quiet, which is
@@ -119,7 +159,7 @@ export function Menu({ at, face, onClose, children }: {
   const from = useRef<HTMLElement | null>(null);
   useEffect(() => {
     from.current ??= document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    box.current?.querySelector<HTMLElement>(`.${ITEM}`)?.focus();
+    box.current?.querySelector<HTMLElement>(kind === "dialog" ? PRESSABLE : `.${ITEM}`)?.focus();
     // Given back only where the menu going is what left the focus nowhere. A reader who clicked
     // away has already said where they are, and taking them back to the row would be undoing it.
     return () => {
@@ -127,11 +167,14 @@ export function Menu({ at, face, onClose, children }: {
         from.current?.focus();
       }
     };
-  }, [face]);
+  }, [face, kind]);
 
   /** Up and down the items. The pattern a menu is read by, and the reason a blanket key handler
-   *  cannot be one of these: these presses are the menu's own, not a way out of it. */
+   *  cannot be one of these: these presses are the menu's own, not a way out of it. **Not in a
+   *  dialog**, which is walked with Tab: an arrow there would carry the reader off a stepper onto an
+   *  item below it. */
   const walk = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (kind === "dialog") return;
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
     const items = [...e.currentTarget.querySelectorAll<HTMLElement>(`.${ITEM}`)];
@@ -143,7 +186,7 @@ export function Menu({ at, face, onClose, children }: {
 
   return (
     <div
-      className="menu"
+      className={className === undefined ? "menu" : `menu ${className}`}
       // The size caps are the other half of fitting: a list longer than the window, or a name wider
       // than it, cannot be placed anywhere that shows the whole of it — so it is the box that gives,
       // and what does not fit is scrolled to rather than lost off an edge.
@@ -153,11 +196,12 @@ export function Menu({ at, face, onClose, children }: {
         maxHeight: room.h - EDGE * 2,
         maxWidth: room.w - EDGE * 2,
       }}
-      role="menu"
+      role={kind}
+      aria-label={label}
       ref={box}
       onKeyDown={walk}
     >
-      {children}
+      <Kind.Provider value={kind}>{children}</Kind.Provider>
     </div>
   );
 }
@@ -176,10 +220,12 @@ export function MenuItem({ apart = false, off = false, onClick, children }: {
   onClick: () => void;
   children: ReactNode;
 }) {
+  const kind = useContext(Kind);
   return (
     <button
+      type="button"
       className={`${ITEM}${apart ? ` ${ITEM}--apart` : ""}${off ? ` ${ITEM}--off` : ""}`}
-      role="menuitem"
+      role={kind === "menu" ? "menuitem" : undefined}
       // Not `disabled`: a disabled button is out of the arrows' reach and says nothing to a reader
       // being read to, which is the opposite of what drawing it was for.
       aria-disabled={off || undefined}

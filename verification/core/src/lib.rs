@@ -4614,27 +4614,41 @@ const REGISTRY: &[OpSpec] = &[
     // picture and the reasons under its head next.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-back", required: &[], refs: &[], strings: &[], binds: false },
     //
-    // The pane a run is drawn in, and what its header carries: the run's own number on the name's
-    // line, which step on the line under it, and the task it is on with how many tasks in on the
-    // third. The step is said with the action it was opened
-    // from (`action`), as one value — the step is one terminal, and which action it belongs to is
-    // what says where on the automation's picture the run has got to. A run whose placement has been
-    // taken off the picture since says the step alone. `label` reads a pane's name and nothing else,
-    // which is why this one is here.
+    // **The pane a run is drawn in is its launch's**: one launch, one pane, however many seats its
+    // roles have, and the run whose terminal is drawn in it is the seat in front. Every op below that
+    // names a run's pane names the pane of the launch that run is a seat of.
     //
-    // `state` is where the run stands, said at the end of the name's line, and `reason` why a failed
-    // one failed, said on a band under the header — both spelled as `run-row` spells them,
-    // so a road reads the run the same way on the pane and on the tab, in whichever language the
-    // screen is drawn. The pane outlives the step it was opened for, which is why a run that is over
-    // is read here at all.
+    // What the row of the seat in front carries, under the launch's header (`launch-head`): the run's
+    // own number on its first line, which step on the line under it, and the task it is on with how
+    // many tasks in on the third. The mark and the automation's name are the header's, so the row
+    // leaves them out. The step is said with the action it was opened from (`action`), as one value —
+    // the step is one terminal, and which action it belongs to is what says where on the automation's
+    // picture the run has got to. A run whose placement has been taken off the picture since says the
+    // step alone. `label` reads a pane's name and nothing else, which is why this one is here.
+    //
+    // `state` is where the run stands, said at the end of the row's first line, and `reason` why a
+    // failed one failed, said on a band under the row — both spelled as `run-row` spells them, so a
+    // road reads the run the same way on the pane and on the tab, in whichever language the screen is
+    // drawn. The pane outlives the step it was opened for, which is why a run that is over is read
+    // here at all.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-pane", required: &[], refs: &["target", "task"], strings: &["step", "action", "state", "reason"], binds: false },
-    // **Which face that pane's body is turned to** (`face`): its roles, or the terminal. A run's pane
-    // opens on its roles, and is turned to its terminal while a step that may wait for a person runs.
-    // On the roles, a role whose round is under way is a card, standing in the order the roles are
-    // defined in; a role with no round is an icon on the bar under the cards. `card` is the name the
-    // card carries — the role's, or the automation's where it defines no role — and `step` the step
-    // under way that the card says. A road names what it is sure of and leaves the rest out.
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-roles", required: &["face"], refs: &["target"], strings: &["face", "card", "step"], binds: false },
+    // **The header of that pane** — the launch, not any one run of it: the chip saying it is
+    // automatic, the automation's name, where the launch stands, and how many of its seats are working
+    // a task out of how many it has. `state` is `running`, `paused` (the header's "Pause after the
+    // current task" pressed, every role finishing the task it is on and taking no new one) or `ended`
+    // (stopped, and its moves gone from the header). `working` and `of` are the two counts, read only
+    // while the launch is going; a road names what it is sure of and leaves the rest out.
+    // `target` is a run of the launch, whose pane is read.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "launch-head", required: &["state"], refs: &["target"], strings: &["state"], binds: false },
+    // **Which face that pane's body is turned to** (`face`): the desks of its roles, or the terminal of
+    // one seat. A pane opens on its roles, and is turned to the terminal while a step that may wait
+    // for a person runs. On the roles, a role whose round is under way is a desk the width of the pane,
+    // standing in the order the roles are defined in, with a seat per run of it; a role with no round
+    // is an icon on the bar under the desks. `desk` is the name the desk carries — the role's, or the
+    // automation's where it defines no role — and `step` the step under way that a seat of it says. On
+    // the terminal, a bar over it names the role and the seat and carries the one way back to the
+    // roles. A road names what it is sure of and leaves the rest out.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-roles", required: &["face"], refs: &["target"], strings: &["face", "desk", "step"], binds: false },
     // **Whether the program in that pane has ended**, once its run is over. The pane outlives the
     // run, and its last lines stay on the screen either way, so words on it cannot say whether the
     // terminal is still taking lines — a line typed at it is what does. A run that is over leaves no
@@ -4643,16 +4657,17 @@ const REGISTRY: &[OpSpec] = &[
     // `target` is which run's pane, read the way `close-run-pane` reads it.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-pane-ended", required: &[], refs: &["target"], strings: &[], binds: false },
     // Taking that pane away, once its run is over: while the run is going or held the control cannot
-    // be pressed, so a road stops the run first (`press-run` with `on: pane`).
+    // be pressed, so a road stops the launch first (`press-run` with `on: pane`).
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "close-run-pane", required: &[], refs: &["target"], strings: &[], binds: false },
     // **The two ways from a run's pane to the ledger.** A failed run's band carries the
     // press that opens the automation's build screen with the box it stopped at picked out — named the
     // way `pick-box` names one, by `box` or, for a built-in, by its key (`builtin`) — and a run that is
-    // over carries on its header's line the press that opens the automations on the history tab. Both
-    // bring the ledger forward, from the workspace's own window as well as from the one it shares.
+    // over carries on its row, under the launch's header, the press that opens the automations on the
+    // history tab. Both bring the ledger forward, from the workspace's own window as well as from the
+    // one it shares.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "see-picture", required: &[], refs: &["target"], strings: &["box", "builtin"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "see-history", required: &[], refs: &["target"], strings: &[], binds: false },
-    // **What keeps a waiting run waiting**, on the card its pane stands on while the
+    // **What keeps a waiting run waiting**, on the card its seat's terminal stands on while the
     // built-in that takes a task waits: how many of the tasks it looks for it cannot take (`tasks`),
     // and one line per thing stopping them with how many it holds. The line read here is a value
     // ordered before theirs that is not closed — `dimension` and `value`, holding `count` tasks.
@@ -4723,10 +4738,15 @@ const REGISTRY: &[OpSpec] = &[
     // force-cancel a run going (`stop`, through the question it asks first), or cancel a held one
     // (`cancel`).
     //
-    // `on: pane` presses the same moves on the line over the pane the run is drawn in rather than on
-    // the tab's row: a reader watching a run is in its pane. Left off, or `on: row`, it is the row.
-    // `open` is the row's alone, the pane being where it leads; `roles` and `terminal` are the
-    // pane's alone — the two faces its body is turned to (`run-roles`).
+    // `on: pane` presses on the pane the run is drawn in rather than on the tab's row: a reader
+    // watching a run is in its pane. The pane is the launch's, so its moves are the launch's, on its
+    // header: `pause` is "Pause after the current task" — every run of it finishes the task it is on
+    // and takes no new one, not the pause at the end of the action the row asks — `resume` picks the
+    // launch up again, and `stop` force-cancels every run of it, through the question it asks first.
+    // `terminal` presses this run's seat among the desks, turning the pane to that seat's terminal, and
+    // `roles` presses the way back on the bar over the terminal (`run-roles`). Left off, or `on: row`,
+    // it is the row. `open` and `cancel` are the row's alone: the pane is where `open` leads, and a
+    // launch's header has no cancel.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-run", required: &["press"], refs: &["target"], strings: &["press", "on"], binds: false },
     //
     // **The automations the sidebar opens**, every project's on one list (`open-view` with

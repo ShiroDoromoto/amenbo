@@ -4,7 +4,7 @@
 # was last chosen for — a step placed on a cheaper model ran on the dearest one while its pane said
 # otherwise (`app/src-tauri/src/pty.rs`, `model_to_open_on`).
 #
-# The pane's own header is Amenbo's account of the choice, drawn from the same definition, so it
+# The run's row in the pane is Amenbo's account of the choice, drawn from the same definition, so it
 # stays right on a build that starts the program wrong. What says the choice arrived is the program
 # it arrived at: a stand-in prints every argument it was started with on a line of its own
 # (`amenbo_verify_cli::domain::workspace`), so the road reads back the model name it placed the step on.
@@ -13,7 +13,7 @@ title: A step placed on a model has its agent started on that model, in the pane
 description: >
   Place an action on an automation with its one step carried out by Claude Code on a model named
   there, and start a run. In the pane the run is drawn in, the agent the step opened was started
-  with that model's name — the program says so itself, and not just the pane's header.
+  with that model's name — the program says so itself, and not just the run's row in the pane.
 given:
   # Two agents, each answering with two models it can be started on. The names are the harness's own
   # — a road never writes a real model name — so the one the step is placed on is one this machine

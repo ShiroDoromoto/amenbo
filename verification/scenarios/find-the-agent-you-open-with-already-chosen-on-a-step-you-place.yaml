@@ -52,8 +52,8 @@ given:
   - { type: action, domain: automation, op: step-add, with: { target: draft, name: write, prompt: write the draft }, as: write }
   - { type: action, domain: automation, op: action-entry, with: { target: draft, step: write } }
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — placed with an agent on it", project: harbour }, as: auto }
-  # A picture with nothing on it takes only a built-in a run starts at, so the library
-  # action goes in on a line leaving one. The built-in's way out for having taken a task ends the run,
+  # A role starts only at the built-in that takes a task, so the library action goes in on a line
+  # leaving that one. The built-in's way out for having taken a task ends the run,
   # which is the line the `+` stands on.
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_take }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した } }

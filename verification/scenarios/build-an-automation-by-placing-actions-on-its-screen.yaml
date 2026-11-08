@@ -1,23 +1,21 @@
 # An automation's picture is built on its own screen, one layer over an action's: every box on it is
-# a placement of an action. What a reader does there that no other screen asks of them is five things.
-# A picture with nothing on it has no `+` to press, so the first placement comes from the press in the
-# empty picture — and it is where a run starts, so what that press offers is the three built-ins a run
-# can start at and nothing else. What a run starts at is changed on the start's own
-# panel, to another of the three. Every later placement goes in on a line, off the library. What
-# leaving one way out leads to is said on that way out's row, with the limit a line going back to a
-# box before it carries. And a placement is taken off outright, with the action left in the library.
+# a placement of an action. What a reader does there that no other screen asks of them is four things.
+# An automation is born with one role that starts nowhere, and a picture with nothing on it has no `+`
+# to press — so the role's start comes from the press beside the picture, which puts the built-in that
+# takes a task on, the only start a role has. Every later placement goes in on a line, off the library.
+# What leaving one way out leads to is said on that way out's row, with the limit a line going back to
+# a box before it carries. And a placement is taken off outright, with the action left in the library.
 # A build that lost any of them would leave an automation nobody could finish from the screen.
 id: build-an-automation-by-placing-actions-on-its-screen
-title: An automation's placements are put down, started at, joined, let go of and taken off on its own screen
+title: An automation's role is given its start, and its placements are joined, let go of and taken off on its own screen
 description: >
-  Open an automation with nothing on it, find the press in the empty picture offering the three
-  built-ins a run can start at and nothing else, place the one that takes a task, and read the start's
-  mark on its box. Change the start to the one that files a task, and read the first one gone and the
-  mark on the second. Say its way out finishes the task, put a library action in on that line, say
+  Open an automation with nothing on it, press the button beside the picture that starts its role
+  with the built-in that takes a task, and read that box on the picture and the button gone. Say the
+  way out for having taken a task finishes the task, put a library action in on that line, say
   that action's own way out finishes the task, and put a second library action in on that line —
   reading both halves of what that did. Turn the second library action's way out back to the first, write a limit on
   that line and empty it again, say instead that leaving it finishes the task, and take that back.
-  Take the second placement off, find the start as it was, and find the second action still in the
+  Take the second placement off, find the start still drawn, and find the second action still in the
   library. Each change is read on the picture, because the panel alone could say a thing the picture
   never drew.
 given:
@@ -30,7 +28,8 @@ given:
   - { type: action, domain: automation, op: action-add, with: { name: review }, as: review }
   - { type: action, domain: automation, op: step-add, with: { target: review, name: read, prompt: read the draft back }, as: read }
   - { type: action, domain: automation, op: action-entry, with: { target: review, step: read } }
-  # An automation is born empty, which is the state the road opens on: nothing placed, and no line.
+  # An automation is born with one role that starts nowhere, which is the state the road opens on:
+  # nothing placed, and no line.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — placed on screen" }, as: auto }
 
 steps_gui:
@@ -46,72 +45,42 @@ steps_gui:
     with:
       target: auto
 
-  # The first placement, from the press in the empty picture. A picture with no line at all is the
-  # case the `+` on a line cannot reach, and what goes there is where a run starts — so the start's
-  # mark is on its box from the moment it is placed.
+  # The role's start, from the press beside the picture. A picture with no line at all is the case
+  # the `+` on a line cannot reach, and a role starts only at the built-in that takes a task — so the
+  # press puts that one on, with nothing to choose, and goes once the role has its start.
   - type: action
     domain: automation
-    op: place-action
-    with:
-      builtin: take_task
+    op: start-role
 
   - type: assert
     domain: automation
     op: pictured
     with:
       builtin: take_task
-      entry: true
+      present: true
 
-  # What a run starts at, changed on the start's own panel. The placement stays where it was and
-  # stands on the other built-in, so the first is gone from the picture and the mark is on the second.
+  # A line to put a library action in on: leaving the start by the way out for having taken a task
+  # finishes the task.
   - type: action
     domain: automation
     op: pick-box
     with:
       builtin: take_task
-
-  - type: action
-    domain: automation
-    op: replace-entry
-    with:
-      builtin: make_task
-
-  - type: assert
-    domain: automation
-    op: pictured
-    with:
-      builtin: take_task
-      present: false
-
-  - type: assert
-    domain: automation
-    op: pictured
-    with:
-      builtin: make_task
-      entry: true
-
-  # A line to put a library action in on: leaving the start by the way out for having filed a task
-  # finishes the task. The start's box is pressed again, since what it stood on changed under the panel.
-  - type: action
-    domain: automation
-    op: pick-box
-    with:
-      builtin: make_task
 
   - type: action
     domain: automation
     op: set-next
     with:
-      builtin: make_task
-      exit: 起票した
+      builtin: take_task
+      exit: 着手した
       ends: done
 
   - type: action
     domain: automation
     op: insert-box
     with:
-      after_builtin: make_task
-      exit: 起票した
+      after_builtin: take_task
+      exit: 着手した
       action: draft
 
   - type: assert
@@ -237,7 +206,7 @@ steps_gui:
       exit: drafted
       present: false
 
-  # Taking a placement off takes its box off the picture. The start is left as it was, mark and all.
+  # Taking a placement off takes its box off the picture. The start is left as it was.
   - type: action
     domain: automation
     op: pick-box
@@ -259,8 +228,8 @@ steps_gui:
     domain: automation
     op: pictured
     with:
-      builtin: make_task
-      entry: true
+      builtin: take_task
+      present: true
 
   # What was taken off was the placement and not the action: the library still lists it.
   - type: action

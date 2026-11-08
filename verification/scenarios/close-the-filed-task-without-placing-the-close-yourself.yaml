@@ -1,13 +1,17 @@
 # A run that starts by filing a task holds that task, and a picture that lets it end without closing
-# the task is refused at the launch. The reader who puts one action after that entry has nearly always
-# said the whole of what the run does, so the built-in that closes the task comes on after the
+# the task is refused at the launch. The reader who puts one action after that role's start has nearly
+# always said the whole of what the run does, so the built-in that closes the task comes on after the
 # action's done way out by itself, ending the run. A build where it did not would send every reader
 # of this road to the launch's refusal first, to learn a box they never asked about.
+#
+# The screen gives a role its start only at the built-in that takes a task, so the start that files
+# one is stood up by the terminal before the road (`place-add` with `starts`), and the road opens on
+# the picture with that start already on it.
 id: close-the-filed-task-without-placing-the-close-yourself
-title: The first action put after an entry that files a task brings the built-in that closes it
+title: The first action put after a role's start that files a task brings the built-in that closes it
 description: >
-  Start an automation at the built-in that files a task, and put a library action on after its way
-  out that says nothing yet. The built-in that closes the task stands after the action's done way
+  On an automation whose role starts at the built-in that files a task, put a library action on after
+  its way out that says nothing yet. The built-in that closes the task stands after the action's done way
   out, marked as put on for the reader, and leaving it ends the run. It is an ordinary placement:
   take it off, and the action's done way out says nothing again.
 given:
@@ -17,6 +21,7 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: write, exit_to: "" } }
 
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a task filed and closed" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: make_task, starts: true } }
 
 steps_gui:
   - type: action
@@ -31,13 +36,7 @@ steps_gui:
     with:
       target: auto
 
-  - type: action
-    domain: automation
-    op: place-action
-    with:
-      builtin: make_task
-
-  # The entry files the task and takes it, so that is the way out the run goes on by.
+  # The start files the task and takes it, so that is the way out the run goes on by.
   - type: action
     domain: automation
     op: insert-box

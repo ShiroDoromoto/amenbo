@@ -16,8 +16,8 @@
 id: place-a-built-in-and-read-what-it-does
 title: A built-in is read from the library, put in on a line from its own head, and read again from its placement
 description: >
-  On the actions tab, open the built-in that takes a task (`take_task`) and read what it does, the two
-  settings it reads and its two ways out, with no automation running it yet. On an automation, put it in on the line
+  On the actions tab, open the built-in that waits (`wait`) and read what it does, the three settings
+  it reads and its one way out, with no automation running it yet. On an automation, put it in on the line
   leaving a library action, from the head for the built-ins in the panel the `+` opens, and read it on
   the picture. Press its box, open the action standing on it, and read the same screen again, now run
   by one automation.
@@ -28,12 +28,12 @@ given:
   - { type: action, domain: automation, op: action-entry, with: { target: draft, step: write } }
   - { type: action, domain: automation, op: exit-add, with: { action: draft, name: drafted } }
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one a built-in goes on" }, as: auto }
-  # The picture starts at a built-in a run can start at, and the library action goes on after it. The
-  # start is the one that files a task, not the one the road reads, so the count read below is the
-  # road's placement alone.
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: make_task }, as: at_make }
+  # The role starts at the built-in that takes a task, the only start a role has, and the library
+  # action goes on after it — the picture draws only what the role's start reaches. The start is not
+  # the built-in the road reads, so the count read below is the road's placement alone.
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_take }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: draft }, as: at_draft }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_make, exit: 起票した, to: at_draft } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_draft } }
 
 steps_gui:
   # Before anything places it: the built-in is on the library's list, and opens to be read.
@@ -47,15 +47,15 @@ steps_gui:
     domain: automation
     op: builtin-open
     with:
-      builtin: take_task
+      builtin: wait
 
   - type: assert
     domain: automation
     op: builtin-read
     with:
-      builtin: take_task
-      settings: [絞り込み, 着手できるタスクが無いとき]
-      exits: [着手した, 着手できるタスクが無い]
+      builtin: wait
+      settings: [時間, 分, 秒]
+      exits: [完了]
       used_by: 0
 
   # The line it goes in on: leaving the library action by its way out finishes the task.
@@ -91,13 +91,13 @@ steps_gui:
     with:
       after: draft
       exit: drafted
-      builtin: take_task
+      builtin: wait
 
   - type: assert
     domain: automation
     op: pictured
     with:
-      builtin: take_task
+      builtin: wait
       present: true
 
   - type: assert
@@ -106,7 +106,7 @@ steps_gui:
     with:
       from: draft
       exit: drafted
-      to_builtin: take_task
+      to_builtin: wait
 
   # And read again from where it stands: the placement's panel opens the same screen, and the
   # placement is now counted on it.
@@ -114,7 +114,7 @@ steps_gui:
     domain: automation
     op: pick-box
     with:
-      builtin: take_task
+      builtin: wait
 
   - type: action
     domain: automation
@@ -124,5 +124,5 @@ steps_gui:
     domain: automation
     op: builtin-read
     with:
-      builtin: take_task
+      builtin: wait
       used_by: 1

@@ -227,6 +227,85 @@ describe("useQuery — invalidations reach queries that have subscribers", () =>
   });
 });
 
+// A slow read and a burst of store changes: every change landing before the read settles used to start the same
+// read again, and each one queued on the store behind the last, holding up every other read on the screen.
+describe("revalidate — one fetch per key at a time", () => {
+  let gates: Map<string, Array<{ resolve: (v: string) => void; reject: (e: unknown) => void }>>;
+
+  /** A fetch that settles only when the test says so, carrying "the nth fetch of that key" like fetchFor. */
+  function gatedFetch(k: string): Promise<string> {
+    const n = (fetched.get(k) ?? 0) + 1;
+    fetched.set(k, n);
+    return new Promise((resolve, reject) => {
+      const list = gates.get(k) ?? [];
+      list.push({ resolve: () => resolve(`${k}#${n}`), reject });
+      gates.set(k, list);
+    });
+  }
+
+  /** Settle the oldest fetch of `k` still waiting, then flush what it sets off. */
+  async function finish(k: string, how: "resolve" | "reject" = "resolve"): Promise<void> {
+    const g = gates.get(k)!.shift()!;
+    if (how === "resolve") g.resolve("");
+    else g.reject(new Error(`${k} failed`));
+    await settle();
+  }
+
+  function Gated({ k }: { k: string }) {
+    const { data, error } = useQuery<string>(["gated", k], () => gatedFetch(k));
+    return createElement("span", { "data-k": k }, error ? "error" : (data ?? "…"));
+  }
+
+  beforeEach(() => {
+    gates = new Map();
+  });
+
+  it("invalidations that land while a fetch runs start no fetch of their own, and one fetch follows it", async () => {
+    render(createElement(Gated, { k: "slow" }));
+    await settle();
+    expect(count("slow")).toBe(1);
+
+    invalidateAllQueries();
+    invalidateAllQueries();
+    invalidateQueries((key: QueryKey) => key[0] === "gated");
+    await settle();
+    expect(count("slow")).toBe(1); // still only the first one, however many arrived
+
+    await finish("slow");
+    expect(count("slow")).toBe(2); // the one fetch that covers them all, started after the first settled
+    expect(shown("slow")).toBe("slow#1");
+
+    await finish("slow");
+    expect(count("slow")).toBe(2);
+    expect(shown("slow")).toBe("slow#2"); // the follow-up's answer is what stays on screen
+  });
+
+  it("a failed fetch still runs the follow-up an invalidation asked for", async () => {
+    render(createElement(Gated, { k: "flaky" }));
+    await settle();
+    invalidateAllQueries();
+
+    await finish("flaky", "reject");
+    expect(count("flaky")).toBe(2);
+    expect(shown("flaky")).toBe("error");
+
+    await finish("flaky");
+    expect(shown("flaky")).toBe("flaky#2");
+  });
+
+  it("without an invalidation during the fetch, nothing follows it", async () => {
+    render(createElement(Gated, { k: "calm" }));
+    await settle();
+    await finish("calm");
+    expect(count("calm")).toBe(1);
+    expect(shown("calm")).toBe("calm#1");
+
+    invalidateAllQueries(); // once idle, an invalidation fetches straight away as before
+    await settle();
+    expect(count("calm")).toBe(2);
+  });
+});
+
 // The other half of the fold in `core/changes`: a scope is only worth naming if some query listens for it.
 // The two are written apart — a dataset map and a switch — so a scope added to one and not the other is a
 // silent no-op: the feed folds it, nothing refetches, and the screen keeps the state it had.

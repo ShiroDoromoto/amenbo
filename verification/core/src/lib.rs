@@ -4470,7 +4470,8 @@ const REGISTRY: &[OpSpec] = &[
     // searched for first, and made off the press the search leaves when nothing is found. What it
     // lands on is its build screen over the automation's, **still being made**, and
     // the step ends there: only one of the two presses at its foot closes it (`action-finish-creating`,
-    // `action-abandon`), and a road says which.
+    // `action-abandon`), and a road says which. Finishing is its first save, which an action with no
+    // step is refused, so a road finishing it puts a step in first (`add-step`).
     //
     // Or one of Amenbo's built-ins (`builtin`), picked under the library's own head for them. It is
     // named by its key, the one word of it that is the same in every language: what its row draws is
@@ -4533,7 +4534,9 @@ const REGISTRY: &[OpSpec] = &[
     // screen" — or, `false`, the back named after the automation and "open full screen" beside it.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "action-over", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // The two ways out of one still being made, the pair the CLI names alike. Finishing
-    // keeps it, empty or not, and lands on the automation. Giving it up asks once — naming it and
+    // saves it for the first time and lands on the automation — and an action with no step to start
+    // at, or one whose steps leave a way out or an input open, is refused that save and stays in front,
+    // still being made. Giving it up asks once — naming it and
     // saying the placement it stands on goes with it — and the road answers with the answer that goes
     // ahead; the action and its placement are taken away, and the automation is what is left.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "action-finish-creating", required: &[], refs: &[], strings: &[], binds: false },
@@ -5210,6 +5213,17 @@ impl Scenario {
             });
         }
 
+        // An action made on the spot is born with no step, and finishing it is its first save, which
+        // an action with no step is refused — so a road finishing one it put nothing in stays on the
+        // build screen in front, and every step after it reads a screen that is not there.
+        for i in finishing_an_empty_action(self.steps(Driver::Gui)) {
+            errs.push(ValidationError {
+                driver: Some(Driver::Gui),
+                step: Some(i),
+                message: "`action-finish-creating` saves the action for the first time, and one with no step is refused that save — put a step in with `add-step` before finishing it, or give it up with `action-abandon`".to_string(),
+            });
+        }
+
         // And the one rule that is about where a road has left the screen rather than about a step's
         // own text. A screen's question alone: the CLI's road has no column to draw a file in.
         for (i, op) in rendering_in_the_way(self.steps(Driver::Gui)) {
@@ -5640,6 +5654,37 @@ fn carrier_read_inside_an_action(steps: &[Step]) -> Vec<(usize, &str)> {
     found
 }
 
+/// Every `action-finish-creating` pressed on an action made on the spot that no step has gone into.
+///
+/// **What `insert-box` makes by a `name` is born empty**, and finishing it is its first save, which
+/// an action with no step is refused. So the steps put in with `add-step` are counted from the press
+/// that made it, less those taken out with `remove-step`, and the count is let go of once the action
+/// is finished, given up, or left by another tab or automation. Only a step put in on this screen
+/// is counted: what a road declares or joins after it does not make a step.
+fn finishing_an_empty_action(steps: &[Step]) -> Vec<usize> {
+    let mut making: Option<usize> = None;
+    let mut found = Vec::new();
+    for (i, step) in steps.iter().enumerate() {
+        if step.domain() != Domain::Automation {
+            continue;
+        }
+        match step.op() {
+            "insert-box" if step.with().contains_key("name") => making = Some(0),
+            "add-step" => making = making.map(|n| n + 1),
+            "remove-step" => making = making.map(|n| n.saturating_sub(1)),
+            "action-finish-creating" => {
+                if making == Some(0) {
+                    found.push(i);
+                }
+                making = None;
+            }
+            "action-abandon" | "screen" | "open" => making = None,
+            _ => {}
+        }
+    }
+    found
+}
+
 /// Where the files a road copies into its world are kept when nobody says otherwise, resolved
 /// against this crate so it is the same folder whatever the CWD.
 ///
@@ -5872,6 +5917,43 @@ steps_gui:
             "  - type: action\n    domain: automation\n    op: action-open\n    with: { target: take }\n  - type: assert\n    domain: automation\n    op: panel-shows\n    with: { field: prompt, value: take the next task }\n",
         ] {
             let yaml = format!("id: x\ntitle: y\n{WORLD}steps_gui:\n{road}");
+            load_str(&yaml).unwrap().validate().unwrap_or_else(|errs| panic!("{road}: {errs:?}"));
+        }
+    }
+
+    /// The road that made an action on a line and finished it with nothing in it. Finishing is the
+    /// action's first save, and one with no step is refused it, so the build screen stays in front and
+    /// the road reads the picture behind it.
+    #[test]
+    fn finishing_an_action_made_with_no_step_is_rejected() {
+        for between in [
+            "",
+            "  - type: action\n    domain: automation\n    op: add-step\n    with: { name: write, prompt: write the draft }\n  - type: action\n    domain: automation\n    op: remove-step\n",
+        ] {
+            let yaml = format!(
+                "id: x\ntitle: y\n{WORLD}steps_gui:\n  - type: action\n    domain: automation\n    op: open\n    with: {{ target: auto }}\n  - type: action\n    domain: automation\n    op: insert-box\n    with: {{ after: take, exit: got one, name: work }}\n{between}  - type: action\n    domain: automation\n    op: action-finish-creating\n"
+            );
+            let errs = load_str(&yaml).unwrap().validate().expect_err("an empty action is not saved");
+            let at = if between.is_empty() { 2 } else { 4 };
+            assert!(
+                errs.iter().any(|e| e.step == Some(at) && e.message.contains("`add-step`")),
+                "{between}: {errs:?}"
+            );
+        }
+    }
+
+    /// And the roads that close it the ways that go through: a step put in before the finish, the
+    /// action given up instead, and one picked off the library, which was saved before it was placed.
+    #[test]
+    fn an_action_finished_with_a_step_in_it_is_let_through() {
+        for road in [
+            "  - type: action\n    domain: automation\n    op: insert-box\n    with: { after: take, exit: got one, name: work }\n  - type: action\n    domain: automation\n    op: add-step\n    with: { name: write, prompt: write the draft }\n  - type: action\n    domain: automation\n    op: pick-box\n    with: { name: write }\n  - type: action\n    domain: automation\n    op: set-next\n    with: { ends: exit }\n  - type: action\n    domain: automation\n    op: action-finish-creating\n",
+            "  - type: action\n    domain: automation\n    op: insert-box\n    with: { after: take, exit: got one, name: work }\n  - type: action\n    domain: automation\n    op: action-abandon\n",
+            "  - type: action\n    domain: automation\n    op: insert-box\n    with: { after: take, exit: got one, name: work }\n  - type: action\n    domain: automation\n    op: add-step\n    with: { name: write, prompt: write the draft }\n  - type: action\n    domain: automation\n    op: action-finish-creating\n  - type: action\n    domain: automation\n    op: insert-box\n    with: { after: work, exit: done, action: take }\n",
+        ] {
+            let yaml = format!(
+                "id: x\ntitle: y\n{WORLD}steps_gui:\n  - type: action\n    domain: automation\n    op: open\n    with: {{ target: auto }}\n{road}"
+            );
             load_str(&yaml).unwrap().validate().unwrap_or_else(|errs| panic!("{road}: {errs:?}"));
         }
     }

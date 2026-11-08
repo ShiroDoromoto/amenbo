@@ -4312,9 +4312,10 @@ impl Instructor {
             // The press under the action's name on the pressed placement's panel. What it lands on is
             // the action's own: a library action's build screen, or a built-in's read-only one.
             // The pair at the foot of an action still being made, opened over its automation. Both
-            // land on the automation's picture; the second asks first, since it takes the action and
-            // the placement it stands on away and there is no undoing it.
-            (Domain::Automation, "action-finish-creating") => "On the action build screen standing over the automation, press the button at its foot that finishes creating the action and goes back. Confirm the screen over it closes, and the automation's build screen is what is left.".to_string(),
+            // land on the automation's picture; the first saves the action for the first time, and the
+            // second asks first, since it takes the action and the placement it stands on away and
+            // there is no undoing it.
+            (Domain::Automation, "action-finish-creating") => "On the action build screen standing over the automation, press the button at its foot that saves the action and goes back, which finishes creating it. Confirm the screen over it closes, and the automation's build screen is what is left.".to_string(),
             (Domain::Automation, "action-abandon") => "On the action build screen standing over the automation, press the button at its foot that stops making the action. Confirm the question the machine asks names the action and says the placement it stands on is taken away with it, and answer it with the answer that goes ahead. Confirm the screen over it closes, and the automation's build screen is what is left.".to_string(),
             (Domain::Automation, "open-placed") => "In the panel showing what the pressed placement holds, press the button that opens the action's build screen — the screen for the action standing on it opens over the automation's build screen, which stays behind it.".to_string(),
             // A built-in's row on the actions tab, listed after the library's with a chip of its own.
@@ -6698,7 +6699,7 @@ impl Instructor {
                 "Confirm the action build screen for \"{}\" stands over the automation's build screen, with the automation still behind it. {} Press a tab of the automations screen, an item in the sidebar, and \"＜\" and \"＞\" at the top left, and confirm none of them does anything. Press outside the screen over the automation and press Escape, and confirm it stays open.",
                 req(with, "name")?,
                 match step_mark(with, "draft")? {
-                    Some(true) => "Confirm its head carries the mark saying the action is still being made, that its foot holds the button that stops making it and the button that finishes creating it and goes back, and that there is neither a button going back to the automation nor one opening it full screen.",
+                    Some(true) => "Confirm its head carries the mark saying the action is still being made, that its foot holds the button that stops making it and the button that saves it and goes back, and that there is neither a button going back to the automation nor one opening it full screen.",
                     Some(false) => "Confirm its head carries no mark saying the action is still being made, that it holds the button going back to the automation, named after it, and the one opening it full screen, and that its foot holds neither of the two buttons that finish or stop making it.",
                     None => "",
                 }
@@ -10092,6 +10093,18 @@ steps_gui:
     with: { name: work, draft: true }
   - type: action
     domain: automation
+    op: add-step
+    with: { name: write, prompt: write the draft }
+  - type: action
+    domain: automation
+    op: pick-box
+    with: { name: write }
+  - type: action
+    domain: automation
+    op: set-next
+    with: { ends: exit }
+  - type: action
+    domain: automation
     op: action-finish-creating
   - type: assert
     domain: automation
@@ -10115,11 +10128,11 @@ steps_gui:
             steps.iter().map(|st| ins.render(st).expect("every step renders")).collect();
         assert!(lines[0].contains("dashed line") && !lines[0].contains("`+`"), "{}", lines[0]);
         assert!(lines[1].contains("still being made") && lines[1].contains("Escape"), "{}", lines[1]);
-        assert!(lines[2].contains("finishes creating"), "{}", lines[2]);
-        assert!(lines[3].contains("drawn dashed") && lines[3].contains("the box \"work\""), "{}", lines[3]);
-        assert!(lines[4].contains("stops making") && lines[4].contains("goes ahead"), "{}", lines[4]);
-        assert!(lines[5].contains("drawn dashed") && lines[5].contains("interface's language"), "{}", lines[5]);
-        assert!(lines[6].contains("no mark saying the action is still being made"), "{}", lines[6]);
+        assert!(lines[5].contains("saves the action and goes back") && lines[5].contains("finishes creating"), "{}", lines[5]);
+        assert!(lines[6].contains("drawn dashed") && lines[6].contains("the box \"work\""), "{}", lines[6]);
+        assert!(lines[7].contains("stops making") && lines[7].contains("goes ahead"), "{}", lines[7]);
+        assert!(lines[8].contains("drawn dashed") && lines[8].contains("interface's language"), "{}", lines[8]);
+        assert!(lines[9].contains("no mark saying the action is still being made"), "{}", lines[9]);
         assert!(ins.expectation(&steps[1]).is_none(), "the mark is the interface's words, an eye's");
     }
 

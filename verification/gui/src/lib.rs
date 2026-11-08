@@ -4747,15 +4747,6 @@ impl Instructor {
                 false => "On the automations screen, in the pulldown over its tabs, choose its first line — the one that takes in every project. The list under the tabs is every project's again."
                     .to_string(),
             },
-            // The project's own pause, the ‖ on the workspace's header. It carries no label: what it
-            // does is said on hover, which is how the operator knows it from the pane's pause.
-            (Domain::Automation, "pause-before-next-task") => match with.contains_key("project") {
-                true => format!(
-                    "In the workspace, with the project \"{}\" shown, press the ‖ on the header whose hover says it pauses after the current task.",
-                    self.key_label(with, "project")
-                ),
-                false => "In the workspace, press the ‖ on the header whose hover says it pauses after the current task.".to_string(),
-            },
             // A band of the runs going on the open build screen's definition. Its press is the running
             // tab's row's own, so it goes where that row goes: the pane the run is drawn in.
             (Domain::Automation, "held-go") => {
@@ -7509,17 +7500,22 @@ fn launch_reason(reason: &str) -> Result<&'static str, String> {
 
 /// What a row of the "running" tab is pressed for. A run's moves sit in the list behind its one mark —
 /// two bars while it is going, a triangle while it is held, each with a small caret — and are picked
-/// from there.
+/// from there. Of the two pauses there, `pause` waits for the action under way and
+/// `pause-before-next-task` for the task the run is on: it is this run's alone, where the pane's pause
+/// after the current task is the whole launch's (`launch_press`).
 fn run_press(press: &str) -> Result<&'static str, String> {
     Ok(match press {
         "open" => "press the row itself — the workspace comes forward with that run's pane picked out",
         "pause" => "open the list behind the run's mark and pick the one that pauses it once the action under way is over",
+        "pause-before-next-task" => "open the list behind the run's mark and pick \"Pause after the current task\", the one that pauses it once the task it is on is over",
         "resume" => "open the list behind the run's mark and pick the one that picks it up again",
         "stop" => "open the list behind the run's mark and pick the one that force-cancels it. A question asks first, saying that changes made part way through and the worktree may be left behind — answer it with the press that goes through with it",
         "cancel" => "open the list behind the run's mark and pick the one that cancels it — the run is paused, so it ends on the spot and nothing asks first",
         "roles" | "terminal" => return Err(format!("`press: {press}` is the pane's — the row has no face to turn")),
         other => {
-            return Err(format!("`press` does not know `{other}` — it is open / pause / resume / stop / cancel"))
+            return Err(format!(
+                "`press` does not know `{other}` — it is open / pause / pause-before-next-task / resume / stop / cancel"
+            ))
         }
     })
 }
@@ -9397,9 +9393,6 @@ steps_gui:
     domain: automation
     op: scope-refusal-names
     with: { target: act, reach: project, names: auto }
-  - type: action
-    domain: automation
-    op: pause-before-next-task
   - type: assert
     domain: automation
     op: not-ready-note
@@ -9437,7 +9430,6 @@ steps_gui:
             "the action made from the list is said with its reach",
         );
         let n = lines.len();
-        assert!(lines[n - 5].contains("‖") && lines[n - 5].contains("after the current task"), "{}", lines[n - 5]);
         assert!(
             lines[n - 4].contains("\"Morning round\" is not ready to start")
                 && lines[n - 4].contains("nothing is set to happen after one of a box's ways out"),
@@ -9690,6 +9682,43 @@ steps_gui:
         let mut ins = Instructor::new();
         let refused = ins.render(&row.steps(Driver::Gui)[0]).expect_err("the row has no face to turn");
         assert!(refused.contains("the pane's"), "{refused}");
+    }
+
+    /// A row carries both pauses in the list behind its mark: the one after the action under way, and
+    /// the one after the task the run is on, which is this run's alone. The workspace's header has no
+    /// pause of its own to press.
+    #[test]
+    fn a_run_row_pauses_after_its_action_or_after_its_task() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: automation
+    op: start
+    as: run
+  - type: action
+    domain: automation
+    op: press-run
+    with: { target: run, press: pause }
+  - type: action
+    domain: automation
+    op: press-run
+    with: { target: run, press: pause-before-next-task }
+  - type: action
+    domain: automation
+    op: pause-before-next-task
+"#);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        let action = ins.render(&steps[1]).expect("the press renders");
+        assert!(action.contains("on the row for this run") && action.contains("the action under way"), "{action}");
+        let task = ins.render(&steps[2]).expect("the press renders");
+        assert!(task.contains("on the row for this run"), "{task}");
+        assert!(task.contains("\"Pause after the current task\"") && task.contains("the task it is on"), "{task}");
+        assert!(!task.contains("the action under way"), "{task}");
+        let header = ins.render(&steps[3]).expect_err("the workspace's header has no pause");
+        assert!(header.contains("not yet mapped"), "{header}");
     }
 
     /// The pane is its launch's, so what is pressed on it is the launch's header: the pause after the

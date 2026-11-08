@@ -12,7 +12,9 @@
 // its title, role, who works it and the trigger's name; **a refusal is drawn and the card stays
 // open**; **"Remove trigger" takes that one away by its id**; and **the condition is picked as a
 // status, a role and a count**, a filter the boxes cannot show kept as it was written, with how many
-// tasks match now and what the next look does said under it.
+// tasks match now and what the next look does said under it; and **"Try it now" tries what is typed,
+// unsaved**, what it says standing in the preview until something is typed again, the button held
+// while it runs and the try stopped when the card closes.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,6 +27,8 @@ const hoisted = vi.hoisted(() => ({
   enable: vi.fn(),
   confirm: vi.fn(),
   count: vi.fn(),
+  try: vi.fn(),
+  stop: vi.fn(),
 }));
 
 vi.mock("../core/automations", () => ({
@@ -33,6 +37,8 @@ vi.mock("../core/automations", () => ({
   removeAutomationTrigger: hoisted.remove,
   setAutomationTriggerEnabled: hoisted.enable,
   useTriggerCount: hoisted.count,
+  tryAutomationTrigger: hoisted.try,
+  stopTriggerTry: hoisted.stop,
 }));
 vi.mock("../core/dialog", () => ({ confirmDialog: hoisted.confirm }));
 
@@ -167,6 +173,9 @@ beforeEach(() => {
   hoisted.confirm.mockResolvedValue(true);
   hoisted.count.mockReset();
   hoisted.count.mockReturnValue({ count: 1, error: undefined });
+  hoisted.try.mockReset();
+  hoisted.stop.mockReset();
+  hoisted.stop.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -567,5 +576,70 @@ describe("the card", () => {
   it("offers no removal while opened on a new one", async () => {
     await draw(detail(written));
     expect(buttonNamed(t("auto.trigger.remove"))).toBeUndefined();
+  });
+});
+
+describe("trying it as it is typed", () => {
+  const previewNotes = () => page().querySelector("[data-preview=notes]")?.textContent;
+
+  it("tries what was typed without saving, and previews the task it would file", async () => {
+    hoisted.try.mockResolvedValue({ kind: "files", title: "Read the new reports", notes: "Three came in." });
+    const { onClose } = await draw(detail());
+    await press(radio(t("auto.trigger.taskFile")));
+    await type(box(t("auto.trigger.taskPath")), "/Users/alice/next.md");
+    await press(buttonNamed(t("auto.trigger.try")));
+
+    expect(hoisted.try).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ task: { kind: "file", path: "/Users/alice/next.md" } }),
+      expect.any(Number),
+    );
+    expect(hoisted.add).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(previewTitle()).toBe("Read the new reports");
+    expect(previewNotes()).toBe("Three came in.");
+
+    await type(box(t("auto.trigger.taskPath")), "/Users/alice/other.md");
+    expect(previewTitle()).toBe(t("auto.trigger.previewFromFile"));
+    expect(previewNotes()).toBeUndefined();
+  });
+
+  it("says why it would file none", async () => {
+    await draw(detail());
+    await type(box(t("auto.trigger.taskTitle")), "Check the reports");
+    const tried = [
+      [{ kind: "condition" }, t("auto.trigger.triedCondition")],
+      [{ kind: "program_said_no" }, t("auto.trigger.triedSaidNo")],
+      [{ kind: "said_nothing", why: "the program ended with exit code 2" }, tf("auto.trigger.triedNothing", { why: "the program ended with exit code 2" })],
+    ] as const;
+    for (const [said, words] of tried) {
+      hoisted.try.mockResolvedValueOnce(said);
+      await press(buttonNamed(t("auto.trigger.try")));
+      expect(previewTitle()).toBe(words);
+      expect(previewNotes()).toBeUndefined();
+    }
+  });
+
+  it("draws what core refused at the top, and the preview stays as typed", async () => {
+    hoisted.try.mockRejectedValue(new Error("a trigger files every 1 minute or more"));
+    await draw(detail());
+    await type(box(t("auto.trigger.minutes")), "0");
+    await type(box(t("auto.trigger.taskTitle")), "Check the reports");
+    await press(buttonNamed(t("auto.trigger.try")));
+    expect(page().querySelector("[role=alert]")?.textContent).toContain("a trigger files every 1 minute or more");
+    expect(previewTitle()).toBe("Check the reports");
+  });
+
+  it("holds the button while it runs, and stops the try when the card closes", async () => {
+    hoisted.try.mockReturnValue(new Promise(() => {}));
+    await draw(detail());
+    await press(buttonNamed(t("auto.trigger.try")));
+    const running = buttonNamed(t("auto.trigger.trying"));
+    expect(running?.disabled).toBe(true);
+    const tag = hoisted.try.mock.calls[0][2] as number;
+
+    act(() => root.unmount());
+    expect(hoisted.stop).toHaveBeenCalledWith(tag);
+    root = createRoot(container);
   });
 });

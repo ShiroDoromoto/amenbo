@@ -144,7 +144,7 @@ pub const OFF_WORKER: &[&str] = &[
     "folder_git_branch_create", "folder_git_merge", "folder_git_merge_continue",
     "folder_git_merge_abort", "folder_git_take", "folder_git_fetch", "folder_git_pull",
     "folder_git_push", "folder_names", "drop_effect", "folder_watch", "folder_search", "folder_replace",
-    "talk_open",
+    "talk_open", "automation_trigger_try", "automation_trigger_try_stop",
 ];
 
 /// One command, and what answers it if it panics before it has answered itself.

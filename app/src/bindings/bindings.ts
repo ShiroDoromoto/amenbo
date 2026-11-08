@@ -1609,6 +1609,15 @@ export type AutomationTriggerTaskDto = { "kind": "fixed", title: string, notes: 
 export type AutomationTriggerTaskInputDto = { "kind": "fixed", title: string, notes: string, } | { "kind": "file", path: string, } | { "kind": "script", script: AutomationScriptInputDto, };
 
 /**
+ * **What a trigger's own parts said, tried as it is typed** — the wire form of
+ * [`amenbo_core::ops::automation_run::TriggerTried`]: `condition` where its condition does not hold,
+ * `program_said_no` where the program it asks first said not to file one, `said_nothing` where it
+ * could say nothing that can be filed (`why` in core's sentence), and `files` with the title and notes
+ * of the task it would file.
+ */
+export type AutomationTriggerTriedDto = { "kind": "condition" } | { "kind": "program_said_no" } | { "kind": "said_nothing", why: string, } | { "kind": "files", title: string, notes: string, };
+
+/**
  * **Whether a trigger files a task now** — the wire form of [`amenbo_core::model::TriggerWhen`]:
  * `every` so many minutes, `idle` whenever no run of it is under way, `tasks` whenever its condition
  * holds, `script` whenever its script says to.

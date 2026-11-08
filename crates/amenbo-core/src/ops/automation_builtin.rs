@@ -532,17 +532,6 @@ pub fn all() -> &'static [Builtin] {
     BUILTINS
 }
 
-/// **The built-ins a run can start at before it holds a task** (`AMB-D-970`): the one that fetches,
-/// whose work needs no task and whose way on is to file one. The launch lets one stand as the entry where
-/// every line out of it reaches a step that takes a task before any other step
-/// ([`super::automation_run::check`]).
-const BEFORE_A_TASK: &[&str] = &[FETCH.key];
-
-/// Whether the built-in of this key works before the run holds a task ([`BEFORE_A_TASK`]).
-pub fn works_before_a_task(key: &str) -> bool {
-    BEFORE_A_TASK.contains(&key)
-}
-
 /// **The built-ins a run can start at** (`AMB-D-977`), in the order a picture with nothing on it offers
 /// them: the one that takes a task, the one a person hands one to, and the one that fetches. The first
 /// thing put on a picture has to be one of these, and it is the entry from then on
@@ -1213,10 +1202,16 @@ mod tests {
             let startable = vec!["claude".to_string()];
             let unmet = check(tx.conn(), p.automation.id, Some(&startable), nothing_asked(), None).expect("check");
             // The picture ends with the task open, and takes it at a step of its own rather than a
-            // built-in — each its own reason, and neither the one asked here.
+            // built-in, which is no start for a round either — each its own reason, and none the one
+            // asked here.
             let gaps: Vec<_> = unmet
                 .iter()
-                .filter(|u| !matches!(u, Unmet::LeavesTaskOpen { .. } | Unmet::HandsOnTaskTaken { .. }))
+                .filter(|u| {
+                    !matches!(
+                        u,
+                        Unmet::LeavesTaskOpen { .. } | Unmet::HandsOnTaskTaken { .. } | Unmet::RoleStartsNowhere { .. }
+                    )
+                })
                 .collect();
             assert!(gaps.is_empty(), "nobody chosen for the built-in is not a gap: {gaps:?}");
 

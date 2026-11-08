@@ -1,7 +1,7 @@
 //! **Launching an automation** — what refuses to start one, and the run the launch writes.
 //!
 //! Nothing on the definition side refuses an unfinished automation ([`crate::ops::automation`]): a step
-//! with no way onward, an automation with no entry, a required setting nobody answered — each of them
+//! with no way onward, a role starting its round nowhere, a required setting nobody answered — each of them
 //! saves, because building happens in whatever order the author likes. **This is where they are
 //! refused**, which is the moment a person is actually about to be let down by them.
 //!
@@ -93,7 +93,7 @@ use crate::time::Timestamp;
 /// action placed twice is two boxes with one name, and a screen that opens the box a reason is about has
 /// to know which of the two. So the same gap in an action placed twice is two reasons, one per placement.
 /// The reasons about the automation as a whole ([`Unmet::ExportOnly`], [`Unmet::NoSteps`],
-/// [`Unmet::NoEntry`], [`Unmet::NoFailuresTo`]) name none,
+/// [`Unmet::NoFailuresTo`]) and about a role starting nowhere ([`Unmet::RoleStartsNowhere`]) name none,
 /// and nor do the ones the action's own check finds ([`check_action`]): it is asked with the action on
 /// no picture.
 ///
@@ -109,10 +109,11 @@ pub enum Unmet {
     ExportOnly,
     /// Nothing is placed on the automation at all. Nothing else is worth saying about it.
     NoSteps,
-    /// No placement is named as the entry, so there is nowhere for a run to start and nothing is
-    /// reachable. The first placement is the entry (`AMB-D-977`), so only a store written before that
-    /// holds one of these, and replacing the entry gives it one.
-    NoEntry,
+    /// A role that names no placement on the picture as where its round starts (`AMB-D-1123`): its seats
+    /// would have nowhere to start a round. Said of every role where none of them names one and the
+    /// entry is not the built-in that takes a task either — a run of no role starts at the entry
+    /// ([`start_of`]) only for as long as a picture is drawn that way.
+    RoleStartsNowhere { role: String },
     /// Nobody is chosen to file a failed round to — neither a person nor one of the automation's roles
     /// ([`crate::model::Automation::failures_to`]). A round that fails would have nobody to go to.
     NoFailuresTo,
@@ -125,9 +126,10 @@ pub enum Unmet {
     /// meant, so a run is not sent through it. Raised wherever it stands, reached from the entry or not:
     /// it is a decision left open, not a gap a run would fall into.
     ActionDraft { action: String, placement: i64 },
-    /// The entry declares no `task_take` output, so no step of the run would ever come to hold a task
-    /// and every step after it would be about nothing.
-    EntryTakesNoTask { step: String, builtin: Option<String>, placement: i64 },
+    /// A role whose round starts at a placement that is not the built-in that takes a task
+    /// (`AMB-D-1123`). A role works the tasks filed under it, and its round starts by taking one; any
+    /// other start leaves every step after it about nothing. `step` is the action placed there.
+    RoleStartTakesNoTask { role: String, step: String, builtin: Option<String>, placement: i64 },
     /// A way out with nothing set to happen after it. The run would reach it and stop. The error way
     /// out is not one of these — it is carried from birth and halts unless somebody says otherwise.
     ///
@@ -234,9 +236,11 @@ impl Unmet {
                     .to_string()
             }
             Unmet::NoSteps => "no action is placed on it".to_string(),
-            Unmet::NoEntry => {
-                "no placement is named as the entry — choose what a run starts at with `automation entry-replace`"
-                    .to_string()
+            Unmet::RoleStartsNowhere { role } => {
+                format!(
+                    "the role '{role}' starts its round nowhere — place the built-in 'take_task' and start the \
+                     role there with `automation role-update --entry`"
+                )
             }
             Unmet::NoFailuresTo => {
                 "nobody is chosen to file a failed round to — choose a person or one of its roles with \
@@ -255,10 +259,10 @@ impl Unmet {
                      it up"
                 )
             }
-            Unmet::EntryTakesNoTask { step, .. } => {
+            Unmet::RoleStartTakesNoTask { role, step, .. } => {
                 format!(
-                    "the entry '{step}' takes no task — draw every line out of it on to a step that takes one, \
-                     or change what a run starts at with `automation entry-replace`"
+                    "the role '{role}' starts its round at '{step}', which takes no task — start it at the \
+                     built-in 'take_task' with `automation role-update --entry`"
                 )
             }
             Unmet::OpenExit { step, exit, .. } => {
@@ -345,12 +349,12 @@ impl Unmet {
         match self {
             Unmet::ExportOnly => ErrorCode::NotReadyAutomationExportOnly,
             Unmet::NoSteps => ErrorCode::NotReadyAutomationNoSteps,
-            Unmet::NoEntry => ErrorCode::NotReadyAutomationNoEntry,
+            Unmet::RoleStartsNowhere { .. } => ErrorCode::NotReadyAutomationRoleStartsNowhere,
             Unmet::NoFailuresTo => ErrorCode::NotReadyAutomationNoFailuresTo,
             Unmet::ActionEmpty { placement: Some(_), .. } => ErrorCode::NotReadyAutomationActionEmpty,
             Unmet::ActionEmpty { placement: None, .. } => ErrorCode::NotReadyActionSaveEmpty,
             Unmet::ActionDraft { .. } => ErrorCode::NotReadyAutomationActionDraft,
-            Unmet::EntryTakesNoTask { .. } => ErrorCode::NotReadyAutomationEntryTakesNoTask,
+            Unmet::RoleStartTakesNoTask { .. } => ErrorCode::NotReadyAutomationRoleStartTakesNoTask,
             Unmet::OpenExit { .. } => ErrorCode::NotReadyAutomationOpenExit,
             Unmet::UnwiredInput { .. } => ErrorCode::NotReadyAutomationUnwiredInput,
             Unmet::UnansweredCfg { .. } => ErrorCode::NotReadyAutomationUnansweredCfg,
@@ -391,9 +395,10 @@ impl Unmet {
             None => msg,
         };
         match self {
-            Unmet::ExportOnly | Unmet::NoSteps | Unmet::NoEntry | Unmet::NoFailuresTo => msg,
+            Unmet::ExportOnly | Unmet::NoSteps | Unmet::NoFailuresTo => msg,
+            Unmet::RoleStartsNowhere { role } => msg.with("role", role),
             Unmet::ActionEmpty { action, .. } | Unmet::ActionDraft { action, .. } => msg.with("action", action),
-            Unmet::EntryTakesNoTask { step, .. } => msg.with("step", step),
+            Unmet::RoleStartTakesNoTask { role, step, .. } => msg.with("role", role).with("step", step),
             Unmet::OpenExit { step, exit, .. } => msg.with("step", step).with("exit", exit),
             Unmet::UnwiredInput { step, port, .. } => msg.with("step", step).with("port", port),
             Unmet::UnansweredCfg { step, cfg, .. } | Unmet::MisansweredCfg { step, cfg, .. } => {
@@ -431,12 +436,12 @@ impl Unmet {
     /// the action's own check.
     pub fn placement(&self) -> Option<i64> {
         match self {
-            Unmet::ExportOnly | Unmet::NoSteps | Unmet::NoEntry | Unmet::NoFailuresTo => None,
+            Unmet::ExportOnly | Unmet::NoSteps | Unmet::NoFailuresTo | Unmet::RoleStartsNowhere { .. } => None,
             Unmet::ActionEmpty { placement, .. }
             | Unmet::OpenExit { placement, .. }
             | Unmet::UnwiredInput { placement, .. } => *placement,
             Unmet::ActionDraft { placement, .. }
-            | Unmet::EntryTakesNoTask { placement, .. }
+            | Unmet::RoleStartTakesNoTask { placement, .. }
             | Unmet::UnansweredCfg { placement, .. }
             | Unmet::MisansweredCfg { placement, .. }
             | Unmet::CfgNotFound { placement, .. }
@@ -467,7 +472,7 @@ impl Unmet {
     /// The key of the built-in `step` came from, or `None` for a person's own action or step.
     fn builtin(&self) -> Option<&str> {
         match self {
-            Unmet::EntryTakesNoTask { builtin, .. }
+            Unmet::RoleStartTakesNoTask { builtin, .. }
             | Unmet::OpenExit { builtin, .. }
             | Unmet::UnwiredInput { builtin, .. }
             | Unmet::UnansweredCfg { builtin, .. }
@@ -616,9 +621,16 @@ fn not_found(what: &str, id: i64) -> Error {
 /// not mended in place, so nothing found in it is worth saying. Otherwise the list opens with the one
 /// reason that is about the automation's own settings rather than its picture: nobody chosen to
 /// file a failed round to ([`Unmet::NoFailuresTo`]). Two of the rest answer alone, beside that one: an
-/// automation with nothing placed on it has nothing else to say about it, and one with no entry has
-/// nothing reachable to say it about — every other check is asked of the placements a run would
-/// actually walk, and with no entry that is none of them.
+/// automation with nothing placed on it has nothing else to say about it, and one where a run has
+/// nowhere to start has nothing reachable to say it about — every other check is asked of the
+/// placements a run would actually walk, and with nowhere to start that is none of them.
+///
+/// **A run starts where the round of its seat's role starts** (`AMB-D-1123`, [`start_of`]), so each
+/// role is asked where that is: one naming no placement on the picture is
+/// [`Unmet::RoleStartsNowhere`], and one naming a placement that is not the built-in that takes a task
+/// is [`Unmet::RoleStartTakesNoTask`]. Where no role names a start at all, a run of no role starts at
+/// the entry, and that is let through only where the entry is the built-in that takes a task; anything
+/// else is every role starting nowhere.
 ///
 /// **What is asked of a placement is asked of the action standing on it**, and then of every step the
 /// action could open ([`steps_opened_by`]): a way out inside with nothing after it and a required input
@@ -1005,28 +1017,49 @@ fn check_picture(
         unmet.push(Unmet::NoSteps);
         return Ok(unmet);
     }
-    let Some(entry_id) = pic.entry_placement_id else {
-        unmet.push(Unmet::NoEntry);
-        return Ok(unmet);
-    };
     let by_id: BTreeMap<i64, &AutomationPlacement> = placements.iter().map(|p| (p.id, p)).collect();
-    let defs = defs_of(conn, placements)?;
-    let live = reachable(entry_id, pic, &by_id, &defs);
     let routed = role_entries(pic, &by_id);
+    let starts = if routed.is_empty() {
+        // No role names where its round starts, so a run of no role starts at the entry — let through
+        // only where the entry is the built-in that takes a task, as a role's start would be.
+        let entry = pic.entry_placement_id.and_then(|id| by_id.get(&id).copied());
+        let takes = match entry {
+            Some(entry) => takes_a_task_first(conn, entry)?,
+            None => false,
+        };
+        if !takes {
+            for role in pic.roles() {
+                unmet.push(Unmet::RoleStartsNowhere { role: role.name.clone() });
+            }
+        }
+        let Some(entry) = entry else {
+            return Ok(unmet);
+        };
+        vec![entry.id]
+    } else {
+        for role in pic.roles() {
+            let Some(start) = role.entry_placement_id.and_then(|id| by_id.get(&id).copied()) else {
+                unmet.push(Unmet::RoleStartsNowhere { role: role.name.clone() });
+                continue;
+            };
+            if !takes_a_task_first(conn, start)? {
+                unmet.push(Unmet::RoleStartTakesNoTask {
+                    role: role.name.clone(),
+                    step: action_name(conn, start.action_id)?,
+                    builtin: action_builtin(conn, start.action_id)?,
+                    placement: start.id,
+                });
+            }
+        }
+        routed.clone()
+    };
+    let defs = defs_of(conn, placements)?;
+    let live = reachable(&starts, pic, &by_id, &defs);
     let roles = roles_by_placement(pic, &by_id, &defs);
 
     for placement in placements {
         if let Some(action) = read::automation_action(conn, placement.action_id)?.filter(|a| a.draft) {
             unmet.push(Unmet::ActionDraft { action: action.name, placement: placement.id });
-        }
-    }
-    if let Some(entry) = by_id.get(&entry_id) {
-        if !takes_a_task(conn, pic, entry, &defs[&entry.id])? && !takes_one_first(conn, pic, entry, &by_id, &defs)? {
-            unmet.push(Unmet::EntryTakesNoTask {
-                step: action_name(conn, entry.action_id)?,
-                builtin: action_builtin(conn, entry.action_id)?,
-                placement: entry.id,
-            });
         }
     }
     for placement in placements.iter().filter(|p| live.contains(&p.id)) {
@@ -1066,7 +1099,7 @@ fn check_picture(
             }
         }
         for port in def.action_inputs() {
-            if port.required && !fed(pic, placement, port.id, entry_id, &live, &by_id, &defs)? {
+            if port.required && !fed(pic, placement, port.id, &starts, &live, &by_id, &defs)? {
                 unmet.push(Unmet::UnwiredInput {
                     step: name.clone(),
                     port: port.name,
@@ -1145,7 +1178,7 @@ fn check_picture(
             unmet.push(Unmet::ActionEmpty { action: name.clone(), placement: Some(placement.id) });
             continue;
         }
-        let fed_here = |port| fed(pic, placement, port, entry_id, &live, &by_id, &defs);
+        let fed_here = |port| fed(pic, placement, port, &starts, &live, &by_id, &defs);
         push_new(&mut unmet, inside(def, Some(placement.id), &steps, fed_here)?);
         // A built-in names no agent and no model: Amenbo carries it out itself (`AMB-D-964`).
         for step in steps.iter().filter(|step| step.builtin.is_none()) {
@@ -1245,8 +1278,9 @@ fn unrunnable(program: &str, step: &str, placement: i64) -> Option<Unmet> {
 /// the ones that settle the task: the built-ins that close it, hand it back to a person or put it off,
 /// and a line that stops the run and calls a person (the error way out with nothing after it is one — it
 /// halts). Reaching the run's end, or a placement that takes a task, before any of them is the line
-/// refused. A placement already walked is not walked again, so a line back within the task — a review
-/// sending the work back — is followed once and asked nothing.
+/// refused — a line back to where a role's round starts among them, since that is the built-in that
+/// takes a task (`AMB-D-1123`). A placement already walked is not walked again, so a line back within
+/// the task — a review sending the work back — is followed once and asked nothing.
 ///
 /// **The picture inside an action is opened too.** A line in there can end the run on its own, and
 /// that is the same task left open. What takes a task and what closes one are asked of the action as a
@@ -1567,24 +1601,25 @@ fn steps_reached(def: &ActionDef, steps: &[AutomationStep], avoiding: Option<i64
     seen
 }
 
-/// The placements a run could actually reach, walked from the entry and from where each role starts
-/// ([`role_entries`]) — a run starts where its seat's role does — along the edges that go on to another
-/// placement, and, from a way out that hands on the task taken, on to where each role starts. A
-/// placement nothing reaches is not checked: it cannot stop a run, and refusing to launch over one would
-/// make an automation undeletable-in-practice while its author was still drawing it.
+/// The placements a run could actually reach, walked from where runs start — where each role starts
+/// ([`role_entries`]), a run starting where its seat's role does, or the entry where no role names a
+/// start ([`start_of`]) — along the edges that go on to another placement, and, from a way out that
+/// hands on the task taken, on to where each role starts. A placement nothing reaches is not checked: it
+/// cannot stop a run, and refusing to launch over one would make an automation undeletable-in-practice
+/// while its author was still drawing it.
 fn reachable(
-    entry_id: i64,
+    starts: &[i64],
     pic: &Picture,
     by_id: &BTreeMap<i64, &AutomationPlacement>,
     defs: &Defs,
 ) -> BTreeSet<i64> {
-    reachable_without(entry_id, pic, by_id, defs, None)
+    reachable_without(starts, pic, by_id, defs, None)
 }
 
 /// [`reachable`], walked without passing through `avoiding` — **what a run can reach before it first
 /// comes to that placement**. The placement itself is not among them.
 fn reachable_without(
-    entry_id: i64,
+    starts: &[i64],
     pic: &Picture,
     by_id: &BTreeMap<i64, &AutomationPlacement>,
     defs: &Defs,
@@ -1592,8 +1627,7 @@ fn reachable_without(
 ) -> BTreeSet<i64> {
     let routed = role_entries(pic, by_id);
     let mut seen = BTreeSet::new();
-    let mut todo = vec![entry_id];
-    todo.extend(routed.iter().copied());
+    let mut todo = starts.to_vec();
     while let Some(id) = todo.pop() {
         if Some(id) == avoiding || !by_id.contains_key(&id) || !seen.insert(id) {
             continue;
@@ -1657,8 +1691,8 @@ fn decided(pic: &Picture, placement_id: i64, exit_id: i64, by_id: &BTreeMap<i64,
 }
 
 /// Whether the action on a placement declares a `task_take` output on any of the ways out it can leave by
-/// there — the thing that makes the placement usable as an entry, since the task it comes out holding is
-/// what the run is about from there on.
+/// there: a run coming to it takes a task, and one it already holds would be left open
+/// ([`leaves_task_open`]).
 fn takes_a_task(
     conn: &Connection,
     pic: &Picture,
@@ -1677,69 +1711,26 @@ fn takes_a_task(
     Ok(false)
 }
 
-/// **Whether a run started here holds a task before any step works on one** — for an entry that takes
-/// none itself (`AMB-D-970`). It has to be a built-in that works before a task
-/// ([`crate::ops::automation_builtin::works_before_a_task`]), and every line out of it has to end the
-/// run or reach a placement that takes a task, passing only through more of those built-ins on the way.
-/// A line nothing is drawn after is not asked here: that is [`Unmet::OpenExit`], said on its own.
-fn takes_one_first(
-    conn: &Connection,
-    pic: &Picture,
-    entry: &AutomationPlacement,
-    by_id: &BTreeMap<i64, &AutomationPlacement>,
-    defs: &Defs,
-) -> Result<bool> {
-    let before_a_task = |placement: &AutomationPlacement| -> Result<bool> {
-        Ok(action_builtin(conn, placement.action_id)?
-            .is_some_and(|key| crate::ops::automation_builtin::works_before_a_task(&key)))
-    };
-    if !before_a_task(entry)? {
-        return Ok(false);
-    }
-    let mut walked = BTreeSet::new();
-    let mut todo = vec![entry.id];
-    while let Some(id) = todo.pop() {
-        if !walked.insert(id) {
-            continue;
-        }
-        let Some(placement) = by_id.get(&id) else { continue };
-        let def = &defs[&placement.id];
-        let never = never_taken(conn, pic, placement, def)?;
-        for exit in def.action_exits() {
-            if Some(exit.name.as_str()) == never {
-                continue;
-            }
-            let Some(edge) = pic.edge_for_exit(id, exit.id) else {
-                continue;
-            };
-            let Some(to) = edge.to_id.and_then(|to| by_id.get(&to)) else { continue };
-            if takes_a_task(conn, pic, to, &defs[&to.id])? {
-                continue;
-            }
-            if !before_a_task(to)? {
-                return Ok(false);
-            }
-            todo.push(to.id);
-        }
-    }
-    Ok(true)
+/// **Whether a round started at `placement` takes a task before anything else** — the action standing
+/// there is the built-in that takes one, which is what every role's round starts at (`AMB-D-1123`).
+fn takes_a_task_first(conn: &Connection, placement: &AutomationPlacement) -> Result<bool> {
+    Ok(action_builtin(conn, placement.action_id)?.as_deref() == Some(TAKE_TASK.key))
 }
 
 /// Whether anything actually reaches one input — the action's input port `port_id`, on this placement.
 /// A wire counts only where **both** halves hold: its far end is declared — that placement's way out
-/// really hands on the port it keys — and that placement is reachable from the entry **without passing
-/// through this one**. A wire from a placement no run reaches would never carry anything, and one from
-/// this placement's own way out, or from a placement only reached after it, carries nothing the first
-/// time a run arrives — either way it feeds no input.
+/// really hands on the port it keys — and that placement is reachable from where runs start (`starts`,
+/// [`reachable`]) **without passing through this one**. A wire from a placement no run reaches would
+/// never carry anything, and one from this placement's own way out, or from a placement only reached
+/// after it, carries nothing the first time a run arrives — either way it feeds no input.
 ///
-/// Nothing feeds the entry at launch: what a launch is handed is filed as a task before the run starts
-/// ([`HandedAtLaunch`]), so the built-in that files a task placed as the entry has nothing reaching its
-/// title.
+/// Nothing feeds where a run starts: what a launch is handed is filed as a task before the run starts
+/// ([`HandedAtLaunch`]), so a placement standing there has nothing reaching its inputs the first time.
 fn fed(
     pic: &Picture,
     placement: &AutomationPlacement,
     port_id: i64,
-    entry_id: i64,
+    starts: &[i64],
     live: &BTreeSet<i64>,
     by_id: &BTreeMap<i64, &AutomationPlacement>,
     defs: &Defs,
@@ -1753,7 +1744,7 @@ fn fed(
         // (`AMB-T-5641`): the placement's own way out, or one of a placement only reached through it,
         // leaves the input empty the first time the run arrives, and the run fails there on no_input.
         if before.is_none() {
-            before = Some(reachable_without(entry_id, pic, by_id, defs, Some(placement.id)));
+            before = Some(reachable_without(starts, pic, by_id, defs, Some(placement.id)));
         }
         if !before.as_ref().is_some_and(|b| b.contains(&wire.from_id)) {
             continue;
@@ -3318,13 +3309,15 @@ pub fn task_from_file(path: &str) -> std::result::Result<(String, String), Strin
     Ok((title.trim().to_string(), notes.trim_end().to_string()))
 }
 
-/// [`launch`], with the check's two reasons about how a task is held let through — the lines that
-/// leave a taken task open, and a person's own action handing one on. For a test of how a run walks,
-/// opens, reports or stops, where the picture's shape is not the subject, and for a test of the safety
-/// net a run carries for a line the check missed (`AMB-D-967`).
+/// [`launch`], with the check's reasons about how a task is taken and held let through — a role
+/// starting nowhere or somewhere that takes no task, the lines that leave a taken task open, and a
+/// person's own action handing one on. For a test of how a run walks, opens, reports or stops, where the
+/// picture's shape is not the subject, and for a test of the safety net a run carries for a line the
+/// check missed (`AMB-D-967`).
 ///
-/// A step of a person's own that hands on the task is how those tests draw a run coming to hold one
-/// without a built-in in front of it; the refusal of such a way out is asked in this module's tests.
+/// A step of a person's own that hands on the task, standing where the run starts, is how those tests
+/// draw a run coming to hold one without a built-in in front of it; the refusals of such a picture are
+/// asked in this module's tests.
 #[cfg(test)]
 pub(crate) fn launch_past_the_task_checks(
     tx: &WriteTx<'_>,
@@ -3332,9 +3325,21 @@ pub(crate) fn launch_past_the_task_checks(
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
     launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, true, false, |unmet| {
-        !matches!(unmet, Unmet::LeavesTaskOpen { .. } | Unmet::HandsOnTaskTaken { .. })
+        !past_the_task_checks(unmet)
     })?
     .run()
+}
+
+/// The reasons [`launch_past_the_task_checks`] lets through.
+#[cfg(test)]
+fn past_the_task_checks(unmet: &Unmet) -> bool {
+    matches!(
+        unmet,
+        Unmet::RoleStartsNowhere { .. }
+            | Unmet::RoleStartTakesNoTask { .. }
+            | Unmet::LeavesTaskOpen { .. }
+            | Unmet::HandsOnTaskTaken { .. }
+    )
 }
 
 /// [`launch_past_the_task_checks`], with a setting that names what the project does not have let through
@@ -3348,14 +3353,11 @@ pub(crate) fn launch_past_the_setting_checks(
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
     launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, true, false, |unmet| {
-        !matches!(
-            unmet,
-            Unmet::LeavesTaskOpen { .. }
-                | Unmet::HandsOnTaskTaken { .. }
-                | Unmet::CfgNotFound { .. }
-                | Unmet::CfgValueClosed { .. }
-                | Unmet::FolderUnchosen { .. }
-        )
+        !past_the_task_checks(unmet)
+            && !matches!(
+                unmet,
+                Unmet::CfgNotFound { .. } | Unmet::CfgValueClosed { .. } | Unmet::FolderUnchosen { .. }
+            )
     })?
     .run()
 }
@@ -4720,17 +4722,33 @@ mod tests {
         });
     }
 
+    /// **With nowhere for a run to start, every role starting nowhere is all that is said** — no role
+    /// names a start and there is no entry, so nothing is reachable and every other check is asked of
+    /// nothing.
     #[test]
-    fn an_automation_with_no_entry_says_only_that() {
+    fn an_automation_with_nowhere_to_start_says_only_that() {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
             automation::set_entry(tx, automation.id, None).expect("clear entry");
-            assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
-                vec![Unmet::NoEntry],
-                "with no entry nothing is reachable, so every other check is asked of nothing",
-            );
+            let nowhere = Unmet::RoleStartsNowhere { role: "1件やりきるの係".into() };
+            assert_eq!(checked(tx, &automation), vec![nowhere.clone()]);
+            assert_eq!(nowhere.placement(), None);
+            assert_eq!(nowhere.code(), ErrorCode::NotReadyAutomationRoleStartsNowhere);
+            let msg = nowhere.msg();
+            let named: Vec<(&str, &str)> = msg.fields().iter().collect();
+            assert_eq!(named, vec![("role", "1件やりきるの係")]);
         });
+    }
+
+    /// The one role an automation is born with ([`automation::born_role`]).
+    fn born(tx: &WriteTx<'_>, automation: &Automation) -> crate::model::AutomationRole {
+        read::automation_roles_of(tx.conn(), automation.id).expect("roles").remove(0)
+    }
+
+    /// Name `at` as where `role`'s round starts.
+    fn starts_at(tx: &WriteTx<'_>, role: i64, at: i64) {
+        let change = automation::RoleChange { entry_placement_id: Some(Some(at)), ..automation::RoleChange::default() };
+        automation::role_update(tx, role, change).expect("where the role starts");
     }
 
     /// **Nobody chosen to file a failed round to is refused** — by the check, by a launch and by a save —
@@ -4845,8 +4863,10 @@ mod tests {
         });
     }
 
+    /// **Where no role names a start, the entry is let through only as the built-in that takes a task**
+    /// (`AMB-D-1123`). Anything else standing there is every role starting nowhere.
     #[test]
-    fn an_entry_that_takes_no_task_is_refused() {
+    fn where_no_role_starts_an_entry_that_takes_no_task_is_refused() {
         with_tx(|tx| {
             let automation = mk_automation(tx, "1件やりきる");
             let (_, placement) = mk_placed(tx, &automation, "取る", "take one", "claude");
@@ -4859,10 +4879,71 @@ mod tests {
                 None,
             )
             .expect("edge");
-            automation::set_entry(tx, automation.id, Some(placement.id)).expect("entry");
-            assert_eq!(
-                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
-                vec![Unmet::EntryTakesNoTask { step: "取る".into(), builtin: None, placement: placement.id }],
+            let automation = automation::set_entry(tx, automation.id, Some(placement.id)).expect("entry");
+            assert_eq!(checked(tx, &automation), vec![Unmet::RoleStartsNowhere { role: "1件やりきるの係".into() }]);
+        });
+    }
+
+    /// **A role that names no start is refused once another role names one** (`AMB-D-1123`): its seats
+    /// would have nowhere to start a round. The entry no longer stands in for it.
+    #[test]
+    fn a_role_that_starts_nowhere_is_refused() {
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let entry = automation.entry_placement_id.expect("an entry");
+            starts_at(tx, born(tx, &automation).id, entry);
+            assert_eq!(checked(tx, &automation), vec![], "the one role starts where the task is taken");
+
+            automation::role_add(tx, automation.id, NewRole { name: "見る".into(), ..NewRole::default() })
+                .expect("a role starting nowhere");
+            assert_eq!(checked(tx, &automation), vec![Unmet::RoleStartsNowhere { role: "見る".into() }]);
+            let refused = launch(tx, automation.id, &here(&claude())).expect_err("refused");
+            assert!(refused.to_string().contains("'見る' starts its round nowhere"), "{refused}");
+        });
+    }
+
+    /// **A role starting its round anywhere but the built-in that takes a task is refused**
+    /// (`AMB-D-1123`), named by the placement it starts at. A run starts there all the same, so what is
+    /// reachable is walked from there.
+    #[test]
+    fn a_role_that_starts_at_what_takes_no_task_is_refused() {
+        with_tx(|tx| {
+            let (automation, _, placement) = launchable(tx);
+            let role = born(tx, &automation);
+            starts_at(tx, role.id, placement.id);
+            let refused = Unmet::RoleStartTakesNoTask {
+                role: role.name.clone(),
+                step: "直す".into(),
+                builtin: None,
+                placement: placement.id,
+            };
+            assert_eq!(checked(tx, &automation), vec![refused.clone()]);
+            assert_eq!(refused.placement(), Some(placement.id));
+            assert_eq!(refused.code(), ErrorCode::NotReadyAutomationRoleStartTakesNoTask);
+            let id = placement.id.to_string();
+            let msg = refused.msg();
+            let named: Vec<(&str, &str)> = msg.fields().iter().collect();
+            assert_eq!(named, vec![("placement", id.as_str()), ("role", role.name.as_str()), ("step", "直す")]);
+        });
+    }
+
+    /// **A line back to where a role starts with the task still open is refused** (`AMB-D-967`): a role
+    /// starts at the built-in that takes a task, so going back there takes another one.
+    #[test]
+    fn a_line_back_to_where_the_role_starts_with_the_task_open_is_refused() {
+        with_tx(|tx| {
+            let (automation, taking, _, working) = taken_then_worked(tx);
+            starts_at(tx, born(tx, &automation).id, taking.id);
+            let on = AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, working.id, None, EdgeTarget::Go(taking.id), None).expect("back to the start");
+            let unmet = checked(tx, &automation);
+            assert!(
+                matches!(
+                    unmet.as_slice(),
+                    [Unmet::LeavesTaskOpen { to: Some(_), to_builtin: Some(key), placement, .. }]
+                        if key == TAKE_TASK.key && *placement == working.id
+                ),
+                "{unmet:?}",
             );
         });
     }
@@ -5026,16 +5107,21 @@ mod tests {
                 exit: crate::model::DONE_EXIT.into(),
                 placement: placement.id,
             };
-            assert_eq!(checked(tx, &automation), vec![refused.clone()]);
+            // Standing first, it is no start for a round either (`AMB-D-1123`).
+            let nowhere = Unmet::RoleStartsNowhere { role: "自分で取るの係".into() };
+            assert_eq!(checked(tx, &automation), vec![nowhere, refused.clone()]);
             assert!(refused.say().contains("take_task"), "{}", refused.say());
 
             let err = launch(tx, automation.id, &here(&claude())).expect_err("refused");
             let Error::NotReady(msg) = err else { panic!("a launch that cannot go ahead is not_ready") };
             assert_eq!(
                 msg.parts().iter().map(|p| p.code()).collect::<Vec<_>>(),
-                vec![Some(ErrorCode::NotReadyAutomationHandsOnTaskTaken)],
+                vec![
+                    Some(ErrorCode::NotReadyAutomationRoleStartsNowhere),
+                    Some(ErrorCode::NotReadyAutomationHandsOnTaskTaken),
+                ],
             );
-            let named: Vec<(&str, &str)> = msg.parts()[0].fields().iter().collect();
+            let named: Vec<(&str, &str)> = msg.parts()[1].fields().iter().collect();
             let id = placement.id.to_string();
             assert_eq!(named, vec![("placement", id.as_str()), ("step", "取る"), ("exit", crate::model::DONE_EXIT)]);
         });
@@ -5429,7 +5515,11 @@ mod tests {
                 "Amenbo's default carries a step nobody chose for",
             );
 
-            let role = role_at(tx, &automation, "実装", placement.id, Some("claude"), Some("opus"));
+            // The role starts where the task is taken, as every role does, and its round reaches the step.
+            let entry = automation.entry_placement_id.expect("an entry");
+            let born = born(tx, &automation);
+            let role = role_at(tx, &automation, "実装", entry, Some("claude"), Some("opus"));
+            automation::role_delete(tx, born.id).expect("the one it was born with goes");
             assert_eq!(
                 carried(tx, &automation, &placement, &step, Some("codex")),
                 Some(fell_back("claude", Some("opus"), ChosenAt::Role { role_id: role.id })),
@@ -6837,7 +6927,7 @@ mod tests {
             let fields = about(again.id).msg().fields().iter().map(|(k, v)| (k, v.to_string())).collect::<Vec<_>>();
             assert!(fields.contains(&("placement", again.id.to_string())), "{fields:?}");
             assert!(fields.contains(&("inside_step", second.id.to_string())), "{fields:?}");
-            assert_eq!(Unmet::NoEntry.placement(), None);
+            assert_eq!(Unmet::RoleStartsNowhere { role: "見る".into() }.placement(), None);
         });
     }
 

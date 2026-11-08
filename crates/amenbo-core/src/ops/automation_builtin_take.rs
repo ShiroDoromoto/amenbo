@@ -1269,11 +1269,13 @@ mod tests {
 
     /// An automation with two roles, each starting its round at a built-in that takes a task of its own
     /// (`AMB-D-1123`), which goes on to an agent's step that goes on to closing the task. Answers each
-    /// role with the agent's step its round goes on to.
+    /// role with the agent's step its round goes on to. The role it was born with, starting nowhere, is
+    /// taken out.
     fn by_role(tx: &WriteTx<'_>, project: i64) -> (Automation, [(i64, AutomationPlacement); 2]) {
         let automation =
             automation::add(tx, project, NewAutomation { name: "roles".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
                 .expect("automation");
+        let born = read::automation_roles_of(tx.conn(), automation.id).expect("roles").remove(0);
         let written = action(tx, "take_task").expect("the built-in's action");
         let on = AutomationPictureOwner::Automation;
         let mut roles = Vec::new();
@@ -1289,7 +1291,7 @@ mod tests {
             let role = automation::role_add(tx, automation.id, new).expect("a role");
             roles.push((role.id, work));
         }
-        // The launch check still asks for an entry; a run starts where its role's round does all the same.
+        automation::role_delete(tx, born.id).expect("the role it was born with");
         let automation = automation::set_entry(tx, automation.id, first).expect("entry");
         let reviewer = roles.pop().expect("the reviewer");
         let builder = roles.pop().expect("the builder");

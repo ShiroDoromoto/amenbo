@@ -1577,9 +1577,10 @@ mod tests {
         });
     }
 
-    /// **The launch check reads the setting**: the way out it will not leave by needs no line, and only
-    /// set to take the task it files can it be the entry. Nothing is handed to it at launch any more
-    /// (`AMB-D-1123`), so as the entry nothing reaches its title.
+    /// **The launch check reads the setting**: the way out it will not leave by needs no line. Standing
+    /// first it is no start, set to take the task it files or not — a round starts at the built-in that
+    /// takes a task (`AMB-D-1123`) — and nothing is handed to it at launch any more, so nothing reaches
+    /// its title.
     #[test]
     fn the_launch_check_asks_only_the_way_out_it_is_set_to_leave_by() {
         with_tx(|tx| {
@@ -1601,13 +1602,13 @@ mod tests {
             let unmet = |tx: &WriteTx<'_>| check(tx.conn(), automation.id, Some(&startable), nothing_asked(), None).expect("check");
 
             let left = unmet(tx);
-            assert!(left.iter().any(|u| matches!(u, Unmet::EntryTakesNoTask { .. })), "{left:?}");
+            assert!(left.iter().any(|u| matches!(u, Unmet::RoleStartsNowhere { .. })), "{left:?}");
             assert!(left.iter().any(|u| matches!(u, Unmet::OpenExit { exit, .. } if exit == MADE)), "{left:?}");
 
             automation::cfg_set(tx, make.id, WHAT_THEN, Some(&serde_json::to_string(TAKE_IT).expect("json")))
                 .expect("take it");
             let taken = unmet(tx);
-            assert!(!taken.iter().any(|u| matches!(u, Unmet::EntryTakesNoTask { .. })), "{taken:?}");
+            assert!(taken.iter().any(|u| matches!(u, Unmet::RoleStartsNowhere { .. })), "{taken:?}");
             assert!(!taken.iter().any(|u| matches!(u, Unmet::OpenExit { .. })), "{taken:?}");
             assert!(
                 taken.iter().any(|u| matches!(u, Unmet::UnwiredInput { port, .. } if port == TITLE)),

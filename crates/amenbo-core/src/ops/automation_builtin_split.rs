@@ -505,8 +505,8 @@ mod tests {
     }
 
     /// **A line from a way out of the split to where another role's round starts is a line like any
-    /// other**: the launch check does not refuse it, and a task of the role whose round goes on to the
-    /// split goes down it.
+    /// other**: the launch check does not refuse the line — only the other role's starting at what takes
+    /// no task (`AMB-D-1123`) — and a task of the role whose round goes on to the split goes down it.
     #[test]
     fn a_line_to_where_another_role_starts_is_walked_like_any_other() {
         with_tx(|tx| {
@@ -526,21 +526,30 @@ mod tests {
             for name in ["デザイン", UNSORTED] {
                 crate::ops::test_support::mk_closed_after(tx, &automation, split.id, Some(name));
             }
+            let born = read::automation_roles_of(tx.conn(), automation.id).expect("roles").remove(0);
             let sorting = NewRole { name: "仕分け".into(), entry_placement_id: Some(take.id), ..NewRole::default() };
             let sorting = automation::role_add(tx, automation.id, sorting).expect("a role");
             let closing = NewRole { name: "仕上げ".into(), entry_placement_id: Some(close.id), ..NewRole::default() };
             automation::role_add(tx, automation.id, closing).expect("another role");
+            automation::role_delete(tx, born.id).expect("the role it was born with");
             let automation = automation::set_entry(tx, automation.id, Some(take.id)).expect("entry");
 
             let unmet = check(tx.conn(), automation.id, None, nothing_asked(), None).expect("check");
-            assert!(unmet.is_empty(), "a line to another role's start is not refused: {unmet:?}");
+            assert!(
+                matches!(
+                    unmet.as_slice(),
+                    [Unmet::RoleStartTakesNoTask { role, placement, .. }] if role == "仕上げ" && *placement == close.id
+                ),
+                "a line to another role's start is not refused: {unmet:?}",
+            );
 
             let task = mk_task_in(tx, "やること", Some(project));
             crate::ops::task::set_assignee(tx, task, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
             crate::ops::task::update(tx, task, crate::ops::task::TaskPatch { role_id: Some(sorting.id), ..Default::default() })
                 .expect("the role");
             dimension::set(tx, task, value_id(tx, role, "技術")).expect("classify");
-            let run = launched(tx, &automation);
+            let by = Launcher { startable: None, models: nothing_asked(), default_agent: None, workspace_open: Some(true), by: Some(ActorKind::Ai) };
+            let run = crate::ops::automation_run::launch_past_the_task_checks(tx, automation.id, &by).expect("launch");
             let entry = read::automation_run_defs_of(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()

@@ -551,8 +551,8 @@ pub enum Command {
     /// each one, what runs after each way out is taken, and what is handed along.
     ///
     /// These are the building commands. Nothing here refuses an unfinished automation — a step with no
-    /// way onward, no entry named, a required setting nobody answered. What refuses them is the launch
-    /// check, where a person is about to be let down by them.
+    /// way onward, a role starting its round nowhere, a required setting nobody answered. What refuses
+    /// them is the launch check, where a person is about to be let down by them.
     ///
     /// **The parts are named by id**, the one each `add` prints. They carry no ref of their own: a step
     /// is named by the automation it sits in, not by a number anybody types back.

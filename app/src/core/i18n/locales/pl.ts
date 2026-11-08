@@ -1149,6 +1149,8 @@ export const pl: Translation = {
     "auto.lib.entry.takeTask": "Realizuj czekające zadania",
     "auto.lib.entry.makeTask": "Wpisz coś i zacznij",
     "auto.lib.entry.fetch": "Zacznij od odczytania pliku lub adresu URL",
+    "auto.lib.splitAxis": "Oś podziału",
+    "auto.lib.splitNoAxis": "Nie ma osi, na której zadanie ma jedną wartość, więc nie ma po czym dzielić. Utwórz ją w zarządzaniu klasyfikacjami",
     "auto.lib.makeNamed": "＋ Utwórz nową o nazwie „{name}”",
     "auto.lockMark": "Nie można tu zmienić",
     "auto.lib.make": "Utwórz nową i umieść",

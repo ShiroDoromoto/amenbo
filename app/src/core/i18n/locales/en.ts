@@ -1374,6 +1374,8 @@ const ui = {
   "auto.lib.entry.takeTask": "Work through the tasks waiting",
   "auto.lib.entry.makeTask": "Type something in and start",
   "auto.lib.entry.fetch": "Start by reading a file or URL",
+  "auto.lib.splitAxis": "Axis to split by",
+  "auto.lib.splitNoAxis": "There is no axis a task holds one value of, so there is nothing to split by. Make one where classifications are managed",
   "auto.lib.makeNamed": "＋ Make a new one named “{name}”",
   "auto.lockMark": "Can’t be changed here",
   "auto.lib.make": "Make an action and place it",

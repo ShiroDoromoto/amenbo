@@ -1144,6 +1144,8 @@ export const fr: Translation = {
     "auto.lib.entry.takeTask": "Avancer les tâches en attente",
     "auto.lib.entry.makeTask": "Saisir quelque chose et démarrer",
     "auto.lib.entry.fetch": "Démarrer en lisant un fichier ou une URL",
+    "auto.lib.splitAxis": "Axe de répartition",
+    "auto.lib.splitNoAxis": "Aucun axe ne porte une seule valeur par tâche : il n’y a rien par quoi répartir. Créez-en un là où se gèrent les classifications",
     "auto.lib.makeNamed": "＋ En créer une nommée « {name} »",
     "auto.lockMark": "Non modifiable ici",
     "auto.lib.make": "En créer une et la placer",

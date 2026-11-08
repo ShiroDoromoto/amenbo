@@ -1133,6 +1133,8 @@ export const id: Translation = {
     "auto.lib.entry.takeTask": "Kerjakan tugas yang menumpuk",
     "auto.lib.entry.makeTask": "Ketik langsung lalu mulai",
     "auto.lib.entry.fetch": "Mulai dengan membaca file atau URL",
+    "auto.lib.splitAxis": "Sumbu pembagi",
+    "auto.lib.splitNoAxis": "Tidak ada sumbu yang hanya memberi satu nilai per tugas, jadi tidak bisa dibagi. Buat sumbu di pengelolaan klasifikasi",
     "auto.lib.makeNamed": "＋ Buat baru dengan nama “{name}”",
     "auto.lockMark": "Tidak bisa diubah di sini",
     "auto.lib.make": "Buat baru dan tempatkan",

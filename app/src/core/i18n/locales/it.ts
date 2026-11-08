@@ -1144,6 +1144,8 @@ export const it: Translation = {
     "auto.lib.entry.takeTask": "Portare avanti le attività in attesa",
     "auto.lib.entry.makeTask": "Scrivere qualcosa e iniziare",
     "auto.lib.entry.fetch": "Iniziare leggendo un file o un URL",
+    "auto.lib.splitAxis": "Asse per cui dividere",
+    "auto.lib.splitNoAxis": "Non c’è un asse con un solo valore per attività, quindi non si può dividere. Creane uno dove si gestiscono le classificazioni",
     "auto.lib.makeNamed": "＋ Creane una nuova chiamata «{name}»",
     "auto.lockMark": "Non modificabile qui",
     "auto.lib.make": "Creane una nuova e collocala",

@@ -263,34 +263,48 @@ export function useAutomationBuiltins(): AutomationBuiltinDto[] {
  * **Put a built-in on the picture**, standing on its own, named by its key. It is how the first
  * placement comes in, which is one of the `ENTRY_BUILTINS` (`AMB-D-977`). Its library action is
  * written the first time any automation places it.
+ *
+ * `axis` is the axis the built-in that splits by one splits by, and `null` for any other: that one has
+ * an action per axis (`AMB-D-973`).
  */
-export async function placeAutomationBuiltin(automationId: number, key: string): Promise<void> {
+export async function placeAutomationBuiltin(
+  automationId: number,
+  key: string,
+  axis: number | null = null,
+): Promise<void> {
   if (!inTauri()) return;
-  return ack("automation_builtin_place", { automationId, key });
+  return ack("automation_builtin_place", { automationId, key, axis });
 }
 
 /**
  * **Put a built-in in on a line** — `insertAutomationAction` for a built-in: the way out that was
  * pressed comes to point at the new spot, and the new spot goes on to where that way out used to.
+ * `axis` as for `placeAutomationBuiltin`.
  */
-export async function insertAutomationBuiltin(edgeId: number, key: string): Promise<void> {
+export async function insertAutomationBuiltin(
+  edgeId: number,
+  key: string,
+  axis: number | null = null,
+): Promise<void> {
   if (!inTauri()) return;
-  return ack("automation_builtin_insert", { edgeId, key });
+  return ack("automation_builtin_insert", { edgeId, key, axis });
 }
 
 /**
  * **Put a built-in on after a way out that says nothing yet** — `insertAutomationBuiltin` for a way
- * out with no line to press.
+ * out with no line to press. `axis` as for `placeAutomationBuiltin`.
  */
 export async function insertAutomationBuiltinAtExit(
   from: { boxId: number; exitName: string | null },
   key: string,
+  axis: number | null = null,
 ): Promise<void> {
   if (!inTauri()) return;
   return ack("automation_builtin_insert_at_exit", {
     fromId: from.boxId,
     exitName: from.exitName,
     key,
+    axis,
   });
 }
 

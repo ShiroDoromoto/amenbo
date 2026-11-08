@@ -1144,6 +1144,8 @@ export const es: Translation = {
     "auto.lib.entry.takeTask": "Avanzar las tareas pendientes",
     "auto.lib.entry.makeTask": "Escribir algo y empezar",
     "auto.lib.entry.fetch": "Empezar leyendo un archivo o una URL",
+    "auto.lib.splitAxis": "Eje por el que dividir",
+    "auto.lib.splitNoAxis": "No hay ningún eje en el que una tarea tenga un solo valor, así que no hay por dónde dividir. Crea uno donde se gestionan las clasificaciones",
     "auto.lib.makeNamed": "＋ Crear una nueva llamada «{name}»",
     "auto.lockMark": "No se puede cambiar aquí",
     "auto.lib.make": "Crear una nueva y colocarla",

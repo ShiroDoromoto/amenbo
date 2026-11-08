@@ -67,7 +67,7 @@ use crate::dto::{
     AutomationBuiltinExitDto, AutomationBuiltinRunDto, AutomationCardDto, AutomationCfgDto,
     AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationFailuresToDto, AutomationHeldBackDto,
     AutomationHeldByRecordDto, AutomationHeldByValueDto, AutomationLaunchAsksDto,
-    AutomationCarrierDto, AutomationLaunchAxisDto, AutomationLaunchBlockDto,
+    AutomationCarrierDto, AutomationLaunchBlockDto,
     AutomationLaunchCheckDto, AutomationLaunchIncidentDto, AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRoleDto, AutomationRolePassDto, AutomationRunCardDto,
     AutomationRunEndingsDto,
@@ -1716,24 +1716,16 @@ fn block_dto(unmet: &Unmet) -> AutomationLaunchBlockDto {
     }
 }
 
-/// **What a launch of this automation asks for** — what its entry reads at launch, so the dialog every
-/// press opens asks for that and nothing else (`AMB-D-970`). Core answers it
-/// ([`automation_run::launch_asks`]); an entry handed what it does not read would refuse the launch.
+/// **What a launch of this automation asks for** — nothing (`AMB-D-1123`). Work is handed to an
+/// automation as a task with a role, filed before a run rather than read by its entry at launch, so the
+/// dialog every press opens asks for nothing; a task to hand over is filed as any other is.
 #[tauri::command]
 pub fn automation_launch_asks(id: i64) -> Result<AutomationLaunchAsksDto, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_launch_asks");
     let store = open_store_read()?;
-    let (reads, axes) = match automation_run::launch_asks(store.read_model().conn(), id)? {
-        automation_run::LaunchAsks::Task { axes } => ("task", axes),
-        automation_run::LaunchAsks::Nothing => ("nothing", Vec::new()),
-    };
-    Ok(AutomationLaunchAsksDto {
-        reads: reads.to_string(),
-        axes: axes
-            .into_iter()
-            .map(|axis| AutomationLaunchAxisDto { name: axis.name, values: axis.values, required: axis.required })
-            .collect(),
-    })
+    read::automation(store.read_model().conn(), id)?
+        .ok_or_else(|| amenbo_core::Error::not_found(format!("automation '{id}' not found")))?;
+    Ok(AutomationLaunchAsksDto { reads: "nothing".to_string(), axes: Vec::new() })
 }
 
 /// **Start a run of this automation** — the press behind the build screen's "start".
@@ -1758,16 +1750,16 @@ pub fn automation_launch_asks(id: i64) -> Result<AutomationLaunchAsksDto, CmdErr
 ///
 /// **One press runs side by side.** The run is started in a launch — the one standing for the
 /// automation, or a new one — and the watch starts more in it up to the automation's roles' headcount
-/// (`amenbo_core::ops::automation_run::headcount`) while there are tasks to take
+/// (`amenbo_core::ops::automation_run::seats`) while there are tasks to take
 /// (`amenbo_core::ops::automation_run::top_up`). The answer names that launch.
 ///
 /// **What the person hands over with the press** (`AMB-D-981`): `title`, `notes`, `classification`
-/// (axis and value, by name) and `files` by their paths on this machine, all for the built-in that
-/// files a task, the one entry that reads anything ([`automation_launch_asks`] says whether this one
-/// is). The files are ingested the way an attachment is ([`crate::commands::attachment_add`]):
-/// the per-file cap checked, then streamed into the blob store. They go into the store before the
-/// launch, and onto the run in the launch's own transaction ([`automation_run::HandedAtLaunch`]) — a
-/// launch refused afterwards leaves a blob nothing names, which the blob sweep takes like any other.
+/// (axis and value, by name) and `files` by their paths on this machine, filed as a task under the
+/// automation's first role before the run starts (`AMB-D-1123`). The files are ingested the way an
+/// attachment is ([`crate::commands::attachment_add`]): the per-file cap checked, then streamed into the
+/// blob store. They go into the store before the launch, and onto that task in the launch's own
+/// transaction ([`automation_run::HandedAtLaunch`]) — a launch refused afterwards leaves a blob nothing
+/// names, which the blob sweep takes like any other.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub fn automation_launch(

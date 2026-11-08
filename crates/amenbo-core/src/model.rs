@@ -1996,7 +1996,8 @@ pub struct AutomationTrigger {
     #[serde(default)]
     pub name: String,
     /// The role the task it files is worked under — one of the same automation's own
-    /// ([`AutomationRole`]) — or `None` for none, which leaves the task to be worked in a session.
+    /// ([`AutomationRole`]) — or `None` for the automation's first role. Whether it has room to file one
+    /// is asked of that role's seats (`AMB-D-1123`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub role_id: Option<i64>,
     pub when: TriggerWhen,
@@ -2030,17 +2031,17 @@ pub enum TriggerWhen {
     /// Every `minutes` minutes, counted from when the trigger was written and then from each task it
     /// filed.
     Every { minutes: u32 },
-    /// Whenever the automation has no run under way (`running` or `paused`) — counted, like the most
-    /// runs it may have going, over every run of it, whoever started it. It still waits
+    /// Whenever no seat of the trigger's role is taken by a run under way (`running` or `paused`) —
+    /// counted over every run in those seats, whoever started it (`AMB-D-1123`). It still waits
     /// [`MIN_TRIGGER_EVERY_MINUTES`] after it is written and after each task it files, so a run that
     /// ends at once is not followed by another on every look.
     Idle,
     /// Whenever its [`TriggerCondition`] holds, with nothing else to wait for — but, like an `every`,
-    /// not while the automation has its most runs under way. It waits [`MIN_TRIGGER_EVERY_MINUTES`]
+    /// not while every seat of the trigger's role is taken. It waits [`MIN_TRIGGER_EVERY_MINUTES`]
     /// after it is written and after each task it files, as an `idle` does.
     Tasks,
     /// Whenever its script says to, with nothing else to wait for — held back, like a `tasks`, only by
-    /// the automation having its most runs under way, and waiting [`MIN_TRIGGER_EVERY_MINUTES`] after it
+    /// every seat of the trigger's role being taken, and waiting [`MIN_TRIGGER_EVERY_MINUTES`] after it
     /// is written and after each task it files.
     Script,
 }
@@ -2760,12 +2761,10 @@ pub struct AutomationRun {
     /// written before a CLI could set one is a person's, since the app's button was the only way.
     #[serde(default)]
     pub acknowledged_by_kind: Option<ActorKind>,
-    /// **What a person handed over to file the task a run starts by filing** — the title, the notes and
-    /// the classification, as JSON ([`crate::ops::automation_run::HandedTask`]) — or what one of an
-    /// automation's triggers wrote for it ([`AutomationTrigger`]). Only a run whose entry is
-    /// the built-in that files a task is handed these, and that built-in is what reads them. `None` for
-    /// every other run (`AMB-D-970`). The files handed along with them hang off the run
-    /// ([`AttachmentTarget::AutomationRun`]) until that built-in moves them on to the task (`AMB-D-981`).
+    /// **What a person handed over to file the task a run started by filing**, as JSON — kept on runs
+    /// launched before what is handed was filed as a task ahead of the run (`AMB-D-1123`). No run is
+    /// written with one now, and nothing reads it: what a launch is handed is filed as a task with a
+    /// role before the run starts ([`crate::ops::automation_run::HandedAtLaunch`]).
     #[serde(default)]
     pub handed_task: Option<String>,
     /// **What a run failed with [`AutomationStoppedReason::FailedCheck`] did not pass**, as the refusal

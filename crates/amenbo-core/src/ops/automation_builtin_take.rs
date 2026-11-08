@@ -1069,11 +1069,11 @@ mod tests {
         });
     }
 
-    /// **A newer version that starts by filing a task fails the run standing at its entry**: only a
-    /// launch is handed what to file.
+    /// **A newer version that starts by filing a task fails the run standing at its entry**: nothing
+    /// reaches the title of the task it files, since nothing is handed to an entry (`AMB-D-1123`).
     #[test]
     fn a_run_standing_at_its_entry_fails_on_a_version_that_starts_by_filing_a_task() {
-        use crate::ops::automation_builtin_make::{MADE_AND_TAKEN, TAKE_IT, WHAT_THEN};
+        use crate::ops::automation_builtin_make::{MADE_AND_TAKEN, TAKE_IT, TITLE, WHAT_THEN};
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = waiting_picture(tx, project);
@@ -1094,7 +1094,10 @@ mod tests {
             automation::set_entry(tx, automation.id, Some(make.id)).expect("entry");
             let claude = ["claude".to_string()];
             let unmet = check(tx.conn(), automation.id, Some(&claude), nothing_asked(), None).expect("check");
-            assert!(unmet.is_empty(), "it would launch: {unmet:?}");
+            assert!(
+                unmet.iter().any(|u| matches!(u, Unmet::UnwiredInput { port, .. } if port == TITLE)),
+                "nothing reaches the title: {unmet:?}",
+            );
             automation::version_add(tx, automation.id).expect("save the automation");
 
             let TakenUp::Failed(failed) = take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look") else {
@@ -1102,7 +1105,7 @@ mod tests {
             };
             assert_eq!(failed.stopped_reason, Some(AutomationStoppedReason::FailedCheck));
             let detail = failed.stopped_detail.expect("what it did not pass is kept");
-            assert!(detail.contains("files a task"), "{detail}");
+            assert!(detail.contains("has nothing reaching it"), "{detail}");
         });
     }
 

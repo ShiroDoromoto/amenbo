@@ -1755,8 +1755,8 @@ describe("the picture of an automation", () => {
   });
 });
 
-describe("the inputs the start dialog hands over", () => {
-  /** "File a task" at `at`, with the three inputs it reads at launch and one it does not. */
+describe("the entry that files a task", () => {
+  /** "File a task" at `at`, with the three inputs the start dialog once handed it and one more. */
   function filing(at: number, entry: number): PicGraph {
     return detail({
       entryPlacementId: entry,
@@ -1776,12 +1776,10 @@ describe("the inputs the start dialog hands over", () => {
     });
   }
 
-  it("counts the entry's title, notes and chosen classification as reached, and nothing else", () => {
-    expect(at(layOut(filing(2, 2)), 2).unfed).toEqual(["other"]);
-  });
-
-  it("asks for a wire into the same inputs where the box is not what a run starts at", () => {
-    // Drawn in the screen's words, so only how many are asked for is the store's to say.
+  it("asks for a wire into every input even where the box is what a run starts at", () => {
+    // What a launch is handed is filed as a task before the run (`AMB-D-1123`), so nothing reaches
+    // the entry's inputs but a wire. Drawn in the screen's words, so only how many is asserted.
+    expect(at(layOut(filing(2, 2)), 2).unfed).toHaveLength(4);
     expect(at(layOut(filing(2, 1)), 2).unfed).toHaveLength(4);
   });
 });

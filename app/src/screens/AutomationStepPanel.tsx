@@ -63,7 +63,7 @@ import { builtinShown, builtinWord } from "../core/builtinWords";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
 import { ExitMark, filterValueLabel, ReachChip, usedCount } from "./automationParts";
-import { automationGraph, behindOf, ERROR_EXIT, fed, readAtLaunch } from "./automationLayout";
+import { automationGraph, behindOf, ERROR_EXIT, fed } from "./automationLayout";
 import { exitLabel, NextRow, useAgents, useDraft, useModels, type Run } from "./automationPanel";
 import { Sec } from "./automationDeclParts";
 import {
@@ -442,15 +442,6 @@ function InputRow({
       {tf("auto.pic.unfed", { names: inputName })}
     </span>
   );
-  // Handed over in the start dialog, not by a wire — so there is nothing to choose here.
-  if (readAtLaunch(graph, placement.builtin, placement.id, input.name)) {
-    return (
-      <div className="autostep__wire">
-        {chip}
-        <span className="autostep__atlaunch">{t("auto.step.atLaunch")}</span>
-      </div>
-    );
-  }
   return (
     <div className="autostep__wire">
       {chip}

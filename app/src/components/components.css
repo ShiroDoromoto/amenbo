@@ -1669,7 +1669,6 @@ button.feed__target:hover { color: var(--c-accent); }
 /* One input, and what fills it. */
 .autostep__wire { display: flex; flex-direction: column; gap: var(--s-1); padding-block: var(--s-1); }
 /* Where the input is handed over in the start dialog instead: said, not chosen. */
-.autostep__atlaunch { color: var(--c-text-muted); font-size: var(--fs-md); }
 /* A required input nothing reaches the first time a run comes — the mark the picture puts on its box. */
 .autostep__unfed { display: inline-flex; align-items: center; gap: var(--s-1); color: var(--c-heed); font-size: var(--fs-md); }
 /* What an input just declared was joined to, with the press that takes it back (`AMB-T-5799`). */

@@ -962,7 +962,7 @@ export const nl: Translation = {
     "auto.build.carrierAgent": "Agent",
     "auto.build.carrierModel": "Model",
     "auto.build.carrierByStep": "Overschreven door de stap",
-    "auto.build.carrierHint": "● markeert een instelling die de stap overschrijft. De volgorde waarin het wordt bepaald: wat de stap opgeeft, dan de standaard van de rol, dan de standaard van Amenbo.",
+    "auto.build.carrierHint": "● markeert een instelling die de stap overschrijft. De volgorde waarin het wordt bepaald: wat de stap opgeeft, dan de standaard van de rol, dan de standaard van Amenbo ({agent} / {model}).",
     "auto.trigger.title": "Trigger",
     "auto.trigger.lead": "Maakt een taak aan zonder dat er iemand is. Of er een komt en wat erin staat, wordt mechanisch bepaald, zonder AI. De AI werkt pas in de run die de aangemaakte taak start.",
     "auto.trigger.name": "Naam van de trigger",

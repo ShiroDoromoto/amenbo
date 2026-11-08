@@ -1201,7 +1201,7 @@ const ui = {
   "auto.build.carrierAgent": "Agent",
   "auto.build.carrierModel": "Model",
   "auto.build.carrierByStep": "Overridden by the step",
-  "auto.build.carrierHint": "● marks a setting the step overrides. It is decided in this order: what the step specifies, then the role's default, then Amenbo's default.",
+  "auto.build.carrierHint": "● marks a setting the step overrides. It is decided in this order: what the step specifies, then the role's default, then Amenbo's default ({agent} / {model}).",
   "auto.trigger.title": "Trigger",
   "auto.trigger.lead": "Files a task with nobody there. Whether to file one and what it says are both decided mechanically, without AI. AI works only inside the run the filed task starts.",
   "auto.trigger.name": "Trigger name",

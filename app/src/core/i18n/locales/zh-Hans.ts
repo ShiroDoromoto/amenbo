@@ -964,7 +964,7 @@ export const zhHans: Translation = {
     "auto.build.carrierAgent": "智能体",
     "auto.build.carrierModel": "模型",
     "auto.build.carrierByStep": "由步骤覆盖",
-    "auto.build.carrierHint": "● 表示步骤覆盖的设置。决定顺序为：步骤的指定 → 角色的默认 → Amenbo 整体的默认。",
+    "auto.build.carrierHint": "● 表示步骤覆盖的设置。决定顺序为：步骤的指定 → 角色的默认 → Amenbo 整体的默认（{agent} / {model}）。",
     "auto.trigger.title": "触发器",
     "auto.trigger.lead": "在无人时创建任务。是否创建、任务写什么，都按规则机械决定，不使用 AI。AI 只在所创建任务启动的运行中工作。",
     "auto.trigger.name": "触发器名称",

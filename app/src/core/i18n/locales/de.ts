@@ -966,7 +966,7 @@ export const de: Translation = {
     "auto.build.carrierAgent": "Agent",
     "auto.build.carrierModel": "Modell",
     "auto.build.carrierByStep": "Vom Schritt überschrieben",
-    "auto.build.carrierHint": "● markiert eine Einstellung, die der Schritt überschreibt. Entschieden wird in dieser Reihenfolge: Angabe des Schritts, dann Standard der Rolle, dann Standard von Amenbo.",
+    "auto.build.carrierHint": "● markiert eine Einstellung, die der Schritt überschreibt. Entschieden wird in dieser Reihenfolge: Angabe des Schritts, dann Standard der Rolle, dann Standard von Amenbo ({agent} / {model}).",
     "auto.trigger.title": "Auslöser",
     "auto.trigger.lead": "Legt eine Aufgabe an, ohne dass jemand da ist. Ob eine angelegt wird und was darin steht, wird mechanisch entschieden, ohne KI. Die KI arbeitet erst im Durchlauf, den die angelegte Aufgabe startet.",
     "auto.trigger.name": "Name des Auslösers",

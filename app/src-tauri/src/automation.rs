@@ -1723,7 +1723,7 @@ pub fn automation_detail(id: i64) -> Result<Option<AutomationDetailDto>, CmdErro
             who.passed_titles.insert(task, title);
         }
     }
-    Ok(Some(detail_dto(view, held_by, &save_blocks, who)))
+    Ok(Some(detail_dto(view, held_by, &save_blocks, who, default_agent)))
 }
 
 /// Whether this automation could be started, and what is in the way — core's launch check, named for
@@ -3353,6 +3353,7 @@ fn detail_dto(
     held_by: Vec<AutomationRunCardDto>,
     save_blocks: &[Unmet],
     mut who: Who,
+    default_agent: Option<String>,
 ) -> AutomationDetailDto {
     let names = exit_names(view.placements.iter().flat_map(|p| p.exits.iter()));
     let wires = view.wires.iter().map(|w| wire_dto(w, &names, |id| view.port_name(id))).collect();
@@ -3390,6 +3391,7 @@ fn detail_dto(
         saved: view.saved.map(saved_dto),
         unsaved: view.unsaved,
         save_blocks: save_blocks.iter().map(block_dto).collect(),
+        default_agent,
     }
 }
 

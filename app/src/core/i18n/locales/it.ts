@@ -974,7 +974,7 @@ export const it: Translation = {
     "auto.build.carrierAgent": "Agente",
     "auto.build.carrierModel": "Modello",
     "auto.build.carrierByStep": "Sovrascritto dal passo",
-    "auto.build.carrierHint": "● indica un’impostazione che il passo sovrascrive. L’ordine con cui si decide è: ciò che indica il passo, poi il predefinito del ruolo, poi il predefinito di Amenbo.",
+    "auto.build.carrierHint": "● indica un’impostazione che il passo sovrascrive. L’ordine con cui si decide è: ciò che indica il passo, poi il predefinito del ruolo, poi il predefinito di Amenbo ({agent} / {model}).",
     "auto.trigger.title": "Attivatore",
     "auto.trigger.lead": "Crea un’attività senza che ci sia nessuno. Se crearla e cosa dice sono decisi in modo meccanico, senza IA. L’IA lavora solo nell’esecuzione avviata dall’attività creata.",
     "auto.trigger.name": "Nome dell’attivatore",

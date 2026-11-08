@@ -19,7 +19,11 @@
 // another model marks the model alone. A marked cell is in the AI's colour; a cell that falls back, to
 // the role's default or Amenbo's, is muted and shows the value it fell back to. The words for where
 // each was chosen are the GUI's (`AMB-D-396`).
-import { t } from "../core/i18n";
+//
+// **The line under the table names Amenbo's own default** (`defaultAgent`), the last a step falls back
+// to: its agent by the label the cells use, and as its model the agent's own default, since Amenbo's
+// default has none (`AMB-D-865`). While nobody has chosen one, the agent is named as unset.
+import { t, tf } from "../core/i18n";
 import { pictureOrder, type PicGraph } from "./automationLayout";
 import { useAgents } from "./automationPanel";
 import type { AutomationCarrierDto, AutomationDetailDto } from "../bindings/bindings";
@@ -89,7 +93,13 @@ export function AutomationRoleCarriers({
           ))}
         </tbody>
       </table>
-      <p className="autocarriers__hint">{t("auto.build.carrierHint")}</p>
+      <p className="autocarriers__hint">
+        {tf("auto.build.carrierHint", {
+          agent:
+            automation.defaultAgent === undefined ? t("auto.pic.stepUnset") : agentLabel(automation.defaultAgent),
+          model: t("auto.step.modelDefault"),
+        })}
+      </p>
     </div>
   );
 }

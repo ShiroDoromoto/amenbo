@@ -974,7 +974,7 @@ export const es: Translation = {
     "auto.build.carrierAgent": "Agente",
     "auto.build.carrierModel": "Modelo",
     "auto.build.carrierByStep": "Sobrescrito por el paso",
-    "auto.build.carrierHint": "● marca un ajuste que el paso sobrescribe. Se decide en este orden: lo que indica el paso, luego el predeterminado del rol y luego el predeterminado de Amenbo.",
+    "auto.build.carrierHint": "● marca un ajuste que el paso sobrescribe. Se decide en este orden: lo que indica el paso, luego el predeterminado del rol y luego el predeterminado de Amenbo ({agent} / {model}).",
     "auto.trigger.title": "Disparador",
     "auto.trigger.lead": "Crea una tarea sin que haya nadie. Si crearla y qué dice se deciden de forma mecánica, sin IA. La IA solo trabaja dentro de la ejecución que inicia la tarea creada.",
     "auto.trigger.name": "Nombre del disparador",

@@ -968,7 +968,7 @@ export const ja: Translation = {
     "auto.build.carrierAgent": "エージェント",
     "auto.build.carrierModel": "モデル",
     "auto.build.carrierByStep": "ステップで上書きしている",
-    "auto.build.carrierHint": "● はステップで上書きしている設定です。決まり方は「ステップの指定 → 役割の既定 → Amenbo 全体の既定」の順です。",
+    "auto.build.carrierHint": "● はステップで上書きしている設定です。決まり方は「ステップの指定 → 役割の既定 → Amenbo 全体の既定（{agent} / {model}）」の順です。",
     "auto.trigger.title": "きっかけの設定",
     "auto.trigger.lead": "人がいなくてもタスクを起票するための設定です。「起票するか」と「タスクの中身」はどちらも機械的に決まり、AI は使いません。AI が働くのは、起票されたタスクの周の中です。",
     "auto.trigger.name": "きっかけの名前",

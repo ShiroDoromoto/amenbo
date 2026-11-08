@@ -1438,6 +1438,86 @@ fn pause_before_next_task_asks_the_run() {
     cli.json(&["automation", "cancel", &run, "--force", "--json"]);
 }
 
+/// **How many are in a role is changed on the launch alone** (`AMB-D-1015`, `AMB-D-1124`): the launch
+/// holds its own headcount beside the definition, which stays as it was saved. Lowered below the runs
+/// under way, the seats go as their runs finish a task rather than at once; put back, the launch is at
+/// the definition again. None and past the cap are refused, the refusal of none naming the way to stop
+/// the role instead. Stopping the role once its task is done leaves the headcount as it was, and taking
+/// it up again lifts the stop. A launch or a role that does not exist is not_found (`AMB-D-986`).
+#[test]
+fn a_launch_holds_its_own_headcount_and_a_role_of_it_is_stopped_and_taken_up_again() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, _, _) = a_saved_launchable(&cli);
+    room_for_two(&cli, &a);
+    let role = id_str(&cli.json(&["automation", "role-list", &a, "--json"])["roles"][0]["id"]);
+    let first = cli.json(&["automation", "start", &a, "--json"]);
+    let launch = id_str(&first["automation_run"]["launch_id"]);
+    let run = id_of(&first, "automation_run");
+    let second = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
+
+    let (text, _) = cli.run(&["automation", "run-show", &run]);
+    assert!(text.contains(&format!("launch {launch}")), "a run names its launch: {text}");
+    let shown = cli.json(&["automation", "launch-show", &launch, "--json"]);
+    assert_eq!(shown["count"].as_u64(), Some(1), "{shown}");
+    let at = &shown["roles"][0];
+    assert_eq!(id_str(&at["role_id"]), role, "{shown}");
+    assert_eq!(at["defined"].as_u64(), Some(2), "{shown}");
+    assert_eq!(at["headcount"].as_u64(), Some(2), "{shown}");
+    assert_eq!(at["under_way"].as_array().map(Vec::len), Some(2), "{shown}");
+
+    // Lowered below the runs under way: no run is stopped, one seat is still to go.
+    let set = cli.json(&["automation", "launch-headcount-set", &launch, "--role", &role, "--headcount", "1", "--json"]);
+    assert_eq!(set["automation_launch_role"]["headcount"].as_u64(), Some(1), "{set}");
+    let shown = cli.json(&["automation", "launch-show", &launch, "--json"]);
+    assert_eq!(shown["roles"][0]["defined"].as_u64(), Some(2), "the definition is left as it is: {shown}");
+    assert_eq!(shown["roles"][0]["headcount"].as_u64(), Some(1), "{shown}");
+    assert_eq!(shown["roles"][0]["to_let_go"].as_u64(), Some(1), "{shown}");
+    let (text, _) = cli.run(&["automation", "launch-show", &launch]);
+    assert!(text.contains(&format!("role {role}  defined 2  this launch 1  2 under way  1 to let go")), "{text}");
+    let listed = cli.json(&["automation", "role-list", &a, "--json"]);
+    assert_eq!(listed["roles"][0]["headcount"].as_u64(), Some(2), "the role as defined: {listed}");
+
+    let (refused, code) = cli.run_err(&["automation", "launch-headcount-set", &launch, "--role", &role, "--headcount", "0", "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("launch-role-hold"), "none names the way to stop the role: {refused}");
+    let cap = amenbo_core::model::MAX_ROLE_HEADCOUNT;
+    let (refused, code) =
+        cli.run_err(&["automation", "launch-headcount-set", &launch, "--role", &role, "--headcount", &(cap + 1).to_string(), "--json"]);
+    assert_ne!(code, 0, "past the cap is refused: {refused}");
+    let shown = cli.json(&["automation", "launch-show", &launch, "--json"]);
+    assert_eq!(shown["roles"][0]["headcount"].as_u64(), Some(1), "a refusal changes nothing: {shown}");
+
+    let reset = cli.json(&["automation", "launch-headcount-reset", &launch, "--role", &role, "--json"]);
+    assert_eq!(reset["automation_launch_role"]["headcount"].as_u64(), Some(2), "{reset}");
+    let shown = cli.json(&["automation", "launch-show", &launch, "--json"]);
+    assert_eq!(shown["roles"][0]["to_let_go"].as_u64(), Some(0), "the seat to go is called off: {shown}");
+
+    let held = cli.json(&["automation", "launch-role-hold", &launch, "--role", &role, "--json"]);
+    assert_eq!(held["automation_launch_role"]["held"].as_bool(), Some(true), "{held}");
+    assert_eq!(held["automation_launch_role"]["headcount"].as_u64(), Some(2), "the headcount stays: {held}");
+    assert!(held["runs_ended"].is_array(), "{held}");
+    let (text, _) = cli.run(&["automation", "launch-show", &launch]);
+    assert!(text.contains("stops once its task is done"), "{text}");
+    let released = cli.json(&["automation", "launch-role-release", &launch, "--role", &role, "--json"]);
+    assert_eq!(released["automation_launch_role"]["held"].as_bool(), Some(false), "{released}");
+    assert_eq!(released["automation_launch_role"]["headcount"].as_u64(), Some(2), "{released}");
+
+    let (err, code) = cli.run_err(&["automation", "launch-show", "999999", "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("not_found"), "{err}");
+    let (err, code) = cli.run_err(&["automation", "launch-role-hold", "999999", "--role", &role, "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("not_found"), "{err}");
+    let (err, code) = cli.run_err(&["automation", "launch-headcount-set", &launch, "--role", "999999", "--headcount", "2", "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("not_found"), "a role that does not exist: {err}");
+
+    for r in [&run, &second] {
+        cli.run(&["automation", "cancel", r, "--force", "--json"]);
+    }
+}
+
 /// **A step does not pause or force-cancel its own run** (`AMB-D-1020`): typed in a step's terminal, both
 /// are refused, naming why and that a person can stop the run from its pane. Aimed at another run, they
 /// go through as they would outside a step.

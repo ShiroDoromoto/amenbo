@@ -2813,7 +2813,8 @@ pub fn launch_headcount_reset(tx: &WriteTx<'_>, launch_id: i64, role_id: i64) ->
 }
 
 /// **A launch not ended, and one role of the newest saved version of its automation** — what changing a
-/// headcount on the launch, or stopping the role taking tasks, is asked of.
+/// headcount on the launch, or stopping the role taking tasks, is asked of. A launch or a role that
+/// does not exist is not_found (`AMB-D-986`).
 pub(crate) fn launch_role(
     conn: &Connection,
     launch_id: i64,
@@ -2829,13 +2830,18 @@ pub(crate) fn launch_role(
     let automation =
         read::automation(conn, launch.automation_id)?.ok_or_else(|| not_found("automation", launch.automation_id))?;
     let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
-    let role = pic.roles().iter().find(|r| r.id == role_id).cloned().ok_or_else(|| {
-        Error::invalid(format!(
-            "role '{role_id}' is not one of automation '{}' as it was last saved",
-            automation.name
-        ))
-    })?;
-    Ok((launch, role))
+    if let Some(role) = pic.roles().iter().find(|r| r.id == role_id).cloned() {
+        return Ok((launch, role));
+    }
+    // A role id that names no role at all is not_found (`AMB-D-986`); one that names a role, just not
+    // one of this automation as it was last saved, is refused as invalid.
+    if read::automation_role(conn, role_id)?.is_none() {
+        return Err(not_found("role", role_id));
+    }
+    Err(Error::invalid(format!(
+        "role '{role_id}' is not one of automation '{}' as it was last saved",
+        automation.name
+    )))
 }
 
 /// **Whether a run's seat is one still to go** — the headcount of its role lowered on the launch below

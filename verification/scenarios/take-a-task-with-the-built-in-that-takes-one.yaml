@@ -15,8 +15,9 @@ title: The built-in that takes a task reserves the one handed to the AI, and a r
 description: >
   Place the built-in that takes a task (`take_task`) as an automation's entry, with the way out that took a task going
   on to an agent's step and the way out that found none closing the run. Start it while no task is
-  handed to the AI, and read the run over on the history tab. Hand a task to the AI, start it again,
-  and read the task gone to in_progress and the agent's step in the run's pane working it.
+  handed to the AI, read the run over on the history tab, and stop its launch from the pane's header.
+  Hand a task to the AI, start it again, and read the task gone to in_progress and the agent's step in
+  the run's pane working it.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
 
@@ -95,6 +96,36 @@ steps_gui:
       target: seed
       field: status
       equals: todo
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  # The run is over, and its launch is not: a launch outlasts its runs and waits for the next task to
+  # take until somebody stops it. Left standing, it would take the task handed on below by itself,
+  # and the second start would join it. So it is stopped from its pane's header first.
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: empty_handed
+      press: stop
+      on: pane
+
+  - type: assert
+    domain: automation
+    op: launch-head
+    with:
+      target: empty_handed
+      state: ended
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
 
   # Handed to the AI, and written through, so it is a task the built-in can reserve.
   - type: action

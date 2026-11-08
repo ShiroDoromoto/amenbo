@@ -50,8 +50,7 @@ export function AutomationActionMake({
 }: {
   /**
    * Where the new action is placed: on the line pressed, or after a way out that says nothing yet. A
-   * picture with nothing on it takes one of the built-ins a run starts at, never an action made here
-   * (`AMB-D-977`).
+   * role's round starts at the built-in that takes a task, never an action made here (`AMB-D-1123`).
    */
   into: { edgeId: number } | { fromId: number; exitName: string };
   /** What the name box starts with. */

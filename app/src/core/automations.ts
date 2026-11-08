@@ -318,26 +318,12 @@ export function useAutomationBuiltins(): AutomationBuiltinDto[] {
 }
 
 /**
- * **Put a built-in on the picture**, standing on its own, named by its key. It is how the first
- * placement comes in, which is one of the `ENTRY_BUILTINS` (`AMB-D-977`). Its library action is
- * written the first time any automation places it.
+ * **Put a built-in in on a line** — `insertAutomationAction` for a built-in: the way out that was
+ * pressed comes to point at the new spot, and the new spot goes on to where that way out used to.
+ * Its library action is written the first time any automation places it.
  *
  * `axis` is the axis the built-in that splits by one splits by, and `null` for any other: that one has
  * an action per axis (`AMB-D-973`).
- */
-export async function placeAutomationBuiltin(
-  automationId: number,
-  key: string,
-  axis: number | null = null,
-): Promise<void> {
-  if (!inTauri()) return;
-  return ack("automation_builtin_place", { automationId, key, axis });
-}
-
-/**
- * **Put a built-in in on a line** — `insertAutomationAction` for a built-in: the way out that was
- * pressed comes to point at the new spot, and the new spot goes on to where that way out used to.
- * `axis` as for `placeAutomationBuiltin`.
  */
 export async function insertAutomationBuiltin(
   edgeId: number,
@@ -350,7 +336,7 @@ export async function insertAutomationBuiltin(
 
 /**
  * **Put a built-in on after a way out that says nothing yet** — `insertAutomationBuiltin` for a way
- * out with no line to press. `axis` as for `placeAutomationBuiltin`.
+ * out with no line to press. `axis` as for `insertAutomationBuiltin`.
  */
 export async function insertAutomationBuiltinAtExit(
   from: { boxId: number; exitName: string | null },
@@ -493,13 +479,6 @@ export async function removeAutomationPlacement(id: number): Promise<void> {
   if (!inTauri()) return;
   return ack("automation_placement_remove", { id });
 }
-
-/**
- * **The built-ins a picture with nothing on it offers**, in this order (`AMB-D-977`): the one that
- * takes a task, the one a person hands one to, and the one that fetches. The core no longer holds the
- * first placement to them; the build screen still offers them until it draws each role's start.
- */
-export const ENTRY_BUILTINS: readonly string[] = ["take_task", "make_task", "fetch"];
 
 /** What a way out is said to do: open a placement, close the task, or stop the run. */
 /** Which picture a line is drawn on: an automation's boxes are placements, an action's are steps. */
@@ -818,6 +797,18 @@ export async function addAutomationRole(automationId: number, name: string): Pro
 }
 
 /**
+ * **Give a role that starts nowhere its start: the built-in that takes a task** (`AMB-D-1123`). Each
+ * role takes from its own waiting tasks, so that one built-in is the only start a role has. It is put
+ * on the picture and made the role's start in one write, and answers with the placement put on, for
+ * the picture to mark. A role that already starts somewhere is refused by core.
+ */
+export async function startAutomationRoleAtTakeTask(roleId: number): Promise<number[]> {
+  if (!inTauri()) return [];
+  const ack = await forAck("automation_role_start_take_task", { id: roleId });
+  return ack.placements;
+}
+
+/**
  * **Rename a role, set how many it has, give it a new icon seed, or choose the agent and model its
  * steps fall back to** where a step chose none (`AMB-D-960`). `icon` / `agent` / `model` take `null`
  * to clear; clearing the agent clears the model with it, and a model is only named beside an agent.
@@ -1065,8 +1056,8 @@ function made(ack: { actions: number[]; placements: number[] }): Made | null {
 
 /**
  * **Make an empty action and put it in on the line pressed**, and answer with the action's id, for
- * the screen to go and build it (`AMB-D-956`). A picture with nothing on it takes one of the
- * `ENTRY_BUILTINS` first, so there is no line-less road here.
+ * the screen to go and build it (`AMB-D-956`). A role's round starts at the built-in that takes a
+ * task (`startAutomationRoleAtTakeTask`), so there is no line-less road here.
  *
  * It takes a name and a library and nothing else: the inside of an action is its steps, written on
  * the action's own screen. Until one is, the launch check names the action as empty. `null` outside

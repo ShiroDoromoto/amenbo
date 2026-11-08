@@ -520,7 +520,7 @@ impl WriteAck {
         self.actions.push(id);
         self
     }
-    /// Name a placement the write put on beside the one asked for, where there is one
+    /// Name a placement the write put on for the reader rather than picked by them, where there is one
     /// ([`crate::dto::WriteAck::placements`]).
     pub(crate) fn placed(mut self, closer: Option<&amenbo_core::model::AutomationPlacement>) -> WriteAck {
         self.placements.extend(closer.map(|one| one.id));

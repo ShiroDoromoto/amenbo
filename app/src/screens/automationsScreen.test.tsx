@@ -35,6 +35,7 @@ const hoisted = vi.hoisted(() => ({
   save: vi.fn(async (..._args: unknown[]) => {}),
   discard: vi.fn(async (..._args: unknown[]) => {}),
   confirm: vi.fn(async (..._args: unknown[]) => true),
+  startRole: vi.fn(async (..._args: unknown[]): Promise<number[]> => [41]),
 }));
 
 vi.mock("../core/automations", () => ({
@@ -46,7 +47,7 @@ vi.mock("../core/automations", () => ({
   useAutomationBuiltins: () => [],
   useAutomationAction: () => null,
   insertAutomationAction: () => Promise.resolve([]),
-  ENTRY_BUILTINS: ["take_task", "make_task", "fetch"],
+  startAutomationRoleAtTakeTask: hoisted.startRole,
   launchAutomation: hoisted.launch,
   saveAutomation: hoisted.save,
   discardAutomation: hoisted.discard,
@@ -149,6 +150,8 @@ function button(label: string): HTMLButtonElement {
   if (!found) throw new Error(`no button labelled ${label}`);
   return found;
 }
+/** The press that gives the picked role its start (`AMB-D-1123`). */
+const roleStart = () => tf("auto.pic.roleStart", { name: t("auto.bi.takeTask.name") });
 const blocks = () => [...container.querySelectorAll(".autolaunch__blocks li")].map((li) => li.textContent);
 
 
@@ -548,15 +551,6 @@ describe("the panel beside the picture", () => {
   }
   const panelPlace = () => container.querySelector(".actpanel__head .actbuild__sec")?.textContent;
 
-  it("opens the library from the press on an empty picture", async () => {
-    await open();
-    await act(async () => { button(t("auto.pic.first")).click(); });
-    expect(panelPlace()).toBe(t("auto.pic.place"));
-    expect(container.querySelector(".wheremark")?.textContent).toBe(t("auto.lib.here"));
-    // The first placement is where a run starts, one of the built-ins (`AMB-D-977`).
-    expect(container.textContent).not.toContain(t("auto.lib.makeNew"));
-  });
-
   it("opens the definition's own fields from Edit, and keeps them open on a second press", async () => {
     await open();
     await act(async () => { button(t("auto.build.edit")).click(); });
@@ -592,6 +586,56 @@ describe("the panel beside the picture", () => {
       container.querySelector<HTMLButtonElement>(".actpanel__close")!.click();
     });
     expect(container.querySelector(".actpanel")).toBeNull();
+  });
+});
+
+// A role takes from its own waiting tasks, so the built-in that takes a task is the one start it has,
+// put on with one press wherever the picked role starts nowhere (`AMB-D-1123`).
+describe("the press that gives a role its start", () => {
+  const alice = { id: 1, name: "Alice", headcount: 1, passes: [], entryPlacementId: 40 };
+  const bob = { id: 2, name: "Bob", headcount: 1, passes: [] };
+  async function open(roles: AutomationDetailDto["roles"]) {
+    hoisted.automations = [card()];
+    hoisted.detail = detail({ roles });
+    hoisted.check = { ready: false, blocks: [] };
+    hoisted.startRole.mockClear();
+    hoisted.startRole.mockResolvedValue([41]);
+    await render();
+    await act(async () => { button("Morning round").click(); });
+  }
+  const offered = () => buttons().some((b) => b.textContent === roleStart());
+
+  it("puts the built-in that takes a task on as the picked role's start, without opening the library", async () => {
+    await open([bob]);
+    await act(async () => { button(roleStart()).click(); });
+    expect(hoisted.startRole).toHaveBeenCalledWith(2);
+    expect(container.querySelector(".actpanel")).toBeNull();
+  });
+
+  it("is not offered for a role that starts somewhere", async () => {
+    await open([alice]);
+    expect(offered()).toBe(false);
+  });
+
+  // A role added is picked once it is in, and starts nowhere: the press follows the pick, not
+  // whether the picture has anything on it.
+  it("follows the role picked, on a picture that already has placements", async () => {
+    await open([alice, bob]);
+    expect(offered()).toBe(false);
+    await act(async () => { button("Bob").click(); });
+    expect(offered()).toBe(true);
+    await act(async () => { button("Alice").click(); });
+    expect(offered()).toBe(false);
+  });
+
+  it("says what core refused under the press", async () => {
+    await open([bob]);
+    hoisted.startRole.mockRejectedValueOnce(new Error("role 'Bob' already starts at placement '40'"));
+    await act(async () => {
+      button(roleStart()).click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(container.querySelector(".actbuild__canvas [role='alert']")?.textContent).toContain("already starts");
   });
 });
 
@@ -992,9 +1036,9 @@ describe("an automation a run is going on (AMB-D-1015)", () => {
     expect(hoisted.stop).not.toHaveBeenCalled();
   });
 
-  it("offers placing the first action, and opens its own fields to be written", async () => {
-    await openHeld();
-    expect(buttons().some((b) => b.textContent === t("auto.pic.first"))).toBe(true);
+  it("offers a role that starts nowhere its start, and opens its own fields to be written", async () => {
+    await openHeld([run], { roles: [{ id: 1, name: "Alice", headcount: 1, passes: [] }] });
+    expect(buttons().some((b) => b.textContent === roleStart())).toBe(true);
     await act(async () => { button(t("auto.build.edit")).click(); });
     expect(container.querySelector(".actpanel__body")).not.toBeNull();
     expect(container.querySelector("fieldset:disabled")).toBeNull();
@@ -1007,8 +1051,8 @@ describe("an automation a run is going on (AMB-D-1015)", () => {
   });
 
   it("says nothing of runs while none is going", async () => {
-    await openHeld([]);
+    await openHeld([], { roles: [{ id: 1, name: "Alice", headcount: 1, passes: [] }] });
     expect(container.querySelector(".autoheld")).toBeNull();
-    expect(buttons().some((b) => b.textContent === t("auto.pic.first"))).toBe(true);
+    expect(buttons().some((b) => b.textContent === roleStart())).toBe(true);
   });
 });

@@ -451,22 +451,10 @@ fn builtin_port_dto(port: &automation_builtin::BuiltinPort) -> AutomationPortDto
     AutomationPortDto { name: port.name.to_string(), kind: port.kind.as_str(), required: port.required }
 }
 
-/// **Put a built-in on a picture**, standing on its own. Its library action is written from the
-/// definition the first time any automation places it
-/// ([`amenbo_core::ops::automation_builtin::action_on`]). `axis` is the axis the one that splits by an
-/// axis splits by, and nothing for any other (`AMB-D-973`).
-#[tauri::command]
-pub fn automation_builtin_place(automation_id: i64, key: String, axis: Option<i64>) -> Result<WriteAck, CmdError> {
-    with_store_mut(|store| {
-        store.automation_builtin_place(automation_id, &key, axis)?;
-        Ok(())
-    })?;
-    Ok(WriteAck::new(&["automations", "automationActions"]))
-}
-
 /// **Put a built-in in on a line** ([`automation_step_insert`] for a built-in) — the way out that was
 /// pressed comes to point at the new placement, in one transaction with the library action written
-/// where none was yet. `axis` as for [`automation_builtin_place`].
+/// where none was yet. `axis` is the axis the one that splits by an axis splits by, and nothing for any
+/// other (`AMB-D-973`).
 #[tauri::command]
 pub fn automation_builtin_insert(edge_id: i64, key: String, axis: Option<i64>) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
@@ -477,7 +465,7 @@ pub fn automation_builtin_insert(edge_id: i64, key: String, axis: Option<i64>) -
 }
 
 /// **Put a built-in on after a way out that says nothing yet** — [`automation_builtin_insert`] for a
-/// way out with no line to press. `axis` as for [`automation_builtin_place`].
+/// way out with no line to press. `axis` as for [`automation_builtin_insert`].
 #[tauri::command]
 pub fn automation_builtin_insert_at_exit(
     from_id: i64,
@@ -1422,6 +1410,17 @@ fn write_or_clear<T>(value: Option<T>, clear: Option<bool>) -> Option<Option<T>>
         (_, Some(value)) => Some(Some(value)),
         _ => None,
     }
+}
+
+/// **Give a role that starts nowhere its start: the built-in that takes a task**
+/// ([`amenbo_core::ops::automation::role_start_take_task`], `AMB-D-1123`). Each role takes from its
+/// own waiting tasks, so that one built-in is the only start a role has. It is put on the picture and
+/// made the role's start in one transaction, and its id comes back for the picture to mark. A role
+/// that already starts somewhere is core's refusal, passed on.
+#[tauri::command]
+pub fn automation_role_start_take_task(id: i64) -> Result<WriteAck, CmdError> {
+    let started = with_store_mut(|store| Ok(store.automation_role_start_take_task(id)?))?;
+    Ok(WriteAck::new(&["automations", "automationActions"]).placed(Some(&started.placement)))
 }
 
 /// **Reorder a role among its automation's roles** ([`amenbo_core::ops::automation::role_move`]).
@@ -3896,6 +3895,45 @@ mod tests {
         automation_role_remove(alice).unwrap();
         assert!(automation_role_remove(born).is_err(), "the last role is not taken out");
         assert_eq!(names(&roles()), ["Devの係"]);
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// **A role that starts nowhere is given the built-in that takes a task as its start**, and the
+    /// write names that placement for the picture to mark. A second press on the same role is core's
+    /// refusal, passed on, and puts nothing more on the picture.
+    #[test]
+    fn a_role_that_starts_nowhere_starts_at_the_built_in_that_takes_a_task() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("automation-role-start");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        let automation_id = {
+            let mut store = amenbo_core::Store::open().unwrap();
+            let project = store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "Roles".into(),
+                    view: amenbo_core::model::View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap();
+            store.automation_add(project.id, NewAutomation { name: "Dev".into(), ..Default::default() }).unwrap().id
+        };
+        automation_role_add(automation_id, "Alice".into(), None, None, None, None, None).unwrap();
+        let detail = || automation_detail(automation_id).unwrap().expect("the automation");
+        let alice = detail().roles.iter().find(|r| r.name == "Alice").expect("Alice").id;
+        assert_eq!(detail().roles.iter().find(|r| r.id == alice).unwrap().entry_placement_id, None);
+
+        let ack = automation_role_start_take_task(alice).unwrap();
+        let after = detail();
+        let start = after.roles.iter().find(|r| r.id == alice).unwrap().entry_placement_id;
+        assert_eq!(ack.placements.len(), 1, "the placement put on comes back");
+        assert_eq!(start, Some(ack.placements[0]), "the role starts at it");
+        let placed = after.placements.iter().find(|p| p.id == ack.placements[0]).expect("on the picture");
+        assert_eq!(placed.builtin.as_deref(), Some("take_task"));
+
+        assert!(automation_role_start_take_task(alice).is_err(), "a role that starts somewhere is refused");
+        assert_eq!(detail().placements.len(), after.placements.len(), "and nothing more is put on");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

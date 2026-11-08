@@ -1434,7 +1434,6 @@ const ui = {
   "auto.step.unwired": "nothing reaches it",
   "auto.step.joined": "Joined to the output “{name}” of step {no}, {step}",
   "auto.step.joinedUndo": "Undo",
-  "auto.step.atLaunch": "handed over as the run starts",
   "auto.step.exits": "Exits",
   "auto.step.modelDefault": "the agent's own default",
   "auto.step.notHere": "{agent} — not on this machine",
@@ -2121,7 +2120,6 @@ const err: Partial<Record<ErrorCode, string>> = {
   not_ready_automation_action_empty: "the action “{action}” placed on it has no start step",
   not_ready_automation_entry_takes_no_task:
     "{step}: the start step takes no task, so every step after it would be about nothing",
-  not_ready_automation_back_to_entry: "{step}: “{exit}” goes back to the start “{to}”, which is handed what to file only when the run starts",
   not_ready_automation_open_exit: "{step}: nothing is set to happen after “{exit}”",
   not_ready_automation_unwired_input: "{step}: nothing reaches the required input “{port}”",
   not_ready_automation_unanswered_cfg: "{step}: the required setting “{cfg}” is unanswered",

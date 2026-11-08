@@ -1899,11 +1899,11 @@ pub enum AutomationCmd {
         #[arg(long, conflicts_with = "failures_to")]
         no_failures_to: bool,
     },
-    /// Add a trigger to an automation, after the ones it has: every so many minutes, whenever none of
-    /// its runs is under way, whenever few enough tasks match a filter, or whenever a program says so,
-    /// it files a task — the one written here, the one a file says, or the one a program writes — and
-    /// starts a run of the automation on it, with nobody pressing start (the entry has to be
-    /// make_task). With --trigger instead of the automation, write that one trigger afresh, take it
+    /// Add a trigger to an automation, after the ones it has: every so many minutes, whenever no seat
+    /// of its role is taken, whenever few enough tasks match a filter, or whenever a program says so,
+    /// it files a task under its role — the one written here, the one a file says, or the one a program
+    /// writes — and starts a run of the automation in that role's seat to take it, with nobody pressing
+    /// start. With --trigger instead of the automation, write that one trigger afresh, take it
     /// away with --rm, or switch it on and off with --on and --off. Only the app runs triggers
     Trigger {
         /// automation id, to add a trigger to it
@@ -2613,24 +2613,22 @@ pub enum AutomationCmd {
     /// Start an automation: check its newest saved version, copy it into a run, and start it — refused
     /// for an automation never saved (`automation save`); what is written since is not used. The tasks a
     /// step works on and the folder it runs in are the automation's own answers, given while it was
-    /// built. Only an entry of the make_task built-in reads what is handed over here: the `--title`,
-    /// `--notes` and `--dim` of the task it files, and each `--file`, attached to that task.
-    /// take_task and fetch read nothing, and handing an entry what it does not read is refused
+    /// built. What is handed over here is filed as a task under the automation's first role before the
+    /// run starts: the `--title`, `--notes` and `--dim` of the task, and each `--file`, attached to it
     Start {
         /// automation id
         id: i64,
-        /// a file to attach to the task the make_task entry files (repeat for several)
+        /// a file to attach to the task filed before the run (repeat for several)
         #[arg(long = "file", value_name = "PATH")]
         files: Vec<String>,
-        /// the title of the task an entry that files one (make_task) files — required there
+        /// the title of the task filed before the run — required with --notes, --dim or --file
         #[arg(long, value_name = "TITLE")]
         title: Option<String>,
         /// that task's notes, as Markdown. Pass `-` to read them from stdin
         #[arg(long, value_name = "NOTES")]
         notes: Option<String>,
-        /// classify that task as `<axis>=<value>`, by name (repeat for several axes). Open to the axes
-        /// the built-in offers the step before it, and to every axis the project requires that its
-        /// placement leaves open — a value on each of those is required
+        /// classify that task as `<axis>=<value>`, by name (repeat for several axes). Every axis the
+        /// project requires needs a value
         #[arg(long = "dim", value_name = "AXIS=VALUE")]
         dim: Vec<String>,
     },
@@ -2650,7 +2648,7 @@ pub enum AutomationCmd {
     TestRun {
         /// automation id
         id: i64,
-        /// the title of the task an entry that files one (make_task) files — required there
+        /// the title of the task filed before the walk — required with --notes or --dim
         #[arg(long, value_name = "TITLE")]
         title: Option<String>,
         /// that task's notes, as Markdown. Pass `-` to read them from stdin

@@ -1453,8 +1453,8 @@ fn not_from_its_own_step(store: &Store, run: i64, verb: &str) -> Result<(), CliE
 ///
 /// `None` reaches the launch check as "not asked", which leaves the agent check unmade rather than
 /// failing every step on a machine nobody has probed.
-/// `--dim <axis>=<value>`, split here and looked up by the launch, which answers for the axes against
-/// where the entry is placed (`amenbo_core::ops::automation_builtin_make`).
+/// `--dim <axis>=<value>`, split here and looked up by the launch, which classifies the task it files
+/// before the run with them (`amenbo_core::ops::automation_builtin_make::launch_values`).
 fn classification_of(dim: &[String]) -> Result<Vec<(String, String)>, CliError> {
     dim.iter()
         .map(|pair| match pair.split_once('=') {
@@ -1652,7 +1652,7 @@ fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
     let says = trigger.script.as_ref().map(|s| format!("\"{}\" says so", s.program));
     let (when, next) = match trigger.when {
         TriggerWhen::Every { minutes } => (format!("every {minutes} minute(s)"), "next at"),
-        TriggerWhen::Idle => ("whenever none of its runs is under way".to_string(), "not before"),
+        TriggerWhen::Idle => ("whenever no seat of its role is taken".to_string(), "not before"),
         TriggerWhen::Tasks | TriggerWhen::Script => ("whenever".to_string(), "not before"),
     };
     let first: Vec<String> = fewer.into_iter().chain(says).collect();

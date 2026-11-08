@@ -691,13 +691,12 @@ export type AutomationHeldByRecordDto = { id: number, title: string, count: numb
 export type AutomationHeldByValueDto = { dimensionId: number, axis: string, value: string, count: number, };
 
 /**
- * **What a launch asks the person starting it for** — what the entry reads at launch
- * ([`amenbo_core::ops::automation_run::LaunchAsks`]), so the dialog every press opens asks for that
- * and nothing else (`AMB-D-970`).
+ * **What a launch asks the person starting it for** — the dialog every press opens asks for that and
+ * nothing else (`AMB-D-970`).
  *
- * `reads` is `"task"` for the built-in that files a task (a title, notes, a value on each of `axes`
- * and files, `AMB-D-981`), and `"nothing"` for any other entry. `axes` is empty unless `reads` is
- * `"task"`.
+ * `reads` is `"nothing"`: work is handed to an automation as a task with a role, filed before a run
+ * rather than read by its entry at launch (`AMB-D-1123`), so `axes` is empty. `"task"` (a title, notes,
+ * a value on each of `axes` and files, `AMB-D-981`) is no longer answered.
  */
 export type AutomationLaunchAsksDto = { reads: "task" | "nothing", axes: Array<AutomationLaunchAxisDto>, };
 

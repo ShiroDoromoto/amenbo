@@ -79,11 +79,12 @@
 // automation was ready and the press then refuse it (`AMB-T-5272`).
 //
 // **A closed workspace is not on the list.** It is not about the definition and stops being true the
-// moment a window opens, so the press refuses it — before its dialog asks what to hand over, with the
-// way to the workspace beside the line (`../components/StartAutomation`, `AMB-T-5590`) — rather than
-// the build screen drawing it among things somebody has to go and fix. Core refuses it as well
-// (`amenbo_core::ops::automation_run::launch`), for one that closes while the dialog is up. Whether it
-// is standing is handed down from the shell, which is the one place that knows which window holds it.
+// moment a window opens, so the press refuses it — before the launch is sent, with the way to the
+// workspace beside the line (`../components/StartAutomation`, `AMB-T-5590`) — rather than the build
+// screen drawing it among things somebody has to go and fix. Core refuses it as well
+// (`amenbo_core::ops::automation_run::launch`), for one that closes while the launch is on its way.
+// Whether it is standing is handed down from the shell, which is the one place that knows which
+// window holds it.
 //
 // **A test run is stepped through beside the picture** (`./AutomationTestPane`, `AMB-T-5804`). Its
 // press stands beside the start, held down by the same check, since core refuses a test run where it
@@ -308,7 +309,7 @@ export function AutomationBuildScreen({
   const check = useLaunchCheck(id, projectId, folders.live.map((one) => one.path));
   // The press itself is the one every entrance makes (`../components/StartAutomation`): this screen
   // is where an automation is built, not a third place for a launch to behave differently.
-  const { start, refused, starting, handing } = useAutomationStart(projectId, workspaceOpen, onGoToRun);
+  const { start, refused, starting } = useAutomationStart(projectId, workspaceOpen, onGoToRun);
   const test = useAutomationTestRun(projectId, () => setShowing({ kind: "test" }));
   const testing = showing?.kind === "test" ? test.testing : null;
 
@@ -480,13 +481,12 @@ export function AutomationBuildScreen({
             type="button"
             className="btn btn--primary"
             disabled={check?.ready !== true || starting || projectId === null}
-            onClick={() => start(id, automation?.name ?? "", folders.live.map((one) => one.path))}
+            onClick={() => void start(id, folders.live.map((one) => one.path))}
           >
             {t("auto.start")}
           </button>
         </span>
       </div>
-      {handing}
       {test.handing}
 
       {(saveBlocks.length > 0 ||

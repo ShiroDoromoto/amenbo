@@ -979,7 +979,7 @@ export const pl: Translation = {
     "auto.build.carrierAgent": "Agent",
     "auto.build.carrierModel": "Model",
     "auto.build.carrierByStep": "Nadpisane przez krok",
-    "auto.build.carrierHint": "● oznacza ustawienie nadpisane przez krok. Kolejność ustalania: to, co wskazuje krok, potem domyślne roli, potem domyślne Amenbo.",
+    "auto.build.carrierHint": "● oznacza ustawienie nadpisane przez krok. Kolejność ustalania: to, co wskazuje krok, potem domyślne roli, potem domyślne Amenbo ({agent} / {model}).",
     "auto.trigger.title": "Wyzwalacz",
     "auto.trigger.lead": "Tworzy zadanie, gdy nikogo nie ma. To, czy je utworzyć i co w nim jest, rozstrzyga się mechanicznie, bez AI. AI pracuje dopiero w przebiegu, który uruchamia utworzone zadanie.",
     "auto.trigger.name": "Nazwa wyzwalacza",

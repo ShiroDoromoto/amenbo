@@ -974,7 +974,7 @@ export const fr: Translation = {
     "auto.build.carrierAgent": "Agent",
     "auto.build.carrierModel": "Modèle",
     "auto.build.carrierByStep": "Remplacé par l’étape",
-    "auto.build.carrierHint": "● marque un réglage que l’étape remplace. L’ordre de décision est : ce que précise l’étape, puis le défaut du rôle, puis le défaut d’Amenbo.",
+    "auto.build.carrierHint": "● marque un réglage que l’étape remplace. L’ordre de décision est : ce que précise l’étape, puis le défaut du rôle, puis le défaut d’Amenbo ({agent} / {model}).",
     "auto.trigger.title": "Déclencheur",
     "auto.trigger.lead": "Crée une tâche sans que personne soit là. Faut-il en créer une, et que dit-elle : les deux sont décidés mécaniquement, sans IA. L’IA ne travaille que dans l’exécution que lance la tâche créée.",
     "auto.trigger.name": "Nom du déclencheur",

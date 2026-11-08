@@ -963,7 +963,7 @@ export const vi: Translation = {
     "auto.build.carrierAgent": "Tác nhân",
     "auto.build.carrierModel": "Mô hình",
     "auto.build.carrierByStep": "Bước đã ghi đè",
-    "auto.build.carrierHint": "● đánh dấu thiết lập mà bước ghi đè. Thứ tự quyết định: chỉ định của bước, rồi mặc định của vai trò, rồi mặc định của Amenbo.",
+    "auto.build.carrierHint": "● đánh dấu thiết lập mà bước ghi đè. Thứ tự quyết định: chỉ định của bước, rồi mặc định của vai trò, rồi mặc định của Amenbo ({agent} / {model}).",
     "auto.trigger.title": "Trình kích hoạt",
     "auto.trigger.lead": "Tạo công việc khi không có ai. Có tạo hay không và nội dung ra sao đều được quyết định một cách máy móc, không dùng AI. AI chỉ làm việc trong lượt chạy mà công việc được tạo khởi động.",
     "auto.trigger.name": "Tên trình kích hoạt",

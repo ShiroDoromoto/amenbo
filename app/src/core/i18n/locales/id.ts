@@ -963,7 +963,7 @@ export const id: Translation = {
     "auto.build.carrierAgent": "Agen",
     "auto.build.carrierModel": "Model",
     "auto.build.carrierByStep": "Ditimpa oleh langkah",
-    "auto.build.carrierHint": "● menandai pengaturan yang ditimpa oleh langkah. Urutan penentuannya: yang ditentukan langkah, lalu bawaan peran, lalu bawaan Amenbo.",
+    "auto.build.carrierHint": "● menandai pengaturan yang ditimpa oleh langkah. Urutan penentuannya: yang ditentukan langkah, lalu bawaan peran, lalu bawaan Amenbo ({agent} / {model}).",
     "auto.trigger.title": "Pemicu",
     "auto.trigger.lead": "Membuat tugas tanpa ada orang. Apakah tugas dibuat dan apa isinya diputuskan secara mekanis, tanpa AI. AI hanya bekerja di dalam proses yang dimulai oleh tugas yang dibuat.",
     "auto.trigger.name": "Nama pemicu",

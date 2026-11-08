@@ -601,7 +601,13 @@ unsaved: boolean,
  * **Why a save would be refused** — the launch check asked the way the save asks it, without this
  * machine's agents and models ([`amenbo_core::ops::automation::save`]). Empty when it would pass.
  */
-saveBlocks: Array<AutomationLaunchBlockDto>, };
+saveBlocks: Array<AutomationLaunchBlockDto>, 
+/**
+ * **Amenbo's own default agent** — what a step falls back to where neither it nor its role chose
+ * one (`AMB-D-960`), by its id. It has no model: a step that falls back to it runs on the agent's
+ * own default (`AMB-D-865`). Absent while nobody has chosen one.
+ */
+defaultAgent?: string, };
 
 /**
  * **What happens after a way out is taken.**

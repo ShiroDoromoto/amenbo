@@ -964,7 +964,7 @@ export const zhHant: Translation = {
     "auto.build.carrierAgent": "代理",
     "auto.build.carrierModel": "模型",
     "auto.build.carrierByStep": "由步驟覆寫",
-    "auto.build.carrierHint": "● 表示步驟覆寫的設定。決定順序為：步驟的指定 → 角色的預設 → Amenbo 整體的預設。",
+    "auto.build.carrierHint": "● 表示步驟覆寫的設定。決定順序為：步驟的指定 → 角色的預設 → Amenbo 整體的預設（{agent} / {model}）。",
     "auto.trigger.title": "觸發器",
     "auto.trigger.lead": "在無人時建立任務。是否建立、任務寫什麼，都依規則機械決定，不使用 AI。AI 只在所建立任務啟動的執行中工作。",
     "auto.trigger.name": "觸發器名稱",

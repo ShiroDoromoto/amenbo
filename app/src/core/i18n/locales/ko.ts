@@ -959,7 +959,7 @@ export const ko: Translation = {
     "auto.build.carrierAgent": "에이전트",
     "auto.build.carrierModel": "모델",
     "auto.build.carrierByStep": "단계에서 덮어씀",
-    "auto.build.carrierHint": "● 는 단계에서 덮어쓴 설정입니다. 정해지는 순서는 「단계의 지정 → 역할의 기본 → Amenbo 전체의 기본」입니다.",
+    "auto.build.carrierHint": "● 는 단계에서 덮어쓴 설정입니다. 정해지는 순서는 「단계의 지정 → 역할의 기본 → Amenbo 전체의 기본({agent} / {model})」입니다.",
     "auto.trigger.title": "트리거",
     "auto.trigger.lead": "사람이 없어도 작업을 등록합니다. 등록할지와 작업 내용은 모두 기계적으로 정해지며 AI를 쓰지 않습니다. AI는 등록된 작업이 시작하는 실행 안에서만 일합니다.",
     "auto.trigger.name": "트리거 이름",

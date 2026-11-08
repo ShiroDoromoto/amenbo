@@ -22,7 +22,7 @@ vi.mock("../core/boundFolders", () => ({
 // `inTauri` is false here, so the machine is not asked which agents it has: an agent is named by its id.
 vi.mock("../core/ipc", () => ({ invoke: () => Promise.resolve(null) }));
 
-import { t } from "../core/i18n";
+import { t, tf } from "../core/i18n";
 import { automationGraph } from "./automationLayout";
 import { AutomationRoleCarriers, roleCarrierRows } from "./AutomationRoleCarriers";
 
@@ -144,6 +144,7 @@ function detail(): AutomationDetailDto {
     heldBy: [],
     unsaved: false,
     saveBlocks: [],
+    defaultAgent: "codex",
   };
 }
 
@@ -206,7 +207,18 @@ describe("the table", () => {
       t("auto.build.carrierModel"),
     ]);
     expect(container.querySelector(".autocarriers__mark")?.getAttribute("title")).toBe(t("auto.build.carrierByStep"));
-    expect(container.textContent).toContain(t("auto.build.carrierHint"));
+    expect(container.querySelector(".autocarriers__hint")?.textContent).toBe(
+      tf("auto.build.carrierHint", { agent: "codex", model: default_ }),
+    );
+  });
+
+  it("names Amenbo's own default agent as unset while nobody has chosen one", async () => {
+    const automation = detail();
+    delete automation.defaultAgent;
+    await draw(automation, 1);
+    expect(container.querySelector(".autocarriers__hint")?.textContent).toBe(
+      tf("auto.build.carrierHint", { agent: t("auto.pic.stepUnset"), model: t("auto.step.modelDefault") }),
+    );
   });
 
   it("is not drawn for a round with no step an agent carries out", async () => {

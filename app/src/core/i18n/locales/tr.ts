@@ -962,7 +962,7 @@ export const tr: Translation = {
     "auto.build.carrierAgent": "Ajan",
     "auto.build.carrierModel": "Model",
     "auto.build.carrierByStep": "Adım tarafından geçersiz kılındı",
-    "auto.build.carrierHint": "● adımın geçersiz kıldığı bir ayarı gösterir. Karar sırası: adımın belirttiği, sonra rolün varsayılanı, sonra Amenbo’nun varsayılanı.",
+    "auto.build.carrierHint": "● adımın geçersiz kıldığı bir ayarı gösterir. Karar sırası: adımın belirttiği, sonra rolün varsayılanı, sonra Amenbo’nun varsayılanı ({agent} / {model}).",
     "auto.trigger.title": "Tetikleyici",
     "auto.trigger.lead": "Kimse yokken bir görev açar. Açılıp açılmayacağı ve içinde ne yazacağı yapay zekâ olmadan, mekanik olarak belirlenir. Yapay zekâ yalnızca açılan görevin başlattığı çalıştırmada çalışır.",
     "auto.trigger.name": "Tetikleyicinin adı",

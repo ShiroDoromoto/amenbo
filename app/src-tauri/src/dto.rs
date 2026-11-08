@@ -3574,6 +3574,12 @@ pub struct AutomationDetailDto {
     /// **Why a save would be refused** — the launch check asked the way the save asks it, without this
     /// machine's agents and models ([`amenbo_core::ops::automation::save`]). Empty when it would pass.
     pub(crate) save_blocks: Vec<AutomationLaunchBlockDto>,
+    /// **Amenbo's own default agent** — what a step falls back to where neither it nor its role chose
+    /// one (`AMB-D-960`), by its id. It has no model: a step that falls back to it runs on the agent's
+    /// own default (`AMB-D-865`). Absent while nobody has chosen one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) default_agent: Option<String>,
 }
 
 /// **One role of an automation**: who works the placements its round reaches, and the agent their

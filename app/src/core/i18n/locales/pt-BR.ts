@@ -975,7 +975,7 @@ export const ptBR: Translation = {
     "auto.build.carrierAgent": "Agente",
     "auto.build.carrierModel": "Modelo",
     "auto.build.carrierByStep": "Substituído pela etapa",
-    "auto.build.carrierHint": "● marca uma configuração que a etapa substitui. A ordem de decisão é: o que a etapa indica, depois o padrão do papel, depois o padrão do Amenbo.",
+    "auto.build.carrierHint": "● marca uma configuração que a etapa substitui. A ordem de decisão é: o que a etapa indica, depois o padrão do papel, depois o padrão do Amenbo ({agent} / {model}).",
     "auto.trigger.title": "Gatilho",
     "auto.trigger.lead": "Cria uma tarefa sem ninguém por perto. Se criar e o que ela diz são decididos de forma mecânica, sem IA. A IA só trabalha dentro da execução que a tarefa criada inicia.",
     "auto.trigger.name": "Nome do gatilho",

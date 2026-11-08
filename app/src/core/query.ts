@@ -162,6 +162,9 @@ export const SCOPE_WATCHERS: Readonly<Record<string, readonly string[]>> = {
   // Every one of those reasons — a value closed, a blocker finished, a decision settled, a start day,
   // a creation ended — folds to "tasks"; the run moving on is what ends the wait.
   heldBack: ["tasks", "automationRuns"],
+  // One launch as its pane draws it: its runs and its roles' headcounts move with the runs, the tasks
+  // waiting for each role with the tasks, and a role's name and icon with the definition.
+  launchState: ["automationRuns", "tasks", "automations"],
   // The library the "actions" tab draws. It moves on two kinds of row — the action itself, and a
   // step being pointed at one or away from one, which is what the count beside each action is —
   // and both fold to this scope.

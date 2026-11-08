@@ -4684,6 +4684,86 @@ pub struct AutomationRunIncidentDto {
     pub(crate) person: bool,
 }
 
+/// **One launch as its pane draws it, read at once** ([`amenbo_core::ops::automation_run::launch_state`])
+/// — the launch, the automation it is of, and every role of it with its seats and the tasks waiting for
+/// it. One pane is drawn per launch.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationLaunchStateDto {
+    #[ts(type = "number")]
+    pub(crate) launch: i64,
+    #[ts(type = "number")]
+    pub(crate) project: i64,
+    #[ts(type = "number")]
+    pub(crate) automation: i64,
+    /// The automation's name as it stands now.
+    pub(crate) automation_name: String,
+    /// **Where the launch stands** — `paused` once every run under way in it has been asked to pause
+    /// before its next task (`AMB-D-1019`). Read apart from each role's [`AutomationLaunchRoleStateDto::held`]:
+    /// a paused launch takes no task in any role, held or not.
+    #[ts(type = "\"running\" | \"paused\" | \"ended\"")]
+    pub(crate) status: &'static str,
+    /// The most a role's headcount may be set to for the launch (`AMB-D-1124`).
+    pub(crate) max_headcount: u32,
+    /// Every role the newest saved version holds, in the order they are defined in — those with no task
+    /// under way or waiting among them.
+    pub(crate) roles: Vec<AutomationLaunchRoleStateDto>,
+}
+
+/// **One role of a launch** ([`amenbo_core::ops::automation_run::LaunchRoleState`]): what it is, how many
+/// are in it, the runs in its seats, and the tasks waiting for it to take.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationLaunchRoleStateDto {
+    #[ts(type = "number")]
+    pub(crate) role: i64,
+    pub(crate) name: String,
+    /// The icon it is drawn with, by the name the GUI knows it under. Absent for none chosen.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) icon: Option<String>,
+    /// The headcount the newest saved version gives it — what the next launch copies.
+    pub(crate) defined: u32,
+    /// The headcount this launch holds for it. `defined` once the launch has ended.
+    pub(crate) headcount: u32,
+    /// How many of its runs are under way, a paused one among them. None once the launch has ended.
+    #[ts(type = "number")]
+    pub(crate) under_way: usize,
+    /// **How many seats are still to go** after the headcount was lowered on the launch: each goes as
+    /// its run finishes its task.
+    pub(crate) to_let_go: u32,
+    /// **Whether the role is stopped taking tasks for the launch** — its runs finish the task they are
+    /// on and take no new one.
+    pub(crate) held: bool,
+    /// **The runs in its seats**, oldest first — one card for each of [`Self::under_way`].
+    pub(crate) runs: Vec<AutomationRunCardDto>,
+    /// How many of its tasks are waiting to be taken — not started, ready, and matching the filter of
+    /// the automation's "take a task" entry. None where no round of it starts there.
+    #[ts(type = "number")]
+    pub(crate) waiting: usize,
+    /// The first three of them, in the order the role takes them in.
+    pub(crate) first_waiting: Vec<AutomationWaitingTaskDto>,
+}
+
+/// **One task waiting for a role to take it** ([`amenbo_core::ops::automation_run::WaitingTask`]).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationWaitingTaskDto {
+    #[ts(type = "number")]
+    pub(crate) task: i64,
+    /// The task's reference.
+    pub(crate) task_ref: String,
+    pub(crate) title: String,
+    /// **The role it was passed on from**, by its id. Absent where no round passed it on, and where
+    /// that round had no role or the role has since been taken out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) from_role: Option<i64>,
+}
+
 /// **One failed round's task waiting in a launch for the role it was filed to**
 /// ([`amenbo_core::ops::automation_run::LaunchIncident`]) — what makes that role's card in the run's
 /// pane read "an incident has reached it", with or without a round of the role under way. A role's

@@ -1176,7 +1176,6 @@ export const ptBR: Translation = {
     "auto.make.go": "Criar e abrir a ação",
     "auto.step.none": "Toque numa colocação do desenho e o conteúdo aparece aqui",
     "auto.step.name": "Nome",
-    "auto.step.entryReplaceConfirm": "Isso muda onde uma execução começa. O que acontece depois do início atual e os repasses que saem dele são removidos. Os posicionamentos seguintes continuam; conecte-os de novo em “O que acontece depois”.",
     "auto.step.next": "O que acontece depois",
     "auto.step.nextNothing": "Ainda não foi definido",
     "auto.step.placeNext": "+ Colocar a próxima ação aqui",

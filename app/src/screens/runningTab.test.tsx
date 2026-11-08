@@ -81,10 +81,10 @@ function run(over: Partial<AutomationRunCardDto> = {}): AutomationRunCardDto {
 function picture(): unknown {
   const spot = (id: number, name: string) => ({ id, name, exits: [{ id: id * 10, name: "done", outputs: [] }], inputs: [] });
   return {
-    entryPlacementId: 20,
     placements: [spot(20, "Groundwork"), spot(21, "Build")],
     edges: [{ id: 1, fromId: 20, exitId: 200, ends: "go", toId: 21 }],
     wires: [],
+    roles: [],
   };
 }
 

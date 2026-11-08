@@ -211,8 +211,16 @@ export type PicPass = { role: AutomationRoleDto; task?: string; depends: boolean
 
 /** One picture, whichever of the two it is: the boxes, the lines, and the box a run opens first. */
 export type PicGraph = {
-  /** The box a run opens first. Absent while the definition is still being built. */
+  /**
+   * The box a run opens first: where a role's round starts, or the step an action opens first. Absent
+   * while it is still being built, and on an automation's whole picture, where each role starts at its own.
+   */
   entryId?: number;
+  /**
+   * Where each role's round starts, on an automation's whole picture — a run opens at any of them, so
+   * what reaches an input is walked from all of them as core does. Absent on any other picture.
+   */
+  starts?: readonly number[];
   boxes: readonly PicBox[];
   edges: readonly AutomationEdgeDto[];
   wires: readonly AutomationWireDto[];
@@ -245,7 +253,7 @@ export function automationGraph(
 ): PicGraph | null {
   if (detail === null) return null;
   const whole: PicGraph = {
-    entryId: detail.entryPlacementId,
+    starts: detail.roles.flatMap((one) => (one.entryPlacementId === undefined ? [] : [one.entryPlacementId])),
     boxes: detail.placements,
     edges: detail.edges,
     wires: detail.wires,
@@ -258,29 +266,13 @@ export function automationGraph(
     const at = detail.placements.find((one) => one.id === placementId);
     return detail.roles.find((one) => one.id === at?.roleId)?.name;
   };
-  // The boxes on no role the automation's start reaches before any role takes the task — the
-  // built-in it starts with, and whatever stands after it on no round.
-  const onNoRole = (placementId: number) =>
-    detail.placements.find((one) => one.id === placementId)?.roleId === undefined;
-  const beforeAnyRole = new Set<number>();
-  const queue = detail.entryPlacementId !== undefined && onNoRole(detail.entryPlacementId) ? [detail.entryPlacementId] : [];
-  while (queue.length > 0) {
-    const at = queue.shift()!;
-    if (beforeAnyRole.has(at)) continue;
-    beforeAnyRole.add(at);
-    for (const edge of detail.edges) {
-      if (edge.ends === "go" && edge.fromId === at && edge.toId !== undefined && onNoRole(edge.toId)) queue.push(edge.toId);
-    }
-  }
   // Into the round from a box on no part of it: from the role that box is on, or — where it is on no
-  // round and not reached from the start — from the action standing there. A line from the start is
-  // a task a person filed, which is said where nothing else hands the round its task.
+  // round — from the action standing there.
   // The roles come first and the actions on no round after them, whatever order the edges stand in.
   const fromRoles: string[] = [];
   const fromActions: string[] = [];
   for (const edge of detail.edges) {
     if (edge.ends !== "go" || edge.toId === undefined || !inRound.has(edge.toId) || inRound.has(edge.fromId)) continue;
-    if (beforeAnyRole.has(edge.fromId)) continue;
     const byRole = roleName(edge.fromId);
     if (byRole !== undefined) fromRoles.push(byRole);
     else {
@@ -862,14 +854,14 @@ export function fed(graph: PicGraph, boxId: number, port: string): boolean {
 }
 
 /**
- * **What a run can come to before it first comes to `boxId`** — from the entry along the edges that go
- * on to a box, never passing through that one (`amenbo_core::ops::automation_run::reachable_without`).
+ * **What a run can come to before it first comes to `boxId`** — from the entry (on the whole picture,
+ * from where each role's round starts) along the edges that go on to a box, never passing through that
+ * one (`amenbo_core::ops::automation_run::reachable_without`).
  * The box itself is not among them.
  */
 function reachedBefore(graph: PicGraph, boxes: Map<number, PicBox>, boxId: number): Set<number> {
   const seen = new Set<number>();
-  if (graph.entryId === undefined || !boxes.has(graph.entryId)) return seen;
-  const queue = [graph.entryId];
+  const queue = (graph.entryId === undefined ? (graph.starts ?? []) : [graph.entryId]).filter((id) => boxes.has(id));
   while (queue.length > 0) {
     const id = queue.shift()!;
     if (id === boxId || seen.has(id)) continue;

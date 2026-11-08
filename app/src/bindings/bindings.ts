@@ -556,13 +556,9 @@ export type AutomationChosenAtDto = { "kind": "step" } | { "kind": "role", roleI
  * them.
  *
  * It is fetched whole rather than paged: an automation is tens of rows, and the build screen's
- * picture, its launch check and its panel all read the same walk from the entry.
+ * picture, its launch check and its panel all read the same walk from where each role starts.
  */
-export type AutomationDetailDto = { id: number, projectId: number, name: string, notes: string, 
-/**
- * The placement a run opens first. Absent while the automation is still being built.
- */
-entryPlacementId?: number, archived: boolean, 
+export type AutomationDetailDto = { id: number, projectId: number, name: string, notes: string, archived: boolean, 
 /**
  * **What files a task on its own and starts a run with it**, every one of the automation's
  * triggers in the order they are written in. Empty for an automation only a person starts.

@@ -1163,7 +1163,6 @@ export const tr: Translation = {
     "auto.make.go": "Oluştur ve eylemi aç",
     "auto.step.none": "Şemadaki bir yerleşime basın, içeriği burada görünsün",
     "auto.step.name": "Ad",
-    "auto.step.entryReplaceConfirm": "Bu, bir çalıştırmanın nereden başladığını değiştirir. Mevcut başlangıçtan sonra olanlar ve ondan çıkan aktarımlar silinir. Sonraki yerleşimler kalır; onları “Sonra ne olacak” altında yeniden bağlayın.",
     "auto.step.next": "Sonra ne olacak",
     "auto.step.nextNothing": "Henüz belirlenmedi",
     "auto.step.placeNext": "+ Sonraki eylemi buraya yerleştir",

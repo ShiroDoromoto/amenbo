@@ -3528,7 +3528,7 @@ pub struct AutomationBuiltinExitDto {
 /// them.
 ///
 /// It is fetched whole rather than paged: an automation is tens of rows, and the build screen's
-/// picture, its launch check and its panel all read the same walk from the entry.
+/// picture, its launch check and its panel all read the same walk from where each role starts.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -3539,10 +3539,6 @@ pub struct AutomationDetailDto {
     pub(crate) project_id: i64,
     pub(crate) name: String,
     pub(crate) notes: String,
-    /// The placement a run opens first. Absent while the automation is still being built.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional, type = "number")]
-    pub(crate) entry_placement_id: Option<i64>,
     pub(crate) archived: bool,
     /// **What files a task on its own and starts a run with it**, every one of the automation's
     /// triggers in the order they are written in. Empty for an automation only a person starts.

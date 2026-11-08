@@ -423,8 +423,8 @@ export function AutomationPicture({
       <p className="autopic__roundempty">{t("auto.pic.roundEmpty")}</p>
     ) : null;
   }
-  // Where a run opens: the automation's start, which on a role's picture need not be where the round starts.
-  const startId = round?.whole.entryId ?? graph?.entryId;
+  // Where a run opens: where the round starts, or on an action's picture the step it opens first.
+  const startId = graph?.entryId;
 
   const drawing = (
     <div className="autopic">

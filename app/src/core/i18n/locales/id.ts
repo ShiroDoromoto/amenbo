@@ -1164,7 +1164,6 @@ export const id: Translation = {
     "auto.make.go": "Buat lalu buka aksinya",
     "auto.step.none": "Tekan penempatan di gambar, isinya muncul di sini",
     "auto.step.name": "Nama",
-    "auto.step.entryReplaceConfirm": "Ini mengubah titik awal sebuah run. Apa yang terjadi setelah awal saat ini, dan serah terima yang keluar darinya, akan hilang. Penempatan setelahnya tetap ada; sambungkan lagi di “Apa yang terjadi setelahnya”.",
     "auto.step.next": "Apa yang terjadi setelahnya",
     "auto.step.nextNothing": "Belum ditentukan",
     "auto.step.placeNext": "+ Tempatkan aksi berikutnya di sini",

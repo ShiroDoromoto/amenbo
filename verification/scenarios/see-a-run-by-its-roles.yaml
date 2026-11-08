@@ -6,8 +6,8 @@
 # that seat's terminal, and "← Back to the roles" on the bar over the terminal is the one way back.
 #
 # The automation is the one pause-a-launch-after-the-current-task-from-its-pane walks, with its first
-# step made one that may wait for a person. Its one role, the one it was born with, starts nowhere and
-# the task names no role, so its round is one desk named after the automation.
+# step made one that may wait for a person. Its one role, the one it was born with, starts at the
+# built-in that takes a task and the task is that role's, so its round is one desk named after the role.
 id: see-a-run-by-its-roles
 title: A launch's pane shows its round as a desk, and turns to the terminal while a step may wait for a person
 description: >
@@ -42,7 +42,9 @@ given:
   - { type: action, domain: automation, op: action-entry, with: { target: after, step: wait } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: wait, exit_to: "" } }
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one watched by its roles" }, as: auto }
-  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task }, as: at_start }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_start }
+  # The task is the born role's, whose round starts there: a run takes only its role's tasks.
+  - { type: action, domain: task, op: update, with: { target: seed, role_of: auto } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: take }, as: at_take }
   - { type: action, domain: automation, op: agent-set, with: { target: at_take, step: claim, agent: claude-code } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: after }, as: at_after }
@@ -111,14 +113,14 @@ steps_gui:
       report: worked the task, and the pane goes back to its roles
 
   # The step after does not wait for a person, so the pane is back on its roles: a seat of the round's
-  # desk, named after the automation, says the step it went on to.
+  # desk, named after the role, says the step it went on to.
   - type: assert
     domain: automation
     op: run-roles
     with:
       target: run
       face: roles
-      desk: "SCENARIO SEED — one watched by its roles"
+      desk: "SCENARIO SEED — one watched by its rolesの係"
       step: wait
 
   # The seat pressed turns the pane to its terminal.
@@ -152,5 +154,5 @@ steps_gui:
     with:
       target: run
       face: roles
-      desk: "SCENARIO SEED — one watched by its roles"
+      desk: "SCENARIO SEED — one watched by its rolesの係"
       step: wait

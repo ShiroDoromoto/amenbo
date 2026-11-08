@@ -627,13 +627,13 @@ describe("the panel of one spot", () => {
     expect(nextFor(t("auto.pic.errorExit"))).toBeDefined();
   });
 
-  /// Core still makes the first thing placed where a whole run starts and refuses to take it off while
-  /// anything else is on the picture, so the press is left off there — and only there.
-  it("keeps the first spot on while anything else stands on the picture", async () => {
+  /// No spot is where a whole run starts, so every one can be taken off — the first
+  /// one placed too.
+  it("offers to take off any spot, the first one placed among them", async () => {
     const automation = detail({ placements: [spot(), spot({ id: 2, name: "Do it" })] });
     const presses = () => [...container.querySelectorAll("button")].map((one) => one.textContent);
     await render({ automation, placementId: 1 });
-    expect(presses()).not.toContain(t("auto.step.placementRemove"));
+    expect(presses()).toContain(t("auto.step.placementRemove"));
     await render({ automation, placementId: 2 });
     expect(presses()).toContain(t("auto.step.placementRemove"));
   });

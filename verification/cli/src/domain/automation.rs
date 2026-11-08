@@ -260,6 +260,26 @@ impl Driver<'_> {
                 }
                 args.push("--json".into());
                 let id = self.bound_id(&args, "automation_placement", bind)?;
+                // `starts: true` makes it where the round of the role the automation was born with
+                // starts: an automation has no start of its own, so a run is launched only from a
+                // role's.
+                if with.get("starts").and_then(|v| v.as_bool()) == Some(true) {
+                    let listed = self.run_json(&["automation", "role-list", &automation.to_string(), "--json"])?;
+                    let born = listed["roles"][0]["id"]
+                        .as_i64()
+                        .ok_or_else(|| format!("automation {automation} has no role to start at placement {id}"))?;
+                    self.run_json(&[
+                        "automation",
+                        "role-update",
+                        &born.to_string(),
+                        "--entry",
+                        &id.to_string(),
+                        "--json",
+                    ])?;
+                    return Ok(Outcome::action(format!(
+                        "placed {what} {placed} on automation {automation} (placement {id}), where role {born}'s round starts"
+                    )));
+                }
                 Ok(Outcome::action(format!(
                     "placed {what} {placed} on automation {automation} (placement {id})"
                 )))

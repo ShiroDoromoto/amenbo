@@ -195,7 +195,7 @@ mod tests {
         let entry = read::automation_run_defs_of(tx.conn(), run.id)
             .expect("defs")
             .into_iter()
-            .find(|d| d.entry)
+            .find(|d| !d.role_ids().is_empty())
             .expect("the entry");
         let Opened::Carried { next: Next::Step(work), .. } = open(tx, run.id, entry.id, Some(&claude)).expect("take")
         else {
@@ -244,7 +244,7 @@ mod tests {
 
             let (run, next) = walk(tx, &p, Some(SHA), "Fixed it.\n\nThe test covers it.");
             let Next::Step(again) = next else { panic!("the run goes round to its entry: {next:?}") };
-            assert!(again.entry, "{again:?}");
+            assert!(!again.role_ids().is_empty(), "{again:?}");
             assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::Done));
             let shas: Vec<String> =
                 read::task_commits(tx.conn(), task).expect("commits").into_iter().map(|c| c.sha).collect();
@@ -341,7 +341,7 @@ mod tests {
             let entry = read::automation_run_defs_of(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
-                .find(|d| d.entry)
+                .find(|d| !d.role_ids().is_empty())
                 .expect("the entry");
             let Opened::Carried { next: Next::Step(work), .. } = open(tx, run.id, entry.id, Some(&claude)).expect("take")
             else {
@@ -366,7 +366,7 @@ mod tests {
             assert_eq!(paused.run.pause_kind, Some(crate::model::AutomationPauseKind::BeforeNextTask));
             let resumed = crate::ops::automation_stop::resume(tx, run.id, Some(&claude), nothing_asked(), None)
                 .expect("resume");
-            assert!(resumed.next.entry, "picked up at the entry: {:?}", resumed.next);
+            assert!(!resumed.next.role_ids().is_empty(), "picked up where its role starts: {:?}", resumed.next);
             assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"));
         });
     }
@@ -391,7 +391,7 @@ mod tests {
             let entry = read::automation_run_defs_of(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
-                .find(|d| d.entry)
+                .find(|d| !d.role_ids().is_empty())
                 .expect("the entry");
             let Opened::Carried { next: Next::Step(work), .. } = open(tx, run.id, entry.id, Some(&claude)).expect("take")
             else {
@@ -437,7 +437,7 @@ mod tests {
             let task = for_ai(tx, &p, project);
 
             let (_, next) = walk(tx, &p, None, "Nothing to merge.");
-            assert!(matches!(&next, Next::Step(again) if again.entry), "the run goes round: {next:?}");
+            assert!(matches!(&next, Next::Step(again) if !again.role_ids().is_empty()), "the run goes round: {next:?}");
             assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::Done));
             assert!(read::task_commits(tx.conn(), task).expect("commits").is_empty());
         });

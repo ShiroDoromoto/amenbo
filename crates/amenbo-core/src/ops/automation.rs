@@ -27,8 +27,8 @@
 //! the lines with it (`AMB-D-961`). The ports at a wire's two ends are still named, and renaming one
 //! parts the wire from it.
 //!
-//! **Nothing here refuses an unfinished automation.** A box with no way onward, an automation with no
-//! entry, a required setting nobody answered — each of them saves. What refuses them is the launch
+//! **Nothing here refuses an unfinished automation.** A box with no way onward, a role whose round
+//! starts nowhere, a required setting nobody answered — each of them saves. What refuses them is the launch
 //! check, which is where a person is actually about to be let down by them.
 //!
 //! **Writes go straight to SQL through the engine.** Every mutator takes the [`WriteTx`]
@@ -1075,7 +1075,7 @@ impl ActionDef {
     /// [`lines_back`] of the picture inside the action.
     pub fn lines_back(&self) -> BTreeSet<i64> {
         let boxes: Vec<i64> = self.steps.iter().map(|s| s.id).collect();
-        lines_back(self.entry_step_id, &boxes, &self.edges)
+        lines_back(self.entry_step_id.as_slice(), &boxes, &self.edges)
     }
 }
 
@@ -1294,7 +1294,6 @@ pub(crate) fn add_with_no_role(tx: &WriteTx<'_>, project_id: i64, new: NewAutoma
         project_id,
         name,
         notes: new.notes,
-        entry_placement_id: None,
         archived: false,
         failures_to: new.failures_to,
         export_only: false,
@@ -1623,10 +1622,10 @@ pub struct Stopped {
 /// it is in the middle of:
 ///
 /// - **No run of it starts.** A launch is refused, and so is picking up a run paused before its next
-///   task, which would start a round from the entry ([`automation_run`]).
+///   task, which would start a round from a role's start ([`automation_run`]).
 /// - **Its triggers file nothing** while it is stopped, and their `next_at` stays where it was.
 /// - **A run of it finishes the round it is on**, and pauses where the round is over, before it takes
-///   its next task. One standing at its entry waiting for room in the action that takes one is paused
+///   its next task. One standing at a role's start waiting for room in the action that takes one is paused
 ///   here at once ([`Stopped::paused`]). A run that takes no tasks has no round to finish and goes on to
 ///   its end.
 /// - **It stops waiting for a task** ([`Automation::waits_for_task_since`]): no run of it is started
@@ -1662,83 +1661,6 @@ pub fn move_to(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<Automation> {
     after.updated_at = Timestamp::now();
     emit_update(tx, record::automation(&before), record::automation(&after))?;
     Ok(after)
-}
-
-/// Write which placement a run opens first, `None` for none. What may be named is the callers' to ask.
-fn name_entry(tx: &WriteTx<'_>, automation_id: i64, placement_id: Option<i64>) -> Result<Automation> {
-    let before = live_automation(tx, automation_id)?;
-    let mut after = before.clone();
-    after.entry_placement_id = placement_id;
-    after.updated_at = Timestamp::now();
-    emit_update(tx, record::automation(&before), record::automation(&after))?;
-    Ok(after)
-}
-
-/// **Change what a run starts at**, to another of the built-ins it can start at (`AMB-D-977`). `key` is
-/// the built-in's key ([`automation_builtin::entries`]).
-///
-/// The entry keeps its spot, and every line drawn to it stays: what changes is the action standing
-/// there. What belonged to the one it replaces goes with it — the lines out of its ways out, the
-/// wires to and from its ports, and the answers written for its settings — because the new one declares
-/// ways out, ports and settings of its own. The placements after it stay on the picture, for the reader
-/// to join up again. The new one comes with what a built-in standing first answers ([`answer_as_entry`]).
-///
-/// **An automation with placements and no entry** — kept from a store written before the entry was
-/// the first placement — takes the built-in as a new placement, standing alone, and starts at it.
-/// There is no entry to replace, and no other road to one.
-///
-/// Refused on an automation with nothing on it: the first placement is where the entry is chosen
-/// ([`placement_add`]).
-pub fn entry_replace(tx: &WriteTx<'_>, automation_id: i64, key: &str) -> Result<AutomationPlacement> {
-    rewritable(tx, Def::Automation(automation_id))?;
-    let automation = live_automation(tx, automation_id)?;
-    if !automation_builtin::starts_a_run(key) {
-        return Err(not_an_entry(key));
-    }
-    let Some(entry_id) = automation.entry_placement_id else {
-        if read::automation_placement_ids(tx.conn(), automation_id)?.is_empty() {
-            return Err(Error::invalid(
-                "nothing is placed on this automation yet — the first thing placed on it is what a run \
-                 starts at, so place the built-in instead",
-            ));
-        }
-        let action = automation_builtin::action(tx, key)?;
-        let placement = put_placement(tx, &automation, action.id)?;
-        name_entry(tx, automation_id, Some(placement.id))?;
-        answer_as_entry(tx, &placement, Some(key))?;
-        return Ok(placement);
-    };
-    let before = live_placement(tx, entry_id)?;
-    let action = automation_builtin::action(tx, key)?;
-    if before.action_id == action.id {
-        return Ok(before);
-    }
-    let on = AutomationPictureOwner::Automation;
-    for wire in read::automation_wire_ids_naming_box(tx.conn(), on, entry_id)? {
-        tx.delete_record("automation_wire", wire)?;
-    }
-    for edge in read::automation_edges_from(tx.conn(), on, entry_id)? {
-        tx.delete_record("automation_edge", edge.id)?;
-    }
-    delete_cfgs(tx, AutomationCfgOwner::Placement, entry_id)?;
-    for chosen in read::automation_placement_step_ids(tx.conn(), entry_id)? {
-        tx.delete_record("automation_placement_step", chosen)?;
-    }
-    let mut after = before.clone();
-    after.action_id = action.id;
-    after.version = None;
-    after.updated_at = Timestamp::now();
-    emit_update(tx, record::automation_placement(&before), record::automation_placement(&after))?;
-    answer_as_entry(tx, &after, Some(key))?;
-    Ok(after)
-}
-
-/// The refusal of a built-in, or an action, that a run cannot start at — naming the ones it can.
-fn not_an_entry(what: &str) -> Error {
-    Error::invalid(format!(
-        "a run cannot start at {what} — it starts at one of the built-ins {}",
-        automation_builtin::entries().iter().map(|k| format!("'{k}'")).collect::<Vec<_>>().join(", ")
-    ))
 }
 
 /// **Save the automation as its next version, once the launch check passes.** Every op that writes on
@@ -1780,8 +1702,7 @@ pub fn unsaved(conn: &Connection, automation_id: i64) -> Result<bool> {
     let draft = Picture::read(conn, &automation)?;
     match read::automation_version_latest(conn, automation_id)? {
         Some(latest) => Ok(!draft.is(&latest)?),
-        None => Ok(draft.entry_placement_id.is_some()
-            || !draft.placements.is_empty()
+        None => Ok(!draft.placements.is_empty()
             || draft.roles.len() > 1
             || !draft.roles.iter().all(only_named)),
     }
@@ -1798,8 +1719,7 @@ fn only_named(role: &AutomationRole) -> bool {
 }
 
 /// **Throw away what is written on the automation since its newest version**, putting every row back as
-/// that version holds it, under the id it was saved with (`AMB-D-961`), and the placement it opens first
-/// with them. Its name and notes are not part of a version, so they stay as they are.
+/// that version holds it, under the id it was saved with (`AMB-D-961`). Its name and notes are not part of a version, so they stay as they are.
 ///
 /// Not refused while a run of it goes on (`AMB-D-1015`): the run reads its own copy. Refused for an
 /// automation nobody has saved, since there is nothing to go back to, and when a placement the version
@@ -1830,10 +1750,6 @@ pub fn discard(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVersion
             )));
         }
     }
-    // `entry_placement_id` is `RESTRICT`, as an action's entry is, so the entry is moved first.
-    if automation.entry_placement_id != saved.entry_placement_id {
-        name_entry(tx, automation_id, saved.entry_placement_id)?;
-    }
     restore_rows(tx, &draft.wires, &saved.wires, record::automation_wire)?;
     restore_rows(tx, &draft.edges, &saved.edges, record::automation_edge)?;
     restore_rows(tx, &draft.placement_steps, &saved.placement_steps, record::automation_placement_step)?;
@@ -1853,11 +1769,10 @@ pub fn discard(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVersion
 
 /// **The automation's picture** — the rows a version is saved from, with the version of its action each
 /// placement stands on, the answers written for their settings, the agents chosen for their steps, the
-/// edges and wires drawn on the automation, the roles defined in it, and the placement it opens first.
+/// edges and wires drawn on the automation, and the roles defined in it.
 /// Read off its tables (the draft, [`Picture::read`]) or off a saved version ([`Picture::saved`]), and
 /// asked the same way either way, as [`ActionDef`] is.
 pub(crate) struct Picture {
-    pub(crate) entry_placement_id: Option<i64>,
     pub(crate) placements: Vec<AutomationPlacement>,
     cfgs: Vec<AutomationCfg>,
     placement_steps: Vec<AutomationPlacementStep>,
@@ -1883,7 +1798,6 @@ impl Picture {
             placement_steps.extend(read::automation_placement_steps_of(conn, placement.id)?);
         }
         Ok(Picture {
-            entry_placement_id: automation.entry_placement_id,
             placements,
             cfgs,
             placement_steps,
@@ -1896,7 +1810,6 @@ impl Picture {
     /// The picture as one saved version holds it, every row under the id it was saved with (`AMB-D-961`).
     pub(crate) fn saved(version: &AutomationVersion) -> Result<Picture> {
         Ok(Picture {
-            entry_placement_id: version.entry_placement_id,
             placements: serde_json::from_str(&version.placements).map_err(Error::from)?,
             cfgs: serde_json::from_str(&version.cfgs).map_err(Error::from)?,
             placement_steps: serde_json::from_str(&version.placement_steps).map_err(Error::from)?,
@@ -1959,19 +1872,19 @@ impl Picture {
         self.placement_steps.iter().find(|c| c.placement_id == placement_id && c.step_id == step_id)
     }
 
-    /// [`lines_back`] of the picture. An action's is asked of the version a placement stands on instead
-    /// ([`ActionDef::lines_back`]).
+    /// [`lines_back`] of the picture, walked from where each role's round starts. An action's is asked
+    /// of the version a placement stands on instead ([`ActionDef::lines_back`]).
     pub(crate) fn lines_back(&self) -> BTreeSet<i64> {
         let boxes: Vec<i64> = self.placements.iter().map(|p| p.id).collect();
-        lines_back(self.entry_placement_id, &boxes, &self.edges)
+        let starts: Vec<i64> = self.roles.iter().filter_map(|r| r.entry_placement_id).collect();
+        lines_back(&starts, &boxes, &self.edges)
     }
 
     /// Whether `saved` holds this picture, row for row. Every op that writes a row moves its
     /// `updated_at`, so a row written since the save differs from its copy even where it was written back
     /// to the same value.
     fn is(&self, saved: &AutomationVersion) -> Result<bool> {
-        Ok(self.entry_placement_id == saved.entry_placement_id
-            && same_rows(&self.placements, &saved.placements)?
+        Ok(same_rows(&self.placements, &saved.placements)?
             && same_rows(&self.cfgs, &saved.cfgs)?
             && same_rows(&self.placement_steps, &saved.placement_steps)?
             && same_rows(&self.edges, &saved.edges)?
@@ -1997,7 +1910,6 @@ pub fn version_add(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVer
         id: read::next_id(conn, "automation_version")?,
         automation_id,
         version,
-        entry_placement_id: picture.entry_placement_id,
         placements: serde_json::to_string(&picture.placements).map_err(Error::from)?,
         cfgs: serde_json::to_string(&picture.cfgs).map_err(Error::from)?,
         placement_steps: serde_json::to_string(&picture.placement_steps).map_err(Error::from)?,
@@ -2043,15 +1955,12 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     for trigger in &automation.triggers {
         tx.delete_record("automation_trigger", trigger.id)?;
     }
-    // The roles and the entry are references into the placements that are about to go, so they are
-    // dropped before them.
+    // The roles are references into the placements that are about to go, so they are dropped before
+    // them.
     for role in read::automation_roles_of(tx.conn(), id)? {
         take_role_off_tasks(tx, role.id)?;
         stop_filing_failures_to(tx, &role)?;
         tx.delete_record("automation_role", role.id)?;
-    }
-    if automation.entry_placement_id.is_some() {
-        name_entry(tx, id, None)?;
     }
     for placement in read::automation_placement_ids(tx.conn(), id)? {
         delete_placement_row(tx, placement)?;
@@ -2129,63 +2038,7 @@ pub(crate) fn run_delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
 /// The action has to be within reach of the automation's project: its own project's library, or the
 /// device's. Another project's is refused — the prompt would be read across a boundary that is there to
 /// keep one project's context out of another's.
-///
-/// **The first thing put on an automation is what a run starts at** (`AMB-D-977`): it has to be one of
-/// the built-ins a run can start at ([`automation_builtin::entries`]), and it is named the entry as it
-/// is put down. Any other is refused there, naming the ones there are — a run could not start at it, and
-/// the picture would only find out at launch. It comes with what a built-in standing first answers
-/// ([`answer_as_entry`]).
 pub fn placement_add(
-    tx: &WriteTx<'_>,
-    automation_id: i64,
-    action_id: i64,
-) -> Result<AutomationPlacement> {
-    rewritable(tx, Def::Automation(automation_id))?;
-    let automation = live_automation(tx, automation_id)?;
-    checked_action(tx, &automation, action_id)?;
-    if !read::automation_placement_ids(tx.conn(), automation_id)?.is_empty() {
-        return put_placement(tx, &automation, action_id);
-    }
-    let action = live_action(tx, action_id)?;
-    if !action.builtin.as_deref().is_some_and(automation_builtin::starts_a_run) {
-        let what = match &action.builtin {
-            Some(key) => format!("the built-in '{key}'"),
-            None => format!("action '{}'", action.name),
-        };
-        return Err(Error::invalid(format!(
-            "{} — nothing is placed on this automation yet, and what is placed first is where a run \
-             starts",
-            not_an_entry(&what)
-        )));
-    }
-    let placement = put_placement(tx, &automation, action_id)?;
-    name_entry(tx, automation_id, Some(placement.id))?;
-    answer_as_entry(tx, &placement, action.builtin.as_deref())?;
-    Ok(placement)
-}
-
-/// **What a built-in answers when it comes to stand first**, before anyone has answered it (`AMB-T-5795`).
-///
-/// The built-in that files a task leaves it not started unless told otherwise, and a run that starts
-/// there with the task left not started works no task. So standing first, it is answered the one way a
-/// run can start from: take the task it files. The answer is an ordinary one, to be changed like any
-/// other.
-fn answer_as_entry(tx: &WriteTx<'_>, placement: &AutomationPlacement, key: Option<&str>) -> Result<()> {
-    use crate::ops::automation_builtin_make::{KEY, TAKE_IT, WHAT_THEN};
-    if key != Some(KEY) {
-        return Ok(());
-    }
-    let take = serde_json::to_string(TAKE_IT).map_err(Error::from)?;
-    cfg_set(tx, placement.id, WHAT_THEN, Some(&take))?;
-    Ok(())
-}
-
-/// **Put an action on an automation whatever stands on it already**, with nothing added beside it.
-/// [`placement_add`] refuses anything but a built-in a run can start at as the first placement
-/// (`AMB-D-977`). An imported file is put down as it was drawn ([`crate::ops::automation_import`]), and
-/// a store written before that rule can hold a picture that began with any action, which is how the
-/// tests of the run side draw one.
-pub(crate) fn placement_add_by_hand(
     tx: &WriteTx<'_>,
     automation_id: i64,
     action_id: i64,
@@ -2197,7 +2050,7 @@ pub(crate) fn placement_add_by_hand(
 }
 
 /// Write one placement row at the bottom of an automation's list — what [`placement_add`] does once it
-/// has asked what it asks.
+/// has asked whether the action is within reach.
 ///
 /// It stands on the action's newest saved version, or on none where nobody has saved one — which is
 /// every built-in, whose `action_id` already names one version (`AMB-D-1000`).
@@ -2261,7 +2114,7 @@ impl ActionShelf {
 /// **Make an empty action and put it in on a line.** Where it goes is decided by the press, before
 /// there is anything in it: the reader goes on to build the action and comes back to find it standing
 /// where they meant it to (`AMB-D-956`). A picture with nothing on it has no line to press, and what
-/// goes there first is one of the built-ins ([`placement_add`], `AMB-D-977`).
+/// goes there first is put on by [`placement_add`].
 ///
 /// **What it takes is a name and a library, and nothing else.** The inside of an action is its steps,
 /// and each step carries its own prompt, ways out and outputs — so it is built on the action's own
@@ -2342,7 +2195,7 @@ pub fn placement_insert_new_at_exit(
     Ok(placement)
 }
 
-/// **An action put on straight after the entry that files a task, and the built-in Amenbo put on after
+/// **An action put on straight after a role's start that files a task, and the built-in Amenbo put on after
 /// it** (`AMB-T-5797`) — what the build screen's four ways of putting an action on answer with.
 #[derive(Clone, Debug)]
 pub struct Placed {
@@ -2356,13 +2209,14 @@ pub struct Placed {
 /// **Close the task a run files, after the first action that works on it** (`AMB-T-5797`).
 ///
 /// A run that starts by filing a task holds that task, and a picture that lets it go on without
-/// closing it is refused at the launch (`AMB-D-967`). The reader who put one action after the entry
-/// has nearly always said the whole of what the run does, so the built-in that closes the task is put
+/// closing it is refused at the launch (`AMB-D-967`). The reader who put one action after a role's
+/// start that files the task has nearly always said the whole of what the run does, so the built-in that closes the task is put
 /// on after the action's done way out, and that one ends the run. It is an ordinary placement: the
 /// reader takes it off or moves it like any other.
 ///
 /// It is put on only where nothing has been decided that it would undo: the placement stands straight
-/// after an entry that files a task (not after its error way out), its done way out still says
+/// after the placement a role's round starts at, which files a task (not after its error way out),
+/// its done way out still says
 /// nothing, and no placement on the picture closes the task already.
 pub fn close_after_filed(
     tx: &WriteTx<'_>,
@@ -2374,7 +2228,7 @@ pub fn close_after_filed(
         return Ok(None);
     }
     let automation = live_automation(tx, placed.automation_id)?;
-    if automation.entry_placement_id != Some(from_id) {
+    if !read::automation_roles_of(tx.conn(), automation.id)?.iter().any(|r| r.entry_placement_id == Some(from_id)) {
         return Ok(None);
     }
     let builtin_of = |action_id: i64| -> Result<Option<String>> {
@@ -2441,7 +2295,7 @@ fn hang_on_exit(
 }
 
 /// Reorder a placement within its automation. It moves it in the lists alone — the picture is walked
-/// from the entry along the edges, and no order here reaches it.
+/// from where each role's round starts along the edges, and no order here reaches it.
 pub fn placement_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationPlacement> {
     let before = live_placement(tx, id)?;
     rewritable(tx, Def::Automation(before.automation_id))?;
@@ -2512,32 +2366,13 @@ pub fn placement_version_set(tx: &WriteTx<'_>, id: i64, version: i64) -> Result<
 /// Take a placement off its automation, with the answers written on it and every edge and wire
 /// naming it at either end. A role whose round started there is left with no way of working until one
 /// is chosen again. The action it stood on is untouched.
-///
-/// **The entry comes off last** (`AMB-D-977`). While anything else is on the picture it is refused —
-/// a picture with no entry has nowhere to start, and nothing but a first placement names one — and
-/// [`entry_replace`] is the way to change it. Taken off alone, it leaves the picture empty, and the
-/// next thing placed is the entry again.
 pub fn placement_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let placement = live_placement(tx, id)?;
     rewritable(tx, Def::Automation(placement.automation_id))?;
-    let automation = live_automation(tx, placement.automation_id)?;
-    if automation.entry_placement_id == Some(id) {
-        let others = read::automation_placement_ids(tx.conn(), automation.id)?.len() - 1;
-        if others > 0 {
-            return Err(Error::invalid(format!(
-                "placement '{id}' is where a run of this automation starts, and {others} other \
-                 placement(s) are still on it — take those off first"
-            )));
-        }
-        // `entry_placement_id` is `RESTRICT`, and that check bites at the statement rather than at the
-        // commit — so the reference is dropped before the row it names, not after.
-        name_entry(tx, automation.id, None)?;
-    }
     delete_placement_row(tx, id)
 }
 
-/// One placement and everything hanging off it, with no word about the entry — what [`delete`] walks,
-/// where the entry has already been dropped and the automation itself is going anyway.
+/// One placement and everything hanging off it — what [`placement_delete`] and [`delete`] walk.
 fn delete_placement_row(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     drop_role_entries(tx, &live_placement(tx, id)?)?;
     delete_lines_naming_box(tx, AutomationPictureOwner::Automation, id)?;
@@ -3954,9 +3789,9 @@ fn returning_exit(
 /// **Which lines of one picture go back** — the edges a limit on how often they are taken is counted on
 /// ([`AutomationEdge::max_times`]).
 ///
-/// A walk down from the entry, depth first, following each box's `go` edges in the order given: an edge
-/// to a box still on the path the walk came down by goes back. What the entry does not reach is walked
-/// afterwards, box by box in the order given, so every edge has an answer. `boxes` and `edges` are the
+/// A walk down from each of `starts` in turn — the entry of an action, where each role's round starts on
+/// an automation — depth first, following each box's `go` edges in the order given: an edge to a box
+/// still on the path the walk came down by goes back. What the starts do not reach is walked afterwards, box by box in the order given, so every edge has an answer. `boxes` and `edges` are the
 /// picture in display order — which decides the answer where a loop could be read from either end — and
 /// the GUI draws the same edges dashed by the same walk (`app/src/screens/automationLayout.ts`, `walk`).
 ///
@@ -3964,7 +3799,7 @@ fn returning_exit(
 /// limit on a line going down would stop a run on a number nobody is shown. Whether a line goes back
 /// depends on every other line of the picture, so it is read here, off the whole picture, rather than
 /// kept on the edge.
-pub fn lines_back(entry: Option<i64>, boxes: &[i64], edges: &[AutomationEdge]) -> BTreeSet<i64> {
+pub fn lines_back(starts: &[i64], boxes: &[i64], edges: &[AutomationEdge]) -> BTreeSet<i64> {
     let known: BTreeSet<i64> = boxes.iter().copied().collect();
     let mut out: BTreeMap<i64, Vec<(i64, i64)>> = BTreeMap::new();
     for edge in edges {
@@ -3976,7 +3811,7 @@ pub fn lines_back(entry: Option<i64>, boxes: &[i64], edges: &[AutomationEdge]) -
     }
     let mut back = BTreeSet::new();
     let mut seen = BTreeSet::new();
-    let starts = entry.filter(|id| known.contains(id)).into_iter().chain(boxes.iter().copied());
+    let starts = starts.iter().copied().filter(|id| known.contains(id)).chain(boxes.iter().copied());
     for start in starts {
         if !seen.insert(start) {
             continue;
@@ -4350,7 +4185,7 @@ mod tests {
     /// 8→7. The line down 7→8 is taken once per turn and is not what spins.
     #[test]
     fn of_a_loop_only_the_line_back_goes_back() {
-        let back = lines_back(Some(7), &[7, 8, 9], &[line(1, 7, 8), line(2, 8, 7), line(3, 8, 9)]);
+        let back = lines_back(&[7], &[7, 8, 9], &[line(1, 7, 8), line(2, 8, 7), line(3, 8, 9)]);
         assert_eq!(back, BTreeSet::from([2]));
     }
 
@@ -4359,16 +4194,16 @@ mod tests {
     #[test]
     fn a_line_to_itself_goes_back_and_one_across_does_not() {
         let edges = [line(1, 1, 2), line(2, 1, 3), line(3, 2, 3), line(4, 3, 3)];
-        assert_eq!(lines_back(Some(1), &[1, 2, 3], &edges), BTreeSet::from([4]));
+        assert_eq!(lines_back(&[1], &[1, 2, 3], &edges), BTreeSet::from([4]));
     }
 
     /// **Whether a line goes back turns on the rest of the picture**, which is why the limit is written
     /// on every line into a box: 8→7 goes down from where nothing reaches, until 7→8 is drawn.
     #[test]
     fn a_line_comes_to_go_back_when_the_loop_is_closed() {
-        let alone = lines_back(Some(6), &[6, 7, 8], &[line(1, 6, 7), line(2, 8, 7)]);
+        let alone = lines_back(&[6], &[6, 7, 8], &[line(1, 6, 7), line(2, 8, 7)]);
         assert!(alone.is_empty(), "8 is walked on its own, and 7 is not on its way down");
-        let closed = lines_back(Some(6), &[6, 7, 8], &[line(1, 6, 7), line(2, 8, 7), line(3, 7, 8)]);
+        let closed = lines_back(&[6], &[6, 7, 8], &[line(1, 6, 7), line(2, 8, 7), line(3, 7, 8)]);
         assert_eq!(closed, BTreeSet::from([2]));
     }
 
@@ -4377,8 +4212,8 @@ mod tests {
     #[test]
     fn a_loop_nothing_reaches_still_has_a_way_back() {
         let edges = [line(1, 2, 3), line(2, 3, 2)];
-        assert_eq!(lines_back(Some(1), &[1, 2, 3], &edges), BTreeSet::from([2]));
-        assert_eq!(lines_back(None, &[3, 2], &edges), BTreeSet::from([1]));
+        assert_eq!(lines_back(&[1], &[1, 2, 3], &edges), BTreeSet::from([2]));
+        assert_eq!(lines_back(&[], &[3, 2], &edges), BTreeSet::from([1]));
     }
 
     /// The edge hanging on one way out of one box, the way out said by its name — what a test reads
@@ -4414,7 +4249,7 @@ mod tests {
             &[],
         )
         .expect("write the action");
-        let placement = placement_add_by_hand(tx, automation.id, action.id).expect("place it");
+        let placement = placement_add(tx, automation.id, action.id).expect("place it");
         (action, placement)
     }
 
@@ -4452,7 +4287,7 @@ mod tests {
                 Ok(_) => panic!("rewritten"),
             };
             let on = AutomationPictureOwner::Automation;
-            kept(placement_add_by_hand(tx, automation.id, action.id).map(|_| ()));
+            kept(placement_add(tx, automation.id, action.id).map(|_| ()));
             kept(edge_add(tx, on, first.id, None, EdgeTarget::Go(second.id), None).map(|_| ()));
             kept(placement_move(tx, second.id, Position::Top).map(|_| ()));
             kept(placement_delete(tx, second.id));
@@ -6457,7 +6292,7 @@ mod tests {
     fn a_placement_moves_only_onto_a_version_its_action_has() {
         with_tx(|tx| {
             let automation = mk_automation(tx);
-            let entry = entry_placed(tx, &automation, automation_builtin::entries()[0]);
+            let entry = builtin_placed(tx, &automation, "take_task");
             placement_version_set(tx, entry.id, 1).expect_err("a built-in has no versions to move onto");
             let (action, placed) = mk_placed(tx, &automation, "実装する");
             placement_version_set(tx, placed.id, 1).expect_err("nobody has saved version 1");
@@ -6893,7 +6728,6 @@ mod tests {
             let shared = action_add(tx, None, "共有", "").expect("add action");
             let other_project = mk_project(tx, "別の企画");
             let theirs = action_add(tx, Some(other_project), "他所", "").expect("add action");
-            entry_placed(tx, &automation, "take_task");
             placement_add(tx, automation.id, mine.id).expect("mine");
             placement_add(tx, automation.id, shared.id).expect("shared");
             assert!(
@@ -6903,120 +6737,37 @@ mod tests {
         });
     }
 
-    /// The built-in of `key`, placed on an automation with nothing on it — which makes it the entry.
-    fn entry_placed(tx: &WriteTx<'_>, automation: &Automation, key: &str) -> AutomationPlacement {
+    /// The built-in of `key`, placed on an automation.
+    fn builtin_placed(tx: &WriteTx<'_>, automation: &Automation, key: &str) -> AutomationPlacement {
         let action = automation_builtin::action(tx, key).expect("the built-in's action");
-        placement_add(tx, automation.id, action.id).expect("place the entry")
+        placement_add(tx, automation.id, action.id).expect("place the built-in")
     }
 
-    /// **The first placement is the entry, and only a built-in a run can start at is one**
-    /// (`AMB-D-977`). Anything else is refused there, naming the ones there are; once the entry
-    /// stands, any action goes on after it.
+    /// The built-in of `key`, placed on an automation with a role whose round starts at it.
+    fn role_starts_at(tx: &WriteTx<'_>, automation: &Automation, key: &str) -> AutomationPlacement {
+        let placed = builtin_placed(tx, automation, key);
+        let new = NewRole { name: "起票".into(), entry_placement_id: Some(placed.id), ..NewRole::default() };
+        role_add(tx, automation.id, new).expect("define a role");
+        placed
+    }
+
+    /// **Anything goes on first** (`AMB-D-1123`): an automation has no entry of its own, so the first
+    /// placement is an ordinary one — a written action as well as any built-in — and the last comes off
+    /// like any other.
     #[test]
-    fn the_first_placement_is_the_entry_and_one_of_the_built_ins_a_run_starts_at() {
+    fn any_action_goes_on_first_and_any_comes_off_last() {
         with_tx(|tx| {
             let automation = mk_automation(tx);
             let written = action_add(tx, Some(automation.project_id), "調べる", "").expect("add action");
-            let refused = placement_add(tx, automation.id, written.id).expect_err("not a start");
-            for key in automation_builtin::entries() {
-                assert!(refused.to_string().contains(key), "{refused}");
-            }
-            let close = automation_builtin::action(tx, "close_task").expect("built-in");
-            assert!(placement_add(tx, automation.id, close.id).is_err(), "a built-in a run does not start at");
+            let first = placement_add(tx, automation.id, written.id).expect("a written action goes on first");
+            let close = builtin_placed(tx, &automation, "close_task");
+            placement_delete(tx, first.id).expect("the first comes off while another is on");
+            placement_delete(tx, close.id).expect("the last comes off");
             assert!(read::automation_placement_ids(tx.conn(), automation.id).unwrap().is_empty());
-
-            for key in automation_builtin::entries() {
-                let other = add(tx, automation.project_id, NewAutomation { name: (*key).into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
-                    .expect("add automation");
-                let entry = entry_placed(tx, &other, key);
-                assert_eq!(live_automation(tx, other.id).unwrap().entry_placement_id, Some(entry.id));
-            }
-
-            let entry = entry_placed(tx, &automation, "fetch");
-            let after = placement_add(tx, automation.id, written.id).expect("anything goes on after it");
-            let automation = live_automation(tx, automation.id).unwrap();
-            assert_eq!(automation.entry_placement_id, Some(entry.id), "the second is not the entry");
-            assert_ne!(after.id, entry.id);
         });
     }
 
-    /// **The entry comes off last** (`AMB-D-977`): refused while anything else is on the picture,
-    /// and taken off alone it leaves the picture empty, the next placement being the entry again.
-    #[test]
-    fn the_entry_comes_off_last() {
-        with_tx(|tx| {
-            let automation = mk_automation(tx);
-            let one = entry_placed(tx, &automation, "take_task");
-            let written = action_add(tx, Some(automation.project_id), "実装する", "").expect("add action");
-            let two = placement_add(tx, automation.id, written.id).expect("place");
-            edge_add(tx, AutomationPictureOwner::Automation, one.id, Some("着手した"), EdgeTarget::Go(two.id), None)
-                .expect("add edge");
-            let refused = placement_delete(tx, one.id).expect_err("others are on it");
-            assert!(refused.to_string().contains("take those off first"), "{refused}");
-
-            placement_delete(tx, two.id).expect("take the other off");
-            assert!(read::automation_edge_ids(tx.conn(), AutomationPictureOwner::Automation, automation.id)
-                .unwrap()
-                .is_empty());
-            placement_delete(tx, one.id).expect("the entry alone comes off");
-            assert_eq!(live_automation(tx, automation.id).unwrap().entry_placement_id, None);
-            assert!(read::automation_placement_ids(tx.conn(), automation.id).unwrap().is_empty());
-            let again = entry_placed(tx, &automation, "make_task");
-            assert_eq!(live_automation(tx, automation.id).unwrap().entry_placement_id, Some(again.id));
-        });
-    }
-
-    /// **Replacing the entry keeps its spot and what comes after it** (`AMB-D-977`): the lines out
-    /// of the old one's ways out, its wires and its answers go; the lines to it and the placements
-    /// after it stay.
-    #[test]
-    fn replacing_the_entry_keeps_its_spot_and_drops_what_the_old_one_declared() {
-        with_tx(|tx| {
-            let automation = mk_automation(tx);
-            let on = AutomationPictureOwner::Automation;
-            let entry = entry_placed(tx, &automation, "fetch");
-            let after_action = action_from_prompt(
-                tx,
-                Some(automation.project_id),
-                NewStep::new("読む", "read it"),
-                &[],
-                &[],
-            )
-            .expect("write the action");
-            let after = placement_add(tx, automation.id, after_action.id).expect("place");
-            crate::ops::test_support::mk_in(tx, &after_action, "中身", AutomationPortKind::Value, false);
-            edge_add(tx, on, entry.id, Some("取ってきた"), EdgeTarget::Go(after.id), None).expect("out");
-            wire_add(tx, on, entry.id, Some("取ってきた"), "中身", after.id, "中身").expect("wire");
-            edge_add(tx, on, after.id, None, EdgeTarget::Go(entry.id), None).expect("back to the entry");
-            cfg_set(tx, entry.id, "形式", Some("\"URL\"")).expect("answer");
-
-            let replaced = entry_replace(tx, automation.id, "take_task").expect("replace");
-            assert_eq!(replaced.id, entry.id, "the spot is kept");
-            let take = automation_builtin::action(tx, "take_task").expect("built-in");
-            assert_eq!(live_placement(tx, entry.id).unwrap().action_id, take.id);
-            assert_eq!(live_automation(tx, automation.id).unwrap().entry_placement_id, Some(entry.id));
-            assert!(read::automation_edges_from(tx.conn(), on, entry.id).unwrap().is_empty(), "lines out go");
-            assert!(read::automation_wire_ids_naming_box(tx.conn(), on, entry.id).unwrap().is_empty(), "wires go");
-            assert!(
-                read::automation_cfg_ids(tx.conn(), AutomationCfgOwner::Placement, entry.id).unwrap().is_empty(),
-                "the old one's answers go",
-            );
-            assert_eq!(
-                read::automation_edges_from(tx.conn(), on, after.id).unwrap().len(),
-                1,
-                "the line to the entry stays",
-            );
-            assert!(read::automation_placement(tx.conn(), after.id).unwrap().is_some(), "what comes after stays");
-
-            assert!(entry_replace(tx, automation.id, "close_task").is_err(), "not one a run starts at");
-            assert!(entry_replace(tx, automation.id, "no_such").is_err());
-            let empty = add(tx, automation.project_id, NewAutomation { name: "空".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
-                .expect("add automation");
-            assert!(entry_replace(tx, empty.id, "take_task").is_err(), "the first placement chooses it");
-        });
-    }
-
-    /// **The first action after an entry that files a task brings the built-in that closes it**
+    /// **The first action after a role's start that files a task brings the built-in that closes it**
     /// (`AMB-T-5797`): put on after the action's done way out, ending the run — and only where nothing
     /// the reader decided would be undone by it.
     #[test]
@@ -7029,7 +6780,7 @@ mod tests {
         };
         with_tx(|tx| {
             let automation = mk_automation(tx);
-            let entry = entry_placed(tx, &automation, "make_task");
+            let entry = role_starts_at(tx, &automation, "make_task");
             let write = action(tx, &automation);
             let placed = placement_insert_at_exit(tx, entry.id, Some(MADE_AND_TAKEN), write.id).expect("place");
             let closer = close_after_filed(tx, entry.id, Some(MADE_AND_TAKEN), &placed)
@@ -7044,34 +6795,34 @@ mod tests {
             assert_eq!(end.len(), 1);
             assert_eq!(end[0].ends, AutomationEnds::Done, "and it ends the run");
 
-            // A second action after the entry finds the task already closed on the picture.
+            // A second action after the start finds the task already closed on the picture.
             let again = action(tx, &automation);
             let other = placement_add(tx, automation.id, again.id).expect("place");
             assert!(close_after_filed(tx, entry.id, Some(MADE_AND_TAKEN), &other).unwrap().is_none());
         });
         with_tx(|tx| {
             let automation = mk_automation(tx);
-            let entry = entry_placed(tx, &automation, "make_task");
+            let entry = role_starts_at(tx, &automation, "make_task");
             let write = action(tx, &automation);
             let placed = placement_insert_at_exit(tx, entry.id, Some(ERROR_EXIT), write.id).expect("place");
             assert!(
                 close_after_filed(tx, entry.id, Some(ERROR_EXIT), &placed).unwrap().is_none(),
-                "not after the entry's error way out",
+                "not after the start's error way out",
             );
         });
         with_tx(|tx| {
             let automation = mk_automation(tx);
-            let entry = entry_placed(tx, &automation, "take_task");
+            let entry = role_starts_at(tx, &automation, "take_task");
             let write = action(tx, &automation);
             let placed = placement_insert_at_exit(tx, entry.id, Some("着手した"), write.id).expect("place");
             assert!(
                 close_after_filed(tx, entry.id, Some("着手した"), &placed).unwrap().is_none(),
-                "an entry that takes a task is left to the reader",
+                "a start that takes a task is left to the reader",
             );
         });
         with_tx(|tx| {
             let automation = mk_automation(tx);
-            let entry = entry_placed(tx, &automation, "make_task");
+            let entry = role_starts_at(tx, &automation, "make_task");
             let write = action(tx, &automation);
             let placed = placement_insert_at_exit(tx, entry.id, Some(MADE_AND_TAKEN), write.id).expect("place");
             edge_add(tx, on, placed.id, None, EdgeTarget::Halt, None).expect("decided");
@@ -7079,56 +6830,6 @@ mod tests {
                 close_after_filed(tx, entry.id, Some(MADE_AND_TAKEN), &placed).unwrap().is_none(),
                 "a done way out the reader decided is left alone",
             );
-        });
-    }
-
-    /// **The built-in that files a task, standing first, takes the task it files** (`AMB-T-5795`): left
-    /// not started, the run would work no task and the launch check would refuse it. Placed first or
-    /// replaced in, it comes answered that way; anywhere else it is left unanswered, and so is any
-    /// other entry.
-    #[test]
-    fn filing_a_task_as_the_entry_takes_the_task_it_files() {
-        use crate::ops::automation_builtin_make::{TAKE_IT, WHAT_THEN};
-        let answer = |tx: &WriteTx<'_>, placement: i64| {
-            read::automation_cfg_by_name(tx.conn(), AutomationCfgOwner::Placement, placement, WHAT_THEN)
-                .unwrap()
-                .and_then(|cfg| cfg.value)
-        };
-        let take = Some(serde_json::to_string(TAKE_IT).unwrap());
-        with_tx(|tx| {
-            let automation = mk_automation(tx);
-            let entry = entry_placed(tx, &automation, "make_task");
-            assert_eq!(answer(tx, entry.id), take, "placed first");
-
-            let make = automation_builtin::action(tx, "make_task").expect("built-in");
-            let later = placement_add(tx, automation.id, make.id).expect("place it again");
-            assert_eq!(answer(tx, later.id), None, "not first, so not answered");
-
-            let other = add(tx, automation.project_id, NewAutomation { name: "差し替え".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
-                .expect("add automation");
-            let fetch = entry_placed(tx, &other, "fetch");
-            let replaced = entry_replace(tx, other.id, "make_task").expect("replace");
-            assert_eq!(replaced.id, fetch.id);
-            assert_eq!(answer(tx, replaced.id), take, "replaced in");
-            entry_replace(tx, other.id, "take_task").expect("replace again");
-            assert!(
-                read::automation_cfg_ids(tx.conn(), AutomationCfgOwner::Placement, fetch.id).unwrap().is_empty(),
-                "the answer goes with it",
-            );
-        });
-    }
-
-    /// **A picture kept with placements and no entry takes one by replacing** — the built-in is put
-    /// down on its own and named the entry, since nothing else names one any more.
-    #[test]
-    fn a_picture_with_no_entry_takes_one_by_replacing() {
-        with_tx(|tx| {
-            let automation = mk_automation(tx);
-            let (_, kept) = mk_placed(tx, &automation, "取る");
-            let placed = entry_replace(tx, automation.id, "make_task").expect("replace");
-            assert_ne!(placed.id, kept.id);
-            assert_eq!(live_automation(tx, automation.id).unwrap().entry_placement_id, Some(placed.id));
-            assert_eq!(read::automation_placement_ids(tx.conn(), automation.id).unwrap().len(), 2);
         });
     }
 
@@ -7708,8 +7409,8 @@ mod tests {
             port_add(tx, AutomationPortOwner::Exit, done, out_of, "結果", value, false).expect("an output");
             port_add(tx, AutomationPortOwner::Action, action.id, into, "前から", value, false).expect("an input");
             action_version_add(tx, action.id).expect("save");
-            let first = placement_add_by_hand(tx, automation.id, action.id).expect("place it");
-            let second = placement_add_by_hand(tx, automation.id, action.id).expect("place it again");
+            let first = placement_add(tx, automation.id, action.id).expect("place it");
+            let second = placement_add(tx, automation.id, action.id).expect("place it again");
             assert_eq!((first.version, second.version), (Some(1), Some(1)));
             exit_add(tx, AutomationOwner::Action, action.id, Some("直す")).expect("a way out written since");
             port_add(tx, AutomationPortOwner::Action, action.id, into, "指摘", value, false)
@@ -8014,9 +7715,9 @@ mod rewritten_under_a_run {
         paused
     }
 
-    /// One copy a run took at launch: its name, prompt, agent, ways out, inputs, settings and whether it
-    /// is the entry.
-    type Copy = (String, Option<String>, String, String, String, String, bool);
+    /// One copy a run took at launch: its name, prompt, agent, ways out, inputs, settings and the roles
+    /// whose round starts at it.
+    type Copy = (String, Option<String>, String, String, String, String, String);
 
     /// What a run copied at launch, without the ways back to the live definition — those let go of a
     /// placement or a step that is taken off.
@@ -8024,7 +7725,7 @@ mod rewritten_under_a_run {
         read::automation_run_defs_of(tx.conn(), run.id)
             .expect("read")
             .into_iter()
-            .map(|d| (d.name, d.prompt, d.agent, d.exits, d.ins, d.cfg, d.entry))
+            .map(|d| (d.name, d.prompt, d.agent, d.exits, d.ins, d.cfg, d.roles))
             .collect()
     }
 
@@ -8058,7 +7759,6 @@ mod rewritten_under_a_run {
         // The automation's picture.
         not_held("rename", update(tx, p.automation.id, Some("別名"), None, None, None));
         not_held("archive", update(tx, p.automation.id, None, None, Some(true), None));
-        not_held("entry", entry_replace(tx, p.automation.id, "fetch"));
         not_held("delete", delete(tx, p.automation.id));
         not_held("place", placement_add(tx, p.automation.id, p.second_action.id));
         not_held("place on a line", placement_insert(tx, p.onward.id, p.second_action.id));

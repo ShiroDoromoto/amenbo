@@ -19,9 +19,8 @@
 //! on a built-in naming a way out, a port or a setting this build's version does not declare is left
 //! out, for the person to draw again.
 //!
-//! **The picture is put down as it was drawn.** The first placement is not held to the built-ins a run
-//! starts at, and nothing is added after a filed task. Each role starts where the file says it does,
-//! and the automation is named no entry of its own (`AMB-D-1123`).
+//! **The picture is put down as it was drawn**, and nothing is added after a filed task. Each role
+//! starts where the file says it does (`AMB-D-1123`).
 //!
 //! **A file of the older shape names an entry for the whole automation**, and it is read as where the
 //! roles start: where it is the built-in that takes a task and no role in the file starts anywhere, the
@@ -87,7 +86,7 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
             }
             StandsOn::Builtin(b) => (builtin_action(tx, project_id, b)?.id, &[][..], true),
         };
-        let row = automation::placement_add_by_hand(tx, automation.id, action_id)?;
+        let row = automation::placement_add(tx, automation.id, action_id)?;
         let def = ActionDef::placed(tx.conn(), &row)?;
         for answer in &placement.settings {
             if builtin && !def.cfgs.iter().any(|c| c.name == answer.name) {
@@ -571,8 +570,7 @@ mod tests {
     }
 
     /// **A file of the older shape names an entry for the whole automation, and it comes in as where the
-    /// first role starts** — where it takes a task and no role in the file starts anywhere. The
-    /// automation is named no entry of its own.
+    /// first role starts** — where it takes a task and no role in the file starts anywhere.
     #[test]
     fn an_older_files_entry_comes_in_as_where_the_first_role_starts() {
         with_tx(|tx| {
@@ -604,7 +602,6 @@ mod tests {
                 .collect();
 
             let imported = import(tx, project, &older(0, Some(starting_nowhere.clone()))).expect("import");
-            assert_eq!(imported.entry_placement_id, None, "no entry of its own");
             assert_eq!(starts(&imported), [Some(placement(&imported, 0)), None, None], "the first role starts there");
 
             let imported = import(tx, project, &older(0, None)).expect("import a file from before roles");

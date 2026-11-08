@@ -243,7 +243,7 @@ fn this_devices_own_tables_move_nobodys_version() {
 #[test]
 fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in() {
     use amenbo_core::model::AutomationPictureOwner;
-    use amenbo_core::ops::automation::{EdgeTarget, NewAutomation};
+    use amenbo_core::ops::automation::{EdgeTarget, NewAutomation, RoleChange};
     use amenbo_core::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
     use amenbo_core::ops::automation_run::{Launcher, Started};
 
@@ -252,14 +252,17 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
     let other = store.project_add(new_project("隣")).unwrap().id;
     let _ = filed(&mut store, new_task("隣の1件", other));
 
-    // The smallest automation that launches and stays running until its entry is opened, which nothing
-    // here does: the built-in that takes a task, the built-in that closes it, and the end of the run.
-    // The first thing placed is the entry (`AMB-D-977`), and a run does not end with the task it took
-    // still open (`AMB-D-967`).
+    // The smallest automation that launches and stays running until where it starts is opened, which
+    // nothing here does: the built-in that takes a task, the built-in that closes it, and the end of
+    // the run. The role it was born with starts its round at the first, and a run does
+    // not end with the task it took still open (`AMB-D-967`).
     let automation = store
         .automation_add(mine, NewAutomation { name: "1件やりきる".into(), failures_to: Some(amenbo_core::model::FailuresTo::Human), ..Default::default() })
         .unwrap();
     let take = store.automation_builtin_place(automation.id, "take_task", None).unwrap();
+    let born = store.automation_detail(automation.id).unwrap().expect("the automation").roles[0].id;
+    let starts = RoleChange { entry_placement_id: Some(Some(take.id)), ..RoleChange::default() };
+    store.automation_role_update(born, starts).unwrap();
     let on = AutomationPictureOwner::Automation;
     let close = store.automation_builtin_place(automation.id, "close_task", None).unwrap();
     store.automation_edge_add(on, take.id, Some(TAKEN), EdgeTarget::Go(close.id), None).unwrap();
@@ -277,7 +280,7 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
         by: Some(ActorKind::Ai),
     };
     let Started::Run(run) = store.automation_launch(automation.id, &by, &Default::default()).unwrap() else {
-        panic!("an entry that does not wait makes a run");
+        panic!("a start that does not wait makes a run");
     };
 
     let mine_before = version_of(&store, mine);
@@ -297,7 +300,7 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
 #[test]
 fn a_test_run_moves_no_version_and_takes_no_task() {
     use amenbo_core::model::{AutomationPictureOwner, AutomationRunStatus};
-    use amenbo_core::ops::automation::{EdgeTarget, NewAutomation};
+    use amenbo_core::ops::automation::{EdgeTarget, NewAutomation, RoleChange};
     use amenbo_core::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
     use amenbo_core::ops::automation_run::Launcher;
 
@@ -308,6 +311,9 @@ fn a_test_run_moves_no_version_and_takes_no_task() {
         .automation_add(mine, NewAutomation { name: "1件やりきる".into(), failures_to: Some(amenbo_core::model::FailuresTo::Human), ..Default::default() })
         .unwrap();
     let take = store.automation_builtin_place(automation.id, "take_task", None).unwrap();
+    let born = store.automation_detail(automation.id).unwrap().expect("the automation").roles[0].id;
+    let starts = RoleChange { entry_placement_id: Some(Some(take.id)), ..RoleChange::default() };
+    store.automation_role_update(born, starts).unwrap();
     let on = AutomationPictureOwner::Automation;
     let close = store.automation_builtin_place(automation.id, "close_task", None).unwrap();
     store.automation_edge_add(on, take.id, Some(TAKEN), EdgeTarget::Go(close.id), None).unwrap();
@@ -326,7 +332,7 @@ fn a_test_run_moves_no_version_and_takes_no_task() {
     let walked = store.automation_rehearse(automation.id, &by, &Default::default()).unwrap();
 
     let exits: Vec<&str> = walked.steps.iter().map(|s| s.exit.as_str()).collect();
-    // The round closes its task and goes back to the entry, which finds nothing left to take.
+    // The round closes its task and goes back to where it starts, which finds nothing left to take.
     assert_eq!(exits, vec![TAKEN, "完了", NONE_TO_TAKE], "{walked:?}");
     assert_eq!(walked.status, AutomationRunStatus::Completed);
     assert_eq!(version_of(&store, mine), before, "nothing it wrote was kept");

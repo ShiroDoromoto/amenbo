@@ -19,7 +19,7 @@ given:
   # The automation that takes tasks. Nothing is handed to the AI, so its filter finds none, and the
   # way out for no task is drawn for its launch.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that takes tasks" }, as: taking }
-  - { type: action, domain: automation, op: place-add, with: { target: taking, builtin: take_task }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: taking, builtin: take_task, starts: true }, as: at_take }
   - { type: action, domain: automation, op: place-add, with: { target: taking, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }

@@ -558,7 +558,6 @@ pub fn automation(a: &Automation) -> Record {
                 ("project_id", kv(a.project_id)),
                 ("name", tv(&a.name)),
                 ("notes", tv(&a.notes)),
-                ("entry_placement_id", kv_opt(&a.entry_placement_id)),
                 ("archived", bv(a.archived)),
                 ("failures_to_kind", a.failures_to.map(|f| tv(f.kind_str())).unwrap_or(Value::Null)),
                 ("failures_to_role_id", kv_opt(&a.failures_to.and_then(|f| f.role_id()))),
@@ -908,7 +907,6 @@ pub fn automation_version(v: &AutomationVersion) -> Record {
             vec![
                 ("automation_id", kv(v.automation_id)),
                 ("version", iv(v.version)),
-                ("entry_placement_id", kv_opt(&v.entry_placement_id)),
                 ("placements", tv(&v.placements)),
                 ("cfgs", tv(&v.cfgs)),
                 ("placement_steps", tv(&v.placement_steps)),
@@ -955,7 +953,6 @@ pub fn automation_run_def(d: &AutomationRunDef) -> Record {
                 ("exits", tv(&d.exits)),
                 ("ins", tv(&d.ins)),
                 ("cfg", tv(&d.cfg)),
-                ("entry", bv(d.entry)),
                 ("roles", tv(&d.roles)),
             ],
             &d.created_at,

@@ -688,21 +688,16 @@ function walk(graph: PicGraph): Walk {
     from.push(edge);
     out.set(edge.fromId, from);
   }
-  const hasEntry = graph.entryId !== undefined && boxes.has(graph.entryId);
-
-  // Reached from the entry along the edges that go on to a box — core's own reading, and the one
-  // that decides which boxes its launch check even looks at
-  // (`amenbo_core::ops::automation_run::reachable`).
-  const live = new Set<number>();
-  if (hasEntry) {
-    const queue = [graph.entryId!];
-    live.add(graph.entryId!);
-    while (queue.length > 0) {
-      for (const edge of out.get(queue.shift()!) ?? []) {
-        if (live.has(edge.toId!)) continue;
-        live.add(edge.toId!);
-        queue.push(edge.toId!);
-      }
+  // Reached from the entry — on the whole picture, from where each role's round starts — along the
+  // edges that go on to a box: core's own reading, and the one that decides which boxes its launch
+  // check even looks at (`amenbo_core::ops::automation_run::reachable`).
+  const queue = (graph.entryId === undefined ? (graph.starts ?? []) : [graph.entryId]).filter((id) => boxes.has(id));
+  const live = new Set<number>(queue);
+  while (queue.length > 0) {
+    for (const edge of out.get(queue.shift()!) ?? []) {
+      if (live.has(edge.toId!)) continue;
+      live.add(edge.toId!);
+      queue.push(edge.toId!);
     }
   }
 
@@ -720,7 +715,8 @@ function walk(graph: PicGraph): Walk {
     }
     onPath.delete(id);
   };
-  if (hasEntry) descend(graph.entryId!);
+  // Only an entry leads the walk down: the whole picture's numbers keep the order its boxes are listed in.
+  if (graph.entryId !== undefined && boxes.has(graph.entryId)) descend(graph.entryId);
   for (const box of graph.boxes) if (!seen.has(box.id)) descend(box.id);
   const order = (id: number): number => seen.get(id)!;
   const forward = (id: number): AutomationEdgeDto[] => (out.get(id) ?? []).filter((edge) => !back.has(edge.id));

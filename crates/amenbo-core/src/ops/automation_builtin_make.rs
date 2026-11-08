@@ -2065,6 +2065,40 @@ mod tests {
         });
     }
 
+    /// **A condition not yet written is counted as it is typed** — by its filter and the role it names,
+    /// as a written one would be, with nothing written; a role of another automation and a `project:`
+    /// are refused as writing it would refuse them.
+    #[test]
+    fn a_condition_not_yet_written_is_counted_as_it_is_typed() {
+        use crate::model::TriggerCondition;
+        use crate::ops::automation_run::{condition_count_of, ConditionCount};
+        with_tx(|tx| {
+            let (automation, _, project) = entry(tx);
+            let new_role = |name: &str| automation::NewRole { name: name.into(), ..Default::default() };
+            let research = automation::role_add(tx, automation.id, new_role("調査係")).expect("a role");
+            let design = automation::role_add(tx, automation.id, new_role("設計係")).expect("another");
+            mk_task_under(tx, "調べる", project, research.id);
+            mk_task_under(tx, "描く", project, design.id);
+            let typed = |filter: &str, role_id: Option<i64>| TriggerCondition { filter: filter.into(), role_id, below: 3 };
+            let count = |condition: TriggerCondition| condition_count_of(tx.conn(), automation.id, &condition);
+
+            assert_eq!(count(typed("status:todo", Some(research.id))).expect("counted"), ConditionCount { matched: 1, below: 3 });
+            assert_eq!(count(typed("status:todo", None)).expect("counted"), ConditionCount { matched: 2, below: 3 });
+            assert_eq!(count(typed("status:done", None)).expect("counted"), ConditionCount { matched: 0, below: 3 });
+            assert_eq!(read::automation(tx.conn(), automation.id).expect("read").expect("there").triggers.len(), 0, "nothing written");
+
+            let other = automation::add(
+                tx,
+                project,
+                NewAutomation { name: "other".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() },
+            )
+            .expect("another automation");
+            let theirs = automation::role_add(tx, other.id, new_role("保守係")).expect("their role");
+            assert!(matches!(count(typed("status:todo", Some(theirs.id))), Err(Error::Invalid(_))), "another's role");
+            assert!(count(typed("project:x", None)).is_err(), "a `project:` is refused");
+        });
+    }
+
     /// **A trigger is checked and tried without anything written** — the check counts its condition and
     /// says what holds it back now: not due yet, then no room while a run is under way, and nothing once
     /// it is due with room; a trigger not enabled is held back by that first. Trying it says what the

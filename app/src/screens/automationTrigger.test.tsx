@@ -10,7 +10,9 @@
 // always carries its condition, and "when a script says so" its script**, while with the other kinds
 // each is sent only when asked for; **the note, the list and the preview say what will be filed** —
 // its title, role, who works it and the trigger's name; **a refusal is drawn and the card stays
-// open**; and **"Remove trigger" takes that one away by its id**.
+// open**; **"Remove trigger" takes that one away by its id**; and **the condition is picked as a
+// status, a role and a count**, a filter the boxes cannot show kept as it was written, with how many
+// tasks match now and what the next look does said under it.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,6 +24,7 @@ const hoisted = vi.hoisted(() => ({
   remove: vi.fn(),
   enable: vi.fn(),
   confirm: vi.fn(),
+  count: vi.fn(),
 }));
 
 vi.mock("../core/automations", () => ({
@@ -29,11 +32,13 @@ vi.mock("../core/automations", () => ({
   updateAutomationTrigger: hoisted.update,
   removeAutomationTrigger: hoisted.remove,
   setAutomationTriggerEnabled: hoisted.enable,
+  useTriggerCount: hoisted.count,
 }));
 vi.mock("../core/dialog", () => ({ confirmDialog: hoisted.confirm }));
 
-import { dueLabel, t, tf } from "../core/i18n";
-import { AutomationTrigger, formOf, inputOf } from "./AutomationTrigger";
+import { dueLabel, errText, t, tf } from "../core/i18n";
+import { filterValueLabel } from "./automationParts";
+import { AutomationTrigger, formOf, inputOf, joinFilter, nowThen, splitFilter } from "./AutomationTrigger";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -127,6 +132,18 @@ async function type(control: HTMLInputElement | HTMLTextAreaElement, value: stri
   });
 }
 
+/** Pick `value` in the select a label names. */
+async function pick(words: string, value: string) {
+  const select = page().querySelector<HTMLSelectElement>(`select[aria-label="${words}"]`);
+  expect(select).not.toBeNull();
+  await act(async () => {
+    select!.value = value;
+    select!.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+const selectNamed = (words: string) => page().querySelector<HTMLSelectElement>(`select[aria-label="${words}"]`);
+
 /** The checkbox on the line whose words are these. */
 function tick(words: string): HTMLInputElement | undefined {
   return [...page().querySelectorAll("label")]
@@ -147,6 +164,8 @@ beforeEach(() => {
   }
   hoisted.confirm.mockReset();
   hoisted.confirm.mockResolvedValue(true);
+  hoisted.count.mockReset();
+  hoisted.count.mockReturnValue({ count: 1, error: undefined });
 });
 
 afterEach(() => {
@@ -178,8 +197,9 @@ describe("the form and what it sends", () => {
 
   it("always sends the condition of a tasks trigger and the script of a script one", () => {
     const form = formOf(undefined);
-    expect(inputOf({ ...form, when: "tasks", filter: " status:todo ", below: "2" }).condition).toEqual({
+    expect(inputOf({ ...form, when: "tasks", below: "2" }).condition).toEqual({
       filter: "status:todo",
+      roleId: undefined,
       below: 2,
     });
     const judge = { program: "/usr/bin/python3", args: "judge.py\n\n--quiet", minutes: "" };
@@ -190,6 +210,38 @@ describe("the form and what it sends", () => {
     });
     expect(inputOf({ ...form, when: "every", judge }).script).toBeUndefined();
     expect(inputOf({ ...form, when: "every", asked: true, judge }).script?.program).toBe("/usr/bin/python3");
+  });
+
+  it("splits a filter into its status and the rest, and joins them back", () => {
+    expect(splitFilter("status:todo")).toEqual({ status: "todo", rest: "" });
+    expect(splitFilter(" dim:area:ui  status:todo,in_progress ")).toEqual({
+      status: "todo,in_progress",
+      rest: "dim:area:ui",
+    });
+    expect(splitFilter("")).toEqual({ status: "", rest: "" });
+    expect(joinFilter("todo", "")).toBe("status:todo");
+    expect(joinFilter("", " dim:area:ui ")).toBe("dim:area:ui");
+    expect(joinFilter("todo,in_progress", "dim:area:ui")).toBe("status:todo,in_progress dim:area:ui");
+  });
+
+  it("sends a filter the boxes cannot show back as it was, with the role it counts", () => {
+    const kept = { ...written, condition: { filter: "status:todo,in_progress dim:area:ui", roleId: 1, below: 4 } };
+    expect(inputOf(formOf(kept)).condition).toEqual({
+      filter: "status:todo,in_progress dim:area:ui",
+      roleId: 1,
+      below: 4,
+    });
+  });
+
+  it("says what the next look does, in the order core weighs it", () => {
+    const form = { ...formOf(written), below: "3" };
+    expect(nowThen(form, true, 1)).toBe(t("auto.trigger.nowIdle"));
+    expect(nowThen(form, true, 3)).toBe(tf("auto.trigger.nowFull", { below: 3 }));
+    expect(nowThen(form, false, 1)).toBe(t("auto.trigger.nowOff"));
+    expect(nowThen({ ...form, when: "every" }, true, 0)).toBe(t("auto.trigger.nowEvery"));
+    expect(nowThen({ ...form, when: "tasks" }, true, 0)).toBe(t("auto.trigger.nowTasks"));
+    expect(nowThen({ ...form, asked: true }, true, 0)).toBe(t("auto.trigger.nowScript"));
+    expect(nowThen({ ...form, below: "" }, true, 0)).toBe(t("auto.trigger.nowNoBelow"));
   });
 
   it("reads a script task's program back into its boxes", () => {
@@ -289,7 +341,8 @@ describe("the card", () => {
     expect(radio(t("auto.trigger.whenIdle"))?.checked).toBe(true);
     expect(radio(t("auto.trigger.taskFile"))?.checked).toBe(true);
     expect(tick(t("auto.trigger.counted"))?.checked).toBe(true);
-    expect((box(t("auto.trigger.filter")) as HTMLInputElement).value).toBe("status:todo");
+    expect(selectNamed(t("auto.trigger.condStatusPick"))?.value).toBe("todo");
+    expect(selectNamed(t("auto.trigger.condRolePick"))?.value).toBe("");
     expect((box(t("auto.trigger.below")) as HTMLInputElement).value).toBe("3");
     expect((box(t("auto.trigger.taskPath")) as HTMLInputElement).value).toBe("/Users/alice/next.md");
     expect(buttonNamed("Bob")?.getAttribute("aria-pressed")).toBe("true");
@@ -307,16 +360,74 @@ describe("the card", () => {
 
   it("keeps the condition on for a tasks trigger, with no box to turn it off", async () => {
     await draw(detail());
-    expect(page().querySelector(`[aria-label="${t("auto.trigger.filter")}"]`)).toBeNull();
+    expect(selectNamed(t("auto.trigger.condStatusPick"))).toBeNull();
     await press(radio(t("auto.trigger.whenTasks")));
     expect(tick(t("auto.trigger.counted"))).toBeUndefined();
-    await type(box(t("auto.trigger.filter")), "status:todo");
+    await pick(t("auto.trigger.condStatusPick"), "in_progress");
     await type(box(t("auto.trigger.below")), "5");
     await press(buttonNamed(t("auto.trigger.save")));
     expect(hoisted.add.mock.calls[0]?.[1]).toMatchObject({
       when: { kind: "tasks" },
-      condition: { filter: "status:todo", below: 5 },
+      condition: { filter: "status:in_progress", below: 5 },
     });
+  });
+
+  it("picks the condition's status and role from the automation's own, and sends both", async () => {
+    await draw(detail());
+    await press(radio(t("auto.trigger.whenIdle")));
+    await press(tick(t("auto.trigger.counted")));
+    const roles = [...selectNamed(t("auto.trigger.condRolePick"))!.options].map((one) => one.textContent);
+    expect(roles).toEqual(["Alice", "Bob", t("auto.trigger.anyRole")]);
+    const statuses = [...selectNamed(t("auto.trigger.condStatusPick"))!.options].map((one) => one.value);
+    expect(statuses).toEqual(["todo", "in_progress", "blocked", "done", "rejected", ""]);
+    await pick(t("auto.trigger.condRolePick"), "1");
+    await type(box(t("auto.trigger.below")), "3");
+    await type(box(t("auto.trigger.taskTitle")), "Check the reports");
+    await press(buttonNamed(t("auto.trigger.save")));
+    expect(hoisted.add.mock.calls[0]?.[1]).toMatchObject({
+      when: { kind: "idle" },
+      condition: { filter: "status:todo", roleId: 1, below: 3 },
+    });
+  });
+
+  it("keeps a filter the boxes cannot show, says so, and sends it back unchanged", async () => {
+    const kept = { ...written, condition: { filter: "status:todo,in_progress dim:area:ui", below: 3 } };
+    await draw(detail(kept), kept);
+    const status = selectNamed(t("auto.trigger.condStatusPick"))!;
+    expect(status.value).toBe("todo,in_progress");
+    expect(status.selectedOptions[0]?.textContent).toBe(
+      `${filterValueLabel("status", "todo")}/${filterValueLabel("status", "in_progress")}`,
+    );
+    expect(page().querySelector("[data-cond=kept]")?.textContent).toBe(
+      tf("auto.trigger.condKept", { rest: "dim:area:ui" }),
+    );
+    await press(buttonNamed(t("auto.trigger.save")));
+    expect(hoisted.update).toHaveBeenCalledWith(
+      31,
+      expect.objectContaining({ condition: { filter: "status:todo,in_progress dim:area:ui", roleId: undefined, below: 3 } }),
+    );
+  });
+
+  it("says how many tasks match now and what the next look does, counted as typed", async () => {
+    await draw(detail(written), written);
+    expect(hoisted.count).toHaveBeenLastCalledWith(7, "status:todo", null);
+    expect(page().querySelector("[data-cond=now]")?.textContent).toBe(
+      tf("auto.trigger.now", { count: 1, then: t("auto.trigger.nowIdle") }),
+    );
+    hoisted.count.mockReturnValue({ count: 3, error: undefined });
+    await pick(t("auto.trigger.condRolePick"), "2");
+    expect(hoisted.count).toHaveBeenLastCalledWith(7, "status:todo", 2);
+    expect(page().querySelector("[data-cond=now]")?.textContent).toBe(
+      tf("auto.trigger.now", { count: 3, then: tf("auto.trigger.nowFull", { below: 3 }) }),
+    );
+  });
+
+  it("says when core cannot count the condition", async () => {
+    hoisted.count.mockReturnValue({ count: null, error: new Error("the filter does not read") });
+    await draw(detail(written), written);
+    expect(page().querySelector("[data-cond=now]")?.textContent).toBe(
+      tf("auto.trigger.nowRefused", { why: errText(new Error("the filter does not read")) }),
+    );
   });
 
   it("asks for a script's boxes when the script decides", async () => {
@@ -375,6 +486,15 @@ describe("the card", () => {
     expect(lines[1]).toContain("Daily check");
     expect(lines[1]).toContain(tf("auto.side.everyDays", { days: 1 }));
     expect(lines[1]).toContain(t("auto.side.triggerRoleNone"));
+  });
+
+  it("reads the condition's status and role by name in the trigger's line", async () => {
+    const counted = { ...written, condition: { filter: "status:todo", roleId: 1, below: 3 } };
+    await draw(detail(counted));
+    const line = page().querySelector("[data-list=triggers] li")?.textContent ?? "";
+    expect(line).toContain(
+      tf("auto.side.belowOf", { what: `${filterValueLabel("status", "todo")} Alice`, below: 3 }),
+    );
   });
 
   it("draws what core refused and stays open with what was typed", async () => {

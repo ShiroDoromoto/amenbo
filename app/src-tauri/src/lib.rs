@@ -497,6 +497,7 @@ pub fn run() {
       automation::automation_trigger_update,
       automation::automation_trigger_delete,
       automation::automation_trigger_set_enabled,
+      automation::automation_trigger_count,
       automation::automation_entry_replace,
       automation::automation_remove,
       automation::automation_action_page,

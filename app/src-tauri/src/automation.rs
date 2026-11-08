@@ -74,7 +74,7 @@ use crate::dto::{
     AutomationRunEndingsDto,
     AutomationRunHistoryDto, AutomationRunIncidentDto, AutomationRunPassDto, AutomationRunStartedDto,
     AutomationRunTaskDto,
-    AutomationSavedDto, AutomationStepDto, AutomationTriggerInputDto,
+    AutomationSavedDto, AutomationStepDto, AutomationTriggerConditionDto, AutomationTriggerInputDto,
     AutomationStepOpenDto, AutomationStepRunDto, AutomationTestRunDto, AutomationTestStepDto,
     AutomationWaitingTaskDto, AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
     WriteAck,
@@ -249,6 +249,19 @@ pub fn automation_trigger_set_enabled(trigger_id: i64, enabled: bool) -> Result<
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations"]))
+}
+
+/// **How many tasks a trigger's condition counts now, as it is typed** — before it is saved, so the
+/// card can say beside it how many match ([`amenbo_core::ops::automation_run::condition_count_of`]).
+/// The tasks are the automation's project's, matching `condition`'s filter and, where it names one,
+/// worked under its role. It writes nothing; what writing the condition would refuse is refused here,
+/// as core's refusal.
+#[tauri::command]
+pub fn automation_trigger_count(automation_id: i64, condition: AutomationTriggerConditionDto) -> Result<usize, CmdError> {
+    let condition: amenbo_core::model::TriggerCondition = condition.into();
+    let store = open_store_read()?;
+    let counted = automation_run::condition_count_of(store.read_model().conn(), automation_id, &condition)?;
+    Ok(counted.matched)
 }
 
 /// **Change what a run starts at**, to another of the built-ins it can start at
@@ -3499,7 +3512,7 @@ fn cfg_dto(cfg: AutomationCfg) -> AutomationCfgDto {
 mod tests {
     use super::*;
     use crate::commands::tests::env_guard;
-    use crate::dto::{AutomationTriggerConditionDto, AutomationTriggerDto, AutomationTriggerWhenDto};
+    use crate::dto::{AutomationTriggerDto, AutomationTriggerWhenDto};
 
     /// **A press on a pane is never a refusal.** Closing a run's pane is a person being rid of the
     /// pane, and between the last step reporting and the press there is a window in which the run
@@ -3862,6 +3875,11 @@ mod tests {
         let triggers = || automation_detail(automation_id).unwrap().expect("the automation").triggers;
         let input = |v: serde_json::Value| serde_json::from_value::<AutomationTriggerInputDto>(v).expect("reads");
         assert!(triggers().is_empty(), "born with none");
+
+        let typed = |filter: &str| AutomationTriggerConditionDto { filter: filter.into(), role_id: None, below: 3 };
+        assert_eq!(automation_trigger_count(automation_id, typed("status:todo")).unwrap(), 0, "no task matches yet");
+        assert!(automation_trigger_count(automation_id, typed("project:Other")).is_err(), "a `project:` is refused");
+        assert!(triggers().is_empty(), "counting writes nothing");
 
         automation_trigger_add(
             automation_id,

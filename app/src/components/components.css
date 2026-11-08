@@ -2227,6 +2227,10 @@ button.feed__target:hover { color: var(--c-accent); }
   display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3);
   background: var(--c-sunken-pic) var(--c-sunken); border-radius: var(--r-md);
 }
+/* Part 1's condition, read as one sentence: "status is [ ], role is [ ], fewer than [ ] tasks". */
+.trigcard__cond { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--fs-md); }
+.trigcard__cond select { width: auto; }
+.trigcard__cond input[type="number"] { width: 64px; }
 .trigcard__form { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 8px 12px; font-size: var(--fs-md); }
 .trigcard__lbl { font-size: var(--fs-xs); }
 .trigcard__mach {

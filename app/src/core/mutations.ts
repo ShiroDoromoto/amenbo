@@ -151,6 +151,9 @@ export const ACK_WATCHERS: Readonly<Record<string, AckWatcher>> = {
   // (`core/automations`).
   automation: (_k, scopes) => scopes.has("automations"),
   automationLaunchCheck: (_k, scopes) => scopes.has("automations"),
+  // How many tasks a trigger's condition counts as it is typed (`core/automations`): a task written
+  // here moves it, and so does a role of the automation going away.
+  automationTriggerCount: (_k, scopes) => scopes.has("tasks") || scopes.has("automations"),
   // What a launch asks for: read off the entry's settings, and off the axes and values the project
   // has — an edit to those acks with "tasks", as `dimAssign`'s note says.
   automationLaunchAsks: (_k, scopes) => scopes.has("automations") || scopes.has("tasks"),

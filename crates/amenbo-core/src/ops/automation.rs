@@ -2619,6 +2619,37 @@ pub fn role_update(tx: &WriteTx<'_>, id: i64, change: RoleChange) -> Result<Auto
     Ok(after)
 }
 
+/// What [`role_start_take_task`] answers with: the role as it now stands, and the placement its round
+/// starts at.
+#[derive(Clone, Debug)]
+pub struct RoleStarted {
+    pub role: AutomationRole,
+    /// The built-in that takes a task, put on for the role to start at.
+    pub placement: AutomationPlacement,
+}
+
+/// **Give a role that starts nowhere its start: the built-in that takes a task** (`AMB-D-1123`). Each role
+/// takes its own tasks, so the only start a role launches from is a placement of that built-in. It is
+/// put on at the bottom of the automation's placements and the role's round is made to start there.
+///
+/// A role that already starts somewhere is refused, and nothing is put on: its start is changed on the
+/// role ([`role_update`]), not by putting another built-in on beside it.
+pub fn role_start_take_task(tx: &WriteTx<'_>, role_id: i64) -> Result<RoleStarted> {
+    let role = live_role(tx, role_id)?;
+    rewritable(tx, Def::Automation(role.automation_id))?;
+    if let Some(placement_id) = role.entry_placement_id {
+        return Err(Error::invalid(format!(
+            "role '{}' already starts at placement '{placement_id}' — change its start on the role instead",
+            role.name
+        )));
+    }
+    let action = automation_builtin::action(tx, super::automation_builtin_take::TAKE_TASK.key)?;
+    let placement = placement_add(tx, role.automation_id, action.id)?;
+    let change = RoleChange { entry_placement_id: Some(Some(placement.id)), ..RoleChange::default() };
+    let role = role_update(tx, role_id, change)?;
+    Ok(RoleStarted { role, placement })
+}
+
 /// Reorder a role among the roles of its automation — the order they are defined in.
 pub fn role_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationRole> {
     let before = live_role(tx, id)?;
@@ -6749,6 +6780,85 @@ mod tests {
         let new = NewRole { name: "起票".into(), entry_placement_id: Some(placed.id), ..NewRole::default() };
         role_add(tx, automation.id, new).expect("define a role");
         placed
+    }
+
+    /// What the launch check says about the role named `name`: that it starts nowhere, or at a step
+    /// that takes no task.
+    fn start_unmet(tx: &WriteTx<'_>, automation: &Automation, name: &str) -> Vec<automation_run::Unmet> {
+        use automation_run::Unmet;
+        automation_run::check(tx.conn(), automation.id, None, automation_run::nothing_asked(), None)
+            .expect("check")
+            .into_iter()
+            .filter(|u| match u {
+                Unmet::RoleStartsNowhere { role } | Unmet::RoleStartTakesNoTask { role, .. } => role == name,
+                _ => false,
+            })
+            .collect()
+    }
+
+    /// **A role that starts nowhere is given the built-in that takes a task as its start** (`AMB-D-1123`):
+    /// one placement of it is put on, the role starts there, and the launch check has nothing more to
+    /// say about where the role starts.
+    #[test]
+    fn a_role_that_starts_nowhere_is_started_at_take_task() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            mk_placed(tx, &automation, "直す");
+            let role = role_add(tx, automation.id, NewRole { name: "さくら".into(), ..NewRole::default() })
+                .expect("a role");
+            assert!(!start_unmet(tx, &automation, "さくら").is_empty(), "it starts nowhere yet");
+            let before = read::automation_placement_ids(tx.conn(), automation.id).expect("read").len();
+
+            let started = role_start_take_task(tx, role.id).expect("start the role");
+            let take = automation_builtin::action(tx, "take_task").expect("built-in");
+            assert_eq!(started.placement.action_id, take.id);
+            assert_eq!(started.placement.automation_id, automation.id);
+            assert_eq!(started.role.entry_placement_id, Some(started.placement.id));
+            assert_eq!(live_role(tx, role.id).expect("read").entry_placement_id, Some(started.placement.id));
+            assert_eq!(read::automation_placement_ids(tx.conn(), automation.id).expect("read").len(), before + 1);
+            assert!(start_unmet(tx, &automation, "さくら").is_empty());
+        });
+    }
+
+    /// **A role that already starts somewhere is refused**, and nothing is put on: its start is changed
+    /// on the role, not by putting another built-in beside it.
+    #[test]
+    fn a_role_that_already_starts_is_not_started_again() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let entry = role_starts_at(tx, &automation, "take_task");
+            let role = read::automation_roles_of(tx.conn(), automation.id)
+                .expect("read")
+                .into_iter()
+                .find(|r| r.entry_placement_id == Some(entry.id))
+                .expect("the role starting there");
+            let before = read::automation_placement_ids(tx.conn(), automation.id).expect("read");
+
+            let refused = role_start_take_task(tx, role.id);
+            assert!(matches!(refused, Err(Error::Invalid(_))), "{refused:?}");
+            assert_eq!(read::automation_placement_ids(tx.conn(), automation.id).expect("read"), before);
+            assert_eq!(live_role(tx, role.id).expect("read").entry_placement_id, Some(entry.id));
+        });
+    }
+
+    /// **An automation kept only to be written out is not given a start either**, and nothing is put on.
+    #[test]
+    fn a_role_of_an_automation_kept_for_export_is_not_started() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let role = role_add(tx, automation.id, NewRole { name: "さくら".into(), ..NewRole::default() })
+                .expect("a role");
+            let old = Automation { export_only: true, ..automation.clone() };
+            emit_update(tx, record::automation(&automation), record::automation(&old))
+                .expect("written before automations had roles");
+
+            match role_start_take_task(tx, role.id) {
+                Err(Error::Invalid(msg)) => assert!(msg.to_string().contains("kept only to be written out"), "{msg}"),
+                other => panic!("not refused as kept for export: {other:?}"),
+            }
+            assert!(read::automation_placement_ids(tx.conn(), automation.id).expect("read").is_empty());
+            assert_eq!(live_role(tx, role.id).expect("read").entry_placement_id, None);
+        });
     }
 
     /// **Anything goes on first** (`AMB-D-1123`): an automation has no entry of its own, so the first

@@ -14,6 +14,7 @@ import {
   layOut,
   marksW,
   openWord,
+  pictureOrder,
   stepKind,
   stepKindWord,
   wordLeft,
@@ -2680,6 +2681,36 @@ describe("one role's round, as the build screen draws it", () => {
 
   it("counts an input fed from another role's box as reached", () => {
     expect(at(layOut(automationGraph(automation, 20)), 3).unfed).toEqual([]);
+    expect(at(layOut(automationGraph(automation)), 3).unfed).toEqual([]);
+  });
+
+  it("warns of a required input nothing reaches, reading from where each role's round starts", () => {
+    // The whole picture has no entry of its own: each role's round starts at its own box.
+    const unwired: AutomationDetailDto = { ...automation, wires: [] };
+    const whole = automationGraph(unwired)!;
+    expect(whole.entryId).toBeUndefined();
+    expect(whole.starts).toEqual([1, 2, 5]);
+    expect(at(layOut(whole), 3).unfed).toEqual(["notes"]);
+    expect(at(layOut(automationGraph(unwired, 20)), 3).unfed).toEqual(["notes"]);
+  });
+
+  it("does not warn on a box no round's start reaches", () => {
+    const stray: AutomationDetailDto = {
+      ...automation,
+      placements: [...automation.placements, step({ id: 6, name: "片付ける", roleId: 40, inputs: [port("notes", "value")] })],
+    };
+    expect(at(layOut(automationGraph(stray)), 6).unfed).toEqual([]);
+  });
+
+  it("numbers the whole picture's boxes in the order they are listed, as before the walk read the starts", () => {
+    const numberOf = pictureOrder(automationGraph(automation)!).numberOf;
+    expect([...numberOf]).toEqual([
+      [1, 1],
+      [2, 2],
+      [3, 3],
+      [4, 4],
+      [5, 5],
+    ]);
   });
 
   it("has nothing to draw for a role whose round reaches nothing", () => {

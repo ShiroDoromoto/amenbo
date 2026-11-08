@@ -500,7 +500,6 @@ pub fn run() {
       automation::automation_trigger_count,
       automation::automation_trigger_try,
       automation::automation_trigger_try_stop,
-      automation::automation_entry_replace,
       automation::automation_remove,
       automation::automation_action_page,
       automation::automation_action_page_everywhere,

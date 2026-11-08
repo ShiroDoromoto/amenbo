@@ -501,16 +501,6 @@ export async function removeAutomationPlacement(id: number): Promise<void> {
  */
 export const ENTRY_BUILTINS: readonly string[] = ["take_task", "make_task", "fetch"];
 
-/**
- * **Change what a run starts at** to another of the `ENTRY_BUILTINS` (`AMB-D-977`). The placement
- * standing first stays where it is and comes to be the other built-in; the lines out of it, the wires
- * naming it and the answers written on it go with the old one. The placements after it stay.
- */
-export async function replaceAutomationEntry(automationId: number, key: string): Promise<void> {
-  if (!inTauri()) return;
-  return ack("automation_entry_replace", { automationId, key });
-}
-
 /** What a way out is said to do: open a placement, close the task, or stop the run. */
 /** Which picture a line is drawn on: an automation's boxes are placements, an action's are steps. */
 export type Picture = "automation" | "action";

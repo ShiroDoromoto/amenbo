@@ -1160,7 +1160,6 @@ export const ko: Translation = {
     "auto.make.go": "만들고 액션 빌드 화면으로",
     "auto.step.none": "그림의 배치를 누르면 내용이 여기에 나옵니다",
     "auto.step.name": "이름",
-    "auto.step.entryReplaceConfirm": "실행의 시작점을 바꿉니다. 지금 시작점에서 나가는 “다음에 할 일”과 전달은 사라집니다. 뒤의 배치는 남으니 “다음에 할 일”에서 다시 이어 주세요.",
     "auto.step.next": "다음에 할 일",
     "auto.step.nextNothing": "아직 정하지 않음",
     "auto.step.placeNext": "+ 여기에 다음 액션 배치",

@@ -1163,7 +1163,6 @@ export const nl: Translation = {
     "auto.make.go": "Maken en de actie openen",
     "auto.step.none": "Druk op een plaatsing in de tekening en de inhoud verschijnt hier",
     "auto.step.name": "Naam",
-    "auto.step.entryReplaceConfirm": "Hiermee verander je waar een run begint. Wat na de huidige start gebeurt en de overdrachten eruit verdwijnen. De plaatsingen daarna blijven; verbind ze opnieuw onder ‘Wat daarna gebeurt’.",
     "auto.step.next": "Wat daarna gebeurt",
     "auto.step.nextNothing": "Nog niets gezegd",
     "auto.step.placeNext": "+ Volgende actie hier plaatsen",

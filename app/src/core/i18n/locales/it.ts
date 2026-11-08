@@ -1175,7 +1175,6 @@ export const it: Translation = {
     "auto.make.go": "Creala e apri l’azione",
     "auto.step.none": "Premi una collocazione nel disegno e il suo contenuto appare qui",
     "auto.step.name": "Nome",
-    "auto.step.entryReplaceConfirm": "Così cambi da dove parte un'esecuzione. Ciò che succede dopo l'inizio attuale e le consegne che ne escono vengono tolti. I posizionamenti successivi restano; ricollegali in «Cosa succede dopo».",
     "auto.step.next": "Cosa succede dopo",
     "auto.step.nextNothing": "Non è ancora stato detto nulla",
     "auto.step.placeNext": "+ Colloca qui l'azione successiva",

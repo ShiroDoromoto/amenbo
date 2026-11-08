@@ -1165,7 +1165,6 @@ export const zhHans: Translation = {
     "auto.make.go": "创建并打开动作",
     "auto.step.none": "按图中的放置，内容会显示在这里",
     "auto.step.name": "名称",
-    "auto.step.entryReplaceConfirm": "这会更换运行的起点。从当前起点出去的“接下来做什么”和传递会被删除。后面的放置会保留，请在“接下来做什么”中重新连接。",
     "auto.step.next": "接下来做什么",
     "auto.step.nextNothing": "还没有确定",
     "auto.step.placeNext": "+ 在这里放置下一个动作",

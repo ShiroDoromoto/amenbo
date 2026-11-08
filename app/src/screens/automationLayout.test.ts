@@ -84,8 +84,12 @@ function wire(over: AutomationWireDto): AutomationWireDto {
 }
 
 /** One automation, as the picture reads it — the definition the screen fetches, laid out. */
-function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
-  return automationGraph({
+/**
+ * An automation's whole picture, started at `entryId` — the box a role's round starts at, which the
+ * layout reads the same wherever the picture's start comes from.
+ */
+function detail({ entryId, ...over }: Partial<AutomationDetailDto> & { entryId?: number } = {}): PicGraph {
+  const whole = automationGraph({
     id: 7,
     projectId: 1,
     name: "Morning round",
@@ -102,6 +106,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
     saveBlocks: [],
     ...over,
   })!;
+  return { ...whole, entryId };
 }
 
 const at = (picture: ReturnType<typeof layOut>, boxId: number) => picture.nodes.find((one) => one.boxId === boxId)!;
@@ -144,7 +149,7 @@ describe("the picture of an automation", () => {
 
   it("puts each depth on its own row, in the order the walk reaches them", () => {
     const one = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [taker(1, "take"), step({ id: 2, name: "work" }), step({ id: 3, name: "check" })],
       edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 2, toId: 3 })],
     });
@@ -156,7 +161,7 @@ describe("the picture of an automation", () => {
 
   it("puts what is at the same depth side by side", () => {
     const one = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [
         // Both ways out hand the task on, so both of what follows are that task's.
         taker(1, "take", {
@@ -190,7 +195,7 @@ describe("the picture of an automation", () => {
 
   it("outlines the steps one task is worked by, and starts a new outline at the next taker", () => {
     const one = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [taker(1, "first"), step({ id: 2, name: "work" }), taker(3, "second")],
       edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 2, toId: 3 })],
     });
@@ -203,7 +208,7 @@ describe("the picture of an automation", () => {
 
   it("puts a step one row under the lowest step that leads to it, not the nearest", () => {
     const one = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [
         taker(1, "take"),
         step({ id: 2, name: "work" }),
@@ -224,7 +229,7 @@ describe("the picture of an automation", () => {
 
   it("does not let a line that goes back push the step it goes to further down", () => {
     const one = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [taker(1, "take"), step({ id: 2, name: "work" }), step({ id: 3, name: "check" })],
       edges: [
         edge({ id: 1, fromId: 1, toId: 2 }),
@@ -239,7 +244,7 @@ describe("the picture of an automation", () => {
 
   it("leaves out of a task's outline what follows the way out that hands no task on", () => {
     const one = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [
         taker(1, "take", {
           exits: [
@@ -278,18 +283,18 @@ describe("the picture of an automation", () => {
           { id: nextId++, name: "*", outputs: [] },
         ],
       });
-    const untaken = layOut(detail({ entryPlacementId: 1, placements: [filer("made and taken")] }));
+    const untaken = layOut(detail({ entryId: 1, placements: [filer("made and taken")] }));
     expect(untaken.laps, "a stretch was drawn for a task nobody takes").toEqual([]);
     expect(at(untaken, 1).takes, "the box was marked as taking the next task").not.toBe(true);
 
-    const taken = layOut(detail({ entryPlacementId: 1, placements: [filer("made")] }));
+    const taken = layOut(detail({ entryId: 1, placements: [filer("made")] }));
     expect(taken.laps.map((lap) => lap.headBoxId)).toEqual([1]);
     expect(at(taken, 1).takes).toBe(true);
   });
 
   it("draws no outline around steps that answer to no task, and still places what nothing reaches", () => {
     const one = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [step({ id: 1, name: "entry that takes nothing" }), step({ id: 2, name: "stranded" })],
     });
     const picture = layOut(one);
@@ -299,7 +304,7 @@ describe("the picture of an automation", () => {
 
   it("ties what comes after a step down its left, and draws no line for what it hands on (AMB-D-1001)", () => {
     const one = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [
         taker(1, "take", {
           exits: [
@@ -321,7 +326,7 @@ describe("the picture of an automation", () => {
 
   it("sends a line back to a shallower row out to a lane, dashed", () => {
     const one = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [
         taker(1, "take"),
         step({ id: 2, name: "work" }),
@@ -349,7 +354,7 @@ describe("the picture of an automation", () => {
 
   it("draws the step that goes on to the next task straight down, outline or no outline", () => {
     const one = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [taker(1, "first"), step({ id: 2, name: "work" }), taker(3, "second")],
       edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 2, toId: 3 })],
     });
@@ -360,7 +365,7 @@ describe("the picture of an automation", () => {
 
   it("sends a line that skips a stretch out to a lane, and leaves it solid", () => {
     const one = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [
         taker(1, "first"),
         step({ id: 2, name: "work" }),
@@ -386,7 +391,7 @@ describe("the picture of an automation", () => {
 
   it("joins two lines from one margin into the same box into one line, with one arrowhead", () => {
     const one = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [
         taker(1, "take", {
           exits: [
@@ -437,7 +442,7 @@ describe("the picture of an automation", () => {
 
   it("gives two lines crossing the same rows into different boxes a lane each, or a margin each", () => {
     const one = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [
         taker(1, "take"),
         step({ id: 2, name: "work" }),
@@ -465,7 +470,7 @@ describe("the picture of an automation", () => {
     ];
     // Two lines back into the third step and one back to the top — the shape a development loop takes.
     const one = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [
         taker(1, "take"),
         step({ id: 2, name: "plan" }),
@@ -507,7 +512,7 @@ describe("the picture of an automation", () => {
 
   it("writes the name of a line in the margin over the leg it leaves its box by, beside that box", () => {
     const one = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [
         taker(1, "take"),
         step({ id: 2, name: "work" }),
@@ -557,7 +562,7 @@ describe("the picture of an automation", () => {
   it("writes the names of lines in the margin by their own rows, not in one column", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take"),
           step({
@@ -602,7 +607,7 @@ describe("the picture of an automation", () => {
     ];
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take"),
           step({ id: 2, name: "split", exits: two }),
@@ -635,7 +640,7 @@ describe("the picture of an automation", () => {
   it("writes the name of a line going back by the box it leaves, not halfway up its lane", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take"),
           step({ id: 2, name: "a" }),
@@ -664,7 +669,7 @@ describe("the picture of an automation", () => {
   it("ends the word over the box that takes the task short of where a line in from the right margin lands", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take"),
           step({
@@ -697,7 +702,7 @@ describe("the picture of an automation", () => {
 
   it("gives two lines leaving one box for the margin a leg each", () => {
     const one = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [
         taker(1, "take"),
         step({ id: 2, name: "work" }),
@@ -789,7 +794,7 @@ describe("the picture of an automation", () => {
       [18, "git の外", 16],
     ];
     const loop = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [
         step({
           id: 1,
@@ -884,7 +889,7 @@ describe("the picture of an automation", () => {
   it("turns two ways out into the box under at heights of their own, each name beside its own leg (AMB-T-5824)", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "タスクに着手する"),
           step({
@@ -955,7 +960,7 @@ describe("the picture of an automation", () => {
   it("turns lines down from two boxes of one row at heights of their own where their legs across meet (AMB-T-5857)", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take", {
             exits: [
@@ -1016,7 +1021,7 @@ describe("the picture of an automation", () => {
   it("turns a line down to the box on the right under the names of the lines that go nowhere beside it", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "タスクに着手する"),
           step({
@@ -1069,7 +1074,7 @@ describe("the picture of an automation", () => {
     const steps = [taker(1, "take"), step({ id: 2, name: "work" })];
     const plain = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: steps,
         edges: [edge({ id: 1, fromId: 1, toId: 2 })],
       }),
@@ -1079,7 +1084,7 @@ describe("the picture of an automation", () => {
 
     const changed = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: steps,
         edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 1, exitName: "*", ends: "halt" })],
       }),
@@ -1093,7 +1098,7 @@ describe("the picture of an automation", () => {
   it("hangs a way out that names no step below the step it leaves, and marks how it ends", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [taker(1, "take")],
         edges: [edge({ id: 1, fromId: 1, ends: "done" })],
       }),
@@ -1111,7 +1116,7 @@ describe("the picture of an automation", () => {
   it("writes the endings of two ways out that go nowhere on rows of their own", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take", {
             exits: [
@@ -1132,7 +1137,7 @@ describe("the picture of an automation", () => {
   it("is wide enough to hold the words of a way out that goes nowhere, off the last box", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take", {
             exits: [
@@ -1160,7 +1165,7 @@ describe("the picture of an automation", () => {
   it("ties a named way out first when the ways out before it have no line", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take", {
             exits: [
@@ -1183,7 +1188,7 @@ describe("the picture of an automation", () => {
   it("writes the name of a second line down to a neighbour in a row of its own, past the end it turns to", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take", {
             exits: [
@@ -1212,7 +1217,7 @@ describe("the picture of an automation", () => {
   it("writes the names of two lines down too short for them each in a row of its own, over no line (AMB-T-5856)", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take", {
             exits: [
@@ -1261,7 +1266,7 @@ describe("the picture of an automation", () => {
     ]) {
       const picture = layOut(
         detail({
-          entryPlacementId: 1,
+          entryId: 1,
           placements: [
             taker(1, "take"),
             step({
@@ -1315,7 +1320,7 @@ describe("the picture of an automation", () => {
     const word = "もう一度はじめからやり直すもう一度はじめからやり直す";
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take"),
           step({
@@ -1372,7 +1377,7 @@ describe("the picture of an automation", () => {
     const word = "もう一度はじめからやり直すもう一度はじめからやり直す";
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take"),
           step({
@@ -1423,7 +1428,7 @@ describe("the picture of an automation", () => {
   it("stands a box further out where the name over the turn of a line down from it runs over the leg of a line from the box beside it", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take"),
           step({
@@ -1489,7 +1494,7 @@ describe("the picture of an automation", () => {
     const long = ["c2", "やり直す3", "b4", "もう一度やり直す5", "ok6", "a7", "差し戻し8"];
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take", { exits: exits(1, ["完了", "to3", "to4"]) }),
           step({ id: 2, name: "two" }),
@@ -1535,7 +1540,7 @@ describe("the picture of an automation", () => {
     const long = ["c2", "やり直す3", "b4", "差し戻し5", "ok6", "a7", "差し戻し8"];
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take", { exits: exits(1, ["完了", "to3", "to4"]) }),
           step({ id: 2, name: "two" }),
@@ -1580,7 +1585,7 @@ describe("the picture of an automation", () => {
   it("writes the name of a line straight down on its left, and staggers the + of lines side by side in the margin", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take"),
           step({
@@ -1612,7 +1617,7 @@ describe("the picture of an automation", () => {
   it("puts the + on the line: over its leg across, or on its lane in the margin", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [taker(1, "take"), step({ id: 2, name: "work" }), step({ id: 3, name: "check" })],
         edges: [
           edge({ id: 1, fromId: 1, toId: 2 }),
@@ -1640,7 +1645,7 @@ describe("the picture of an automation", () => {
   it("puts the + of a line in the margin by its name, at the box it leaves", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take"),
           step({ id: 2, name: "work" }),
@@ -1669,7 +1674,7 @@ describe("the picture of an automation", () => {
   it("puts a + on every edge and on no wire", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take", { exits: [{ id: 91, name: "完了", outputs: [port("note", "value")] }] }),
           step({ id: 2, name: "work", inputs: [port("note", "value")] }),
@@ -1693,7 +1698,7 @@ describe("the picture of an automation", () => {
     ];
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: steps,
         edges: [edge({ id: 1, fromId: 1, toId: 2 })],
         wires: [wire({ id: 1, fromId: 1, fromExitName: "完了", fromPortName: "note", toId: 2, toPortName: "note" })],
@@ -1711,7 +1716,7 @@ describe("the picture of an automation", () => {
     const looped = (wires: ReturnType<typeof wire>[]) =>
       layOut(
         detail({
-          entryPlacementId: 1,
+          entryId: 1,
           placements: [
             taker(1, "take", { exits: [out(91, "seed")] }),
             step({ id: 2, name: "work", inputs: [port("note", "value")], exits: [out(92, "again")] }),
@@ -1759,7 +1764,7 @@ describe("the entry that files a task", () => {
   /** "File a task" at `at`, with the three inputs the start dialog once handed it and one more. */
   function filing(at: number, entry: number): PicGraph {
     return detail({
-      entryPlacementId: entry,
+      entryId: entry,
       placements: [
         taker(1, "take"),
         taker(2, "タスクを起票する", {
@@ -1935,7 +1940,7 @@ describe("what the action itself hands in", () => {
 describe("a way out nothing has been decided for (AMB-D-1003)", () => {
   it("hangs dashed from its box, with the press beside its name, and the error way out does not", () => {
     const one = detail({
-      entryPlacementId: 1,
+      entryId: 1,
       placements: [step({ id: 1, name: "write" })],
     });
     const picture = layOut(one);
@@ -1964,13 +1969,13 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
     });
     const decided = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [branching, step({ id: 2, name: "ship" })],
         edges: [edge({ id: 1, fromId: 1, exitName: "ok", toId: 2 })],
       }),
     );
     expect(decided.opens.map((one) => `${one.boxId}-${one.exitName}`).sort()).toEqual(["1-fix", "2-完了"]);
-    const two = layOut(detail({ entryPlacementId: 1, placements: [branching] }));
+    const two = layOut(detail({ entryId: 1, placements: [branching] }));
     // Side by side along the box, the one further left hanging lower, so neither press lies over the other.
     const [left, right] = [...two.opens].sort((a, b) => a.x - b.x);
     expect(two.opens).toHaveLength(2);
@@ -1980,7 +1985,7 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
   it("stands inside the outline of the task's span, however many hang under the last row", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           taker(1, "take", {
             exits: [
@@ -2019,7 +2024,7 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
       first.exits = [...first.exits, ...open.slice(1).map((name) => ({ id: 99, name, outputs: [] }))];
       const picture = layOut(
         detail({
-          entryPlacementId: 1,
+          entryId: 1,
           placements: [first, step({ id: 2, name: "ship" })],
           edges: [edge({ id: 1, fromId: 1, exitName: "ok", toId: 2 }), shipped],
         }),
@@ -2042,7 +2047,7 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
   it("stands the next box in its row further right, so a press beside a long name ends short of its lines", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           step({
             id: 1,
@@ -2081,7 +2086,7 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
   it("keeps two boxes side by side 24px apart where no press runs past the one on the left", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           step({
             id: 1,
@@ -2109,7 +2114,7 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
   it("leaves the room between rows as it was where every way out says something", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [step({ id: 1, name: "write" }), step({ id: 2, name: "ship" })],
         edges: [edge({ id: 1, fromId: 1, toId: 2 }), edge({ id: 2, fromId: 2, ends: "done" })],
       }),
@@ -2121,7 +2126,7 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
   it("hangs under the lowest leg its box sends out to the right margin, its name and press across none of them", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           step({ id: 1, name: "take", exits: [{ id: 90, name: "ok", outputs: [] }] }),
           step({ id: 2, name: "work", exits: [] }),
@@ -2168,7 +2173,7 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
   it("hangs the name of a line that goes nowhere under the lowest leg its box sends out to the right margin", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           step({ id: 1, name: "take", exits: [{ id: 90, name: "ok", outputs: [] }] }),
           step({ id: 2, name: "work", exits: [] }),
@@ -2204,7 +2209,7 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
   it("hangs under the lowest leg another box of its row sends out under it to a margin, its name and press across none of them", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [
           step({
             id: 1,
@@ -2276,7 +2281,7 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
   it("is not drawn for the way out a built-in never leaves by", () => {
     const picture = layOut(
       detail({
-        entryPlacementId: 1,
+        entryId: 1,
         placements: [step({ id: 1, name: "file", neverLeavesBy: "完了" })],
       }),
     );
@@ -2305,7 +2310,6 @@ describe("one role's round, as the build screen draws it", () => {
     projectId: 1,
     name: "Morning round",
     notes: "",
-    entryPlacementId: 1,
     archived: false,
     triggers: [],
     roles,
@@ -2432,29 +2436,6 @@ describe("one role's round, as the build screen draws it", () => {
     expect(automationGraph({ ...upkept, failuresTo: { kind: "human" } }, 40)!.round).toMatchObject({
       receives: { failures: false },
     });
-  });
-
-  it("says the round starts where the automation does when the built-in it starts with hands it the task", () => {
-    // The automation starts with a built-in on no role, which hands Research the task through one more
-    // box on no role; a box on no role the start does not reach hands Design the task by its name.
-    const started: AutomationDetailDto = {
-      ...automation,
-      entryPlacementId: 8,
-      placements: [
-        step({ id: 8, name: "take", builtin: "take_task" }),
-        step({ id: 9, name: "sort" }),
-        step({ id: 6, name: "file" }),
-        ...automation.placements,
-      ],
-      edges: [
-        edge({ id: 8, fromId: 8, toId: 9 }),
-        edge({ id: 9, fromId: 9, toId: 1 }),
-        edge({ id: 6, fromId: 6, toId: 2 }),
-        ...automation.edges,
-      ],
-    };
-    expect(automationGraph(started, 10)!.round).toMatchObject({ receives: { roles: [] } });
-    expect(automationGraph(started, 20)!.round).toMatchObject({ receives: { roles: ["Research", "file"] } });
   });
 
   it("draws the whole automation where no role is given, or the role is gone", () => {

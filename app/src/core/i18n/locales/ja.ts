@@ -1169,7 +1169,6 @@ export const ja: Translation = {
     "auto.make.go": "作って開く",
     "auto.step.none": "図面の配置を押すと、中身がここに出ます",
     "auto.step.name": "名前",
-    "auto.step.entryReplaceConfirm": "起点を差し替えます。いまの起点から出ている「次にすること」と受け渡しは消えます。後ろの配置は残るので、「次にすること」でつなぎ直してください",
     "auto.step.next": "次にすること",
     "auto.step.nextNothing": "まだ決めていない",
     "auto.step.placeNext": "＋ ここに次のアクションを配置",

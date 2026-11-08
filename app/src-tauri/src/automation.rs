@@ -312,21 +312,6 @@ pub fn automation_trigger_try_stop(tag: u64) {
     }
 }
 
-/// **Change what a run starts at**, to another of the built-ins it can start at
-/// ([`amenbo_core::ops::automation::entry_replace`], `AMB-D-977`). `key` is the built-in's key.
-///
-/// There is no press that names a placement as the entry: the first thing put on a picture is it, and
-/// this is the one way to change it afterwards. The lines out of the old one go with it, so the build
-/// screen asks before pressing it; the placements after it stay.
-#[tauri::command]
-pub fn automation_entry_replace(automation_id: i64, key: String) -> Result<WriteAck, CmdError> {
-    with_store_mut(|store| {
-        store.automation_entry_replace(automation_id, &key)?;
-        Ok(())
-    })?;
-    Ok(WriteAck::new(&["automations", "automationActions"]))
-}
-
 /// **Delete an automation and everything built into it** — its steps with their declarations and
 /// the edges and wires between them ([`amenbo_core::ops::automation::delete`]).
 ///
@@ -2712,13 +2697,14 @@ fn tell(app: &tauri::AppHandle, dto: AutomationStepOpenDto) {
     }
 }
 
-/// **Take up what has been saved since a run's copy was taken, before its entry is opened**
-/// (`AMB-D-1015`, [`automation_run::take_up_newer`]) — and answer the step to open now, or `None`
-/// where the newer version did not pass and the run failed.
+/// **Take up what has been saved since a run's copy was taken, before the step its round starts at is
+/// opened** (`AMB-D-1015`, [`automation_run::take_up_newer`]) — and answer the step to open now, or
+/// `None` where the newer version did not pass and the run failed.
 ///
 /// **Asked of the store before it is written to.** The watch asks this of every run standing before a
-/// step on every look, and nearly always nothing has been saved since: the entry and the versions are
-/// read first, and the write is opened only where there is something newer to take up.
+/// step on every look, and nearly always nothing has been saved since: where the round starts
+/// ([`automation_run::entry_def`]) and the versions are read first, and the write is opened only where
+/// there is something newer to take up.
 ///
 /// **The card the run stood on is dropped**: opening the new entry tells its own card, rather than
 /// handing back the old one ([`open_one`]). A run that failed is told
@@ -2728,13 +2714,13 @@ pub(crate) fn take_up_newer(
     run_id: i64,
     def: amenbo_core::model::AutomationRunDef,
 ) -> Result<Option<amenbo_core::model::AutomationRunDef>, CmdError> {
-    if !def.entry {
-        return Ok(Some(def));
-    }
     let newer = {
         let store = open_store_read()?;
         let conn = store.read_model().conn();
         let Some(run) = read::automation_run(conn, run_id)? else { return Ok(Some(def)) };
+        if !matches!(automation_run::entry_def(conn, run_id)?, Some(start) if start.id == def.id) {
+            return Ok(Some(def));
+        }
         read::automation_version_latest(conn, run.automation_id)?
             .is_some_and(|saved| !matches!(def.automation_version, Some(copied) if copied >= saved.version))
     };
@@ -3390,7 +3376,6 @@ fn detail_dto(
         project_id: a.project_id,
         name: a.name,
         notes: a.notes,
-        entry_placement_id: a.entry_placement_id,
         archived: a.archived,
         triggers: a.triggers.into_iter().map(Into::into).collect(),
         failures_to: a.failures_to.map(Into::into),

@@ -42,13 +42,13 @@ function step(
   };
 }
 
-function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
-  return automationGraph({
+/** An automation's whole picture, started at `entryId` (the first box unless said otherwise). */
+function detail({ entryId = 1, ...over }: Partial<AutomationDetailDto> & { entryId?: number } = {}): PicGraph {
+  const whole = automationGraph({
     id: 7,
     projectId: 1,
     name: "Morning round",
     notes: "",
-    entryPlacementId: 1,
     archived: false,
     triggers: [],
     roles: [],
@@ -61,6 +61,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
     saveBlocks: [],
     ...over,
   })!;
+  return { ...whole, entryId };
 }
 
 async function render(props: Parameters<typeof AutomationPicture>[0]) {
@@ -437,7 +438,7 @@ describe("the picture of the steps", () => {
         step({ id: 2, name: "work", exits: [{ id: 20, name: "完了", outputs: [] }] }),
       ],
       edges: [{ id: 1, fromId: 1, exitName: "完了", toId: 2, ends: "go" }],
-      entryPlacementId: 2,
+      entryId: 2,
     });
     await render({ graph: one });
     const marked = nodes().filter((node) => node.querySelector(".autopic__entry") !== null);
@@ -447,7 +448,7 @@ describe("the picture of the steps", () => {
   });
 
   it("marks nothing while no placement is named the entry", async () => {
-    await render({ graph: detail({ entryPlacementId: undefined }) });
+    await render({ graph: { ...detail(), entryId: undefined } });
     expect(container.querySelectorAll(".autopic__node .autopic__entry")).toHaveLength(0);
   });
 
@@ -587,7 +588,7 @@ describe("what the picture marks, as the mock draws it", () => {
 });
 
 describe("a way out nothing has been decided for (AMB-D-1003)", () => {
-  const lone = () => detail({ entryPlacementId: 1, placements: [step({ id: 1, name: "write" })] });
+  const lone = () => detail({ placements: [step({ id: 1, name: "write" })] });
   const presses = () => [...container.querySelectorAll<HTMLButtonElement>(".autopic__open")];
 
   it("hangs dashed and ends in a press shown without being pointed at, which puts the next box on it", async () => {
@@ -614,7 +615,6 @@ describe("one role's round, as the build screen draws it", () => {
       projectId: 1,
       name: "Morning round",
       notes: "",
-      entryPlacementId: 1,
       archived: false,
       triggers: [],
       roles: [
@@ -779,22 +779,6 @@ describe("one role's round, as the build screen draws it", () => {
     );
   });
 
-  it("says a person files the round's task when the built-in the automation starts with hands it on", async () => {
-    const r = rounds();
-    await render({
-      graph: automationGraph(
-        rounds({
-          entryPlacementId: 9,
-          placements: [step({ id: 9, name: "take", builtin: "take_task", exits: done(90) }), ...r.placements],
-          edges: [{ id: 9, fromId: 9, exitName: "完了", ends: "go", toId: 1 }, ...r.edges],
-        }),
-        10,
-      ),
-    });
-    const ends = [...container.querySelectorAll(".autopic__end")].map((one) => one.textContent);
-    expect(ends[0]).toBe(t("auto.pic.receives") + t("auto.pic.fromPeople"));
-  });
-
   it("writes the steps inside the action, what it takes in and hands on, and the loop back into it", async () => {
     await render({ graph: automationGraph(rounds(), 20) });
     const write = nodes()[0]!;
@@ -837,9 +821,10 @@ describe("one role's round, as the build screen draws it", () => {
     expect(plusses().length).toBeGreaterThan(0);
   });
 
-  it("marks where a run opens only on the round that holds it", async () => {
+  it("marks where the role's own round starts, and no other box on it", async () => {
     await render({ graph: automationGraph(rounds(), 20) });
-    expect(container.querySelector(".autopic__node .autopic__entry")).toBeNull();
+    expect(nodes()[0]!.querySelector(".autopic__entry")).not.toBeNull();
+    expect(nodes()[1]!.querySelector(".autopic__entry")).toBeNull();
     await render({ graph: automationGraph(rounds(), 10) });
     expect(nodes()[0]!.querySelector(".autopic__entry")).not.toBeNull();
   });

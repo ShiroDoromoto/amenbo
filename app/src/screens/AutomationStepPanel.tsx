@@ -30,12 +30,6 @@
 // **Taking the spot off is here too**, because this is what a reader has in front of them when they
 // decide against it. It leaves the library action where it is, which the confirmation says.
 //
-// **The spot a run starts at is changed here, not chosen** (`AMB-D-977`). The first thing placed is the
-// start, one of the three built-ins a run can start at, and its panel offers the other two in its
-// place. The lines out of it go with the one replaced, so the change asks first. While anything else
-// stands on the picture the start is not taken off: a picture with the rest and no start could not
-// be run, and would have no way to get one back.
-//
 // **A setting is answered by the control its kind takes** — never by writing a filter expression. The
 // shape each one is kept in is `./automationCfg`'s.
 //
@@ -48,18 +42,15 @@ import {
   answerAutomationCfg,
   chooseAutomationAgent,
   clearAutomationWire,
-  ENTRY_BUILTINS,
   removeAutomationPlacement,
-  replaceAutomationEntry,
   setAutomationPlacementVersion,
   setAutomationWire,
   useAutomationAction,
-  useAutomationBuiltins,
 } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
 import { getSnapshot } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
-import { builtinShown, builtinWord } from "../core/builtinWords";
+import { builtinWord } from "../core/builtinWords";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
 import { ExitMark, filterValueLabel, ReachChip, usedCount } from "./automationParts";
@@ -479,36 +470,6 @@ function InputRow({
   );
 }
 
-/**
- * **What a run starts at, and the press that changes it** — drawn on the start's own panel only. The
- * pulldown holds the built-ins a run can start at, in the order the empty picture offers them; picking
- * another asks first, since the lines out of this spot go with the one it replaces.
- */
-function EntryRow({ automationId, current, run }: { automationId: number; current: string; run: Run }) {
-  const builtins = useAutomationBuiltins();
-  const offered = ENTRY_BUILTINS.flatMap((key) => builtins.filter((one) => one.key === key)).map(builtinShown);
-  const replace = async (key: string) => {
-    if (key === current) return;
-    if (!(await confirmDialog(t("auto.step.entryReplaceConfirm")))) return;
-    void run(replaceAutomationEntry(automationId, key));
-  };
-  return (
-    <Sec title={t("auto.pic.entry")}>
-      <select
-        aria-label={t("auto.pic.entry")}
-        value={current}
-        onChange={(e) => void replace(e.target.value)}
-      >
-        {offered.map((one) => (
-          <option key={one.key} value={one.key}>
-            {one.name}
-          </option>
-        ))}
-      </select>
-    </Sec>
-  );
-}
-
 export function AutomationStepPanel({
   automation,
   placementId,
@@ -554,9 +515,11 @@ export function AutomationStepPanel({
   };
   const named = placement.exits.filter((one) => one.name !== ERROR_EXIT);
   const graph = automationGraph(automation)!;
-  const isEntry = automation.entryPlacementId === placement.id;
-  // The start comes off only as the last thing on the picture, which leaves it empty.
-  const removable = !isEntry || automation.placements.length === 1;
+  // Core still makes the first thing placed where a whole run starts, and refuses to take it off while
+  // anything else is on the picture (`placement_delete`). The detail no longer names that spot, but it
+  // is the oldest one — the one with the lowest id — so the press is left off there until it is alone.
+  const oldest = Math.min(...automation.placements.map((one) => one.id));
+  const removable = placement.id !== oldest || automation.placements.length === 1;
   // Amenbo never moves a spot onto a newer version of its action by itself (`AMB-D-1000`): the press is
   // here, and lines and wires the newer version has no end for go with it, so it asks first.
   const behind = behindOf(placement);
@@ -612,10 +575,6 @@ export function AutomationStepPanel({
               {tf("auto.place.versionSet", { version: behind.latest })}
             </button>
           </div>
-        )}
-
-        {isEntry && placement.builtin !== undefined && (
-          <EntryRow automationId={automation.id} current={placement.builtin} run={run} />
         )}
 
         {/* Amenbo carries a built-in out itself, and core refuses anybody chosen for it (`AMB-D-964`). */}

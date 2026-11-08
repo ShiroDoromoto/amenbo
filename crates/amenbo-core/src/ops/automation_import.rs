@@ -20,8 +20,13 @@
 //! out, for the person to draw again.
 //!
 //! **The picture is put down as it was drawn.** The first placement is not held to the built-ins a run
-//! starts at, nothing is added after a filed task, and the entry is the one the file names
-//! (`AMB-D-977`).
+//! starts at, and nothing is added after a filed task. Each role starts where the file says it does,
+//! and the automation is named no entry of its own (`AMB-D-1123`).
+//!
+//! **A file of the older shape names an entry for the whole automation**, and it is read as where the
+//! roles start: where it is the built-in that takes a task and no role in the file starts anywhere, the
+//! first role starts there. Otherwise the roles already say where they start, or the entry is one a role
+//! cannot start at, and it is left out.
 
 use rusqlite::Connection;
 
@@ -33,6 +38,7 @@ use crate::model::{
 use crate::ops::automation::{self, ActionDef, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep};
 use crate::ops::automation_builtin;
 use crate::ops::automation_builtin_split::SPLIT_BY_DIM;
+use crate::ops::automation_builtin_take::TAKE_TASK;
 use crate::ops::automation_export::{
     ActionFile, AutomationFile, BuiltinFile, EdgeFile, ExitFile, PortFile, StandsOn, FORMAT,
 };
@@ -99,12 +105,9 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
         }
         placed.push(Placed { id: row.id, def, builtin });
     }
-    if let Some(entry) = file.entry {
-        let entry = placed.get(entry).ok_or_else(|| no_such("placement", entry))?;
-        automation::set_entry(tx, automation.id, Some(entry.id))?;
-    }
 
     let at = |place: usize| placed.get(place).ok_or_else(|| no_such("placement", place));
+    let mut old_start = old_entry_as_start(file)?.map(|place| at(place).map(|p| p.id)).transpose()?;
     let on = AutomationPictureOwner::Automation;
     for edge in &file.edges {
         let from = at(edge.from)?;
@@ -132,7 +135,10 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
         automation::wire_add(tx, on, from.id, Some(from_exit), &wire.from_port, to.id, &wire.to_port)?;
     }
     for role in &file.roles {
-        let entry_placement_id = role.entry.map(|place| at(place).map(|p| p.id)).transpose()?;
+        let entry_placement_id = match role.entry {
+            Some(place) => Some(at(place)?.id),
+            None => old_start.take(),
+        };
         let new = NewRole {
             name: role.name.clone(),
             headcount: Some(role.headcount),
@@ -145,10 +151,23 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
         automation::role_add(tx, automation.id, new)?;
     }
     if file.roles.is_empty() {
-        automation::role_add(tx, automation.id, automation::born_role(&automation))?;
+        let born = NewRole { entry_placement_id: old_start, ..automation::born_role(&automation) };
+        automation::role_add(tx, automation.id, born)?;
     }
     read::automation(tx.conn(), automation.id)?
         .ok_or_else(|| Error::not_found(format!("automation '{}' not found", automation.id)))
+}
+
+/// **Where the first role starts, read off the entry a file of the older shape names** for the whole
+/// automation, by its place in `placements`: the entry, where it is the built-in that takes a task and
+/// no role in the file starts anywhere. `None` for a file that names no entry, and for one whose roles
+/// already say where they start or whose entry is not where a role can start.
+fn old_entry_as_start(file: &AutomationFile) -> Result<Option<usize>> {
+    let Some(place) = file.entry else { return Ok(None) };
+    let placement = file.placements.get(place).ok_or_else(|| no_such("placement", place))?;
+    let takes_a_task = matches!(&placement.stands_on, StandsOn::Builtin(b) if b.key == TAKE_TASK.key);
+    let a_role_starts = file.roles.iter().any(|r| r.entry.is_some());
+    Ok((takes_a_task && !a_role_starts).then_some(place))
 }
 
 /// One placement this import has put down, with what it stands on as it stands on it.
@@ -541,13 +560,71 @@ mod tests {
             }
             file.edges[3].exit = "昔の出口".into();
             let imported = import(tx, project, &file).expect("import");
-            let entry = imported.entry_placement_id.expect("an entry");
-            let placed = read::automation_placement(tx.conn(), entry).expect("read").expect("row");
+            let first = read::automation_placement_ids(tx.conn(), imported.id).expect("placements")[0];
+            let placed = read::automation_placement(tx.conn(), first).expect("read").expect("row");
             let take = automation_builtin::action(tx, "take_task").expect("built-in");
             assert_eq!(placed.action_id, take.id, "this build's version");
             let edges = read::automation_edges_of(tx.conn(), AutomationPictureOwner::Automation, imported.id)
                 .expect("edges");
             assert_eq!(edges.len(), 3, "the line on a way out the split does not have is left out");
+        });
+    }
+
+    /// **A file of the older shape names an entry for the whole automation, and it comes in as where the
+    /// first role starts** — where it takes a task and no role in the file starts anywhere. The
+    /// automation is named no entry of its own.
+    #[test]
+    fn an_older_files_entry_comes_in_as_where_the_first_role_starts() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let file = written_out(tx, project);
+            let older = |entry: usize, roles: Option<Vec<crate::ops::automation_export::RoleFile>>| {
+                let mut value = serde_json::to_value(&file).expect("json");
+                value["entry"] = serde_json::json!(entry);
+                match roles {
+                    Some(roles) => value["roles"] = serde_json::to_value(roles).expect("roles"),
+                    None => {
+                        value.as_object_mut().expect("a file").remove("roles");
+                    }
+                }
+                parse(&value.to_string()).expect("a file of the older shape")
+            };
+            let starts = |imported: &Automation| -> Vec<Option<i64>> {
+                let roles = read::automation_roles_of(tx.conn(), imported.id).expect("roles");
+                roles.iter().map(|r| r.entry_placement_id).collect()
+            };
+            let placement = |imported: &Automation, place: usize| {
+                read::automation_placement_ids(tx.conn(), imported.id).expect("placements")[place]
+            };
+            let starting_nowhere: Vec<_> = file
+                .roles
+                .iter()
+                .cloned()
+                .map(|r| crate::ops::automation_export::RoleFile { entry: None, ..r })
+                .collect();
+
+            let imported = import(tx, project, &older(0, Some(starting_nowhere.clone()))).expect("import");
+            assert_eq!(imported.entry_placement_id, None, "no entry of its own");
+            assert_eq!(starts(&imported), [Some(placement(&imported, 0)), None, None], "the first role starts there");
+
+            let imported = import(tx, project, &older(0, None)).expect("import a file from before roles");
+            assert_eq!(starts(&imported), [Some(placement(&imported, 0))], "the role it is born with starts there");
+
+            let imported = import(tx, project, &older(0, Some(file.roles.clone()))).expect("import");
+            assert_eq!(
+                starts(&imported),
+                [None, Some(placement(&imported, 2)), None],
+                "the roles already say where they start"
+            );
+
+            let imported = import(tx, project, &older(1, Some(starting_nowhere.clone()))).expect("import");
+            assert_eq!(starts(&imported), [None, None, None], "a role cannot start at what does not take a task");
+
+            let beyond = older(99, Some(starting_nowhere));
+            assert!(matches!(import(tx, project, &beyond), Err(Error::Invalid(_))), "no placement 99");
+
+            let rewritten = serde_json::to_value(older(0, None)).expect("json");
+            assert!(rewritten.get("entry").is_none(), "the entry is read, never written: {rewritten}");
         });
     }
 }

@@ -23,6 +23,7 @@ use crate::model::{
     AutomationPortDirection, AutomationPortKind, AutomationPortOwner, StepScript, ACTION_BOUNDARY,
 };
 use crate::ops::automation::{ActionDef, Picture};
+use crate::ops::automation_builtin_take::TAKE_TASK;
 use crate::store_engine::read;
 
 /// What the file says it is, and which shape of it — the number moves when the shape does.
@@ -37,7 +38,10 @@ pub struct AutomationFile {
     pub amenbo_version: String,
     pub name: String,
     pub notes: String,
-    /// The placement a run opens first, by its place in `placements`.
+    /// **The placement a run opened first, in a file written before each role started its own runs** —
+    /// by its place in `placements`. It is read and never written: an import turns it into a role's start
+    /// ([`crate::ops::automation_import`]), and a file written since carries only the roles' starts.
+    #[serde(default, skip_serializing)]
     pub entry: Option<usize>,
     pub placements: Vec<PlacementFile>,
     pub edges: Vec<EdgeFile>,
@@ -307,12 +311,21 @@ pub fn export(conn: &Connection, automation_id: i64) -> Result<AutomationFile> {
         });
     }
 
+    // A store written before each role started its own runs can name an entry for the whole automation
+    // and no start for any role. That entry is written out as where the first role starts, as the import
+    // reads it off an older file, so it is not lost with the entry.
+    let no_role_starts = picture.roles().iter().all(|r| r.entry_placement_id.is_none());
+    let old_start = picture.entry_placement_id.and_then(at).filter(|&place| {
+        no_role_starts
+            && matches!(&placements[place].stands_on, StandsOn::Builtin(b) if b.key == TAKE_TASK.key)
+    });
+
     Ok(AutomationFile {
         format: FORMAT.to_string(),
         amenbo_version: crate::export::APP_VERSION.to_string(),
         name: automation.name,
         notes: automation.notes,
-        entry: picture.entry_placement_id.and_then(at),
+        entry: None,
         placements,
         edges,
         wires,
@@ -320,12 +333,13 @@ pub fn export(conn: &Connection, automation_id: i64) -> Result<AutomationFile> {
         roles: picture
             .roles()
             .iter()
-            .map(|r| RoleFile {
+            .enumerate()
+            .map(|(i, r)| RoleFile {
                 name: r.name.clone(),
                 headcount: r.headcount,
                 take_order: r.take_order,
                 icon: r.icon.clone(),
-                entry: r.entry_placement_id.and_then(at),
+                entry: r.entry_placement_id.and_then(at).or(if i == 0 { old_start } else { None }),
                 agent: r.agent.clone(),
                 model: r.model.clone(),
             })
@@ -505,10 +519,9 @@ mod tests {
             assert_eq!(file.format, FORMAT);
             assert_eq!(file.amenbo_version, crate::export::APP_VERSION);
             assert_eq!(file.name, "1件やりきる");
-            assert_eq!(file.entry, Some(0));
             match &file.placements[0].stands_on {
                 StandsOn::Builtin(b) => assert_eq!((b.key.as_str(), b.version), ("take_task", take.version)),
-                other => panic!("the entry is the built-in, not {other:?}"),
+                other => panic!("the first placement is the built-in, not {other:?}"),
             }
             assert!(matches!(file.placements[1].stands_on, StandsOn::Action(0)));
             assert!(matches!(file.placements[2].stands_on, StandsOn::Action(0)), "one action, placed twice");
@@ -541,6 +554,8 @@ mod tests {
 
             let text = serde_json::to_string(&file).expect("serialize");
             assert!(!text.contains("\"id\""), "no id is written: {text}");
+            let value = serde_json::to_value(&file).expect("json");
+            assert!(value.get("entry").is_none(), "no entry for the whole automation is written: {text}");
             let back: AutomationFile = serde_json::from_str(&text).expect("read back");
             assert_eq!(back.placements.len(), 3);
         });
@@ -640,8 +655,9 @@ mod tests {
             let file = export(tx.conn(), automation.id).expect("written out from the draft");
             assert_eq!(file.name, automation.name);
             assert_eq!(file.placements.len(), 1);
-            assert_eq!(file.entry, Some(0));
             assert_eq!(file.edges.len(), 1, "what the draft holds is in the file");
+            assert_eq!(file.roles.len(), 1);
+            assert_eq!(file.roles[0].entry, Some(0), "the entry is written out as where the first role starts");
         });
     }
 }

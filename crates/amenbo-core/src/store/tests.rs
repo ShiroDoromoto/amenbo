@@ -1754,7 +1754,7 @@ fn an_import_leaves_nothing_when_refused_and_the_device_library_is_a_humans() {
         amenbo_version: crate::export::APP_VERSION.into(),
         name: "取り込み".into(),
         notes: String::new(),
-        entry: Some(0),
+        entry: None,
         placements: vec![
             placement(StandsOn::Builtin(BuiltinFile { key: "take_task".into(), version: 1, dimension: None })),
             placement(StandsOn::Action(0)),

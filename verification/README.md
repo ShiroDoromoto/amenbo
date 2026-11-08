@@ -341,6 +341,22 @@ What stays off that table is as much the point. An assert whose words *are* on s
 screen's: reading the store for those would check the build's records against themselves rather than
 against what a reader sees.
 
+### The press that starts a run — counted in the store
+
+One action is judged too: `automation start` (`amenbo_verify_gui::starts_a_run`). A start the app
+turns away leaves a screen that reads like one it took — the run pane and `held-back` a road reads
+next are `Review` steps, and the note saying why the press was refused is not a word any assert asks
+for — so a road whose start was refused used to walk on green. Whether a run was raised is a row in
+the store, not something to read off a shot.
+
+So the runs the named automation has behind it are counted with `automation run-list --automation
+<id> --json`, through the driver that stood the world up, once before the step is handed over and
+again once it is shot. A plain start is `read` when the second count is the higher, and one written
+with `refused:` is `read` when it is not; otherwise the step is `fail` and reds the run, with both
+counts in `told`. The counts are compared rather than one run looked for, since a road can press
+start on one automation more than once. Only the counting is the CLI's: the press is the operator's,
+at the screen. Like the asserts above, a road carrying a start needs a `given:`.
+
 ### The asserts a screen draws cut — read off the accessibility tree
 
 A name is drawn in the space the element carrying it stands in, and a name longer than that space is
@@ -450,9 +466,10 @@ a tool other than the repo's own, and `--fixtures <dir>` at a shelf other than
 `verification/fixtures`. Both of those last two are resolved from where the harness was compiled
 when they are left out, so both have to be given to a run that is not standing in this tree — which
 is what `devtool vm verify run` passes for a run in the VM.
-Exit is 0 when every assert a machine judged — off the shot, or off the store — passed and every
-step was captured, non-zero on a failed assert or a load/capture/reading failure — a `Review` step is
-closed by a human from the evidence, not by the exit code.
+Exit is 0 when every assert a machine judged — off the shot, or off the store — passed, every press
+of `automation start` raised the run the road expected of it (see above), and every step was
+captured; non-zero on a failed assert, a start the store disagrees with, or a load/capture/reading
+failure — a `Review` step is closed by a human from the evidence, not by the exit code.
 
 **Name what to press rather than aim at it.** `swift scripts/screen.swift find <pid>` lists every
 element on screen with the name it answers to and where it stands — `--within <class>` narrows that

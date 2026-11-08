@@ -15,6 +15,10 @@
 //! [`amenbo_verify_gui::reads_the_store`]. Both tables are short, and both keep the shot.
 //! Everything else is left as a `Review` for a human eye, with its shot kept.
 //!
+//! One action is judged as well: the press that starts a run. The store is asked how many runs the
+//! automation has before the press and after it ([`amenbo_verify_gui::starts_a_run`]), so a start the
+//! app turned away is red rather than walked past.
+//!
 //! Usage: `verify-gui <scenario.yaml> --app <bundle.app> [--evidence <dir>] [--screen <path>]
 //!                    [--fixtures <dir>] [--json]`
 //!        `verify-gui <scenario.yaml> --print`
@@ -174,7 +178,7 @@ fn run(opts: &Opts) -> Result<bool, String> {
     // The world the scenario declared, stood up with the CLI this very bundle ships. Before the
     // launch, because a store is read as the app starts; and before there is an evidence directory,
     // because a premise that could not be stood up must leave no shots of a half-built world.
-    let mut world = stand_world(&scenario, bundle, &store, opts.fixtures.clone())?;
+    let world = stand_world(&scenario, bundle, &store, opts.fixtures.clone())?;
 
     let mut gui = launch::launch(bundle, &store)?;
     gui.wait_until_shootable(&opts.screen)?;
@@ -195,6 +199,9 @@ fn run(opts: &Opts) -> Result<bool, String> {
     for line in world.as_ref().map(World::stood).unwrap_or_default() {
         eprintln!("world: {line}");
     }
+    // Held where both readings of the store can reach it: the asserts nothing draws, and the runs a
+    // press of start is judged by.
+    let world = std::cell::RefCell::new(world);
     eprintln!(
         "{} step(s) — each one is handed over before it is shot",
         scenario.steps(amenbo_scenario::Driver::Gui).len()
@@ -219,9 +226,15 @@ fn run(opts: &Opts) -> Result<bool, String> {
         // The store the app is running against, asked through the driver that stood its world up.
         // A road with no world never reaches here — the door above turned it away — so a step that
         // arrives with nothing to read is this harness having gone wrong, not the road.
-        |step| match world.as_mut() {
+        |step| match world.borrow_mut().as_mut() {
             Some(w) => w.read(step),
             None => Err("internal: a step to read the store, on a road that stood none up".into()),
+        },
+        // The runs the automation a press of start names has behind it, counted in the same store
+        // before the press and after it. The press itself is the operator's; this only reads.
+        |step| match world.borrow().as_ref() {
+            Some(w) => w.runs_of(step),
+            None => Err("internal: a start to count runs for, on a road that stood no world up".into()),
         },
         // What the walk noticed and is not asking about. To stderr with the hand-over, since it is
         // read by the same eye at the same moment and a `--json` run keeps stdout to its one line.
@@ -236,6 +249,7 @@ fn run(opts: &Opts) -> Result<bool, String> {
         },
     )?;
 
+    let world = world.into_inner();
     let stood = world.as_ref().map(World::stood).unwrap_or_default();
     let manifest = write_manifest(&evidence, &scenario, stood, &outcome)?;
 

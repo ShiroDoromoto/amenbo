@@ -21,10 +21,12 @@
 //! tree instead, where the whole name stands, by asking the same tool to list what is on that
 //! window ([`reads_the_tree`]). What no screen draws at all is put to the store, through the
 //! CLI the bundle ships — a short, closed table ([`reads_the_store`]). Both keep the shot: the
-//! reading moves, the evidence does not. An assert none of them can settle — a structured
-//! field value — is left as a `Review`: its shot is kept for an AI/human eye, the run is not failed
-//! by it. tesseract stays the Linux container path (`scripts/docker/gui-e2e.sh`); each driver maps
-//! the one scenario source to its own world.
+//! reading moves, the evidence does not. One action is put to the store too: the press that starts
+//! a run is judged by whether the automation has one more run after it than before
+//! ([`starts_a_run`]). An assert none of them can settle — a structured field value — is left as a
+//! `Review`: its shot is kept for an AI/human eye, the run is not failed by it. tesseract stays the
+//! Linux container path (`scripts/docker/gui-e2e.sh`); each driver maps the one scenario source to
+//! its own world.
 //!
 //! The screen tool is the input primitive too, called by whoever drives the screen between steps:
 //! its `find` / `click-named` / `right-click-named` / `dblclick-named` / `point-named` / `click` /
@@ -8550,8 +8552,9 @@ fn show(v: &serde_yaml::Value) -> String {
 // ---------------------------------------------------------------------------
 
 /// One step's verdict. An action carries no screen judgment; an OCR-judged assert is `Pass` or
-/// `Fail`; an assert closed by reading the store is `Read` (or `Fail`); an assert neither of them
-/// can judge is `Review` — kept for an AI/human eye, never a run failure.
+/// `Fail`; an assert closed by reading the store is `Read` (or `Fail`), and so is the press that
+/// starts a run ([`starts_a_run`]); an assert neither of them can judge is `Review` — kept for an
+/// AI/human eye, never a run failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
     Action,
@@ -8586,9 +8589,31 @@ pub fn reads_the_store(domain: Domain, op: &str) -> bool {
     matches!((domain, op), (Domain::Store, "blobs"))
 }
 
-/// The same question of a whole step — an action is never one of these, however it is written.
+/// The same question of a whole step. An action is never one of these however it is written, with
+/// the one exception of the press that starts a run ([`starts_a_run`]).
 pub fn step_reads_the_store(step: &Step) -> bool {
     matches!(step, Step::Assert { domain, op, .. } if reads_the_store(*domain, op))
+        || starts_a_run(step).is_some()
+}
+
+/// Whether this step is the press that starts a run, and if so, whether the road expects a run to
+/// come of it: `Some(true)` for a plain start, `Some(false)` for one written with `refused:`.
+///
+/// It is the one action the walk judges, and the store is what judges it. A start the app turned
+/// away leaves a screen that reads like one it took — the pane a road reads next is a `Review`, and
+/// a note saying why the press was refused is not a word any assert asks for — so a road whose start
+/// was refused walked on green. Whether a run was raised is not a thing to read off a shot: it is a
+/// row in the store or it is not. So the runs the automation has behind it are counted before the
+/// press and again after it, through the driver that stood the world up, and the two are compared.
+/// The count is what is compared, not one run looked for, because a road can press start on one
+/// automation more than once.
+pub fn starts_a_run(step: &Step) -> Option<bool> {
+    match step {
+        Step::Action { domain: Domain::Automation, op, with, .. } if op == "start" => {
+            Some(!with.contains_key("refused"))
+        }
+        _ => None,
+    }
 }
 
 /// Whether an assert is read off the window's accessibility tree rather than off the shot.
@@ -8685,12 +8710,14 @@ pub struct StepRecord {
     pub slipped: bool,
     /// What the store answered, for an assert closed by reading it ([`reads_the_store`]) — the same
     /// line the CLI road reports that assert with. It is the whole of the evidence for such a step:
-    /// the shot beside it is of a screen that draws none of what was asked.
+    /// the shot beside it is of a screen that draws none of what was asked. For the press that
+    /// starts a run ([`starts_a_run`]), it is how many runs were counted before the press and after.
     pub told: Option<String>,
 }
 
 /// The whole walk: the per-step records and the roll-up. `passed` is the AND of every assert a
-/// machine judged — the OCR-judged ones and the ones read off the store — while actions and
+/// machine judged — the OCR-judged ones and the ones read off the store — and of every press that
+/// starts a run, judged by whether a run was raised ([`starts_a_run`]). The other actions and
 /// `Review` steps never fail it, so a release gate reads it directly.
 #[derive(Debug)]
 pub struct WalkOutcome {
@@ -8758,6 +8785,12 @@ pub struct StepBrief<'a> {
 /// like every other, since what makes the reading honest is that the screen ahead of it is the one
 /// the step before stood up.
 ///
+/// `count_runs` closes the press that starts a run ([`starts_a_run`]). It answers how many runs the
+/// automation the step names has behind it, and it is asked twice: before the step is handed over,
+/// and again once it is shot. A plain start passes when the second count is the higher, and one
+/// written with `refused:` passes when it is not. Either way the step is red when the store says
+/// otherwise, since a press the app refused leaves nothing on the screen any assert asks about.
+///
 /// `say` is where the walk speaks to whoever is driving without asking them anything, and it carries
 /// one remark: an `action` whose shot came back as the picture the step before it left
 /// ([`same_picture`]). That is the trace a step handed over and never carried out leaves — the hand-
@@ -8773,9 +8806,9 @@ pub struct StepBrief<'a> {
 /// nobody at the screen can name it — and a machine that would still answer for the name ends the
 /// walk there, since every step after it would be reading an agent that had not gone.
 // One argument per side effect the walk has on the world outside it, which is what makes the walk
-// testable without a screen: a struct around them would name the seven and hide none of them.
+// testable without a screen: a struct around them would name each of them and hide none.
 #[allow(clippy::too_many_arguments)]
-pub fn walk<C, O, T, M, H, R, S, Q, A>(
+pub fn walk<C, O, T, M, H, R, S, N, Q, A>(
     scenario: &Scenario,
     evidence_dir: &Path,
     mut capture: C,
@@ -8785,6 +8818,7 @@ pub fn walk<C, O, T, M, H, R, S, Q, A>(
     mut hand_over: H,
     mut run_again: R,
     mut read_store: S,
+    mut count_runs: N,
     mut say: Q,
     mut take_away: A,
 ) -> Result<WalkOutcome, String>
@@ -8796,6 +8830,7 @@ where
     H: FnMut(&StepBrief<'_>) -> Result<(), String>,
     R: FnMut() -> Result<(), String>,
     S: FnMut(&Step) -> Result<(bool, String), String>,
+    N: FnMut(&Step) -> Result<usize, String>,
     Q: FnMut(&str),
     A: FnMut(&str) -> Result<(), String>,
 {
@@ -8845,6 +8880,17 @@ where
             take_away(command)
                 .map_err(|e| format!("step {}: taking `{command}` away failed: {e}", i + 1))?;
         }
+
+        // The runs the automation has behind it before anyone presses start, so the count after the
+        // press has something to be compared with (`starts_a_run`).
+        let start = starts_a_run(step);
+        let runs_before = match start {
+            Some(_) => Some(
+                count_runs(step)
+                    .map_err(|e| format!("step {}: counting the runs failed: {e}", i + 1))?,
+            ),
+            None => None,
+        };
 
         // Handed over first, shot second. The screen is nobody's until somebody has been asked to
         // stand it up, and a shot taken before that is a photograph of the step before this one.
@@ -8898,6 +8944,38 @@ where
             }
         }
         before = Some((shot_at.map(str::to_string), shot_path.clone()));
+
+        // The press that starts a run, judged by whether the store holds one more run than it did
+        // before the press — or, for a press the road says is refused, by its not holding one.
+        if let (Some(raises), Some(was)) = (start, runs_before) {
+            let now = count_runs(step)
+                .map_err(|e| format!("step {}: counting the runs failed: {e}", i + 1))?;
+            let raised = now > was;
+            let pass = raised == raises;
+            if !pass {
+                passed = false;
+            }
+            records.push(StepRecord {
+                index: i,
+                kind,
+                domain: domain.to_string(),
+                op,
+                window: window.map(str::to_string),
+                instruction,
+                screenshot,
+                verdict: if pass { Verdict::Read } else { Verdict::Fail },
+                expected: None,
+                found: None,
+                slipped: false,
+                told: Some(format!(
+                    "the automation had {was} run(s) before the press and {now} after ({}, expected {}, {})",
+                    if raised { "a run was started" } else { "no run was started" },
+                    if raises { "one started" } else { "none, the start refused" },
+                    if pass { "as expected" } else { "MISMATCH" }
+                )),
+            });
+            continue;
+        }
 
         // The asserts nothing draws, put to the store instead of to the shot. Asked first, since a
         // step on that table names no expectation and would otherwise fall through to `Review`.
@@ -9216,6 +9294,11 @@ steps_gui:
     /// answering.
     fn nothing_to_read(_: &Step) -> Result<(bool, String), String> {
         unreachable!("no step on this road is closed by reading the store")
+    }
+
+    /// The counter handed to a walk over a road that presses no start ([`starts_a_run`]).
+    fn nothing_started(_: &Step) -> Result<usize, String> {
+        unreachable!("no step on this road starts a run")
     }
 
     /// The same, for [`reads_the_tree`]: a road with no step on that table is never to reach for
@@ -13139,6 +13222,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -13195,6 +13279,7 @@ steps_gui:
             },
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -13262,6 +13347,7 @@ steps_gui:
             },
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -13537,6 +13623,7 @@ steps_gui:
                 Ok(())
             },
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -13572,6 +13659,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -13606,6 +13694,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             |line| said.borrow_mut().push(line.to_string()),
             |_| Ok(()),
         )
@@ -13643,6 +13732,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             |line| said.borrow_mut().push(line.to_string()),
             |_| Ok(()),
         )
@@ -13686,6 +13776,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             |line| said.borrow_mut().push(line.to_string()),
             |_| Ok(()),
         )
@@ -13875,6 +13966,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -13906,6 +13998,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -13943,6 +14036,7 @@ steps_gui:
             },
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -13998,6 +14092,7 @@ steps_gui:
                 Ok(())
             },
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -14054,6 +14149,7 @@ steps_gui:
             },
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             unheard,
             |command| {
                 done.borrow_mut().push(format!("took {command}"));
@@ -14097,6 +14193,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Err("the operator's install answers for it".to_string()),
         )
@@ -14158,6 +14255,7 @@ given:
                 Ok(())
             },
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -14213,6 +14311,7 @@ steps_gui:
             |_| Ok(()),
             || Err("no window came up".to_string()),
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -14246,6 +14345,7 @@ steps_gui:
             |_| Err("nobody is watching".to_string()),
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -14311,6 +14411,7 @@ steps_gui:
                 *asked.borrow_mut() += 1;
                 Ok((true, "the store holds 1 blob file(s) (expected 1, as expected)".to_string()))
             },
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -14352,6 +14453,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             |_| Ok((false, "the store holds 0 blob file(s) (expected 1, MISMATCH)".to_string())),
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -14382,12 +14484,248 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             |_| Err("the binary would not run".to_string()),
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
         .unwrap_err();
 
         assert!(err.contains("step 2") && err.contains("would not run"), "got: {err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A road that presses start twice on one automation: once where the road says the app turns the
+    /// press away, and once where it should take it.
+    const STARTS: &str = r#"
+id: sample-start
+title: A press the app turns away, and one it takes
+given:
+  - { type: action, domain: automation, op: create, with: { name: SEED }, as: auto }
+steps_gui:
+  - type: action
+    domain: automation
+    op: start
+    with: { target: auto, refused: workspace_closed }
+  - type: action
+    domain: workspace
+    op: show-face
+    with: { face: workspace }
+  - type: action
+    domain: automation
+    op: start
+    with: { target: auto }
+    as: run
+"#;
+
+    /// A counter that answers the counts it was given, one per call, and fails the test when it is
+    /// asked more often than that.
+    fn counting(counts: &[usize]) -> impl FnMut(&Step) -> Result<usize, String> + '_ {
+        let mut next = counts.iter();
+        move |_: &Step| Ok(*next.next().expect("asked to count more often than the road presses start"))
+    }
+
+    fn walk_starts(dir: &Path, counts: &[usize]) -> WalkOutcome {
+        let s = load(STARTS);
+        walk(
+            &s,
+            dir,
+            |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_| unreachable!("no step on this road is read off the shot"),
+            nothing_on_the_tree,
+            nothing_on_the_menu,
+            |_| Ok(()),
+            || Ok(()),
+            nothing_to_read,
+            counting(counts),
+            unheard,
+            |_| Ok(()),
+        )
+        .expect("walk")
+    }
+
+    /// Only `automation start` is a press the store judges, and it takes the road's `refused:` as
+    /// the answer that no run comes of it.
+    #[test]
+    fn only_the_press_that_starts_a_run_is_counted_in_the_store() {
+        let start = |with: Args| Step::Action {
+            domain: Domain::Automation,
+            op: "start".to_string(),
+            with,
+            bind: None,
+            window: None,
+        };
+        assert_eq!(starts_a_run(&start(Args::new())), Some(true));
+        let mut refused = Args::new();
+        refused.insert("refused".to_string(), "workspace_closed".into());
+        assert_eq!(starts_a_run(&start(refused)), Some(false));
+        assert!(step_reads_the_store(&start(Args::new())), "a road with no world cannot count runs");
+        assert_eq!(
+            starts_a_run(&Step::Action {
+                domain: Domain::Automation,
+                op: "start-from-list".to_string(),
+                with: Args::new(),
+                bind: None,
+                window: None,
+            }),
+            None,
+        );
+    }
+
+    /// The red this was written for: start pressed, the app turned it away, and nothing on the screen
+    /// any assert asks about says so. The store holding no new run is what reds the step.
+    #[test]
+    fn a_start_that_raised_no_run_reds_the_run() {
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-start-red-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        // The refused press: none before, none after. The second press: still none after it.
+        let outcome = walk_starts(&dir, &[0, 0, 0, 0]);
+
+        assert!(!outcome.passed, "a start that raised no run is not green");
+        let refused = &outcome.records[0];
+        assert_eq!(refused.verdict, Verdict::Read, "the press the road says is refused raised none, as expected");
+        let pressed = &outcome.records[2];
+        assert_eq!(pressed.verdict, Verdict::Fail);
+        let told = pressed.told.as_deref().unwrap();
+        assert!(told.contains("no run was started") && told.contains("MISMATCH"), "got: {told}");
+
+        let manifest = write_manifest(&dir, &load(STARTS), &[], &outcome).expect("manifest");
+        let text = std::fs::read_to_string(manifest).unwrap();
+        assert!(text.contains("\"passed\":false"), "got: {text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The same road with the press taken: one run more after it than before, and the run is green.
+    /// The count before is taken ahead of the hand-over, and the count after once the step is shot.
+    #[test]
+    fn a_start_that_raised_a_run_is_green_and_is_counted_around_the_press() {
+        let s = load(STARTS);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-start-green-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let order: RefCell<Vec<&str>> = RefCell::new(Vec::new());
+        let counts = RefCell::new([0usize, 0, 0, 1].into_iter());
+        let outcome = walk(
+            &s,
+            &dir,
+            |_, p| {
+                order.borrow_mut().push("shot");
+                std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
+            },
+            |_| unreachable!("no step on this road is read off the shot"),
+            nothing_on_the_tree,
+            nothing_on_the_menu,
+            |_| {
+                order.borrow_mut().push("hand");
+                Ok(())
+            },
+            || Ok(()),
+            nothing_to_read,
+            |_| {
+                order.borrow_mut().push("count");
+                Ok(counts.borrow_mut().next().expect("counted twice per press"))
+            },
+            unheard,
+            |_| Ok(()),
+        )
+        .expect("walk");
+
+        assert!(outcome.passed);
+        assert_eq!(outcome.records[2].verdict, Verdict::Read);
+        assert!(outcome.records[2].told.as_deref().unwrap().contains("0 run(s) before the press and 1 after"));
+        assert_eq!(
+            *order.borrow(),
+            ["count", "hand", "shot", "count", "hand", "shot", "count", "hand", "shot", "count"],
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A press the road says is refused is red when a run comes of it anyway.
+    #[test]
+    fn a_refused_start_that_raised_a_run_reds_the_run() {
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-start-leak-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let outcome = walk_starts(&dir, &[0, 1, 1, 2]);
+
+        assert!(!outcome.passed);
+        assert_eq!(outcome.records[0].verdict, Verdict::Fail);
+        assert_eq!(outcome.records[2].verdict, Verdict::Read);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A store the runs could not be counted in is an execution failure, the way any other reading
+    /// of it is.
+    #[test]
+    fn runs_that_cannot_be_counted_abort_the_walk() {
+        let s = load(STARTS);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-start-err-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let err = walk(
+            &s,
+            &dir,
+            |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_| unreachable!("no step on this road is read off the shot"),
+            nothing_on_the_tree,
+            nothing_on_the_menu,
+            |_| Ok(()),
+            || Ok(()),
+            nothing_to_read,
+            |_| Err("the binary would not run".to_string()),
+            unheard,
+            |_| Ok(()),
+        )
+        .unwrap_err();
+
+        assert!(err.contains("step 1") && err.contains("would not run"), "got: {err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The road this was found on. Its start is pressed with no workspace open, and the app turns it
+    /// away; whatever the screen read, the store holding no new run reds it.
+    #[test]
+    fn the_waiting_run_road_is_red_when_its_start_raises_no_run() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("verification/")
+            .join("scenarios/follow-a-waiting-run-to-the-value-that-holds-it.yaml");
+        let s = load(&std::fs::read_to_string(path).expect("the road"));
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-start-road-{}", std::process::id()));
+
+        for (after, green) in [(0usize, false), (1, true)] {
+            let _ = std::fs::remove_dir_all(&dir);
+            let mut asked = 0;
+            let outcome = walk(
+                &s,
+                &dir,
+                |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+                |_| Ok(reading("")),
+                |_, _| Ok(reading("")),
+                || Ok(reading("")),
+                |_| Ok(()),
+                || Ok(()),
+                nothing_to_read,
+                |_| {
+                    asked += 1;
+                    Ok(if asked % 2 == 0 { after } else { 0 })
+                },
+                unheard,
+                |_| Ok(()),
+            )
+            .expect("walk");
+
+            let start = outcome
+                .records
+                .iter()
+                .find(|r| r.domain == "automation" && r.op == "start")
+                .expect("the road presses start");
+            let want = if green { Verdict::Read } else { Verdict::Fail };
+            assert_eq!(start.verdict, want, "told: {:?}", start.told);
+            if !green {
+                assert!(!outcome.passed, "a refused start is not green");
+            }
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -14464,6 +14802,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -14494,6 +14833,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -14538,6 +14878,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -14606,6 +14947,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -14663,6 +15005,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )
@@ -14693,6 +15036,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            nothing_started,
             unheard,
             |_| Ok(()),
         )

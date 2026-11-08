@@ -577,7 +577,12 @@ failuresTo?: AutomationFailuresToDto,
  * round reaches it (`AutomationPlacementDto::role_id`), and a step the one it falls back to
  * (`AutomationCarrierDto::chosen_at`).
  */
-roles: Array<AutomationRoleDto>, placements: Array<AutomationPlacementDto>, edges: Array<AutomationEdgeDto>, wires: Array<AutomationWireDto>, 
+roles: Array<AutomationRoleDto>, 
+/**
+ * **The most a role can have** ([`amenbo_core::model::MAX_ROLE_HEADCOUNT`], `AMB-D-1124`), so the
+ * build screen stops its "+" where core would refuse.
+ */
+maxHeadcount: number, placements: Array<AutomationPlacementDto>, edges: Array<AutomationEdgeDto>, wires: Array<AutomationWireDto>, 
 /**
  * **The runs going on this definition** — its own that are running or paused. The definition is
  * written all the same, and each run goes on from its snapshot (`AMB-D-1015`), so the build screen
@@ -896,7 +901,15 @@ name: string,
 /**
  * Whether the step may stop and ask a person (`automation_action_step.interactive`).
  */
-interactive: boolean, agent?: string, 
+interactive: boolean, 
+/**
+ * Whether a program runs the step in place of an agent (`AMB-D-1016`).
+ */
+script: boolean, 
+/**
+ * Whether the step is a built-in, which Amenbo itself carries out (`AMB-D-964`).
+ */
+builtin: boolean, agent?: string, 
 /**
  * Absent leaves the agent's own default model.
  */
@@ -922,6 +935,11 @@ export type AutomationRoleDto = { id: number, name: string,
  * How many are in it — how many of its tasks may be under way at once, from 1 up to the cap.
  */
 headcount: number, 
+/**
+ * **How many it has in the newest saved version** — what the next launch goes with. Absent for a
+ * role the version does not hold, and for every role of an automation nobody has saved.
+ */
+savedHeadcount?: number, 
 /**
  * The icon it is drawn with, by the name the GUI knows it under. Absent for none chosen.
  */

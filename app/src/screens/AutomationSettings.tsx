@@ -1,13 +1,22 @@
 // **What the automation holds as a whole, down the build screen's right** (`./AutomationBuildScreen`):
-// who a failed round is filed to, and its triggers. The roles stand down the left and what is built for
-// the picked one in the middle; these two are about none of the roles in particular, so they stand
-// beside both, always in view, each in a box of its own. How many go at once is no longer the
-// automation's to say: it is to be said role by role, by how many each has (`AMB-D-1123`).
+// who a failed round is filed to, its triggers, and how many each role has. The roles stand down the
+// left and what is built for the picked one in the middle; these are about none of the roles in
+// particular, or about all of them at once, so they stand beside both, always in view, each in a box
+// of its own.
+//
+// **How many go at once is said role by role** (`AMB-D-1123`): the box lists every role in the order
+// they are defined in, each with the actions placed for it and a stepper from 1 to the cap core sets
+// (`AMB-D-1124`), and under them the sum — the most tasks under way at once. The headcount is part of
+// the definition, so a step goes to the draft like any other write there, and a launch goes with it
+// once it is saved. A role whose draft differs from the saved version says what the version holds, and
+// the foot of the box saves or discards the draft with the head's own presses — the whole draft, not
+// the headcounts alone.
 //
 // **Every press here writes at once**, the way the "Edit" panel's fields do (`./AutomationAboutPanel`).
-// A trigger is a setting kept apart from the saved versions (`AMB-D-1119`), so the head's "Save" and
-// "Discard changes" neither keep nor undo it. A refusal is drawn once, at the top of the column, in the
-// words core wrote.
+// The headcounts are part of the saved versions, so the head's "Save" and "Discard changes" keep and
+// undo them. A trigger is a setting kept apart from the saved versions (`AMB-D-1119`), and so is who
+// failures are filed to: neither press keeps or undoes them. A refusal is drawn once, at the top of
+// the column, in the words core wrote.
 //
 // **Who failures are filed to is marked required.** A launch is refused while nobody is chosen
 // (`not_ready_automation_no_failures_to`), so a definition with none opens on "Choose one", which cannot
@@ -19,9 +28,12 @@
 // "+ Add a trigger", asks the build screen to open that trigger's card in its middle
 // (`./AutomationTrigger`), to change it or take it away, or to write a new one.
 import { useState } from "react";
-import { editAutomation } from "../core/automations";
+import { editAutomation, editAutomationRole } from "../core/automations";
+import { builtinWord } from "../core/builtinWords";
 import { errText, t, tf } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
+import { Stepper } from "../components/Stepper";
+import { RoleIcon } from "./AutomationRoles";
 import { taskLine, whenLine } from "./AutomationTrigger";
 import type {
   AutomationDetailDto,
@@ -41,11 +53,39 @@ function failuresOf(value: string): AutomationFailuresToDto | null {
   return null;
 }
 
+/** The fewest a role can have. The most is core's (`AutomationDetailDto.maxHeadcount`). */
+const MIN_HEADCOUNT = 1;
+
+/**
+ * **The head's "Save" and "Discard changes"**, handed down so the foot of the headcount box presses
+ * the same two, held back on the same terms.
+ */
+export type DraftPresses = {
+  save: () => void;
+  discard: () => void;
+  canSave: boolean;
+  canDiscard: boolean;
+};
+
+/** "Most N at once", with the number set off the way the sentence around it is not. */
+function TotalLine({ total }: { total: number }) {
+  const [before, after = ""] = t("auto.side.headcountTotal").split("{total}");
+  return (
+    <span>
+      {before}
+      <b className="autoside__num">{total}</b>
+      {after}
+    </span>
+  );
+}
+
 export function AutomationSettings({
   automation,
+  draft,
   onOpenTrigger,
 }: {
   automation: AutomationDetailDto;
+  draft: DraftPresses;
   /** Open a trigger's card: the one given, or a new one. */
   onOpenTrigger: (trigger: AutomationTriggerDto | undefined) => void;
 }) {
@@ -60,6 +100,11 @@ export function AutomationSettings({
     setRefused(null);
     editAutomation(automation.id, patch).catch((e: unknown) => setRefused(errText(e)));
   };
+  const writeHeadcount = (roleId: number, headcount: number) => {
+    setRefused(null);
+    editAutomationRole(roleId, { headcount }).catch((e: unknown) => setRefused(errText(e)));
+  };
+  const total = automation.roles.reduce((sum, role) => sum + role.headcount, 0);
 
   return (
     <div className="autoside">
@@ -118,6 +163,69 @@ export function AutomationSettings({
         <button type="button" className="btn autoside__add" onClick={() => onOpenTrigger(undefined)}>
           {t("auto.side.triggerAdd")}
         </button>
+      </div>
+
+      <div className="autoside__group autoside__group--flush">
+        <span className="autostep__label autoside__pad">{t("auto.side.headcount")}</span>
+        <ul className="autoside__roles">
+          {automation.roles.map((role) => {
+            const actions = automation.placements.filter((one) => one.roleId === role.id);
+            const saved = role.savedHeadcount;
+            return (
+              <li key={role.id} className="autoside__role">
+                <RoleIcon role={role} size={22} />
+                <div className="autoside__rolebody">
+                  <span className="autoside__rolename">{role.name}</span>
+                  {(actions.length > 0 || (saved !== undefined && saved !== role.headcount)) && (
+                    <span className="autoside__acts">
+                      {actions.map((one) => (
+                        <span key={one.id} className="autoside__act">
+                          {builtinWord(one.builtin, one.name)}
+                        </span>
+                      ))}
+                      {saved !== undefined && saved !== role.headcount && (
+                        <span className="autostep__hint">{tf("auto.side.headcountSaved", { n: saved })}</span>
+                      )}
+                    </span>
+                  )}
+                </div>
+                <Stepper
+                  value={role.headcount}
+                  min={MIN_HEADCOUNT}
+                  max={automation.maxHeadcount}
+                  label={tf("auto.side.headcountOf", { role: role.name })}
+                  valueText={tf("auto.side.headcountValue", { n: role.headcount })}
+                  lessLabel={t("auto.side.headcountLess")}
+                  moreLabel={t("auto.side.headcountMore")}
+                  onStep={(next) => writeHeadcount(role.id, next)}
+                />
+              </li>
+            );
+          })}
+        </ul>
+        <div className="autoside__total">
+          <TotalLine total={total} />
+          <span className="autostep__hint">
+            {tf("auto.side.headcountRange", { min: MIN_HEADCOUNT, max: automation.maxHeadcount })}
+          </span>
+        </div>
+        <div className="autoside__draft">
+          {automation.unsaved ? (
+            <>
+              <span>{t("auto.side.draftUnsaved")}</span>
+              <span className="autoside__presses">
+                <button type="button" className="btn" disabled={!draft.canDiscard} onClick={draft.discard}>
+                  {t("auto.side.draftDiscard")}
+                </button>
+                <button type="button" className="btn btn--primary" disabled={!draft.canSave} onClick={draft.save}>
+                  {t("auto.side.draftSave")}
+                </button>
+              </span>
+            </>
+          ) : (
+            <span className="autostep__hint">{t("auto.side.draftSame")}</span>
+          )}
+        </div>
       </div>
     </div>
   );

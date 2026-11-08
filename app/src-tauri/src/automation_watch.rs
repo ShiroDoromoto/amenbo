@@ -32,10 +32,10 @@
 //! `start` typed in a terminal cannot reach this process, so that one waits out the idle sleep.
 //!
 //! **One launch keeps its runs going side by side** (`top_up`). Each look asks every running launch
-//! whether one of its automation's roles has a free seat under its headcount, read from its newest saved
-//! version as it stands, and a task of its own to take, and starts one more run in that seat where it
-//! does — so a launch fills its seats one run a look, a run that ends makes room for the next, and a
-//! headcount raised and saved takes hold on the next look. A role none of whose runs is about to take a
+//! whether one of its automation's roles has a free seat under the headcount the launch holds for it,
+//! and a task of its own to take, and starts one more run in that seat where it does — so a launch fills
+//! its seats one run a look, a run that ends makes room for the next, and a headcount raised on the
+//! launch takes hold on the next look. A role none of whose runs is about to take a
 //! task is the only one given another, so two runs are not started for one task.
 //!
 //! **Triggers are asked here too** (`fire_triggers`): each look asks which are due before it looks at

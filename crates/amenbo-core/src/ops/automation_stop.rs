@@ -50,6 +50,12 @@
 //! run until it is picked up again. **A launch ends only where a person cancels or stops it**: one with
 //! no run under way stays open, and starts a run in a role's free seat once a task turns up for it.
 //!
+//! **One role of a launch is stopped apart from the rest** ([`hold_launch_role`]): its runs finish the
+//! task they are on and take no new one, and its seats stay empty until it is taken up again
+//! ([`release_launch_role`]). That is another thing than the launch's own pause, and than a headcount:
+//! picking the launch up again leaves the role stopped, and the role is taken up again at the headcount
+//! it had.
+//!
 //! **A crash is told to core, or read at startup.** A step's program that ends before its step has
 //! reported is seen by the app that started it, which says so here ([`step_ended`], `AMB-D-961`). An
 //! app that went away took its steps with it and can say nothing; what is left is the fact that a
@@ -842,6 +848,76 @@ pub fn resume_launch(
     Ok(LaunchActed { launch, runs })
 }
 
+/// **What stopping one role of a launch did** — the role's row for the launch as it stands now, and each
+/// run of it that was ended where it stood waiting to take a task.
+#[derive(Clone, Debug)]
+pub struct RoleHeld {
+    pub role: crate::model::AutomationLaunchRole,
+    pub runs: Vec<AutomationRun>,
+}
+
+/// **Stop one role of a launch taking tasks — "stop once the task is done"**
+/// ([`crate::model::AutomationLaunchRole::held`]). Each run of the role finishes the task it is on and
+/// takes no new one: it ends as it comes to take its next task, as a seat still to go does
+/// ([`crate::ops::automation_step::Opened::LetGo`]). Its seats stay empty while the role is stopped.
+/// A run of it standing waiting to take a task holds none, so it ends at once.
+///
+/// **Apart from the headcount**, which stays as it was (`AMB-D-1124`): taken up again
+/// ([`release_launch_role`]), the role fills its seats back up to it. Apart from the launch's own pause
+/// too ([`pause_launch_before_next_task`]): picking the launch up again leaves a role stopped as it was.
+///
+/// A role already stopped is answered as it stands. Refused for a launch that has ended, for one paused
+/// as a whole — every role takes no task then, and the role is stopped or taken up once the launch runs
+/// again — and for a role the newest saved version of its automation does not hold. Nothing is written
+/// then.
+pub fn hold_launch_role(tx: &WriteTx<'_>, launch_id: i64, role_id: i64) -> Result<RoleHeld> {
+    let (launch, role) = role_of_a_running_launch(tx, launch_id, role_id, "stopped")?;
+    let row = crate::ops::automation_run::launch_role_write(tx, &launch, &role, |r| r.held = true)?;
+    let mut runs = Vec::new();
+    for run_id in read::automation_launch_run_ids_under_way(tx.conn(), launch_id)? {
+        let run = live_run(tx, run_id)?;
+        if run.status == AutomationRunStatus::Running
+            && waits_to_take_a_task(tx.conn(), run_id)?
+            && crate::ops::automation_run::role_held(tx.conn(), &run)?
+        {
+            runs.push(ended(tx, run, Ending::Completed)?.run);
+        }
+    }
+    Ok(RoleHeld { role: row, runs })
+}
+
+/// **Take one role of a launch up again** — its seats are free again up to its headcount, and the app's
+/// look starts a run into one where the role has a task to take
+/// ([`crate::ops::automation_run::top_up`]). The headcount is the one it was stopped at.
+///
+/// A role not stopped is answered as it stands. Refused as [`hold_launch_role`] is.
+pub fn release_launch_role(
+    tx: &WriteTx<'_>,
+    launch_id: i64,
+    role_id: i64,
+) -> Result<crate::model::AutomationLaunchRole> {
+    let (launch, role) = role_of_a_running_launch(tx, launch_id, role_id, "taken up again")?;
+    crate::ops::automation_run::launch_role_write(tx, &launch, &role, |r| r.held = false)
+}
+
+/// A launch neither ended nor paused, and one role of the newest saved version of its automation — what
+/// stopping a role, or taking it up again, is asked of.
+fn role_of_a_running_launch(
+    tx: &WriteTx<'_>,
+    launch_id: i64,
+    role_id: i64,
+    doing: &str,
+) -> Result<(AutomationLaunch, crate::model::AutomationRole)> {
+    let (launch, role) = crate::ops::automation_run::launch_role(tx.conn(), launch_id, role_id)?;
+    if launch.status == AutomationLaunchStatus::Paused {
+        return Err(Error::invalid(format!(
+            "launch '{launch_id}' is paused as a whole, and a role of it is {doing} only while it runs — \
+             pick the launch up again first"
+        )));
+    }
+    Ok((launch, role))
+}
+
 /// **Cancel a paused launch** (`AMB-D-1002`) — each of its runs is canceled as one alone is ([`cancel`]),
 /// and the launch ends, its automation no longer waiting for a task to start a run on.
 ///
@@ -1128,7 +1204,7 @@ mod tests {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
-            Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::LeftToWait { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
+            Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::LeftToWait { .. } | crate::ops::automation_step::Opened::LetGo { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
             Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             Opened::Script(_) => panic!("not a script"),
             Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),
@@ -2143,7 +2219,7 @@ mod tests {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
-            Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::LeftToWait { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
+            Opened::Carried { .. } | crate::ops::automation_step::Opened::Waiting { .. } | crate::ops::automation_step::Opened::LeftToWait { .. } | crate::ops::automation_step::Opened::LetGo { .. } | crate::ops::automation_step::Opened::Holding { .. } => panic!("not a built-in"),
             Opened::LeftTaskOpen { .. } => panic!("left a task open"),
             Opened::Script(_) => panic!("not a script"),
             Opened::WaitsForRoom { .. } => panic!("not kept out of an action"),

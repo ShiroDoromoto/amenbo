@@ -2075,9 +2075,19 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     // A launch with no run behind it — one opened for an entry that waited, and never started one —
     // is filed under nothing a person reads, and goes with the automation.
     for launch in read::automation_launch_ids(tx.conn(), id)? {
-        tx.delete_record("automation_launch", launch)?;
+        launch_delete(tx, launch)?;
     }
     tx.delete_record("automation", id)?;
+    Ok(())
+}
+
+/// Delete one launch, with how many were in each role for it, which names it. Its runs have to be gone
+/// already.
+pub(crate) fn launch_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
+    for row in read::automation_launch_roles(tx.conn(), id)? {
+        tx.delete_record("automation_launch_role", row.id)?;
+    }
+    tx.delete_record("automation_launch", id)?;
     Ok(())
 }
 
@@ -2684,7 +2694,7 @@ fn checked_opt(what: &str, value: Option<&str>) -> Result<Option<String>> {
 
 /// How many are in a role: from 1 up to [`MAX_ROLE_HEADCOUNT`] (`AMB-D-1124`). A number past it is turned
 /// away rather than brought down to it, so what is written is what was asked for.
-fn checked_headcount(headcount: u32) -> Result<u32> {
+pub(crate) fn checked_headcount(headcount: u32) -> Result<u32> {
     if !(1..=MAX_ROLE_HEADCOUNT).contains(&headcount) {
         return Err(Error::invalid(format!(
             "how many are in a role is from 1 to {MAX_ROLE_HEADCOUNT}, not {headcount}"

@@ -2073,6 +2073,54 @@ impl Store {
         })
     }
 
+    /// **Change how many are in one role for this launch alone**
+    /// ([`crate::ops::automation_run::launch_headcount_set`]).
+    pub fn automation_launch_headcount_set(
+        &mut self,
+        launch_id: i64,
+        role_id: i64,
+        headcount: u32,
+    ) -> Result<crate::model::AutomationLaunchRole> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Launch, launch_id)], |tx| {
+            crate::ops::automation_run::launch_headcount_set(tx, launch_id, role_id, headcount)
+        })
+    }
+
+    /// **Put one role of this launch back at its definition's headcount**
+    /// ([`crate::ops::automation_run::launch_headcount_reset`]).
+    pub fn automation_launch_headcount_reset(
+        &mut self,
+        launch_id: i64,
+        role_id: i64,
+    ) -> Result<crate::model::AutomationLaunchRole> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Launch, launch_id)], |tx| {
+            crate::ops::automation_run::launch_headcount_reset(tx, launch_id, role_id)
+        })
+    }
+
+    /// **Stop one role of a launch taking tasks once the task under way is done**
+    /// ([`crate::ops::automation_stop::hold_launch_role`]).
+    pub fn automation_launch_role_hold(
+        &mut self,
+        launch_id: i64,
+        role_id: i64,
+    ) -> Result<crate::ops::automation_stop::RoleHeld> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Launch, launch_id)], |tx| {
+            crate::ops::automation_stop::hold_launch_role(tx, launch_id, role_id)
+        })
+    }
+
+    /// **Take one role of a launch up again** ([`crate::ops::automation_stop::release_launch_role`]).
+    pub fn automation_launch_role_release(
+        &mut self,
+        launch_id: i64,
+        role_id: i64,
+    ) -> Result<crate::model::AutomationLaunchRole> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Launch, launch_id)], |tx| {
+            crate::ops::automation_stop::release_launch_role(tx, launch_id, role_id)
+        })
+    }
+
     /// **Start one more run in a running launch**, where there is room and a task to take — or nothing
     /// (one operation = one transaction) — [`crate::ops::automation_run::top_up`]. A launch its checks
     /// refuse takes the whole transaction with it.

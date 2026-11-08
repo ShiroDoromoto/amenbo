@@ -2255,7 +2255,8 @@ pub struct AutomationRole {
     pub name: String,
     /// **How many are in it** — how many tasks under this role may be under way at once. From 1 up
     /// to [`MAX_ROLE_HEADCOUNT`], [`DEFAULT_ROLE_HEADCOUNT`] until somebody changes it. It is part of
-    /// the role, so a saved version keeps it; one saved without it reads as the default.
+    /// the role, so a saved version keeps it; one saved without it reads as the default. A launch
+    /// copies it as it opens ([`AutomationLaunchRole`]), so one saved takes hold from the next launch.
     #[serde(default = "default_role_headcount")]
     pub headcount: u32,
     /// **The order it takes its tasks in** — which of the tasks not started under it is reserved first.
@@ -2542,6 +2543,30 @@ pub struct AutomationLaunch {
     pub started_by_kind: Option<ActorKind>,
     #[serde(default)]
     pub ended_at: Option<Timestamp>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **How many are in one role for one launch** ([`AutomationLaunch`]) — the role's headcount copied from
+/// the newest saved version when the launch opened, then changed on the launch alone
+/// ([`crate::ops::automation_run::launch_headcount_set`]). The definition is left as it is: a headcount
+/// saved takes hold from the next launch, and once this one ends the next copies the definition again.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AutomationLaunchRole {
+    pub id: i64,
+    pub launch_id: i64,
+    /// The role, as the saved version names it — a plain id, kept whether or not the role is still in
+    /// the draft.
+    pub role_id: i64,
+    /// From 1 up to [`MAX_ROLE_HEADCOUNT`].
+    pub headcount: u32,
+    /// **The role is stopped taking tasks for this launch** — "stop once the task is done"
+    /// ([`crate::ops::automation_stop::hold_launch_role`]). Its runs finish the task they are on and take
+    /// no new one, and its free seats stay empty until it is taken up again
+    /// ([`crate::ops::automation_stop::release_launch_role`]). Apart from `headcount`, which stays as
+    /// it was: taken up again, the role fills its seats back up to it.
+    #[serde(default)]
+    pub held: bool,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

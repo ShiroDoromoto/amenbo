@@ -7,12 +7,14 @@
 // way out is drawn on every box, as the stop it is where nobody said what follows it**; and **a spot nothing reaches is still
 // drawn**, which is the state every half-built automation is in.
 import { describe, expect, it } from "vitest";
-import { tf } from "../core/i18n";
+import { t, tf } from "../core/i18n";
 import {
   automationGraph,
   edgeWord,
   layOut,
   openWord,
+  stepKind,
+  stepKindWord,
   wordLeft,
   TAKES_INSET,
   wordW,
@@ -20,10 +22,12 @@ import {
   type PicLine,
 } from "./automationLayout";
 import type {
+  AutomationCarrierDto,
   AutomationDetailDto,
   AutomationEdgeDto,
   AutomationPortDto,
   AutomationPlacementDto,
+  AutomationPlacementStepDto,
   AutomationTriggerDto,
   AutomationWireDto,
 } from "../bindings/bindings";
@@ -92,6 +96,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): PicGraph {
     placements: [],
     edges: [],
     wires: [],
+    maxHeadcount: 10,
     heldBy: [],
     unsaved: false,
     saveBlocks: [],
@@ -2280,6 +2285,13 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
 });
 
 describe("one role's round, as the build screen draws it", () => {
+  const byRole: AutomationCarrierDto = {
+    agent: "claude-code",
+    model: "opus",
+    chosenAt: { kind: "role", roleId: 20 },
+    agentByStep: false,
+    modelByStep: false,
+  };
   // Research hands Design its task; Design writes, checks, goes back to writing on "again", and hands
   // Build the rest. What Design writes takes the notes Research wrote, by a wire from its box.
   const roles = [
@@ -2314,8 +2326,8 @@ describe("one role's round, as the build screen draws it", () => {
         roleId: 20,
         inputs: [port("notes", "value")],
         steps: [
-          { stepId: 1, name: "案を考える", interactive: false },
-          { stepId: 2, name: "設計を書く", interactive: false },
+          { stepId: 1, name: "案を考える", interactive: false, script: false, builtin: false, carrier: byRole },
+          { stepId: 2, name: "設計を書く", interactive: false, script: false, builtin: false, carrier: byRole },
         ],
       }),
       step({
@@ -2338,6 +2350,7 @@ describe("one role's round, as the build screen draws it", () => {
       edge({ id: 5, fromId: 4, toId: 5 }),
     ],
     wires: [wire({ id: 1, fromId: 1, fromExitName: "完了", fromPortName: "notes", toId: 3, toPortName: "notes" })],
+    maxHeadcount: 10,
     heldBy: [],
     unsaved: false,
     saveBlocks: [],
@@ -2443,13 +2456,12 @@ describe("one role's round, as the build screen draws it", () => {
 
   it("sizes each action's box to what it says, so the actions of a round are seen side by side", () => {
     const picture = layOut(automationGraph(automation, 20));
-    const whole = layOut(automationGraph(automation));
     for (const node of picture.nodes) {
-      // Narrower than a box on the whole automation's picture, the names here being short.
-      expect(node.w).toBeLessThan(at(whole, node.boxId).w);
+      // As wide as its name or its row of steps, between the least and the most an action's box takes.
+      expect(node.w).toBeLessThanOrEqual(440);
       expect(node.w).toBeGreaterThanOrEqual(132);
-      // As tall as its lines: the name, and the steps under it at the least.
-      expect(node.h).toBeLessThan(100);
+      // As tall as its lines: the name, and the steps under it at the least — one row of cards here.
+      expect(node.h).toBeLessThan(140);
       expect(node.h % 2).toBe(0);
     }
   });
@@ -2513,8 +2525,104 @@ describe("one role's round, as the build screen draws it", () => {
   it("numbers each box as the whole automation does, and holds the steps inside each action", () => {
     const picture = layOut(automationGraph(automation, 20));
     expect(picture.nodes.map((node) => node.no)).toEqual([2, 3, 4]);
-    expect(at(picture, 3).steps).toEqual(["案を考える", "設計を書く"]);
+    expect(at(picture, 3).steps).toMatchObject([
+      { name: "案を考える", kind: "role" },
+      { name: "設計を書く", kind: "role" },
+    ]);
     expect(at(picture, 2).steps).toEqual([]);
+  });
+
+  it("goes on to the next row where the steps do not fit in one, and stands taller for it", () => {
+    const many = (count: number): AutomationDetailDto => ({
+      ...automation,
+      placements: automation.placements.map((one) =>
+        one.id === 3
+          ? {
+              ...one,
+              steps: Array.from({ length: count }, (_, n) => ({
+                stepId: n + 1,
+                name: `手順を一つ進める ${n + 1}`,
+                interactive: false,
+                script: false,
+                builtin: false,
+                carrier: byRole,
+              })),
+            }
+          : one,
+      ),
+    });
+    const one = at(layOut(automationGraph(many(1), 20)), 3);
+    const five = at(layOut(automationGraph(many(5), 20)), 3);
+    // Wider for the steps on one row, up to the widest a box gets, and taller by the rows past it.
+    expect(five.w).toBeGreaterThan(one.w);
+    expect(five.w).toBeLessThanOrEqual(440);
+    expect(five.h).toBeGreaterThan(one.h);
+    expect(five.h % 2).toBe(0);
+  });
+
+  it("stands no taller for steps that fit on one row, and draws each card as wide as it measured it", () => {
+    const withSteps = (steps: AutomationPlacementStepDto[]): AutomationDetailDto => ({
+      ...automation,
+      placements: automation.placements.map((one) => (one.id === 3 ? { ...one, steps } : one)),
+    });
+    const step = (stepId: number, name: string, over: Partial<AutomationPlacementStepDto> = {}) => ({
+      stepId,
+      name,
+      interactive: false,
+      script: false,
+      builtin: false,
+      carrier: byRole,
+      ...over,
+    });
+    const one = at(layOut(automationGraph(withSteps([step(1, "実装する")]), 20)), 3);
+    // Words short enough that every kind stays on one line of its card in the language the tests run in.
+    const three = at(
+      layOut(
+        automationGraph(
+          withSteps([
+            step(1, "実装する"),
+            step(2, "差分を読む", { carrier: { ...byRole, chosenAt: { kind: "step" }, agent: "cx", agentByStep: true } }),
+            step(3, "テスト", { script: true }),
+          ]),
+          20,
+        ),
+      ),
+      3,
+    );
+    expect(three.h).toBe(one.h);
+    const widths = three.steps!.map((card) => card.w);
+    expect(widths.every((w) => w <= 170)).toBe(true);
+    // The cards and the two arrows between them, with the gaps, fit inside the box on one row.
+    expect(widths.reduce((sum, w) => sum + w, 0) + 2 * (14 + 2 * 6)).toBeLessThanOrEqual(three.w - 18);
+  });
+
+  it("lets a kind too long for its card go on to the next line, and stands taller for it", () => {
+    const withAgent = (agent: string): AutomationDetailDto => ({
+      ...automation,
+      placements: automation.placements.map((one) =>
+        one.id === 3
+          ? {
+              ...one,
+              steps: [
+                {
+                  stepId: 1,
+                  name: "画面で動きを確かめる",
+                  interactive: false,
+                  script: false,
+                  builtin: false,
+                  carrier: { ...byRole, chosenAt: { kind: "step" }, agent, agentByStep: true },
+                },
+              ],
+            }
+          : one,
+      ),
+    });
+    const short = at(layOut(automationGraph(withAgent("cx"), 20)), 3);
+    const long = at(layOut(automationGraph(withAgent("cx"), 20, () => "とても長い名前のエージェント")), 3);
+    expect(long.steps![0].ownAgent).toBe("とても長い名前のエージェント");
+    expect(long.steps![0].w).toBe(170);
+    expect(long.h).toBeGreaterThan(short.h);
+    expect(long.h % 2).toBe(0);
   });
 
   it("counts an input fed from another role's box as reached", () => {
@@ -2523,5 +2631,52 @@ describe("one role's round, as the build screen draws it", () => {
 
   it("has nothing to draw for a role whose round reaches nothing", () => {
     expect(layOut(automationGraph(automation, 40)).nodes).toEqual([]);
+  });
+});
+
+describe("the kind of a step inside an action", () => {
+  const base: AutomationPlacementStepDto = { stepId: 1, name: "差分を読む", interactive: false, script: false, builtin: false };
+  const carrier = (over: Partial<AutomationCarrierDto>): AutomationCarrierDto => ({
+    agent: "claude-code",
+    model: "opus",
+    chosenAt: { kind: "role", roleId: 1 },
+    agentByStep: false,
+    modelByStep: false,
+    ...over,
+  });
+
+  it("asks a script first, then a person, then what the step chose, then the default it falls back to", () => {
+    const own = carrier({ chosenAt: { kind: "step" }, modelByStep: true, model: "haiku" });
+    expect(stepKind({ ...base, script: true, interactive: true }).kind).toBe("script");
+    expect(stepKind({ ...base, builtin: true }).kind).toBe("builtin");
+    expect(stepKind({ ...base, interactive: true, carrier: own }).kind).toBe("ask");
+    expect(stepKind({ ...base, carrier: own })).toEqual({ name: "差分を読む", kind: "own", ownModel: "haiku" });
+    expect(stepKind({ ...base, carrier: carrier({}) }).kind).toBe("role");
+    expect(stepKind({ ...base, carrier: carrier({ chosenAt: { kind: "amenbo" } }) }).kind).toBe("amenbo");
+    expect(stepKind(base).kind).toBe("unset");
+  });
+
+  it("says what a step chose for itself, and only what it set apart", () => {
+    const agentOnly = stepKind(
+      { ...base, carrier: carrier({ chosenAt: { kind: "step" }, agent: "browser", agentByStep: true }) },
+      (id) => (id === "browser" ? "ブラウザ操作" : id),
+    );
+    expect(stepKindWord(agentOnly)).toBe(
+      tf("auto.pic.stepOwn", { what: tf("auto.pic.stepOwnAgent", { name: "ブラウザ操作" }) }),
+    );
+    const modelOnly = stepKind({ ...base, carrier: carrier({ chosenAt: { kind: "step" }, model: "haiku", modelByStep: true }) });
+    expect(stepKindWord(modelOnly)).toBe(tf("auto.pic.stepOwn", { what: tf("auto.pic.stepOwnModel", { name: "haiku" }) }));
+    // A model of its own that is the agent's own default.
+    const noModel = stepKind({ ...base, carrier: carrier({ chosenAt: { kind: "step" }, model: undefined, modelByStep: true }) });
+    expect(stepKindWord(noModel)).toBe(
+      tf("auto.pic.stepOwn", { what: tf("auto.pic.stepOwnModel", { name: t("auto.step.modelDefault") }) }),
+    );
+    const both = stepKindWord(
+      stepKind({ ...base, carrier: carrier({ chosenAt: { kind: "step" }, agentByStep: true, modelByStep: true }) }),
+    );
+    expect(both).toContain(tf("auto.pic.stepOwnAgent", { name: "claude-code" }));
+    expect(both).toContain(tf("auto.pic.stepOwnModel", { name: "opus" }));
+    expect(stepKindWord(stepKind({ ...base, script: true }))).toBe(t("auto.pic.stepScript"));
+    expect(stepKindWord(stepKind(base))).toBe(t("auto.pic.stepUnset"));
   });
 });

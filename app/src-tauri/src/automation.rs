@@ -2494,6 +2494,13 @@ fn open_one(
             log::info!("run {run_id} found no task to take, and its automation waits for one");
             (run.project_id, None, None, Vec::new())
         }
+        // The run's seat was one still to go — the headcount of its role lowered on the launch, or the
+        // role stopped taking tasks for it — so it ended where it came to take its next task, with none
+        // taken. Its pane is taken down.
+        Opened::LetGo { run } => {
+            log::info!("run {run_id} let its seat go before taking its next task");
+            (run.project_id, None, None, Vec::new())
+        }
         // The action this step goes into takes one run at a time, and another run is in it or came to
         // it first. Nothing was written and nothing moved, so the pane is left as it stands and the
         // watch is not woken: it opens the step again on its next look. A pause asked for while it
@@ -3181,8 +3188,14 @@ fn detail_dto(
         .iter()
         .map(|p| (p.placement.id, p.action.as_ref().map(|one| one.name.clone()).unwrap_or_default()))
         .collect();
-    let roles =
-        view.roles.into_iter().map(|role| role_dto(role, &who.passes, &spot_names, &who.passed_titles)).collect();
+    let roles = view
+        .roles
+        .into_iter()
+        .map(|role| {
+            let saved_headcount = view.saved_headcounts.get(&role.id).copied();
+            role_dto(role, saved_headcount, &who.passes, &spot_names, &who.passed_titles)
+        })
+        .collect();
     AutomationDetailDto {
         id: a.id,
         project_id: a.project_id,
@@ -3195,6 +3208,7 @@ fn detail_dto(
         edges: view.edges.into_iter().map(|e| edge_dto(e, &names)).collect(),
         wires,
         roles,
+        max_headcount: amenbo_core::model::MAX_ROLE_HEADCOUNT,
         placements: view.placements.into_iter().map(|p| placement_dto(p, &mut who)).collect(),
         held_by,
         saved: view.saved.map(saved_dto),
@@ -3355,6 +3369,8 @@ fn placement_dto(view: automation_view::PlacementView, who: &mut Who) -> Automat
                 step_id: one.step.id,
                 name: one.step.name,
                 interactive: one.step.interactive,
+                script: one.step.script.is_some(),
+                builtin: one.step.builtin.is_some(),
                 agent: one.chosen.as_ref().map(|c| c.agent.clone()),
                 model: one.chosen.and_then(|c| c.model),
             })
@@ -3364,6 +3380,7 @@ fn placement_dto(view: automation_view::PlacementView, who: &mut Who) -> Automat
 
 fn role_dto(
     role: AutomationRole,
+    saved_headcount: Option<u32>,
     passes: &[automation_run::RolePass],
     spot_names: &BTreeMap<i64, String>,
     passed_titles: &BTreeMap<i64, String>,
@@ -3387,6 +3404,7 @@ fn role_dto(
         id: role.id,
         name: role.name,
         headcount: role.headcount,
+        saved_headcount,
         icon: role.icon,
         entry_placement_id: role.entry_placement_id,
         agent: role.agent,
@@ -3521,7 +3539,7 @@ mod tests {
         ]);
         let titles = BTreeMap::from([(7, "テストを足す：検索の絞り込み".to_string())]);
         let json = |id: i64, name: &str| {
-            let dto = role_dto(role(id, name), &passes, &spots, &titles);
+            let dto = role_dto(role(id, name), None, &passes, &spots, &titles);
             serde_json::to_value(dto).expect("json")["passes"].clone()
         };
         assert_eq!(
@@ -3535,6 +3553,19 @@ mod tests {
             ]),
         );
         assert_eq!(json(3, "Carol"), serde_json::json!([]), "a role whose round passes nothing");
+    }
+
+    /// **A role goes out with how many it has in the saved version** beside the draft's, and without it
+    /// where the version holds no such role.
+    #[test]
+    fn a_role_goes_out_with_how_many_it_has_in_the_saved_version() {
+        let role = AutomationRole { id: 1, name: "Alice".into(), headcount: 3, ..Default::default() };
+        let json = |saved: Option<u32>| {
+            serde_json::to_value(role_dto(role.clone(), saved, &[], &BTreeMap::new(), &BTreeMap::new())).expect("json")
+        };
+        let saved = json(Some(2));
+        assert_eq!((saved["headcount"].as_u64(), saved["savedHeadcount"].as_u64()), (Some(3), Some(2)));
+        assert!(json(None).get("savedHeadcount").is_none(), "a role the saved version does not hold");
     }
 
     /// **A task passed on goes out with the roles at both ends and the task**, and leaves out what has

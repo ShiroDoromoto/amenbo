@@ -1476,6 +1476,21 @@ pub const STEPS: &[Step] = &[
         // hand is the `task.order_key` already there.
         apply: Apply::Custom(give_each_role_a_take_order),
     },
+    Step {
+        to: 130,
+        name: "add automation_launch_role, how many are in each role for one launch, copied from the definition when it opens",
+        // **Seeded only for the launches not ended** (`running`, `paused`): each role of the automation's
+        // newest saved version — its draft where nothing is saved — at the headcount written there, which
+        // is what the launch sat in until now. An ended launch is given none. No task is touched.
+        apply: Apply::Custom(give_each_launch_its_headcount),
+    },
+    Step {
+        to: 131,
+        name: "add automation_launch_role.held, a role stopped taking tasks for one launch",
+        // **Seeded, and the seed is not a guess: `0` on every row.** No build before this one could stop
+        // a role on its own. No task is touched.
+        apply: Apply::Custom(give_each_launch_role_a_hold),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -1516,6 +1531,96 @@ fn give_each_role_a_take_order(ctx: &Ctx<'_>) -> Result<()> {
             tx.execute(
                 "UPDATE automation_version SET roles = ?1 WHERE id = ?2",
                 rusqlite::params![serde_json::Value::Array(roles).to_string(), version_id],
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// v131: `automation_launch_role.held` — a role a person stopped taking tasks for one launch, apart from
+/// its headcount.
+///
+/// **Appended only where it is missing**, v68's guard and for v53's reason. A store with no automation
+/// adds the column to an empty table and writes nothing.
+fn give_each_launch_role_a_hold(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_launch_role")?.iter().any(|c| c == "held") {
+        tx.execute_batch(
+            "ALTER TABLE automation_launch_role ADD COLUMN held BOOLEAN NOT NULL DEFAULT 0 CHECK(held IN (0, 1));",
+        )?;
+    }
+    Ok(())
+}
+
+/// v130: `automation_launch_role`, **how many are in each role for one launch** — copied from the
+/// definition when the launch opens, and changed on the launch alone from then on.
+///
+/// **The table is `CREATE TABLE IF NOT EXISTS` over frozen text**, for v50's reason.
+///
+/// Each launch `running` or `paused` is given one row per role of its automation's newest saved version
+/// (its `roles` JSON), at the headcount written there; where the automation has no saved version, the
+/// roles of its draft. That is the headcount the launch's seats were read from until now, so nothing
+/// under way changes. An ended launch is given none: nothing reads it again.
+///
+/// **Only the automation tables are read and written.** A store with no automation creates an empty
+/// table and writes nothing.
+fn give_each_launch_its_headcount(ctx: &Ctx<'_>) -> Result<()> {
+    const TS: &str = "'[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'";
+    let tx = ctx.tx;
+    tx.execute_batch(&format!(
+        "CREATE TABLE IF NOT EXISTS automation_launch_role (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    launch_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_launch(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    role_id BIGINT NOT NULL DEFAULT 0,
+    headcount BIGINT NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB {TS}),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB {TS}),
+    UNIQUE (launch_id, role_id)
+);"
+    ))?;
+    let mut standing: Vec<(i64, i64)> = Vec::new();
+    {
+        let mut stmt = tx.prepare(
+            "SELECT id, automation_id FROM automation_launch WHERE status IN ('running', 'paused') ORDER BY id",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        for row in rows {
+            standing.push(row?);
+        }
+    }
+    let now = crate::time::Timestamp::now().to_rfc3339_z();
+    for (launch_id, automation_id) in standing {
+        let saved: Option<String> = tx
+            .query_row(
+                "SELECT roles FROM automation_version WHERE automation_id = ?1 ORDER BY version DESC LIMIT 1",
+                [automation_id],
+                |r| r.get(0),
+            )
+            .optional()?;
+        let mut roles: Vec<(i64, i64)> = Vec::new();
+        match saved {
+            Some(json) => {
+                let parsed: Vec<serde_json::Value> = serde_json::from_str(&json).unwrap_or_default();
+                for role in parsed {
+                    let Some(id) = role.get("id").and_then(serde_json::Value::as_i64) else { continue };
+                    let headcount = role.get("headcount").and_then(serde_json::Value::as_i64).unwrap_or(1);
+                    roles.push((id, headcount));
+                }
+            }
+            None => {
+                let mut stmt =
+                    tx.prepare("SELECT id, headcount FROM automation_role WHERE automation_id = ?1 ORDER BY id")?;
+                let rows = stmt.query_map([automation_id], |r| Ok((r.get(0)?, r.get(1)?)))?;
+                for row in rows {
+                    roles.push(row?);
+                }
+            }
+        }
+        for (role_id, headcount) in roles {
+            tx.execute(
+                "INSERT OR IGNORE INTO automation_launch_role (launch_id, role_id, headcount, created_at, updated_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?4)",
+                rusqlite::params![launch_id, role_id, headcount, now],
             )?;
         }
     }
@@ -12937,6 +13042,105 @@ mod tests {
         assert_eq!(columns("task"), task_before, "the task table is not changed");
         let n: i64 = engine.conn().query_row("SELECT COUNT(*) FROM automation_role", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v130: a launch not ended is given the headcount of each role of its automation's newest saved
+    /// version, or of its draft where nothing is saved. An ended launch is given none.
+    #[test]
+    fn every_launch_standing_copies_its_headcount_at_v130() {
+        let dir = scratch("automation-launch-role");
+        let engine = store_at(&dir, 129);
+        let at = "2026-11-08T00:00:00Z";
+        let saved = r#"[{"id":1,"automation_id":1,"name":"さくら","headcount":3,"order_key":"a","created_at":"2026-11-08T00:00:00Z","updated_at":"2026-11-08T00:00:00Z"},{"id":2,"automation_id":1,"name":"山田","headcount":2,"order_key":"b","created_at":"2026-11-08T00:00:00Z","updated_at":"2026-11-08T00:00:00Z"}]"#;
+        engine
+            .conn()
+            .execute_batch(&format!(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 1, '開発', 'm', '{at}', '{at}'), (2, 1, 'レビュー', 'n', '{at}', '{at}');
+                 INSERT INTO automation_role (id, automation_id, name, headcount, order_key, created_at, updated_at)
+                 VALUES (1, 1, 'さくら', 5, 'a', '{at}', '{at}'), (2, 1, '山田', 2, 'b', '{at}', '{at}'),
+                        (3, 2, '佐藤', 4, 'a', '{at}', '{at}');
+                 INSERT INTO automation_version (automation_id, version, placements, cfgs, placement_steps, edges, wires, roles, created_at, updated_at)
+                 VALUES (1, 1, '[]', '[]', '[]', '[]', '[]', '[]', '{at}', '{at}'),
+                        (1, 2, '[]', '[]', '[]', '[]', '[]', '{saved}', '{at}', '{at}');
+                 INSERT INTO automation_launch (id, automation_id, project_id, status, created_at, updated_at)
+                 VALUES (1, 1, 1, 'running', '{at}', '{at}'), (2, 2, 1, 'paused', '{at}', '{at}'),
+                        (3, 1, 1, 'ended', '{at}', '{at}');"
+            ))
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let counts = |launch: i64| -> Vec<(i64, i64)> {
+            let mut stmt = engine
+                .conn()
+                .prepare("SELECT role_id, headcount FROM automation_launch_role WHERE launch_id = ?1 ORDER BY role_id")
+                .unwrap();
+            stmt.query_map([launch], |r| Ok((r.get(0)?, r.get(1)?))).unwrap().map(|r| r.unwrap()).collect()
+        };
+        assert_eq!(counts(1), vec![(1, 3), (2, 2)], "the newest saved version, not the draft");
+        assert_eq!(counts(2), vec![(3, 4)], "a paused launch too, from the draft where nothing is saved");
+        assert_eq!(counts(3), vec![], "an ended launch is given none");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v130 on a store with no automation only creates an empty table.
+    #[test]
+    fn a_store_with_no_automation_writes_no_launch_headcount_at_v130() {
+        let dir = scratch("automation-launch-role-empty");
+        let engine = store_at(&dir, 129);
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let n: i64 =
+            engine.conn().query_row("SELECT COUNT(*) FROM automation_launch_role", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v131: every role a launch already holds arrives taking tasks — no build before this one could stop
+    /// a role on its own — and the task table is not changed.
+    #[test]
+    fn every_launch_role_already_written_is_not_held_at_v131() {
+        let dir = scratch("automation-launch-role-held");
+        let engine = store_at(&dir, 130);
+        let at = "2026-11-08T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 1, '開発', 'm', '{at}', '{at}');
+                 INSERT INTO automation_launch (id, automation_id, project_id, status, created_at, updated_at)
+                 VALUES (1, 1, 1, 'running', '{at}', '{at}');
+                 INSERT INTO automation_launch_role (launch_id, role_id, headcount, created_at, updated_at)
+                 VALUES (1, 1, 3, '{at}', '{at}'), (1, 2, 1, '{at}', '{at}');"
+            ))
+            .unwrap();
+        let columns = |table: &str| -> Vec<String> {
+            let mut stmt =
+                engine.conn().prepare("SELECT name FROM pragma_table_info(?1) ORDER BY cid").unwrap();
+            stmt.query_map([table], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+        };
+        let task_before = columns("task");
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let mut stmt = engine
+            .conn()
+            .prepare("SELECT headcount, held FROM automation_launch_role ORDER BY role_id")
+            .unwrap();
+        let rows: Vec<(i64, bool)> =
+            stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap().map(|v| v.unwrap()).collect();
+        assert_eq!(rows, vec![(3, false), (1, false)], "the headcount is kept, and nothing is held");
+        assert!(
+            engine.conn().execute("UPDATE automation_launch_role SET held = 2 WHERE role_id = 1", []).is_err(),
+            "only the two booleans go in"
+        );
+        assert_eq!(columns("task"), task_before, "the task table is not changed");
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -18,6 +18,8 @@
 //! the terminal prints one; resolved twice, the two would drift, and an automation that read one way
 //! on screen and another way in a terminal is the same automation in name only.
 
+use std::collections::BTreeMap;
+
 use rusqlite::Connection;
 use serde::Serialize;
 
@@ -102,6 +104,11 @@ pub struct AutomationView {
     pub wires: Vec<AutomationWire>,
     /// The roles defined in the automation, in the order they are defined in.
     pub roles: Vec<AutomationRole>,
+    /// **How many each role has in the newest saved version**, by role id — what the next launch goes
+    /// with (`AMB-D-1123`). A role the version does not hold, and every role of an automation nobody
+    /// has saved, is missing. A role keeps its id across a save and a discard (`AMB-D-961`), so the
+    /// draft's roles are matched to the version's by it.
+    pub saved_headcounts: BTreeMap<i64, u32>,
 }
 
 /// **One placement**, with the action standing on it read in and the declarations it runs under
@@ -375,7 +382,12 @@ pub fn detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>> {
     let edges = read::automation_edges_of(conn, AutomationPictureOwner::Automation, id)?;
     let wires = read::automation_wires_of(conn, AutomationPictureOwner::Automation, id)?;
     let roles = read::automation_roles_of(conn, id)?;
-    let saved = saved_version(conn, id)?;
+    let version = read::automation_version_latest(conn, id)?;
+    let saved_headcounts = match &version {
+        Some(version) => headcounts(&rows(saved_roles(version))?),
+        None => BTreeMap::new(),
+    };
+    let saved = version.map(|v| SavedVersion { version: v.version, saved_at: v.created_at });
     let unsaved = super::automation::unsaved(conn, id)?;
     Ok(Some(AutomationView {
         automation,
@@ -386,6 +398,7 @@ pub fn detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>> {
         edges,
         wires,
         roles,
+        saved_headcounts,
     }))
 }
 
@@ -424,6 +437,7 @@ pub fn saved_detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>
         placements.push(view);
     }
     automation.entry_placement_id = version.entry_placement_id;
+    let roles: Vec<AutomationRole> = rows(saved_roles(&version))?;
     Ok(Some(AutomationView {
         automation,
         showing: Showing::Saved,
@@ -432,8 +446,14 @@ pub fn saved_detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>
         placements,
         edges: rows(&version.edges)?,
         wires: rows(&version.wires)?,
-        roles: rows(saved_roles(&version))?,
+        saved_headcounts: headcounts(&roles),
+        roles,
     }))
+}
+
+/// How many each of `roles` has, by its id.
+fn headcounts(roles: &[AutomationRole]) -> BTreeMap<i64, u32> {
+    roles.iter().map(|role| (role.id, role.headcount)).collect()
 }
 
 /// The newest saved version of one automation, or `None` where nobody has saved it.
@@ -734,6 +754,31 @@ mod tests {
             assert_eq!(placed(&view, placement.id), (Some(1), Some(2)));
             assert_eq!(view.saved.as_ref().map(|v| v.version), Some(1));
             assert!(!view.unsaved);
+        });
+    }
+
+    /// **A show names how many each role has in the newest saved version**, by the role's id: none
+    /// before a save, the number saved while the draft has moved past it, the draft's once it is saved
+    /// again, and nothing for a role added since.
+    #[test]
+    fn a_show_names_how_many_each_role_has_in_the_saved_version() {
+        use crate::ops::automation::{role_add, role_update, version_add, NewRole, RoleChange};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation =
+                add(tx, project, NewAutomation { name: "1件やりきる".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
+            let role = crate::store_engine::read::automation_roles_of(tx.conn(), automation.id).unwrap()[0].clone();
+            let saved = |tx: &crate::store_engine::WriteTx<'_>| detail(tx.conn(), automation.id).unwrap().unwrap().saved_headcounts;
+            assert!(saved(tx).is_empty(), "nobody has saved it");
+
+            version_add(tx, automation.id).unwrap();
+            role_update(tx, role.id, RoleChange { headcount: Some(3), ..RoleChange::default() }).unwrap();
+            let added = role_add(tx, automation.id, NewRole { name: "Bob".into(), ..NewRole::default() }).unwrap();
+            assert_eq!(saved(tx), BTreeMap::from([(role.id, 1)]), "the draft moved on; the version did not");
+
+            version_add(tx, automation.id).unwrap();
+            assert_eq!(saved(tx), BTreeMap::from([(role.id, 3), (added.id, 1)]));
+            assert_eq!(saved_detail(tx.conn(), automation.id).unwrap().unwrap().saved_headcounts, saved(tx));
         });
     }
 

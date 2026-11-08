@@ -41,6 +41,7 @@ const automation: AutomationDetailDto = {
   placements: [],
   edges: [],
   wires: [],
+  maxHeadcount: 10,
   heldBy: [],
   unsaved: false,
   saveBlocks: [],

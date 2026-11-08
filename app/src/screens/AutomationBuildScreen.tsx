@@ -97,10 +97,11 @@
 // a step chose for itself marked (`./AutomationRoleCarriers`).
 //
 // **What the automation holds as a whole stands down the right** (`./AutomationSettings`): who a
-// failed round is filed to, and its triggers, each in a box of its own. They are about none of the
-// roles in particular, so they stand beside the left and the middle rather than in either. Pressing a
-// trigger opens its card in the middle, where the picture stands (`./AutomationTrigger`), until the
-// card is closed or a role is picked on the left.
+// failed round is filed to, its triggers, and how many each role has, each in a box of its own. They
+// are about none of the roles in particular, or about all of them at once, so they stand beside the
+// left and the middle rather than in either. Pressing a trigger opens its card in the middle, where the
+// picture stands (`./AutomationTrigger`), until the card is closed or a role is picked on the left. The
+// headcount box ends on the head's own "Save" and "Discard changes", held back on the same terms.
 //
 // **The head says what is saved** (`./AutomationSaved`, `AMB-D-1005`): nothing yet, changes not
 // saved, or the version saved last and when. A write still marks the field it came from.
@@ -112,6 +113,7 @@ import { AutomationPicture } from "./AutomationPicture";
 import { AutomationRoleHead, AutomationRoleList, AutomationRoleWho } from "./AutomationRoles";
 import { AutomationRoleCarriers } from "./AutomationRoleCarriers";
 import { automationGraph, pictureOrder } from "./automationLayout";
+import { useAgents } from "./automationPanel";
 import { AutomationActionMake } from "./AutomationActionMake";
 import { AutomationActionOver } from "./AutomationActionOver";
 import { AutomationHeldBy } from "./AutomationHeldBy";
@@ -280,8 +282,13 @@ export function AutomationBuildScreen({
       : automation?.triggers.find((one) => one.id === triggerOpen.id);
   const triggerShown = triggerOpen === "new" || openTrigger !== undefined;
   // The picture in the middle is that role's round (`automationGraph`), laid out again only when the
-  // definition or the role changes.
-  const roundGraph = useMemo(() => automationGraph(automation, role?.id), [automation, role?.id]);
+  // definition, the role or the agents change. A step that chose its own agent names it on the
+  // picture as the table of carriers does.
+  const agents = useAgents(projectId);
+  const roundGraph = useMemo(
+    () => automationGraph(automation, role?.id, (id) => agents.find((one) => one.id === id)?.label ?? id),
+    [automation, role?.id, agents],
+  );
   // How wide that round's row has to be, as the picture tells it, and whether the three places go one
   // under another to give it that.
   const [rowNeeds, setRowNeeds] = useState<number | undefined>(undefined);
@@ -576,6 +583,12 @@ export function AutomationBuildScreen({
           {automation !== null && (
             <AutomationSettings
               automation={automation}
+              draft={{
+                save,
+                discard: () => void discard(),
+                canSave: automation.unsaved && saveBlocks.length === 0 && !keeping,
+                canDiscard: automation.saved !== undefined && automation.unsaved && !keeping,
+              }}
               onOpenTrigger={(trigger) => setTriggerOpen(trigger === undefined ? "new" : { id: trigger.id })}
             />
           )}

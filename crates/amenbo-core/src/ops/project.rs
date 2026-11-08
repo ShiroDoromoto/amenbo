@@ -194,9 +194,10 @@ pub fn delete(tx: &WriteTx<'_>, id: i64, actor: ActorKind) -> Result<Vec<String>
     for run_id in read::automation_run_ids_in_project(tx.conn(), id)? {
         orphaned.extend(crate::ops::automation::run_delete(tx, run_id)?);
     }
-    // A launch holds nothing but its runs, which name it, so it goes once they have gone.
+    // A launch holds nothing but its runs, which name it, and how many are in each role for it, so it
+    // goes once they have gone.
     for launch_id in read::automation_launch_ids_in_project(tx.conn(), id)? {
-        tx.delete_record("automation_launch", launch_id)?;
+        crate::ops::automation::launch_delete(tx, launch_id)?;
     }
     for automation_id in read::automation_ids_in_project(tx.conn(), id)? {
         crate::ops::automation::delete(tx, automation_id)?;

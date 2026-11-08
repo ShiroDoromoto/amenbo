@@ -60,7 +60,7 @@ function placement(id: number, roleId: number | undefined, steps: number): Autom
     exits: [],
     inputs: [],
     settings: [],
-    steps: Array.from({ length: steps }, (_, n) => ({ stepId: id * 10 + n, name: `step ${n}`, interactive: false })),
+    steps: Array.from({ length: steps }, (_, n) => ({ stepId: id * 10 + n, name: `step ${n}`, interactive: false, script: false, builtin: false })),
   };
 }
 
@@ -79,6 +79,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     placements: [placement(1, 1, 2), placement(2, 1, 3), placement(3, 2, 1), placement(4, undefined, 4)],
     edges: [],
     wires: [],
+    maxHeadcount: 10,
     heldBy: [],
     unsaved: false,
     saveBlocks: [],

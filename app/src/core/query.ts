@@ -29,6 +29,12 @@
 // and the case where the feed cannot say what changed (gap → reconcile), reach for the coarse
 // `invalidateAllQueries`. This layer never subscribes to the snapshot itself.
 //
+// A key has at most one fetch in flight. An invalidation that lands while it is still running starts no
+// second fetch; it only marks the entry, and once the running fetch settles (resolved or rejected) the key is
+// fetched exactly once more. Repeated store changes during a slow read would otherwise stack the same read
+// on the store's queue and hold up every other read behind it, while the one fetch after settling still
+// guarantees a read that starts after the last change.
+//
 // Key convention (QueryKey = an array of primitives; the first element is the namespace, and targeted
 // invalidation narrows on that prefix):
 //   ["taskPage", projectId, filter, sort, limit, offset]  one page of a list/board
@@ -58,6 +64,8 @@ interface Entry {
   state: QueryState<unknown>;               // Stable reference. Swapped for a new object only when the contents change.
   subscribers: Map<() => void, Fetcher>;    // Re-render trigger → fetcher of each subscribed hook. **Non-empty = live** (the sole liveness condition).
   version: number;                          // Fetch generation. Discards stale (out-of-order) resolutions.
+  inFlight: boolean;                        // A fetch for this key is running; a revalidate meanwhile only sets `again`.
+  again: boolean;                           // An invalidation arrived during the running fetch: fetch once more when it settles.
 }
 
 /** live = it has subscribers. What gets invalidated, and what may be evicted, both follow from this one predicate. */
@@ -181,7 +189,7 @@ function setState(e: Entry, next: QueryState<unknown>): void {
 function subscribe(keyStr: string, listener: () => void, fetcher: Fetcher): Entry {
   let e = cache.get(keyStr);
   if (!e) {
-    e = { state: INITIAL, subscribers: new Map(), version: 0 };
+    e = { state: INITIAL, subscribers: new Map(), version: 0, inFlight: false, again: false };
     cache.set(keyStr, e);
   }
   e.subscribers.set(listener, fetcher);
@@ -210,7 +218,19 @@ function unsubscribe(keyStr: string, e: Entry, listener: () => void): void {
 
 function revalidate(keyStr: string): void {
   const e = cache.get(keyStr);
-  if (!e) return;
+  if (e) refetch(e);
+}
+
+/**
+ * Fetch the entry with a fetcher still on its key, unless one of its fetches is already running — then only
+ * mark it, and fetch once more when that one settles. The follow-up asks the subscribers of that moment for a
+ * fetcher, never reusing the one the first fetch ran (that subscriber may have moved to another key since).
+ */
+function refetch(e: Entry): void {
+  if (e.inFlight) {
+    e.again = true;
+    return;
+  }
   let fetching: Promise<unknown> | null = null;
   for (const f of e.subscribers.values()) {
     fetching = f();
@@ -218,10 +238,17 @@ function revalidate(keyStr: string): void {
   }
   if (!fetching) return; // Every subscriber has moved off this key; their effect cleanups are about to release it.
   const v = ++e.version;
+  e.inFlight = true;
   if (!e.state.loading) setState(e, { ...e.state, loading: true }); // Keep the cached data, mark it as refetching.
   fetching
     .then((data) => { if (e.version === v) setState(e, { data, loading: false, error: undefined }); })
-    .catch((error) => { if (e.version === v) setState(e, { ...e.state, loading: false, error }); });
+    .catch((error) => { if (e.version === v) setState(e, { ...e.state, loading: false, error }); })
+    .finally(() => {
+      e.inFlight = false;
+      if (!e.again) return;
+      e.again = false;
+      refetch(e); // Runs nothing if every subscriber has left meanwhile.
+    });
 }
 
 /** The fetcher a hook hands to the entry of `subscribedKey`: its latest one, but only while the hook still renders that key. */

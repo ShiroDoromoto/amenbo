@@ -1798,23 +1798,13 @@ pub fn automation_launch_asks(id: i64) -> Result<AutomationLaunchAsksDto, CmdErr
 /// (`amenbo_core::ops::automation_run::seats`) while there are tasks to take
 /// (`amenbo_core::ops::automation_run::top_up`). The answer names that launch.
 ///
-/// **What the person hands over with the press** (`AMB-D-981`): `title`, `notes`, `classification`
-/// (axis and value, by name) and `files` by their paths on this machine, filed as a task under the
-/// automation's first role before the run starts (`AMB-D-1123`). The files are ingested the way an
-/// attachment is ([`crate::commands::attachment_add`]): the per-file cap checked, then streamed into the
-/// blob store. They go into the store before the launch, and onto that task in the launch's own
-/// transaction ([`automation_run::HandedAtLaunch`]) — a launch refused afterwards leaves a blob nothing
-/// names, which the blob sweep takes like any other.
+/// **The press hands the run nothing.** Work reaches an automation as a task filed with one of its
+/// roles, its files attached to that task (`AMB-D-1123`).
 #[tauri::command]
-#[allow(clippy::too_many_arguments)]
 pub fn automation_launch(
     id: i64,
     agents: Option<Vec<String>>,
     workspace_open: bool,
-    files: Option<Vec<String>>,
-    title: Option<String>,
-    notes: Option<String>,
-    classification: Option<Vec<(String, String)>>,
 ) -> Result<AutomationRunStartedDto, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_launch");
     // The models are read here, as the check reads them (`automation_launch_check`): the press is
@@ -1829,16 +1819,7 @@ pub fn automation_launch(
         by: Some(ActorKind::Human),
     };
     let started = with_store_mut(|store| {
-        let mut handed = automation_run::HandedAtLaunch {
-            title,
-            notes,
-            classification: classification.unwrap_or_default(),
-            ..Default::default()
-        };
-        for path in files.unwrap_or_default() {
-            handed.files.push(handed_file(store, &path)?);
-        }
-        let started = store.automation_launch(id, &by, &handed)?;
+        let started = store.automation_launch(id, &by)?;
         // A start that made no run still opened the launch the run started once a task turns up joins.
         let launch = match &started {
             automation_run::Started::Run(run) => run.launch_id,
@@ -1864,10 +1845,10 @@ pub fn automation_launch(
 /// a launch, and every step is opened on the road a run takes, with no agent started, no built-in
 /// carried out and nothing kept.
 ///
-/// **It is handed what a launch is, less the files and the workspace.** Nothing is kept, so there is
-/// no task for a file to go onto; no pane is opened, so whether the workspace stands is nobody's
-/// concern. `agents` and the models are asked as the launch asks them, so a step the press would be
-/// refused over is one the test run stops at.
+/// **It is handed a title, notes and a classification**, filed as a task under the first role before
+/// the walk. Nothing is kept, so there is no task for a file to go onto; no pane is opened, so whether
+/// the workspace stands is nobody's concern. `agents` and the models are asked as the launch asks them,
+/// so a step the press would be refused over is one the test run stops at.
 #[tauri::command]
 pub fn automation_test_run(
     id: i64,
@@ -1915,29 +1896,6 @@ pub fn automation_test_run(
             Cut::Looped => "looped",
             Cut::TooLong => "too_long",
         }),
-    })
-}
-
-/// One file handed over at launch, taken in from where it is on this machine: a regular file, within
-/// the per-file cap, streamed into the blob store.
-fn handed_file(
-    store: &mut amenbo_core::Store,
-    path: &str,
-) -> Result<automation_run::HandedFile, CmdError> {
-    let src = std::path::Path::new(path);
-    let meta = std::fs::metadata(src).map_err(|e| format!("cannot read the file '{path}': {e}"))?;
-    if !meta.is_file() {
-        return Err(format!("'{path}' is not a regular file").into());
-    }
-    let filename = src.file_name().and_then(|n| n.to_str()).unwrap_or("attachment").to_string();
-    let mime = amenbo_core::blob::mime_from_filename(&filename);
-    store.config.attachment_limits.check_per_file(mime, meta.len())?;
-    let blob = store.blobs().ingest_path(src)?;
-    Ok(automation_run::HandedFile {
-        blob_hash: blob.hash,
-        filename,
-        mime: mime.map(str::to_string),
-        size_bytes: blob.size_bytes as i64,
     })
 }
 

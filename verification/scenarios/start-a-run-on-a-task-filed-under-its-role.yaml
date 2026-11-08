@@ -1,0 +1,80 @@
+# Work reaches an automation as a task filed under one of its roles, with its files attached to the
+# task, and a start only opens the run. The task is filed with the value the project
+# requires, put under the role whose round starts at the built-in that takes a task, given to the AI,
+# and a file is attached to it. The start then hands the run nothing.
+#
+# A start with no app up on the store is refused, since only the app opens a step. A run started at a
+# terminal opens no step, so what is read is the run it started.
+id: start-a-run-on-a-task-filed-under-its-role
+title: A run starts on a task filed under its role, and the start hands it nothing
+description: >
+  Place the built-in that takes a task where an automation's role starts, then close it. File a task
+  with the value the project requires, put it under that role, give it to the AI and attach a file to
+  it. Start the automation from the terminal with no app up on the store and read it refused; then,
+  with the app up, start it and read the run under way.
+given:
+  # The axis the road requires. Values first: an axis offering none cannot be required.
+  - { type: action, domain: dimension, op: create, with: { name: 職種 } }
+  - { type: action, domain: dimension, op: value-add, with: { dimension: 職種, value: エンジニア } }
+
+  # Take, close.
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one handed a task by its role" }, as: auto }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_take }
+  - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }
+  - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
+
+steps_cli:
+  # Every task has to carry a value on it from here on.
+  - { type: action, domain: dimension, op: required, with: { dimension: 職種, required: true } }
+  # A run starts from the newest saved version, so it is saved first.
+  - { type: action, domain: automation, op: save, with: { target: auto } }
+
+  # The work, handed as a task under the role whose round starts at the take, given to the AI.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: the login page loses the password field on a narrow window
+      dimension: 職種
+      value: エンジニア
+    as: issue
+  - { type: action, domain: task, op: update, with: { target: issue, role_of: auto } }
+  - { type: action, domain: task, op: assign, with: { target: issue, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: issue } }
+
+  # What the task needs goes onto the task itself.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      path: screenshot-notes.md
+      content: "the field is gone below 400 pixels wide\n"
+  - { type: action, domain: task, op: attach, with: { target: issue, file: screenshot-notes.md }, as: notes_file }
+  - { type: assert, domain: attachment, op: listed, with: { target: notes_file, owner: issue, owner_kind: task, present: true } }
+
+  # With no app up on the store, nothing is started: a run's steps are opened by the app, so a run
+  # accepted now would move no further. Once one is up, the same start goes through.
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+      refused: app_not_running
+
+  - { type: action, domain: store, op: app-up }
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: auto
+    as: run
+
+  - type: assert
+    domain: automation
+    op: run
+    with:
+      target: run
+      status: running

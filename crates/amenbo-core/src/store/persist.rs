@@ -1772,19 +1772,17 @@ impl Store {
     /// `by` carries what the store cannot answer — which agents this machine can start, whether the
     /// workspace is open, and who pressed ([`crate::ops::automation_run::Launcher`]). What it says of
     /// Amenbo's own default agent is replaced by this store's ([`Self::automation_default_agent`]).
-    /// `handed` is what the person handed over along with it — text, and files already ingested into
-    /// the blob store ([`crate::ops::automation_run::HandedAtLaunch`]).
+    /// It hands the run nothing: work reaches it as a task filed with one of its roles (`AMB-D-1123`).
     pub fn automation_launch(
         &mut self,
         automation_id: i64,
         by: &crate::ops::automation_run::Launcher<'_>,
-        handed: &crate::ops::automation_run::HandedAtLaunch,
     ) -> Result<crate::ops::automation_run::Started> {
         let agent = self.automation_default_agent(automation_id)?;
         let by = crate::ops::automation_run::Launcher { default_agent: agent.as_deref(), ..*by };
         self.write_one(
             &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
-            |tx| crate::ops::automation_run::start(tx, automation_id, &by, handed),
+            |tx| crate::ops::automation_run::start(tx, automation_id, &by),
         )
     }
 

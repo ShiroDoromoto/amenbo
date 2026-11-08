@@ -70,8 +70,8 @@ pub(crate) fn attach_add(
 const UNREADABLE_HINT: &str = "pass a readable file path";
 
 /// The attach verbs can take a link where the file was, so their refusal of an unreadable file says so
-/// too. The other callers (`automation start --file`, `automation step-out --file`) have no `--url`,
-/// and hear only [`UNREADABLE_HINT`].
+/// too. The other caller (`automation step-out --file`) has no `--url`, and hears only
+/// [`UNREADABLE_HINT`].
 fn or_a_link(mut e: CliError) -> CliError {
     if e.hint.as_deref() == Some(UNREADABLE_HINT) {
         e.hint = Some(format!("{UNREADABLE_HINT}, or use --url to attach an external link"));
@@ -100,23 +100,22 @@ pub(crate) fn attach_file(
 }
 
 /// A file read and measured, and not yet ingested: everything [`attach_file`] checks before the bytes
-/// are copied in. It is its own step so a caller holding several files can check every one of them
-/// before ingesting any (`automation start --file`), and a refusal of the third strands nothing.
-pub(crate) struct FileToIngest {
+/// are copied in, so a file refused here leaves no blob behind.
+struct FileToIngest {
     path: std::path::PathBuf,
-    pub(crate) filename: String,
-    pub(crate) mime: Option<&'static str>,
+    filename: String,
+    mime: Option<&'static str>,
 }
 
 impl FileToIngest {
     /// Copy the bytes into the blob store.
-    pub(crate) fn ingest(&self, store: &Store) -> Result<amenbo_core::blob::BlobRef, CliError> {
+    fn ingest(&self, store: &Store) -> Result<amenbo_core::blob::BlobRef, CliError> {
         store.blobs().ingest_path(&self.path).map_err(CliError::from)
     }
 }
 
 /// Read `source`'s metadata and hold it to the per-file limit, without ingesting it.
-pub(crate) fn file_to_ingest(store: &Store, source: &str, name: Option<String>) -> Result<FileToIngest, CliError> {
+fn file_to_ingest(store: &Store, source: &str, name: Option<String>) -> Result<FileToIngest, CliError> {
     let path = std::path::Path::new(source);
     let meta = std::fs::metadata(path).map_err(|e| CliError {
         code: "not_found",

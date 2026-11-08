@@ -525,29 +525,12 @@ impl Driver<'_> {
             }
             "start" => {
                 let automation = self.resolve(with)?;
-                let mut args = vec!["automation".into(), "start".into(), automation.to_string()];
-                // What an entry that files a task is handed: a file the run wrote, to attach to it.
-                if let Some(file) = with.get("file").and_then(|v| v.as_str()) {
-                    self.in_session(file)?; // refuse a path that reaches out of the run's folder
-                    args.extend(["--file".into(), file.to_string()]);
-                }
-                // And its title, notes and classification.
-                for (key, flag) in [("title", "--title"), ("notes", "--notes")] {
-                    if let Some(value) = with.get(key).and_then(|v| v.as_str()) {
-                        args.extend([flag.into(), value.to_string()]);
-                    }
-                }
-                // One `axis=value` a line, each its own `--dim`.
-                if let Some(pairs) = with.get("dim").and_then(|v| v.as_str()) {
-                    for pair in pairs.lines().map(str::trim).filter(|l| !l.is_empty()) {
-                        args.extend(["--dim".into(), pair.to_string()]);
-                    }
-                }
-                args.push("--json".into());
+                let args = vec!["automation".into(), "start".into(), automation.to_string(), "--json".into()];
                 let id = self.bound_id(&args, "automation_run", bind)?;
                 Ok(Outcome::action(format!("started automation {automation} as run {id}")))
             }
-            // A test run: the same text a start is handed, and nothing kept, so no binding either.
+            // A test run: a title, notes and a classification filed as a task before the walk, and
+            // nothing kept, so no binding either.
             "test-run" => {
                 let automation = self.resolve(with)?;
                 let mut args = vec!["automation".into(), "test-run".into(), automation.to_string()];

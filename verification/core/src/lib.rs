@@ -4248,10 +4248,9 @@ const REGISTRY: &[OpSpec] = &[
     //
     // Running one. `start` binds the run every other verb here names.
     //
-    // What a person hands the run as it starts: `text`, and `file`, a file the run
-    // wrote (`repo write-file`) — the way `attach` names one, and on screen the operator's to bring,
-    // of which only the name crosses. Handed nothing, the run starts as it always has.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start", required: &[], refs: &["target"], strings: &["file", "title", "notes", "dim"], binds: true },
+    // A start hands the run nothing: work reaches it as a task filed under one of its
+    // roles (`task create`, `task update` with `role_of`), its files attached to that task.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start", required: &[], refs: &["target"], strings: &[], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pause", required: &[], refs: &["target"], strings: &[], binds: false },
     // A run paused at the end of an action goes on from the copy it has. One paused before its next
     // task is copied down afresh from the automation as it now stands and starts at that copy's

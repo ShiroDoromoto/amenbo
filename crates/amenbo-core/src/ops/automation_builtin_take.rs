@@ -343,7 +343,7 @@ mod tests {
     use crate::ops::automation_run::{
         check, is_waiting, launch, launch_past_the_task_checks, next_def, nothing_asked, start,
         start_waiting, stop_waiting, take_up_newer, task_wait, task_wait_held_back, tasks_turned_up,
-        HandedAtLaunch, Launcher, Started, TakenUp, Unmet, Waiting,
+        Launcher, Started, TakenUp, Unmet, Waiting,
     };
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
@@ -607,8 +607,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = waiting_picture(tx, project);
-            let nothing = HandedAtLaunch::default();
-            let Started::Waits(waits) = start(tx, automation.id, &launcher(), &nothing).expect("start") else {
+            let Started::Waits(waits) = start(tx, automation.id, &launcher()).expect("start") else {
                 panic!("no run with nothing to take");
             };
             let since = waits.waits_for_task_since.expect("it waits");
@@ -616,7 +615,7 @@ mod tests {
             let wait = task_wait(tx.conn(), automation.id).expect("read").expect("waiting");
             assert_eq!(wait.since, since);
             assert_eq!(wait.looks_for.as_deref(), Some("assignee:me-ai status:todo ready:yes"));
-            let Started::Waits(again) = start(tx, automation.id, &launcher(), &nothing).expect("start") else {
+            let Started::Waits(again) = start(tx, automation.id, &launcher()).expect("start") else {
                 panic!("still nothing to take");
             };
             assert_eq!(again.waits_for_task_since, Some(since), "waiting since the first time");
@@ -628,7 +627,7 @@ mod tests {
             assert!(tasks_turned_up(tx.conn(), &[automation.id]).expect("ask").is_empty(), "not waiting");
             assert!(start_waiting(tx, automation.id, &launcher()).expect("start").is_none());
 
-            let Started::Run(run) = start(tx, automation.id, &launcher(), &nothing).expect("start") else {
+            let Started::Run(run) = start(tx, automation.id, &launcher()).expect("start") else {
                 panic!("a task to take makes a run");
             };
             assert_eq!(run.status, AutomationRunStatus::Running);
@@ -643,7 +642,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             let automation = waiting_picture(tx, project);
             assert!(matches!(
-                start(tx, automation.id, &launcher(), &HandedAtLaunch::default()).expect("start"),
+                start(tx, automation.id, &launcher()).expect("start"),
                 Started::Waits(_)
             ));
             automation::cfg_set(tx, start_of(tx, &automation), WHEN_NONE, None).expect("no longer wait");
@@ -664,7 +663,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             let automation = waiting_picture(tx, project);
             assert!(matches!(
-                start(tx, automation.id, &launcher(), &HandedAtLaunch::default()).expect("start"),
+                start(tx, automation.id, &launcher()).expect("start"),
                 Started::Waits(_)
             ));
             let standing = launched(tx, &automation);
@@ -2008,7 +2007,7 @@ mod tests {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = waiting_picture(tx, project);
-            let started = start(tx, automation.id, &launcher(), &HandedAtLaunch::default()).expect("start");
+            let started = start(tx, automation.id, &launcher()).expect("start");
             assert!(matches!(started, Started::Waits(_)), "nothing to take, so it waits");
             let launch = read::automation_launch_standing(tx.conn(), automation.id)
                 .expect("read")

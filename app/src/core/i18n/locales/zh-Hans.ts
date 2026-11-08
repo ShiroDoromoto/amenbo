@@ -1124,6 +1124,8 @@ export const zhHans: Translation = {
     "auto.lib.entry.takeTask": "推进积压的任务",
     "auto.lib.entry.makeTask": "当场输入后开始",
     "auto.lib.entry.fetch": "读取文件或 URL 后开始",
+    "auto.lib.splitAxis": "用于划分的轴",
+    "auto.lib.splitNoAxis": "没有任务只能有一个值的轴，所以无法划分。请在分类管理中创建一个",
     "auto.lib.makeNamed": "＋ 以“{name}”为名新建",
     "auto.lockMark": "无法在此修改",
     "auto.lib.make": "新建并放置",

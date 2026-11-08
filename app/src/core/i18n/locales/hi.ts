@@ -1122,6 +1122,8 @@ export const hi: Translation = {
     "auto.lib.entry.takeTask": "रुके हुए कार्य आगे बढ़ाएँ",
     "auto.lib.entry.makeTask": "वहीं लिखकर शुरू करें",
     "auto.lib.entry.fetch": "फ़ाइल या URL पढ़कर शुरू करें",
+    "auto.lib.splitAxis": "बाँटने की धुरी",
+    "auto.lib.splitNoAxis": "ऐसी कोई धुरी नहीं जिसमें कार्य का एक ही मान हो, इसलिए बाँटा नहीं जा सकता। वर्गीकरण प्रबंधन में एक धुरी बनाएँ",
     "auto.lib.makeNamed": "＋ “{name}” नाम से नया बनाएँ",
     "auto.lockMark": "यहाँ नहीं बदला जा सकता",
     "auto.lib.make": "नया बनाकर रखें",

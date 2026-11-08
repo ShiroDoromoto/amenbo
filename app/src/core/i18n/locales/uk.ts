@@ -1139,6 +1139,8 @@ export const uk: Translation = {
     "auto.lib.entry.takeTask": "Опрацьовувати накопичені задачі",
     "auto.lib.entry.makeTask": "Ввести щось і почати",
     "auto.lib.entry.fetch": "Почати з читання файлу чи URL",
+    "auto.lib.splitAxis": "Вісь для поділу",
+    "auto.lib.splitNoAxis": "Немає осі, де завдання має одне значення, тож ділити нема за чим. Створіть її в керуванні класифікаціями",
     "auto.lib.makeNamed": "＋ Створити нову з назвою «{name}»",
     "auto.lockMark": "Тут не змінити",
     "auto.lib.make": "Створити й розмістити",

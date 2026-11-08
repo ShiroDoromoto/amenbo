@@ -1122,6 +1122,8 @@ export const nl: Translation = {
     "auto.lib.entry.takeTask": "Wachtende taken afwerken",
     "auto.lib.entry.makeTask": "Ter plekke iets invoeren en starten",
     "auto.lib.entry.fetch": "Starten door een bestand of URL te lezen",
+    "auto.lib.splitAxis": "As om op te splitsen",
+    "auto.lib.splitNoAxis": "Er is geen as waarop een taak één waarde heeft, dus er valt niets te splitsen. Maak er een aan bij het beheer van classificaties",
     "auto.lib.makeNamed": "＋ Nieuwe maken met de naam ‘{name}’",
     "auto.lockMark": "Hier niet te wijzigen",
     "auto.lib.make": "Nieuwe maken en plaatsen",

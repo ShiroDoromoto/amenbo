@@ -1122,6 +1122,8 @@ export const tr: Translation = {
     "auto.lib.entry.takeTask": "Bekleyen görevleri ilerlet",
     "auto.lib.entry.makeTask": "Bir şey yazıp başla",
     "auto.lib.entry.fetch": "Bir dosya ya da URL okuyarak başla",
+    "auto.lib.splitAxis": "Bölünecek eksen",
+    "auto.lib.splitNoAxis": "Görevin tek değer taşıdığı bir eksen yok, bu yüzden bölünecek bir şey yok. Sınıflandırma yönetiminde bir eksen oluşturun",
     "auto.lib.makeNamed": "＋ “{name}” adıyla yenisini oluştur",
     "auto.lockMark": "Burada değiştirilemez",
     "auto.lib.make": "Yenisini yap ve yerleştir",

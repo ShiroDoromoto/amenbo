@@ -1128,6 +1128,8 @@ export const ja: Translation = {
     "auto.lib.entry.takeTask": "たまっているタスクを進める",
     "auto.lib.entry.makeTask": "その場で入力して始める",
     "auto.lib.entry.fetch": "ファイルや URL を読んで始める",
+    "auto.lib.splitAxis": "分ける軸",
+    "auto.lib.splitNoAxis": "値を1つしか付けられない軸が無いので、分けられない。分類の管理で軸を作る",
     "auto.lib.makeNamed": "＋ 「{name}」という名前で新しく作る",
     "auto.lockMark": "ここでは直せない",
     "auto.lib.make": "アクションを作って配置",

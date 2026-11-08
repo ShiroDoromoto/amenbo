@@ -1135,6 +1135,8 @@ export const ptBR: Translation = {
     "auto.lib.entry.takeTask": "Avançar as tarefas pendentes",
     "auto.lib.entry.makeTask": "Digitar algo e começar",
     "auto.lib.entry.fetch": "Começar lendo um arquivo ou URL",
+    "auto.lib.splitAxis": "Eixo para dividir",
+    "auto.lib.splitNoAxis": "Não há eixo em que a tarefa tenha um só valor, então não há por onde dividir. Crie um onde as classificações são gerenciadas",
     "auto.lib.makeNamed": "＋ Criar uma nova chamada “{name}”",
     "auto.lockMark": "Não pode ser alterado aqui",
     "auto.lib.make": "Criar uma nova e colocar",

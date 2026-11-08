@@ -1126,6 +1126,8 @@ export const de: Translation = {
     "auto.lib.entry.takeTask": "Anstehende Aufgaben abarbeiten",
     "auto.lib.entry.makeTask": "Etwas eingeben und starten",
     "auto.lib.entry.fetch": "Mit einer Datei oder URL starten",
+    "auto.lib.splitAxis": "Achse zum Aufteilen",
+    "auto.lib.splitNoAxis": "Es gibt keine Achse, von der eine Aufgabe nur einen Wert hat, also lässt sich nicht aufteilen. Lege eine in der Verwaltung der Klassifizierungen an",
     "auto.lib.makeNamed": "＋ Neu anlegen mit dem Namen „{name}“",
     "auto.lockMark": "Hier nicht änderbar",
     "auto.lib.make": "Neu anlegen und platzieren",

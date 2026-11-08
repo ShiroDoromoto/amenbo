@@ -406,11 +406,12 @@ fn builtin_port_dto(port: &automation_builtin::BuiltinPort) -> AutomationPortDto
 /// **Put a built-in on a picture**, standing on its own — how the first placement comes in, which is
 /// one of the built-ins a run starts at (`AMB-D-977`). Its library action is written from the
 /// definition the first time any automation places it
-/// ([`amenbo_core::ops::automation_builtin::action`]).
+/// ([`amenbo_core::ops::automation_builtin::action_on`]). `axis` is the axis the one that splits by an
+/// axis splits by, and nothing for any other (`AMB-D-973`).
 #[tauri::command]
-pub fn automation_builtin_place(automation_id: i64, key: String) -> Result<WriteAck, CmdError> {
+pub fn automation_builtin_place(automation_id: i64, key: String, axis: Option<i64>) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_place(automation_id, &key, None)?;
+        store.automation_builtin_place(automation_id, &key, axis)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
@@ -418,26 +419,27 @@ pub fn automation_builtin_place(automation_id: i64, key: String) -> Result<Write
 
 /// **Put a built-in in on a line** ([`automation_step_insert`] for a built-in) — the way out that was
 /// pressed comes to point at the new placement, in one transaction with the library action written
-/// where none was yet.
+/// where none was yet. `axis` as for [`automation_builtin_place`].
 #[tauri::command]
-pub fn automation_builtin_insert(edge_id: i64, key: String) -> Result<WriteAck, CmdError> {
+pub fn automation_builtin_insert(edge_id: i64, key: String, axis: Option<i64>) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_insert(edge_id, &key, None)?;
+        store.automation_builtin_insert(edge_id, &key, axis)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))
 }
 
 /// **Put a built-in on after a way out that says nothing yet** — [`automation_builtin_insert`] for a
-/// way out with no line to press.
+/// way out with no line to press. `axis` as for [`automation_builtin_place`].
 #[tauri::command]
 pub fn automation_builtin_insert_at_exit(
     from_id: i64,
     exit_name: Option<String>,
     key: String,
+    axis: Option<i64>,
 ) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.automation_builtin_insert_at_exit(from_id, exit_name.as_deref(), &key, None)?;
+        store.automation_builtin_insert_at_exit(from_id, exit_name.as_deref(), &key, axis)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations", "automationActions"]))

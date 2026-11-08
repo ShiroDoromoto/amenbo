@@ -1123,6 +1123,8 @@ export const vi: Translation = {
     "auto.lib.entry.takeTask": "Xử lý các tác vụ đang chờ",
     "auto.lib.entry.makeTask": "Nhập ngay rồi bắt đầu",
     "auto.lib.entry.fetch": "Bắt đầu bằng cách đọc tệp hoặc URL",
+    "auto.lib.splitAxis": "Trục để chia",
+    "auto.lib.splitNoAxis": "Không có trục nào mà việc chỉ mang một giá trị, nên không chia được. Hãy tạo trục ở phần quản lý phân loại",
     "auto.lib.makeNamed": "＋ Tạo mới với tên “{name}”",
     "auto.lockMark": "Không sửa được ở đây",
     "auto.lib.make": "Tạo mới và đặt",

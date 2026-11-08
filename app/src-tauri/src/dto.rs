@@ -4417,6 +4417,11 @@ pub struct AutomationStepOpenDto {
     /// The project the run was launched from — which project's pane the terminal stands in.
     #[ts(type = "number")]
     pub(crate) project: i64,
+    /// **The launch the run belongs to** ([`amenbo_core::model::AutomationLaunch`]) — which launch's
+    /// pane draws it again. Absent for a run written before launches were kept.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) launch: Option<i64>,
     /// The step to open a terminal on, or absent where the run was stopped instead.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

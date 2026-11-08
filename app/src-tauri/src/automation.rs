@@ -2502,8 +2502,9 @@ fn open_one(
             log::info!("run {run_id} found no task to take, and its automation waits for one");
             (run.project_id, None, None, Vec::new())
         }
-        // The run's seat was one still to go — the headcount of its role lowered on the launch — so it
-        // ended where it came to take its next task, with none taken. Its pane is taken down.
+        // The run's seat was one still to go — the headcount of its role lowered on the launch, or the
+        // role stopped taking tasks for it — so it ended where it came to take its next task, with none
+        // taken. Its pane is taken down.
         Opened::LetGo { run } => {
             log::info!("run {run_id} let its seat go before taking its next task");
             (run.project_id, None, None, Vec::new())

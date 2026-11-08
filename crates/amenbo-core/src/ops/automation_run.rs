@@ -6731,7 +6731,7 @@ mod tests {
     #[test]
     fn a_trigger_weighs_its_room_in_the_seats_of_its_own_role() {
         use crate::model::TriggerWhen;
-        let seat = |role_id, headcount, under_way: &[i64]| Seats { role_id, headcount, under_way: under_way.to_vec() };
+        let seat = |role_id, headcount, under_way: &[i64]| Seats { role_id, headcount, under_way: under_way.to_vec(), held: false };
         let by_role = [seat(Some(1), 2, &[10, 11]), seat(Some(2), 2, &[12])];
         let tasks = TriggerWhen::Tasks;
         let idle = TriggerWhen::Idle;

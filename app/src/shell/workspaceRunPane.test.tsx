@@ -19,7 +19,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PaneStart } from "../talk/terminal";
 import type { BuiltinRun, StepOpened, StepRun } from "../talk/automationStep";
-import type { AutomationRunCardDto } from "../bindings/bindings";
+import type { AutomationLaunchStateDto, AutomationRunCardDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   /** Every opening the face asked for, in order. */
@@ -46,6 +46,10 @@ const hoisted = vi.hoisted(() => ({
   standing: [] as StepOpened[],
   /** The runs the host answers the face's panes with (`useRunCards`). */
   cards: [] as AutomationRunCardDto[],
+  /** What the host answers a launch's pane with (`useLaunchState`). */
+  launch: null as AutomationLaunchStateDto | null,
+  /** The launches the header was pressed on, as `pause 3`, `resume 3` or `stop 3`, in order. */
+  launchMoves: [] as string[],
 }));
 
 vi.mock("../talk/agent", () => ({
@@ -88,6 +92,19 @@ vi.mock("../talk/frames", async (importOriginal) => ({
 vi.mock("../core/automations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../core/automations")>()),
   useRunCards: () => hoisted.cards,
+  useLaunchState: (launch: number | null) => (launch === null ? null : hoisted.launch),
+  pauseLaunchBeforeNextTask: (launch: number) => {
+    hoisted.launchMoves.push(`pause ${launch}`);
+    return Promise.resolve();
+  },
+  resumeLaunch: (launch: number) => {
+    hoisted.launchMoves.push(`resume ${launch}`);
+    return Promise.resolve();
+  },
+  stopLaunch: (launch: number) => {
+    hoisted.launchMoves.push(`stop ${launch}`);
+    return Promise.resolve();
+  },
   forceCancelRun: (run: number) => {
     hoisted.stopped.push(run);
     return Promise.resolve(true);
@@ -240,6 +257,8 @@ beforeEach(() => {
   hoisted.says = true;
   hoisted.standing = [];
   hoisted.cards = [];
+  hoisted.launch = null;
+  hoisted.launchMoves = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -997,5 +1016,116 @@ describe("the pane a launch is drawn in", () => {
     await seat(9, "step-9");
     expect(panes()).toHaveLength(1);
     expect(hoisted.opened[hoisted.opened.length - 1]!.session).toBe("step-9");
+  });
+});
+
+// **The header of a launch's pane** (`./LaunchHead`): the launch and the moves made on the whole of it.
+// Its moves are the launch's — pause every role once its task is over, pick it up again, stop it —
+// and a seat's own moves are not drawn beside them.
+describe("the header of a launch's pane", () => {
+  /** Launch 3 with two roles: three in the first, one working and one waiting for a task to turn up, and
+   *  two in the second, one paused. */
+  function launchState(over: Partial<AutomationLaunchStateDto> = {}): AutomationLaunchStateDto {
+    const role = (id: number, name: string, headcount: number, runs: AutomationRunCardDto[]) => ({
+      role: id, name, defined: headcount, headcount, underWay: runs.length, toLetGo: 0, held: false, runs,
+      waiting: 0, firstWaiting: [],
+    });
+    return {
+      launch: 3,
+      project: 1,
+      automation: 3,
+      automationName: "サンプル制作チーム",
+      status: "running",
+      maxHeadcount: 10,
+      roles: [
+        role(1, "エンジニア", 3, [runCard({ run: 7, launch: 3 }), runCard({ run: 8, launch: 3, waiting: true })]),
+        role(2, "レビュアー", 2, [runCard({ run: 9, launch: 3, status: "paused" })]),
+      ],
+      ...over,
+    };
+  }
+  const head = () => container.querySelector<HTMLElement>(".launchhead");
+  const button = (word: string) =>
+    [...head()!.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === word);
+  async function press(word: string) {
+    await act(async () => {
+      button(word)!.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+  async function standLaunch() {
+    await mount();
+    await arrive({ run: 7, launch: 3, step: step({ runStep: 70, session: "step-7" }) });
+  }
+
+  it("says the launch, where it stands, and how many of its seats are working a task", async () => {
+    hoisted.launch = launchState();
+    await standLaunch();
+    expect(head()).not.toBeNull();
+    expect(head()!.querySelector(".launchhead__chip--auto")!.textContent).toBe(t("face.auto"));
+    expect(head()!.querySelector(".launchhead__name")!.textContent).toBe("サンプル制作チーム");
+    expect(head()!.querySelector(".launchhead__chip--run")!.textContent).toBe(t("auto.launch.running"));
+    // One running with a task: the run waiting for one and the paused one work nothing. Five in all.
+    const count = head()!.querySelector(".launchhead__count")!;
+    expect(count.querySelector("b")!.textContent).toBe("1");
+    expect(count.textContent).toBe(tf("auto.launch.working", { n: 1, m: 5 }));
+    // The seat's own moves are not drawn on the launch's pane.
+    expect(container.querySelector(".slot__runacts")).toBeNull();
+    // Nor are the mark and the name again on the seat's row: the pane is headed once. The row keeps
+    // which run the seat is.
+    const bar = container.querySelector<HTMLElement>(".slot__bar")!;
+    expect(bar.querySelector<HTMLElement>(".plate__auto")!.hidden).toBe(true);
+    expect(bar.querySelector<HTMLElement>(".plate__name")!.hidden).toBe(true);
+    expect(bar.querySelector(".plate__no")!.textContent).toBe("#7");
+  });
+
+  it("pauses every role once its task is over, and says so pressed in the same place", async () => {
+    hoisted.launch = launchState();
+    await standLaunch();
+    expect(button(t("auto.run.pauseAfterTask"))!.getAttribute("aria-pressed")).toBe("false");
+    await press(t("auto.run.pauseAfterTask"));
+    expect(hoisted.launchMoves).toEqual(["pause 3"]);
+
+    // The mock answers `useLaunchState` without telling anyone it changed, and the pane is drawn again
+    // only when its props change, so the paused launch is stood up afresh.
+    act(() => root.unmount());
+    root = createRoot(container);
+    hoisted.launch = launchState({ status: "paused" });
+    await standLaunch();
+    expect(head()!.querySelector(".launchhead__chip--hold")!.textContent).toBe(t("auto.run.pauseAfterTask"));
+    expect(head()!.querySelector(".launchhead__chip--run")).toBeNull();
+    const resume = button(t("auto.launch.resume"))!;
+    expect(resume.getAttribute("aria-pressed")).toBe("true");
+    await press(t("auto.launch.resume"));
+    expect(hoisted.launchMoves).toEqual(["pause 3", "resume 3"]);
+  });
+
+  it("asks before it stops the launch, and stops nothing where the answer is no", async () => {
+    hoisted.launch = launchState();
+    await standLaunch();
+    hoisted.says = false;
+    await press(t("auto.launch.stop"));
+    expect(hoisted.launchMoves).toEqual([]);
+    hoisted.says = true;
+    await press(t("auto.launch.stop"));
+    expect(hoisted.launchMoves).toEqual(["stop 3"]);
+  });
+
+  it("draws no move once the launch has ended", async () => {
+    hoisted.launch = launchState({ status: "ended" });
+    await standLaunch();
+    expect(head()!.querySelector(".launchhead__name")!.textContent).toBe("サンプル制作チーム");
+    expect(head()!.querySelectorAll("button")).toHaveLength(0);
+    expect(head()!.querySelector(".launchhead__count")).toBeNull();
+  });
+
+  it("is not drawn on a run's own pane", async () => {
+    hoisted.launch = launchState();
+    await mount();
+    await arrive();
+    expect(head()).toBeNull();
+    // With no header over it, the run's row is headed with the mark and the automation's name.
+    expect(container.querySelector<HTMLElement>(".slot__bar .plate__auto")!.hidden).toBe(false);
+    expect(container.querySelector<HTMLElement>(".slot__bar .plate__name")!.hidden).toBe(false);
   });
 });

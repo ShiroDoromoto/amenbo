@@ -38,6 +38,7 @@ import { Icon } from "../components/Icon";
 import { PaneModel } from "./PaneModel";
 import { PaneSize } from "./PaneSize";
 import { RunActs } from "./RunActs";
+import { LaunchHead } from "./LaunchHead";
 import { BuiltinCard } from "./BuiltinCard";
 import { RunRoles, RunTermBar, useRoundFellLines, type ViewPin } from "./RunPicture";
 import { faceOf, keepFace, onTerminalShown, showTerminalOf, type Face } from "./runFaces";
@@ -117,7 +118,7 @@ const pins = new Map<number, ViewPin>();
  */
 function Pane({
   frame, terminal, at, hue, project, names, start, autoStart, focused, landed = false, offered = false, written,
-  inserted = [], composeOpen, held = false, goes = null, run = null, builtin = null, tail = null, tailCode = null, onGrab, onStretch,
+  inserted = [], composeOpen, held = false, goes = null, run = null, launch = null, builtin = null, tail = null, tailCode = null, onGrab, onStretch,
   size, onSize,
   on,
 }: PaneProps & {
@@ -497,7 +498,7 @@ function Pane({
     setEnded(false);
     // The line above the pane: what this pane is called, and the lamp that says whether anything is
     // coming out of it (`../talk/plate.ts`).
-    const plate = mountPlate(label, termName, hue, run);
+    const plate = mountPlate(label, termName, hue, run, launch !== null);
     plateRef.current = plate;
     // The row is readable from outside for as long as this pane is drawn, and no longer: a pane on
     // another page is not being measured at all, so a reading kept past this point would be the last
@@ -606,7 +607,7 @@ function Pane({
   useEffect(() => {
     const label = labelRef.current;
     if (!rowWithout || !label) return;
-    const plate = mountPlate(label, termName, hue, run);
+    const plate = mountPlate(label, termName, hue, run, launch !== null);
     // A row is drawn only on a pane something has run in, and a built-in is that: Amenbo is running
     // it here — as a run's pane is, whatever ran in it last. There is no folder to head the row with,
     // and a run's row is headed with its automation.
@@ -799,7 +800,7 @@ function Pane({
   return (
     <div
       className={`slot${focused ? " slot--focused" : ""}${landed ? " slot--landed" : ""}${
-        held ? " slot--held" : ""}${run === null ? "" : " slot--run"}`}
+        held ? " slot--held" : ""}${run === null ? "" : " slot--run"}${launch === null ? "" : " slot--launch"}`}
       style={at}
       data-hand={frame}
       onMouseDown={pressedOn}
@@ -814,6 +815,10 @@ function Pane({
           both are placed against the slot rather than laid out in it, so the frame's flow never
           sees them and what they cover is still the whole slot. */}
       <div className="slot__frame">
+        {/* **A launch's header** (`./LaunchHead`): the launch and the moves made on the whole of it,
+            over the row of the seat in front. That row then leaves the mark and the name to it
+            (`../talk/nameplate`'s `Plate.headed`), so the pane is headed once. */}
+        {launch !== null && <LaunchHead launch={launch} />}
         {/* What is said about this terminal, and the one control the place has. They share the row
             because the row is what is said about this pane, and removing it is the last thing there is
             to say. The control is drawn whether or not anything is running: a frame kept from the last
@@ -874,7 +879,10 @@ function Pane({
               watching. They are drawn while the run is going or paused, and gone once it is over — the
               row says how it ended. **They are marks and not words** (`AMB-T-5529`), standing straight
               after the state they act on, so the row's words are left to the automation's name; each
-              is named for a reader who cannot see it. Cancelling keeps the pane. */}
+              is named for a reader who cannot see it. Cancelling keeps the pane.
+
+              **Not on a launch's pane**: its moves are the launch's, on the header above
+              (`./LaunchHead`), and a seat's own are on the "running" tab's row. */}
           {/* **Cards, the list, or the room's size to decide** (`./RunPicture`), while the roles are up. */}
           {onRoles && (
             <span className="slot__views" role="group" aria-label={t("auto.run.views")}>
@@ -908,7 +916,7 @@ function Pane({
               ))}
             </span>
           )}
-          {runLive && run !== null && (
+          {runLive && run !== null && launch === null && (
             <span className="slot__runacts">
               <RunActs
                 run={{
@@ -1278,6 +1286,12 @@ type PaneProps = {
    * run's pane is stopping the run** (`drop`).
    */
   run?: Say | null;
+  /**
+   * **The launch this pane is drawn for**, by its id, or null on a pane that is not a launch's
+   * (`../talk/layout`'s `Frame.launch`). One launch is one pane, and its header is drawn over the seat
+   * in front (`./LaunchHead`).
+   */
+  launch?: number | null;
   /**
    * The built-in Amenbo is carrying out on this run's pane, or null (`./BuiltinCard`). While there is
    * one, it stands where the terminal would, and nothing is started here.

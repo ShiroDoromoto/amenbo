@@ -88,12 +88,16 @@ export function plateName(run: Say | null, names: FrameNames, frame: string, fol
  * and the start are what move while a step stands — a step that takes its task opens with none and
  * takes it partway (`took`), the run ends, or is paused, with its last step's pane still up
  * (`stated`), and a built-in's card says when it started once it has (`timed`).
+ *
+ * `headed` is that a launch's header stands over this row (`../shell/LaunchHead`): the row then
+ * leaves out what the header already says (`./nameplate`'s `Plate.headed`).
  */
 export function mountPlate(
   host: HTMLElement,
   frame: string,
   hue: number,
   run: Say | null = null,
+  headed = false,
 ): Plate {
   const draw = mountNameplate(host);
 
@@ -162,9 +166,8 @@ export function mountPlate(
   function row(): Row | null {
     if (!(ran || run !== null || names.has(frame))) return null;
     const name = plateName(run, names, frame, folder);
-    return stoppedAt === null
-      ? { name, dot: { hue, face: faceOf(moving) }, run }
-      : { name, dot: { hue, face: faceOf(moving) }, run, now: stoppedAt };
+    const drawn: Row = { name, dot: { hue, face: faceOf(moving) }, run, ...(headed ? { headed } : {}) };
+    return stoppedAt === null ? drawn : { ...drawn, now: stoppedAt };
   }
 
   /** Start the step's clock or stop it, by where the run stands now. */

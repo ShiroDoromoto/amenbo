@@ -1896,6 +1896,7 @@ export function WorkspaceFace({
                     readOnly: builtin?.program !== undefined,
                   }}
                   run={sayOf(frame)}
+                  launch={frame.launch}
                   builtin={builtin ?? null}
                   // What the run's last step left to be read — a script's output (`AMB-D-1016`), or
                   // the screen of an agent's step that failed the run — kept on the run, for a pane

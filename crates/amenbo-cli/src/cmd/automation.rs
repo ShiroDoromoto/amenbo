@@ -601,11 +601,6 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             store.automation_delete(id).map_err(CliError::from)?;
             write_envelope(flags, "automation.rm", "automation", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted automation: {id}"));
         }
-        AutomationCmd::EntryReplace { id, builtin } => {
-            let p = store.automation_entry_replace(id, &builtin).map_err(CliError::from)?;
-            let line = format!("✓ Automation {id} starts at the built-in '{builtin}' (placement {})", p.id);
-            write_draft(flags, "automation.entry-replace", "automation_placement", serde_json::to_value(&p).unwrap(), Some(vec!["action_id".to_string()]), line, Some(Draft::Automation(p.automation_id)));
-        }
         AutomationCmd::Save { id } => {
             // Core hands the newest version straight back when nothing was written since it, so whether
             // this call saved anything is asked before it.

@@ -45,8 +45,7 @@
 //! app's look starts one more where one has ([`top_up`]), so one that ends makes room for the next. The
 //! launch copies each role's headcount from the definition as it opens, and it is changed on the launch
 //! alone from then on ([`launch_headcount_set`]): raised, the seats added take tasks at once; lowered, a
-//! run past it ends as it comes to take its next task. A
-//! run a trigger starts ([`fire`]), or one started once a task turns up ([`start_waiting`]), joins the
+//! run past it ends as it comes to take its next task. A run a trigger starts ([`fire`]) joins the
 //! launch standing, and opens one where none is. A test run belongs to none.
 //!
 //! **A run sits in a seat of one role** ([`AutomationRun::role_id`]). An automation's roles each name the
@@ -1848,7 +1847,7 @@ fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> V
 /// way. `started_at` is the moment of the launch itself.
 ///
 /// It reads the saved definition ([`ReadsFrom::Saved`]). It makes the run even where its round would
-/// start by waiting for a task, which the run then finds where its round starts ([`wait_for_a_task`]);
+/// start by waiting for a task, and the run then ends where its round starts ([`end_with_no_task`]);
 /// a person's start asks that first and makes no run ([`start`]).
 pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result<AutomationRun> {
     launch_handing(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved)
@@ -1860,7 +1859,8 @@ pub enum Started {
     /// A run was launched.
     Run(AutomationRun),
     /// **Every role with a seat open would start its round waiting for a task with none to take**, so
-    /// no run was made and the automation waits for one instead ([`Automation::waits_for_task_since`]).
+    /// no run was made (`AMB-D-1126`). The launch stands open, and a run is started into it once a task
+    /// of a role with a free seat turns up ([`top_up`]). Nothing is marked on the automation.
     Waits(Box<Automation>),
 }
 
@@ -1870,7 +1870,7 @@ impl Started {
         match self {
             Started::Run(run) => Ok(run),
             Started::Waits(automation) => Err(Error::invalid(format!(
-                "automation '{}' was launched to wait for a task, and only a start waits",
+                "automation '{}' was launched with no task to take, and only a start makes no run then",
                 automation.name
             ))),
         }
@@ -1883,10 +1883,10 @@ impl Started {
 /// seat takes.
 ///
 /// **Where every role with a seat open would start its round waiting for a task, and none can be taken
-/// now, no run is made** (`AMB-D-969`): the automation is marked as waiting for one instead
-/// ([`Started::Waits`]), and the app's watch starts a run once one turns up ([`start_waiting`]). A run
-/// made then would only stand where its round starts, counted among the runs under way and doing
-/// nothing.
+/// now, no run is made** ([`Started::Waits`]): the launch is opened and stands with no run, and the
+/// app's look starts one in it once a task turns up for a role with a free seat ([`top_up`],
+/// `AMB-D-1126`). A run made then would only stand where its round starts, counted among the runs under
+/// way and doing nothing.
 pub fn start(
     tx: &WriteTx<'_>,
     automation_id: i64,
@@ -2346,179 +2346,17 @@ fn waits_at_every_start(conn: &Connection, project_id: i64, pic: &Picture, open:
     Ok(!open.is_empty())
 }
 
-/// **Mark an automation as waiting for a task** ([`Automation::waits_for_task_since`]) — from now, or
-/// from when it already was.
-fn mark_waiting(tx: &WriteTx<'_>, before: Automation) -> Result<Automation> {
-    if before.waits_for_task_since.is_some() {
-        return Ok(before);
-    }
-    let after = Automation { waits_for_task_since: Some(Timestamp::now()), ..before.clone() };
-    crate::ops::emit_update(tx, record::automation(&before), record::automation(&after))?;
-    Ok(after)
-}
-
-/// **End a run whose built-in would wait for a task, and have its automation wait instead**
-/// (`AMB-D-969`) — where the run came back to where its round starts with no task to take.
+/// **End a run whose built-in would wait for a task, as one that found nothing to do** (`AMB-D-1126`)
+/// — where the run came back to where its round starts with no task to take.
 ///
 /// **The run completes** there, its step never opened: it found nothing to do, as one leaving by the
-/// way out for nothing to take does. It holds no task, so there is none to hand back. **The automation
-/// is marked as waiting**, and the app's watch starts a run of it once a task turns up
-/// ([`start_waiting`]). So waiting leaves no run standing, counted among those under way, and no step or
-/// stretch. Its launch stays standing, and the run started once a task turns up joins it.
-pub(crate) fn wait_for_a_task(tx: &WriteTx<'_>, run: AutomationRun) -> Result<AutomationRun> {
-    let automation_id = run.automation_id;
-    let automation =
-        read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
-    mark_waiting(tx, automation)?;
+/// way out for nothing to take does. It holds no task, so there is none to hand back. Nothing is marked
+/// on the automation: the run's seat is free again, and the launch standing fills it once a task of
+/// that role turns up ([`top_up`]). So waiting leaves no run standing, counted among those under way,
+/// and no step or stretch.
+pub(crate) fn end_with_no_task(tx: &WriteTx<'_>, run: AutomationRun) -> Result<AutomationRun> {
     let ended = crate::ops::automation_stop::ended(tx, run, crate::ops::automation_stop::Ending::Completed)?;
     Ok(ended.run)
-}
-
-/// **Which of these waiting automations a run may be started of now** ([`start_waiting`]) — those a
-/// task has turned up for under a role with a free seat ([`seats`]), and those where, in the newest saved
-/// version, no role waits for one where its round starts any longer, whose wait [`start_waiting`] ends.
-///
-/// Only whether a task has turned up is asked, one row of the tasks for each role with a free seat,
-/// never a count (`AMB-D-969`). It writes nothing: [`start_waiting`] asks all of it again, in the transaction it
-/// writes in. The caller says which to ask, so it can leave each one alone for a while after asking
-/// (`AMB-D-983`).
-pub fn tasks_turned_up(conn: &Connection, automations: &[i64]) -> Result<Vec<i64>> {
-    let mut due = Vec::new();
-    for &automation_id in automations {
-        let Some(automation) = read::automation(conn, automation_id)? else { continue };
-        if automation.waits_for_task_since.is_none() || automation.archived || automation.stopped || automation.export_only {
-            continue;
-        }
-        if launch_paused(conn, automation_id)? {
-            continue;
-        }
-        if turned_up_in_a_free_seat(conn, &automation)? != Some(false) {
-            due.push(automation_id);
-        }
-    }
-    Ok(due)
-}
-
-/// **Whether a task has turned up for a waiting automation under a role with a free seat**, where that
-/// role's round starts ([`start_builtin`]) — `None` where, in its newest saved version, no role's round
-/// starts at a built-in set to wait any longer, and `Some(false)` where no role has a free seat
-/// ([`seats`]) or none of those has a task turned up.
-fn turned_up_in_a_free_seat(conn: &Connection, automation: &Automation) -> Result<Option<bool>> {
-    let (pic, _) = definition(conn, automation, ReadsFrom::Saved)?;
-    let mut waits = false;
-    for s in seats_of(conn, automation.id, &pic)? {
-        let Some(start) = start_builtin(conn, &pic, s.role_id)? else { continue };
-        let turned_up = crate::ops::automation_builtin::turned_up(
-            conn,
-            automation.project_id,
-            &s.roles(),
-            start.builtin.as_deref(),
-            &start.cfg,
-        )?;
-        match turned_up {
-            Some(true) if s.free() => return Ok(Some(true)),
-            Some(_) => waits = true,
-            None => {}
-        }
-    }
-    Ok(waits.then_some(false))
-}
-
-/// **Start a run of an automation waiting for a task, now that one has turned up** — `Some(run)` where
-/// it did, `None` where there was nothing to start.
-///
-/// It starts none where the automation is not waiting, is archived, stopped or kept for export only, has
-/// its launch paused, or no task has turned up after all under a role with a free seat: the wait goes
-/// on, and nothing is written.
-/// Where, in its newest saved version, no role's round starts at a built-in set to wait any longer, the
-/// wait ends and no run is made — a run started then would start for no task.
-///
-/// The run is a launch like any other ([`launch_handing`]) of the newest saved version, with nothing
-/// handed to it, joining the launch standing, and the wait ends in the same transaction. A launch its
-/// checks refuse is an error, and the transaction takes nothing with it: the automation goes on
-/// waiting.
-pub fn start_waiting(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result<Option<AutomationRun>> {
-    let before = read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
-    if before.waits_for_task_since.is_none() || before.archived || before.stopped || before.export_only {
-        return Ok(None);
-    }
-    if launch_paused(tx.conn(), automation_id)? {
-        return Ok(None);
-    }
-    match turned_up_in_a_free_seat(tx.conn(), &before)? {
-        Some(false) => return Ok(None),
-        None => {
-            stop_waiting(tx, automation_id)?;
-            return Ok(None);
-        }
-        Some(true) => {}
-    }
-    let run = launch_handing(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved)?;
-    stop_waiting(tx, automation_id)?;
-    Ok(Some(run))
-}
-
-/// **Stop an automation waiting for a task** — a person saying not to start a run once one turns up, or
-/// [`start_waiting`] having started one. One that is not waiting is answered as it stands, with nothing
-/// written. The launch standing stays open: only a person stopping it ends it.
-pub fn stop_waiting(tx: &WriteTx<'_>, automation_id: i64) -> Result<Automation> {
-    let before = read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
-    if before.waits_for_task_since.is_none() {
-        return Ok(before);
-    }
-    let after = Automation { waits_for_task_since: None, ..before.clone() };
-    crate::ops::emit_update(tx, record::automation(&before), record::automation(&after))?;
-    Ok(after)
-}
-
-/// **An automation waiting for a task**, as a person reads it: since when, and what is looked for where
-/// the rounds of its newest saved version start (`None` where none of them waits for anything).
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct TaskWait {
-    pub since: Timestamp,
-    pub looks_for: Option<String>,
-}
-
-/// **Whether this automation is waiting for a task** ([`TaskWait`]), or `None` where it is not.
-pub fn task_wait(conn: &Connection, automation_id: i64) -> Result<Option<TaskWait>> {
-    let automation = read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
-    let Some(since) = automation.waits_for_task_since else { return Ok(None) };
-    let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
-    let mut looks_for = None;
-    for role_id in seat_roles(&pic) {
-        if let Some(start) = start_builtin(conn, &pic, role_id)? {
-            looks_for = crate::ops::automation_builtin::looks_for(start.builtin.as_deref(), &start.cfg);
-        }
-        if looks_for.is_some() {
-            break;
-        }
-    }
-    Ok(Some(TaskWait { since, looks_for }))
-}
-
-/// **What is keeping this automation waiting** (`AMB-D-999`) — the tasks looked for where the rounds of
-/// its newest saved version start that cannot be taken, by what stops them: of every role starting a
-/// round, as the first start that waits for anything looks for them. `None` for an automation that is
-/// not waiting. Read when a person is about to look, never by the watch's look.
-pub fn task_wait_held_back(
-    conn: &Connection,
-    automation_id: i64,
-) -> Result<Option<crate::ops::automation_builtin::HeldBack>> {
-    let automation = read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
-    if automation.waits_for_task_since.is_none() {
-        return Ok(None);
-    }
-    let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
-    let roles = roles_on(&pic);
-    for role_id in seat_roles(&pic) {
-        let Some(start) = start_builtin(conn, &pic, role_id)? else { continue };
-        let held =
-            crate::ops::automation_builtin::held_back(conn, automation.project_id, &roles, start.builtin.as_deref(), &start.cfg)?;
-        if held.is_some() {
-            return Ok(held);
-        }
-    }
-    Ok(None)
 }
 
 /// **The launch a run about to be made is started in** — the one standing for the automation, or a new
@@ -2590,20 +2428,20 @@ pub fn launches_to_top_up(conn: &Connection, launches: &[i64]) -> Result<Vec<i64
 }
 
 /// **Whether a launch may be given one more run now.** It is running, and its automation is neither
-/// archived, stopped, kept for export only nor waiting for a task (a run then is [`start_waiting`]'s
-/// to start). And one of the automation's roles has a free seat ([`seats`]), its round starting, in the
-/// newest saved version, at the built-in that takes a task — a role starting anywhere else is never
-/// topped up, its run walking the picture once — a task of its own to take there, and no run of it
-/// standing about to take one, which would take the task found here ([`with_a_task`]). The seats are as many as the launch holds for each role
-/// ([`seats`]), so a headcount raised on the launch takes hold at once ([`launch_headcount_set`]).
+/// archived, stopped nor kept for export only. And one of the automation's roles has a free seat
+/// ([`seats`]), its round starting, in the newest saved version, at the built-in that takes a task — a
+/// role starting anywhere else is never topped up, its run walking the picture once — a task of its own
+/// to take there, and no run of it standing about to take one, which would take the task found here
+/// ([`with_a_task`]). Whether any role is set to wait for a task does not count (`AMB-D-1126`). The
+/// seats are as many as the launch holds for each role ([`seats`]), so a headcount raised on the launch
+/// takes hold at once ([`launch_headcount_set`]).
 fn tops_up(conn: &Connection, launch_id: i64) -> Result<bool> {
     let Some(launch) = read::automation_launch(conn, launch_id)? else { return Ok(false) };
     if launch.status != AutomationLaunchStatus::Running {
         return Ok(false);
     }
     let Some(automation) = read::automation(conn, launch.automation_id)? else { return Ok(false) };
-    if automation.archived || automation.stopped || automation.export_only || automation.waits_for_task_since.is_some()
-    {
+    if automation.archived || automation.stopped || automation.export_only {
         return Ok(false);
     }
     let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
@@ -3454,14 +3292,15 @@ pub(crate) fn launch_past_the_setting_checks(
 /// run is written ([`file_handed`]).
 ///
 /// Where `may_wait`, seats that would each start their round waiting for a task with none to take
-/// ([`waits_at_every_start`]) make no run, and the automation waits instead ([`start`]). Asked last,
-/// once nothing refuses the launch: an automation that could not be launched is not one to wait on.
+/// ([`waits_at_every_start`]) make no run, and the launch stands open for [`top_up`] to fill
+/// ([`start`]). Asked last, once nothing refuses the launch: an automation that could not be launched
+/// opens no launch to fill.
 ///
 /// Where `sit_in` is `None`, the run sits in a free seat ([`seats`]) — refused where no role has one —
 /// and joins the launch standing for the automation, or opens one ([`join_launch`]); a paused launch is
-/// refused. A launch opened for seats that wait stands with no run, and the run started once a task
-/// turns up joins it. **The run sits in the seat of the role the task handed was filed under** where
-/// that seat is free, so it takes that task. Where `sit_in` names a seat — a test run's
+/// refused. A launch opened for seats that wait stands with no run, and the run started in it once a
+/// task turns up ([`top_up`]) joins it. **The run sits in the seat of the role the task handed was
+/// filed under** where that seat is free, so it takes that task. Where `sit_in` names a seat — a test run's
 /// ([`rehearsal_seats`]) — the run sits in that one, free or not, and joins no launch. **It starts
 /// where the round of its seat's role starts** ([`start_of`], `AMB-D-1123`), and is copied down marking
 /// that spot ([`copy_down`]).
@@ -3543,7 +3382,7 @@ fn launch_asking(
         false => None,
     };
     if may_wait && waits_at_every_start(tx.conn(), automation.project_id, &pic, &open)? {
-        return Ok(Started::Waits(Box::new(mark_waiting(tx, automation)?)));
+        return Ok(Started::Waits(Box::new(automation)));
     }
     let role_id = match (sit_in, filed_under.and_then(|role| open.iter().find(|s| s.role_id == Some(role)))) {
         (Some(role_id), _) => role_id,
@@ -4399,8 +4238,9 @@ pub(crate) fn goes_round(
 
 /// **Whether this run stands before a built-in that would wait** for something to turn up
 /// (`AMB-D-969`) — `running`, with nothing under way, and the step it would open next set to wait with
-/// nothing yet for it. Such a run is ended the next time that step is opened, and its automation waits
-/// instead ([`wait_for_a_task`]); until then a pause before its next task takes hold at once.
+/// nothing yet for it. Such a run is ended the next time that step is opened, its seat left for the
+/// launch to fill once a task turns up ([`end_with_no_task`]); until then a pause before its next task
+/// takes hold at once.
 pub fn is_waiting(conn: &Connection, run_id: i64) -> Result<bool> {
     let Waiting::Step(def) = next_def(conn, run_id)? else { return Ok(false) };
     let Some(run) = read::automation_run(conn, run_id)? else { return Ok(false) };

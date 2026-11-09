@@ -958,8 +958,7 @@ pub fn cancel_launch(tx: &WriteTx<'_>, launch_id: i64) -> Result<LaunchActed> {
 }
 
 /// **Stop a launch now** — the force-cancel (`AMB-D-1002`): each run still going ends where it stands
-/// ([`stop`], [`Ending::Canceled`]), and the launch ends, its automation no longer waiting for a task to
-/// start a run on.
+/// ([`stop`], [`Ending::Canceled`]), and the launch ends.
 pub fn stop_launch(tx: &WriteTx<'_>, launch_id: i64) -> Result<LaunchActed> {
     let before = live_launch(tx, launch_id)?;
     going(&before, "stopped")?;
@@ -971,11 +970,9 @@ pub fn stop_launch(tx: &WriteTx<'_>, launch_id: i64) -> Result<LaunchActed> {
     Ok(LaunchActed { launch, runs })
 }
 
-/// End a launch a person canceled or stopped, its runs ended already: the wait for a task its automation
-/// was in is the launch's too, so it ends with it, and nothing starts a run in the launch again.
+/// End a launch a person canceled or stopped, its runs ended already: nothing starts a run in the
+/// launch again.
 fn close_launch(tx: &WriteTx<'_>, launch_id: i64) -> Result<AutomationLaunch> {
-    let launch = live_launch(tx, launch_id)?;
-    crate::ops::automation_run::stop_waiting(tx, launch.automation_id)?;
     set_launch_status(tx, live_launch(tx, launch_id)?, AutomationLaunchStatus::Ended)
 }
 

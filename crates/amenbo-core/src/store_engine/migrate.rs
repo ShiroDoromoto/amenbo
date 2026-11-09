@@ -1506,6 +1506,14 @@ pub const STEPS: &[Step] = &[
         // not kept, so no seat can be told for a round that failed before. No task is touched.
         apply: Apply::Custom(let_a_round_name_its_seat),
     },
+    Step {
+        to: 134,
+        name: "drop automation.waits_for_task_since, the wait for a task the whole automation was in",
+        // **Each role's free seat is filled once a task of its own turns up, and nothing waits for the
+        // whole automation** (`AMB-D-1126`). An automation that was waiting has its launch standing
+        // filled from now on. No task is touched.
+        apply: Apply::Custom(take_the_wait_off_the_automation),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -1724,6 +1732,20 @@ fn let_a_round_name_its_seat(ctx: &Ctx<'_>) -> Result<()> {
     let tx = ctx.tx;
     if !column_names(tx, "automation_run_task")?.iter().any(|c| c == "seat") {
         tx.execute_batch("ALTER TABLE automation_run_task ADD COLUMN seat BIGINT;")?;
+    }
+    Ok(())
+}
+
+/// v134: `automation.waits_for_task_since` is dropped — the wait for a task the whole automation was in
+/// (`AMB-D-1126`). A launch standing for an automation that was waiting stays open, and its free seats
+/// are filled once a task turns up.
+///
+/// **Dropped only where it is there**, v68's guard and for v53's reason. It is a plain column, named by
+/// no foreign key or index, so it is dropped as it is.
+fn take_the_wait_off_the_automation(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if column_names(tx, "automation")?.iter().any(|c| c == "waits_for_task_since") {
+        tx.execute_batch("ALTER TABLE automation DROP COLUMN waits_for_task_since;")?;
     }
     Ok(())
 }
@@ -12823,9 +12845,9 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(133), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 133);
         let since: Option<String> = engine
             .conn()
             .query_row("SELECT waits_for_task_since FROM automation WHERE id = 1", [], |r| r.get(0))
@@ -12838,6 +12860,41 @@ mod tests {
             .conn()
             .execute("UPDATE automation SET waits_for_task_since = '2026-11-07T00:00:00Z' WHERE id = 1", [])
             .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v134: the wait for a task is dropped from the automation, one that was waiting arrives with the
+    /// rest of its row as it was, and its launch standing stays open.
+    #[test]
+    fn an_automation_that_was_waiting_for_a_task_loses_the_wait() {
+        let dir = scratch("automation-wait-dropped");
+        let engine = store_at(&dir, 133);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, waits_for_task_since) \
+                   VALUES (1, 1, 'work', '2026-11-07T00:00:00Z');
+                 INSERT INTO automation_launch (id, automation_id, project_id, status) VALUES (1, 1, 1, 'running');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert!(
+            !column_names(&engine.conn().unchecked_transaction().unwrap(), "automation")
+                .unwrap()
+                .iter()
+                .any(|c| c == "waits_for_task_since"),
+            "the automation holds no wait of its own any more",
+        );
+        let name: String =
+            engine.conn().query_row("SELECT name FROM automation WHERE id = 1", [], |r| r.get(0)).unwrap();
+        assert_eq!(name, "work");
+        let status: String =
+            engine.conn().query_row("SELECT status FROM automation_launch WHERE id = 1", [], |r| r.get(0)).unwrap();
+        assert_eq!(status, "running", "the launch stands");
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -1144,12 +1144,6 @@ datasets! {
         // it that finishes a round pauses rather than starting the next. Like `archived`, not part of a
         // saved version.
         stopped: bool_col,
-        // **Since when Amenbo has been waiting for a task to start a run of this automation on**, or NULL
-        // where it is not waiting. Set where the entry would have waited for a task with none to take —
-        // a run coming back to it, or a start — and cleared once a run is started on one or a person
-        // stops the wait. Nothing else stands while it waits: no run, no step, no stretch. Like
-        // `archived`, not part of a saved version.
-        waits_for_task_since: ts_opt,
         order_key: col(ORDER_KEY),
     }
 

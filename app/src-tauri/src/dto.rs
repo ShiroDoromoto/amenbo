@@ -4345,7 +4345,7 @@ pub struct AutomationLaunchCheckDto {
 /// A run says nothing beyond its id: it starts on the spot, nothing being in line ahead of it
 /// (`AMB-D-947`), and the pane arriving is what it looks like — that comes as an event
 /// ([`AutomationStepOpenDto`]). No run (`null`) where the entry would have waited for a task with none
-/// to take: the automation waits for one instead, and a run is started once it turns up (`AMB-D-969`).
+/// to take: the launch stands open, and a run is started in it once one turns up (`AMB-D-1126`).
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]

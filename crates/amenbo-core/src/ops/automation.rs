@@ -1299,7 +1299,6 @@ pub(crate) fn add_with_no_role(tx: &WriteTx<'_>, project_id: i64, new: NewAutoma
         export_only: false,
         triggers: Vec::new(),
         stopped: false,
-        waits_for_task_since: None,
         order_key,
         created_at: now,
         updated_at: now,
@@ -1628,11 +1627,9 @@ pub struct Stopped {
 ///   its next task. One standing at a role's start waiting for room in the action that takes one is paused
 ///   here at once ([`Stopped::paused`]). A run that takes no tasks has no round to finish and goes on to
 ///   its end.
-/// - **It stops waiting for a task** ([`Automation::waits_for_task_since`]): no run of it is started
-///   once one turns up, and a launch of it standing with no run under way ends.
 ///
-/// Letting it start again picks up no run and waits for no task: those paused stay paused until somebody
-/// resumes them, and a start waits again. Writing what already stands writes nothing.
+/// Letting it start again picks up no run: those paused stay paused until somebody resumes them.
+/// Writing what already stands writes nothing.
 pub fn stop(tx: &WriteTx<'_>, id: i64, stopped: bool) -> Result<Stopped> {
     let before = live_automation(tx, id)?;
     if before.stopped == stopped {
@@ -1640,9 +1637,6 @@ pub fn stop(tx: &WriteTx<'_>, id: i64, stopped: bool) -> Result<Stopped> {
     }
     let mut after = before.clone();
     after.stopped = stopped;
-    if stopped {
-        after.waits_for_task_since = None;
-    }
     after.updated_at = Timestamp::now();
     emit_update(tx, record::automation(&before), record::automation(&after))?;
     let paused = match stopped {

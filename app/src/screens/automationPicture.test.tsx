@@ -854,6 +854,25 @@ describe("one role's round, as the build screen draws it", () => {
     expect(plusses().length).toBeGreaterThan(0);
   });
 
+  it("draws a box no round reaches, which opens its panel, and says nothing of it among where tasks come from", async () => {
+    // A line moved off the tidying box leaves it on no round, its own line still going on into Design's box.
+    const stray = rounds({
+      placements: [...rounds().placements, step({ id: 5, name: "片付ける", exits: done(50) })],
+      edges: [...rounds().edges, { id: 5, fromId: 5, exitName: "完了", ends: "go", toId: 3 }],
+    });
+    const onPickBox = vi.fn();
+    for (const roleId of [10, 20, 30, 40]) {
+      await render({ graph: automationGraph(stray, roleId), onPickBox });
+      expect(container.querySelector(".autopic__node[data-box='5']")).not.toBeNull();
+    }
+    await render({ graph: automationGraph(stray, 20), onPickBox });
+    expect(sources()).toEqual([tf("auto.pic.fromRole", { role: "Research" })]);
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>(".autopic__node[data-box='5']")!.click();
+    });
+    expect(onPickBox).toHaveBeenCalledWith(5);
+  });
+
   it("marks no box as where a run opens, and lists a filing in the legend in its place", async () => {
     await render({ graph: automationGraph(rounds(), 20) });
     expect(container.querySelector(".autopic__entry")).toBeNull();

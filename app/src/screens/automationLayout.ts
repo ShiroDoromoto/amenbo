@@ -197,8 +197,8 @@ export type PicRound = {
    *  round's incident is filed to this role (`failuresTo`), the triggers that file one, in the order
    *  they are written — only those switched on, as one switched off files nothing — each task another
    *  role's round files for this one (`passes` on that role, `PicPass.role` being the role that files
-   *  it), and the roles whose boxes hand on into it that no such task already names, then the actions,
-   *  where the box it comes from is on no round. None of the four means only a person files them. */
+   *  it), and the roles whose boxes hand on into it that no such task already names. None of the four
+   *  means only a person files them. */
   receives: {
     failures: boolean;
     triggers: readonly AutomationTriggerDto[];
@@ -208,8 +208,8 @@ export type PicRound = {
   /** Whom the round hands on to, one each: first each task it files for another role (`passes` on the
    *  role), then each role its lines out of it go to that no such task already names. */
   passes: readonly PicPass[];
-  /** Each line out of the round, by its edge, with the role it hands on to — or the action, where the
-   *  box it goes to is on no round. */
+  /** Each line from a drawn box to a box not drawn, by its edge, with the role that box is on. A box on
+   *  no round is always drawn, so a line never leaves the picture for one. */
   handOff: ReadonlyMap<number, string>;
 };
 
@@ -245,8 +245,9 @@ export type PicGraph = {
   boundary?: { inputs: readonly AutomationPortDto[]; exits: readonly AutomationExitDto[] };
   /**
    * The role this picture is the round of, on the build screen (`automationGraph` with a role). Its
-   * boxes are the ones that round reaches, its entry where the round starts, and a line going back is
-   * drawn as a loop under the box it goes back to rather than as a line. Absent on any other picture.
+   * boxes are the ones that round reaches and the ones no round reaches, its entry where the round
+   * starts, and a line going back is drawn as a loop under the box it goes back to rather than as a
+   * line. Absent on any other picture.
    */
   round?: PicRound;
 };
@@ -254,7 +255,8 @@ export type PicGraph = {
 /**
  * **One automation as a picture** — its boxes are the actions placed on it.
  *
- * Given a role, **only that role's round** (`AutomationPlacementDto::roleId`): its waiting tasks, filed
+ * Given a role, **only that role's round** (`AutomationPlacementDto::roleId`), with every box no round
+ * reaches beside it so it can still be picked, fixed or taken off: its waiting tasks, filed
  * by a failed round, a trigger, another role or a person, the actions it passes through from its start
  * with their steps inside, and handed on to the roles it files a task for and the roles its lines
  * leave for. A role that is gone draws the whole automation.
@@ -276,30 +278,28 @@ export function automationGraph(
   const role = detail.roles.find((one) => one.id === roleId);
   if (role === undefined) return whole;
   const inRound = new Set(detail.placements.filter((one) => one.roleId === role.id).map((one) => one.id));
+  // What is drawn: the round, and every box no round reaches — a line moved off it leaves it there, on
+  // whichever role's picture its builder is looking at.
+  const drawn = new Set(
+    detail.placements.filter((one) => inRound.has(one.id) || one.roleId === undefined).map((one) => one.id),
+  );
   const roleName = (placementId: number): string | undefined => {
     const at = detail.placements.find((one) => one.id === placementId);
     return detail.roles.find((one) => one.id === at?.roleId)?.name;
   };
-  // Into the round from a box on no part of it: from the role that box is on, or — where it is on no
-  // round — from the action standing there.
-  // The roles come first and the actions on no round after them, whatever order the edges stand in.
+  // Into the round from a box not drawn: from the role that box is on. A box on no round is drawn, so
+  // its line into the round is a line on the picture.
   const fromRoles: string[] = [];
-  const fromActions: string[] = [];
   for (const edge of detail.edges) {
-    if (edge.ends !== "go" || edge.toId === undefined || !inRound.has(edge.toId) || inRound.has(edge.fromId)) continue;
+    if (edge.ends !== "go" || edge.toId === undefined || !inRound.has(edge.toId) || drawn.has(edge.fromId)) continue;
     const byRole = roleName(edge.fromId);
     if (byRole !== undefined) fromRoles.push(byRole);
-    else {
-      const name = detail.placements.find((one) => one.id === edge.fromId)?.name;
-      if (name !== undefined) fromActions.push(name);
-    }
   }
-  // Out of the round to a box on no part of it: to the role that box is on, or — where it is on no
-  // round — to the action standing there.
+  // Out of a drawn box to a box not drawn: to the role that box is on.
   const handOff = new Map<number, string>();
   for (const edge of detail.edges) {
-    if (edge.ends !== "go" || edge.toId === undefined || !inRound.has(edge.fromId) || inRound.has(edge.toId)) continue;
-    const to = roleName(edge.toId) ?? detail.placements.find((one) => one.id === edge.toId)?.name;
+    if (edge.ends !== "go" || edge.toId === undefined || !drawn.has(edge.fromId) || drawn.has(edge.toId)) continue;
+    const to = roleName(edge.toId);
     if (to !== undefined) handOff.set(edge.id, to);
   }
   const passes: PicPass[] = role.passes.flatMap((pass) => {
@@ -317,7 +317,8 @@ export function automationGraph(
           .map((pass) => ({ role: from, task: pass.taskTitle ?? pass.name, depends: pass.depends })),
   );
   for (const edge of detail.edges) {
-    if (!handOff.has(edge.id) || edge.toId === undefined) continue;
+    // Only the round hands on: a box no round reaches hands nothing on to anyone.
+    if (!handOff.has(edge.id) || edge.toId === undefined || !inRound.has(edge.fromId)) continue;
     const at = detail.placements.find((one) => one.id === edge.toId);
     const to = detail.roles.find((one) => one.id === at?.roleId);
     if (to !== undefined && !passes.some((one) => one.role.id === to.id)) passes.push({ role: to, depends: false });
@@ -325,9 +326,9 @@ export function automationGraph(
   return {
     entryId: role.entryPlacementId,
     boxes: detail.placements
-      .filter((one) => inRound.has(one.id))
+      .filter((one) => drawn.has(one.id))
       .map((one) => ({ ...one, stepCards: one.steps.map((step) => stepKind(step, agentLabel)) })),
-    edges: detail.edges.filter((edge) => inRound.has(edge.fromId)),
+    edges: detail.edges.filter((edge) => drawn.has(edge.fromId)),
     wires: detail.wires,
     round: {
       whole,
@@ -338,9 +339,7 @@ export function automationGraph(
         triggers: detail.triggers.filter((one) => one.enabled && one.roleId === role.id),
         filed,
         // A role that already files a task for this one is said once, by that filing.
-        roles: [
-          ...new Set([...fromRoles.filter((name) => !filed.some((one) => one.role.name === name)), ...fromActions]),
-        ],
+        roles: [...new Set(fromRoles.filter((name) => !filed.some((one) => one.role.name === name)))],
       },
       passes,
       handOff,
@@ -530,7 +529,7 @@ export type PicLine = {
   points: readonly PicPoint[];
   /** Dashed: it goes back to a box on the way down to the one it leaves. */
   back: boolean;
-  /** On a role's picture, the role it hands on to, where it leaves the round (`PicRound.handOff`). */
+  /** On a role's picture, the role it hands on to, where it leaves the boxes drawn (`PicRound.handOff`). */
   handsTo?: string;
   /**
    * What colour an edge is drawn in, as the legend under the picture reads it: on to the next box,

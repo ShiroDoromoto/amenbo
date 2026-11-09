@@ -1648,9 +1648,11 @@ fn only_a_failed_run_is_acknowledged() {
 
 /// **A start with nothing to take makes no run** where the round starts at a take_task set to wait for a
 /// task: nothing is marked on the automation, and `show` says nothing of a wait — the launch stands
-/// open, and the app starts a run in it once a task turns up.
+/// open, and the app starts a run in it once a task turns up. What each role waits for is read on the
+/// launch (`launch-show`), and a task still being created is named as waiting on a person. There is no
+/// `stop-waiting`, since the automation as a whole waits for nothing.
 #[test]
-fn a_start_with_nothing_to_take_makes_no_run_and_marks_no_wait() {
+fn a_start_with_nothing_to_take_makes_no_run_and_shows_the_wait_on_the_launch() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
     let (a, _, _, take) = a_picture(&cli, false);
@@ -1663,8 +1665,30 @@ fn a_start_with_nothing_to_take_makes_no_run_and_marks_no_wait() {
     let started = cli.json(&["automation", "start", &a, "--json"]);
     assert!(started["automation_run"].is_null(), "no run is made: {started}");
     assert!(started["automation"].get("waits_for_task_since").is_none(), "{started}");
+    let launch = id_str(&started["launch_id"]);
     let (text, _) = cli.run(&["automation", "show", &a]);
     assert!(!text.contains("waiting for a task"), "{text}");
+    let (text, _) = cli.run(&["automation", "start", &a]);
+    assert!(text.contains(&format!("automation launch-show {launch}")), "the start names where to read the wait: {text}");
+
+    let shown = cli.json(&["automation", "launch-show", &launch, "--json"]);
+    let role = &shown["roles"][0];
+    assert_eq!(role["waiting"].as_u64(), Some(0), "{shown}");
+    assert_eq!(role["first_waiting"].as_array().map(Vec::len), Some(0), "{shown}");
+    assert!(role["held_back"].is_null(), "nothing is held back with no task at all: {shown}");
+
+    // A task of the role still being created waits on a person, and is counted on the launch alone.
+    let project = id_str(&cli.json(&["automation", "show", &a, "--json"])["automation"]["project_id"]);
+    let born = born_role(&cli, &a);
+    cli.json(&["task", "add", "--title", "not ready yet", "--project", &project, "--role", &born, "--json"]);
+    let shown = cli.json(&["automation", "launch-show", &launch, "--json"]);
+    assert_eq!(shown["roles"][0]["waiting"].as_u64(), Some(0), "{shown}");
+    assert_eq!(shown["roles"][0]["held_back"]["drafts"].as_u64(), Some(1), "{shown}");
+    let (text, _) = cli.run(&["automation", "launch-show", &launch]);
+    assert!(text.contains("waiting on a person: 1 task(s) still being created"), "{text}");
+
+    let (refused, code) = cli.run_err(&["automation", "stop-waiting", &a]);
+    assert_ne!(code, 0, "the command is gone: {refused}");
 }
 
 /// **A run waiting for room says so** on `run-show`: two runs come to an action that takes one run at a

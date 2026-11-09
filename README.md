@@ -437,8 +437,7 @@ amenbo automation trigger 4 --when-idle --task-from-script /usr/local/bin/next-m
 amenbo automation trigger --trigger 12 --every 30 --title "Look over the inbox"  # ...write trigger 12 afresh, keeping its id, whether it is on and when it last filed a task
 amenbo automation trigger --trigger 12 --off                                  # ...have it asked no more, kept as it is; --on has it asked again
 amenbo automation trigger --trigger 12 --rm -y                                # ...take it away, the automation's other triggers left as they are
-amenbo automation stop 4                               # stop it starting new rounds: start is refused and its triggers file nothing, and each run pauses once its round is over (one waiting for room to take a task, at once) and a wait for a task ends; --off lets it start them again
-amenbo automation stop-waiting 3                       # an automation set to wait for a task makes no run until one turns up; this stops it waiting
+amenbo automation stop 4                               # stop it starting new rounds: start is refused and its triggers file nothing, and each run pauses once its round is over (one waiting for room to take a task, at once); --off lets it start them again
 amenbo automation pause 7                              # ...at the end of the action under way (a wait under way included: the run pauses once its time is up)
 amenbo automation pause 7 --before-next-task           # ...or where it would take its next task (one waiting for room pauses now)
 amenbo automation cancel 7                             # a paused run ends canceled, handing the task back to todo and to the person

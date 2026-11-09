@@ -2617,12 +2617,6 @@ pub enum AutomationCmd {
         /// automation id
         id: i64,
     },
-    /// Stop an automation waiting for a task: the app no longer starts a run of it once a task the
-    /// take_task where a role's round starts looks for turns up. One that is not waiting is answered as it stands
-    StopWaiting {
-        /// automation id
-        id: i64,
-    },
 
     /// Walk an automation's draft, unsaved changes included, role by role in the order the roles are
     /// defined in, each from where it starts to its end, without running anything — saving is not needed, unlike `automation start`: the launch
@@ -2686,7 +2680,8 @@ pub enum AutomationCmd {
 
     /// How many are in each role for one launch, beside its definition: the headcount the definition
     /// gives it, the one this launch holds, the runs under way, the seats still to go after it was
-    /// lowered, and whether it is stopped once its task is done. A run names its launch (`run-show`)
+    /// lowered, and whether it is stopped once its task is done — and under each role, the tasks waiting
+    /// for it to take and what waits on a person where none is. A run names its launch (`run-show`)
     LaunchShow {
         /// launch id
         launch: i64,

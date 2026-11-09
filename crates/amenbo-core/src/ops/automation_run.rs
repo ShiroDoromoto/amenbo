@@ -148,7 +148,8 @@ pub enum Unmet {
     /// it stands, reached from a role's start or not. `step` is the action placed there.
     TakeTaskOffStart { step: String, builtin: Option<String>, placement: i64 },
     /// A way out with nothing set to happen after it. The run would reach it and stop. The error way
-    /// out is not one of these — it is carried from birth and halts unless somebody says otherwise.
+    /// out is not one of these — it is carried from birth and halts unless somebody says otherwise —
+    /// nor is a way out of the split by an axis, whose value a role's take keeps out (`AMB-D-1140`).
     ///
     /// `inside` is the step inside the placed action whose way out it is, or `None` for the action's
     /// own way out on the automation's picture. The two read alike, and are mended in different places:
@@ -1202,6 +1203,13 @@ fn check_picture(
             // whose roles say where that is (`by_role`) — no line drawn from it is walked, unless the
             // built-in itself stands where a role starts.
             if goes_by_role(&routed, placement.id, def, exit.id) {
+                continue;
+            }
+            // A way out of the split by an axis is one of the axis's values, and a value added to the
+            // axis adds one without anybody touching the automation (`AMB-D-1140`). Leaving it without a
+            // line is how somebody says a task of that value is not this automation's to take — the
+            // role's take is narrowed to keep it out — and a run that gets one anyway stops there (`onward`).
+            if builtin.as_deref() == Some(SPLIT_BY_DIM.key) {
                 continue;
             }
             if !decided(pic, placement.id, exit.id, &by_id) {
@@ -4188,9 +4196,15 @@ pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64
         // **An error way out nobody drew a line from halts the run**, and the round is filed as a failure
         // — which is why the launch check never asks for one. That holds for the step's own error way
         // out left without a line inside the action, and for one returned to an action's way out the
-        // automation draws nothing after: the launch check lets that through only for the action's
-        // error way out, and a run holds its pictures still, so no other can be left bare here.
-        if taken.name == ERROR_EXIT || taken.returns_to.is_some() {
+        // automation draws nothing after: the launch check lets that through for the action's error way
+        // out, and a run holds its pictures still.
+        if taken.name == ERROR_EXIT {
+            return Ok(Onward::Halt);
+        }
+        // **A value's way out of the split left without a line** is the other one the launch check
+        // lets through (`AMB-D-1140`): nothing says what follows it, so the run stops there and the
+        // round is filed as a failure like any other with nowhere to go.
+        if taken.returns_to.is_some() && def.builtin.as_deref() != Some(SPLIT_BY_DIM.key) {
             return Ok(Onward::Halt);
         }
         return Ok(Onward::Nowhere);

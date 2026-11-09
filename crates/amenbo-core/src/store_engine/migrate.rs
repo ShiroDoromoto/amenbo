@@ -14340,9 +14340,18 @@ mod tests {
                 files: Vec::new(),
             },
         );
-        let run = crate::store_engine::read::automation_run(engine.conn(), 1).unwrap().expect("the run");
+        // The run is read by its columns rather than through the registry, which names v140's too.
+        type Started = (Option<String>, Option<String>, Option<String>, Option<String>);
+        let run: Started = engine
+            .conn()
+            .query_row(
+                "SELECT start_trigger, start_title, start_notes, start_data FROM automation_run WHERE id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .unwrap();
         assert_eq!(
-            (run.start_trigger, run.start_title, run.start_notes, run.start_data),
+            run,
             (None, None, None, None),
             "handed nothing by a trigger",
         );

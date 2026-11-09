@@ -32,7 +32,7 @@ use amenbo_core::model::{AutomationRole, FailuresTo};
 use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep, RoleChange};
 use amenbo_core::ops::automation_report::{Next, Produced};
 use amenbo_core::ops::automation_run::{
-    Carrier, ChosenAt, ForRoom, HandedAtLaunch, Launcher, ReadsFrom, RoleHeadcount, Started,
+    Carrier, ChosenAt, ForRoom, HandedAtLaunch, LaunchRoleState, Launcher, ReadsFrom, RoleHeadcount, Started,
 };
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
 use amenbo_core::ops::automation_view::{
@@ -1250,25 +1250,33 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 }
                 // Every role's start would have waited for a task with none to take: no run is made, and
                 // the app starts one in the launch once a task turns up (`AMB-D-1126`).
+                // What each role waits for is read on the launch (`automation launch-show`).
                 Started::Waits(a) => {
-                    let line = format!(
-                        "✓ Automation {} ({}) has no task to take — the app starts a run once one turns up",
-                        a.name, a.id
+                    let launch = store.automation_launch_standing(a.id).map_err(CliError::from)?.map(|l| l.id);
+                    let line = match launch {
+                        Some(l) => format!(
+                            "✓ Automation {} ({}) has no task to take — launch {l} stands open, and the app starts a run in it once one turns up. What each role waits for: `{} automation launch-show {l}`",
+                            a.name,
+                            a.id,
+                            amenbo_core::config::Paths::command_name()
+                        ),
+                        None => format!(
+                            "✓ Automation {} ({}) has no task to take — the app starts a run once one turns up",
+                            a.name, a.id
+                        ),
+                    };
+                    write_envelope_with(
+                        flags,
+                        "automation.start",
+                        "automation",
+                        serde_json::to_value(&a).unwrap(),
+                        None,
+                        false,
+                        line,
+                        &[("launch_id", json!(launch))],
                     );
-                    write_envelope(flags, "automation.start", "automation", serde_json::to_value(&a).unwrap(), None, false, line);
                 }
             }
-        }
-        AutomationCmd::StopWaiting { id } => {
-            // An automation no longer waits for a task as a whole (`AMB-D-1126`), so there is nothing to
-            // stop: it is answered as it stands.
-            let a = store
-                .automation_detail(id)
-                .map_err(CliError::from)?
-                .ok_or_else(|| CliError::from(amenbo_core::Error::not_found(format!("automation '{id}' not found"))))?
-                .automation;
-            let line = format!("✓ Automation {} ({}) is not waiting for a task", a.name, a.id);
-            write_envelope(flags, "automation.stop-waiting", "automation", serde_json::to_value(&a).unwrap(), None, false, line);
         }
         AutomationCmd::TestRun { id, title, notes, dim } => {
             // Nothing is started, so the app need not be running, and nothing is kept, so there is no
@@ -1347,17 +1355,33 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
         }
 
         AutomationCmd::LaunchShow { launch } => {
-            let roles = store.automation_launch_headcounts(launch).map_err(CliError::from)?;
+            let state = store.automation_launch_state(launch).map_err(CliError::from)?;
             if flags.json {
+                // Each role's headcount fields at the top of it, beside what it waits for.
+                let roles: Vec<Value> = state
+                    .roles
+                    .iter()
+                    .map(|role| {
+                        let mut row = serde_json::to_value(&role.headcount).unwrap();
+                        row["name"] = json!(role.name);
+                        row["waiting"] = json!(role.waiting);
+                        row["first_waiting"] = serde_json::to_value(&role.first_waiting).unwrap();
+                        row["held_back"] = serde_json::to_value(&role.held_back).unwrap();
+                        row
+                    })
+                    .collect();
                 print_json(&json!({
                     "launch_id": launch,
                     "count": roles.len(),
-                    "roles": serde_json::to_value(&roles).unwrap(),
+                    "roles": roles,
                 }));
             } else {
-                human(flags, format!("Launch {launch} — {} role(s)", roles.len()));
-                for role in &roles {
-                    human(flags, format!("  {}", one_launch_role(role)));
+                human(flags, format!("Launch {launch} — {} role(s)", state.roles.len()));
+                for role in &state.roles {
+                    human(flags, format!("  {}", one_launch_role(&role.headcount)));
+                    for line in launch_role_waits(role) {
+                        human(flags, format!("    {line}"));
+                    }
                 }
             }
         }
@@ -1778,6 +1802,36 @@ fn one_launch_role(role: &RoleHeadcount) -> String {
         line.push_str("  stops once its task is done");
     }
     line
+}
+
+/// **What one role of a launch waits for**, a line each: the tasks waiting for it to take, the first
+/// few named, and — where none is — what waits on a person to be taken (`AMB-D-1144`). A task waiting
+/// for another task or for its start day goes on by itself, and is not named.
+fn launch_role_waits(role: &LaunchRoleState) -> Vec<String> {
+    let mut lines = Vec::new();
+    if role.waiting > 0 {
+        let named: Vec<String> =
+            role.first_waiting.iter().map(|t| format!("{} {}", task_label(t.task_id), t.title)).collect();
+        let more = role.waiting.saturating_sub(named.len());
+        let more = if more > 0 { format!(" and {more} more") } else { String::new() };
+        lines.push(format!("{} waiting to be taken: {}{more}", role.waiting, named.join(", ")));
+    }
+    if let Some(held) = &role.held_back {
+        let mut parts = Vec::new();
+        if !held.values.is_empty() {
+            parts.push(format!("{} value(s) to close", held.values.len()));
+        }
+        if !held.decisions.is_empty() {
+            parts.push(format!("{} decision(s) to settle", held.decisions.len()));
+        }
+        if held.drafts > 0 {
+            parts.push(format!("{} task(s) still being created", held.drafts));
+        }
+        if !parts.is_empty() {
+            lines.push(format!("waiting on a person: {}", parts.join(", ")));
+        }
+    }
+    lines
 }
 
 /// One placement: which action stands there, what it takes, what it is set to, and what happens after

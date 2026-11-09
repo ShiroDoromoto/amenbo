@@ -970,13 +970,10 @@ impl Store {
         Ok(out)
     }
 
-    /// **How many are in each role for one launch, beside its definition**
-    /// ([`crate::ops::automation_run::launch_headcounts`]).
-    pub fn automation_launch_headcounts(
-        &self,
-        launch_id: i64,
-    ) -> Result<Vec<crate::ops::automation_run::RoleHeadcount>> {
-        crate::ops::automation_run::launch_headcounts(self.engine.conn(), launch_id)
+    /// **The launch of one automation that has not ended** — running or paused — or `None` where there
+    /// is none ([`crate::store_engine::read::automation_launch_standing`]).
+    pub fn automation_launch_standing(&self, automation_id: i64) -> Result<Option<crate::model::AutomationLaunch>> {
+        Ok(crate::store_engine::read::automation_launch_standing(self.engine.conn(), automation_id)?)
     }
 
     /// **One launch as its pane draws it, read at once** ([`crate::ops::automation_run::launch_state`]).

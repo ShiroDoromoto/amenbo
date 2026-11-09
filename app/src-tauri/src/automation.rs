@@ -4421,7 +4421,7 @@ mod tests {
                 "task": { "kind": "fixed", "title": "受信箱を見る", "notes": "メモ" },
             }))
             .unwrap(),
-            AutomationTriggerTriedDto::Files { title: "受信箱を見る".into(), notes: "メモ".into() },
+            AutomationTriggerTriedDto::Files { title: "受信箱を見る".into(), notes: "メモ".into(), data: None, files: Vec::new() },
             "no task matches, so fewer than one do",
         );
         assert!(

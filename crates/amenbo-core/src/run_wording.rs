@@ -44,6 +44,79 @@ pub fn stopped(language: &str, why: &str, reached: Reached<'_>, run: i64) -> Str
         .replace("{run}", &run.to_string())
 }
 
+/// **What a failed run's filed task says, in its notes** — everything a person or a role it reaches
+/// needs to judge what happened (`AMB-D-1139`).
+pub struct Failure<'a> {
+    /// What ended the run — one of the `auto.say.*` keys the endings are worded under.
+    pub why: &'a str,
+    /// What the program of the step it stopped on exited with, where that was heard.
+    pub exit_code: Option<i64>,
+    /// The step it stopped on.
+    pub reached: Reached<'a>,
+    /// Where that step comes in the steps the run opened, counting from one.
+    pub step_no: usize,
+    /// The report that step left. `None` where it left none.
+    pub report: Option<&'a str>,
+    pub run: i64,
+    /// The task the run was working. `None` for a run that held no task.
+    pub task: Option<FailedTask<'a>>,
+}
+
+/// The task a failed run was working, and how many times in a row it has stopped, this time counted.
+pub struct FailedTask<'a> {
+    pub id: i64,
+    pub title: &'a str,
+    pub streak: usize,
+}
+
+/// The notes of a failed run's filed task: a heading naming the task, then one item each for why it
+/// stopped, the step, that step's report, the run, the task, and how many times in a row that task has
+/// stopped. A report of more than one line is set under its item, indented, so the list holds.
+pub fn failure(language: &str, failure: &Failure<'_>) -> String {
+    let item = |label: &str, value: &str| -> String {
+        let line = say(language, "fail.item").replace("{label}", say(language, label));
+        let value = value.trim_end();
+        if !value.contains('\n') {
+            return format!("- {}", line.replace("{value}", value.trim_start()));
+        }
+        let indented: Vec<String> =
+            value.lines().map(|l| if l.is_empty() { String::new() } else { format!("  {l}") }).collect();
+        format!("- {}\n\n{}", line.replace("{value}", "").trim_end(), indented.join("\n"))
+    };
+    let why = match failure.exit_code {
+        Some(code) => say(language, "fail.exitCode")
+            .replace("{why}", say(language, failure.why))
+            .replace("{code}", &code.to_string()),
+        None => say(language, failure.why).to_string(),
+    };
+    let step = match failure.reached {
+        Reached::Step(step) => say(language, "fail.stepAt")
+            .replace("{n}", &failure.step_no.to_string())
+            .replace("{step}", step),
+        Reached::Gone => say(language, "reachedGone").to_string(),
+        Reached::Nothing => say(language, "reachedNothing").to_string(),
+    };
+    let report = failure.report.unwrap_or(say(language, "fail.noReport"));
+    let mut items = vec![
+        item("fail.why", &why),
+        item("fail.step", &step),
+        item("fail.report", report),
+        item("fail.run", &say(language, "fail.runId").replace("{run}", &failure.run.to_string())),
+    ];
+    let mut heading = None;
+    if let Some(task) = &failure.task {
+        let named = format!("AMB-T-{}", task.id);
+        heading = Some(say(language, "fail.heading").replace("{task}", &named).replace("{title}", task.title));
+        items.push(item("fail.task", &format!("{named} {}", task.title)));
+        items.push(item("fail.streak", &say(language, "fail.times").replace("{n}", &task.streak.to_string())));
+    }
+    let list = items.join("\n");
+    match heading {
+        Some(heading) => format!("{heading}\n\n{list}"),
+        None => list,
+    }
+}
+
 /// **What a built-in says of how it finished** — the sentence under `auto.say.bi.<key>`, with each
 /// `{slot}` filled from `slots`. The values go in as they are: a task's title or a path is nobody's to
 /// translate.
@@ -121,7 +194,9 @@ mod tests {
     /// names; a key missing here would print itself at the reader.
     const KEYS: &[&str] = &[
         "crashed", "maxTimes", "noAgent", "noInput", "noWayOn", "leftTaskOpen", "failedCheck", "halted",
-        "canceled", "completed", "reached", "reachedGone", "reachedNothing", "line",
+        "canceled", "completed", "reached", "reachedGone", "reachedNothing", "line", "fail.heading",
+        "fail.item", "fail.why", "fail.exitCode", "fail.step", "fail.stepAt", "fail.report", "fail.noReport",
+        "fail.run", "fail.runId", "fail.task", "fail.streak", "fail.times",
     ];
 
     /// Every language Amenbo is read in says every sentence of the line — a language added to the
@@ -142,7 +217,9 @@ mod tests {
         for row in WORDINGS {
             for (key, template) in row.runs {
                 let Some(reference) = lookup(FALLBACK, key) else { continue };
-                for slot in ["{why}", "{reached}", "{run}", "{step}"] {
+                for slot in
+                    ["{why}", "{reached}", "{run}", "{step}", "{label}", "{value}", "{task}", "{title}", "{n}", "{code}"]
+                {
                     assert_eq!(
                         template.contains(slot),
                         reference.contains(slot),
@@ -215,6 +292,44 @@ mod tests {
         assert_eq!(builtin("ja", "took", &slots), "AMB-T-7 直す に着手しました");
         assert_eq!(builtin("en", "took", &slots), "took AMB-T-7 直す");
         assert_eq!(builtin("xx", "took", &slots), "took AMB-T-7 直す");
+    }
+
+    /// **A failed run's notes name every part of what happened**, in the order the screen shows them,
+    /// in the language asked for — and a report of several lines is set under its item.
+    #[test]
+    fn a_failure_is_written_item_by_item_in_the_language_asked_for() {
+        let task = FailedTask { id: 150, title: "BGM を作る", streak: 3 };
+        let failure = Failure {
+            why: "crashed",
+            exit_code: Some(2),
+            reached: Reached::Step("書き出す"),
+            step_no: 4,
+            report: Some("export.sh: sox が見つかりません"),
+            run: 540,
+            task: Some(task),
+        };
+        assert_eq!(
+            super::failure("ja", &failure),
+            format!(
+                "止まりました：AMB-T-150 BGM を作る\n\n\
+                 - 止まった理由：{}（終了コード 2）\n\
+                 - 止まったステップ：4. 書き出す\n\
+                 - そのステップの報告：export.sh: sox が見つかりません\n\
+                 - 実行の番号：#540\n\
+                 - 元のタスク：AMB-T-150 BGM を作る\n\
+                 - 続けて止まった回数：3 回目",
+                say("ja", "crashed"),
+            )
+        );
+        let bare = Failure { exit_code: None, reached: Reached::Nothing, report: Some("one\ntwo"), task: None, ..failure };
+        assert_eq!(
+            super::failure("en", &bare),
+            format!(
+                "- Why it stopped: {}\n- The step it stopped on: It stopped before opening a step.\n\
+                 - That step's report:\n\n  one\n  two\n- The run: #540",
+                say("en", "crashed"),
+            )
+        );
     }
 
     #[test]

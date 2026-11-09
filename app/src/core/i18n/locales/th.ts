@@ -1890,6 +1890,7 @@ export const th: Translation = {
     not_ready_automation_role_starts_nowhere: "บทบาท “{role}” ยังไม่มีจุดเริ่ม",
     not_ready_automation_export_only: "เป็นคำนิยามแบบเก่า จึงทำได้เพียงส่งออก",
     not_ready_automation_no_failures_to: "ยังไม่ได้กำหนดว่าจะแจ้งรอบที่ล้มเหลวไปที่ใคร",
+    not_ready_automation_failure_axis_empty: "การจัดประเภทของงานความล้มเหลว: แกนที่จำเป็น “{axis}” ยังไม่มีค่า",
     not_ready_automation_action_draft: "แอ็กชัน “{action}” ที่วางไว้ยังกำลังสร้างอยู่",
     not_ready_automation_action_empty: "แอ็กชัน “{action}” ที่วางไว้ไม่มีขั้นตอนที่เป็นจุดเริ่ม",
     not_ready_automation_role_start_takes_no_task: "บทบาท “{role}” เริ่มที่ “{step}” ไม่ใช่ “รับงาน”",

@@ -92,9 +92,9 @@ use crate::time::Timestamp;
 /// action placed twice is two boxes with one name, and a screen that opens the box a reason is about has
 /// to know which of the two. So the same gap in an action placed twice is two reasons, one per placement.
 /// The reasons about the automation as a whole ([`Unmet::ExportOnly`], [`Unmet::NoSteps`],
-/// [`Unmet::NoFailuresTo`]) and about a role starting nowhere ([`Unmet::RoleStartsNowhere`]) name none,
-/// and nor do the ones the action's own check finds ([`check_action`]): it is asked with the action on
-/// no picture.
+/// [`Unmet::NoFailuresTo`], [`Unmet::FailureAxisEmpty`]) and about a role starting nowhere
+/// ([`Unmet::RoleStartsNowhere`]) name none, and nor do the ones the action's own check finds
+/// ([`check_action`]): it is asked with the action on no picture.
 ///
 /// **`builtin` is the key of the built-in a name came from** (`AMB-D-964`), and `to_builtin` the same
 /// for `to`. A built-in's step, ways out, inputs and settings are named in the store's Japanese, so a
@@ -114,6 +114,12 @@ pub enum Unmet {
     /// Nobody is chosen to file a failed round to — neither a person nor one of the automation's roles
     /// ([`crate::model::Automation::failures_to`]). A round that fails would have nobody to go to.
     NoFailuresTo,
+    /// An axis the automation's project requires that the classification a failed round's task is filed
+    /// with gives no value ([`crate::model::Automation::failure_values`], `AMB-D-1129`). The task would not
+    /// finish being created, and the failure would reach nobody. A time axis is not one while today falls
+    /// in one of its values' periods: the task is filed under that one, as any task nobody classifies on
+    /// it is. Raised once per axis.
+    FailureAxisEmpty { axis: String },
     /// An action standing on the picture has no step to open — none written yet, or none named as its
     /// entry. A run reaching that spot would have no terminal to put up. Asked of the action alone
     /// ([`check_action`]), it names no placement.
@@ -244,6 +250,12 @@ impl Unmet {
                  `automation update --failures-to`"
                     .to_string()
             }
+            Unmet::FailureAxisEmpty { axis } => {
+                format!(
+                    "the task a failed round is filed as has no value on '{axis}', which this project requires \
+                     — choose one for it"
+                )
+            }
             Unmet::ActionEmpty { action, placement: Some(_) } => {
                 format!("the action '{action}' placed on it has no step to start at")
             }
@@ -348,6 +360,7 @@ impl Unmet {
             Unmet::NoSteps => ErrorCode::NotReadyAutomationNoSteps,
             Unmet::RoleStartsNowhere { .. } => ErrorCode::NotReadyAutomationRoleStartsNowhere,
             Unmet::NoFailuresTo => ErrorCode::NotReadyAutomationNoFailuresTo,
+            Unmet::FailureAxisEmpty { .. } => ErrorCode::NotReadyAutomationFailureAxisEmpty,
             Unmet::ActionEmpty { placement: Some(_), .. } => ErrorCode::NotReadyAutomationActionEmpty,
             Unmet::ActionEmpty { placement: None, .. } => ErrorCode::NotReadyActionSaveEmpty,
             Unmet::ActionDraft { .. } => ErrorCode::NotReadyAutomationActionDraft,
@@ -394,6 +407,7 @@ impl Unmet {
         match self {
             Unmet::ExportOnly | Unmet::NoSteps | Unmet::NoFailuresTo => msg,
             Unmet::RoleStartsNowhere { role } => msg.with("role", role),
+            Unmet::FailureAxisEmpty { axis } => msg.with("axis", axis),
             Unmet::ActionEmpty { action, .. } | Unmet::ActionDraft { action, .. } => msg.with("action", action),
             Unmet::RoleStartTakesNoTask { role, step, .. } => msg.with("role", role).with("step", step),
             Unmet::OpenExit { step, exit, .. } => msg.with("step", step).with("exit", exit),
@@ -433,7 +447,11 @@ impl Unmet {
     /// the action's own check.
     pub fn placement(&self) -> Option<i64> {
         match self {
-            Unmet::ExportOnly | Unmet::NoSteps | Unmet::NoFailuresTo | Unmet::RoleStartsNowhere { .. } => None,
+            Unmet::ExportOnly
+            | Unmet::NoSteps
+            | Unmet::NoFailuresTo
+            | Unmet::FailureAxisEmpty { .. }
+            | Unmet::RoleStartsNowhere { .. } => None,
             Unmet::ActionEmpty { placement, .. }
             | Unmet::OpenExit { placement, .. }
             | Unmet::UnwiredInput { placement, .. } => *placement,
@@ -602,9 +620,11 @@ fn not_found(what: &str, id: i64) -> Error {
 ///
 /// The list is walked in display order, so a person reading it walks their own picture. An automation
 /// kept only to be written out ([`Unmet::ExportOnly`]) has that one reason and no other: its picture is
-/// not mended in place, so nothing found in it is worth saying. Otherwise the list opens with the one
-/// reason that is about the automation's own settings rather than its picture: nobody chosen to
-/// file a failed round to ([`Unmet::NoFailuresTo`]). Two of the rest answer alone, beside that one: an
+/// not mended in place, so nothing found in it is worth saying. Otherwise the list opens with the
+/// reasons that are about the automation's own settings rather than its picture: nobody chosen to
+/// file a failed round to ([`Unmet::NoFailuresTo`]), and each axis the project requires that the task
+/// a failed round is filed as gives no value ([`Unmet::FailureAxisEmpty`]). Both are said together, so
+/// mending one does not bring the other to light afterwards. Two of the rest answer alone, beside those: an
 /// automation with nothing placed on it has nothing else to say about it, and one where a run has
 /// nowhere to start has nothing reachable to say it about — every other check is asked of the
 /// placements a run would actually walk, and with nowhere to start that is none of them.
@@ -1022,6 +1042,23 @@ pub fn carriers(
     Ok(found)
 }
 
+/// **The axes the automation's project requires that the classification a failed round's task is filed
+/// with gives no value**, by name, in the project's order of axes ([`Unmet::FailureAxisEmpty`]). The time
+/// axis's value for today is counted as given where the classification gives none on it, since the
+/// failure is filed under it then ([`crate::ops::automation_stop`]).
+fn failure_axes_empty(conn: &Connection, automation: &Automation) -> Result<Vec<String>> {
+    let mut given: Vec<i64> = automation.failure_values.iter().map(|v| v.dimension_id).collect();
+    let today = crate::time::today();
+    if let Some((axis, _)) = crate::ops::task::time_axis_default(conn, automation.project_id, today, &given)? {
+        given.push(axis);
+    }
+    Ok(read::required_dimensions(conn, automation.project_id, crate::model::ClassifiedSide::Task)?
+        .into_iter()
+        .filter(|(axis, _)| !given.contains(axis))
+        .map(|(_, name)| name)
+        .collect())
+}
+
 /// [`check`], asked of `pic` — the draft or a saved version of `automation` ([`ReadsFrom`]).
 fn check_picture(
     conn: &Connection,
@@ -1039,6 +1076,9 @@ fn check_picture(
     let mut unmet = Vec::new();
     if automation.failures_to.is_none() {
         unmet.push(Unmet::NoFailuresTo);
+    }
+    for axis in failure_axes_empty(conn, automation)? {
+        unmet.push(Unmet::FailureAxisEmpty { axis });
     }
     let placements = &pic.placements;
     if placements.is_empty() {
@@ -4674,7 +4714,7 @@ mod tests {
             );
 
             let (automation, _, _) = launchable(tx);
-            automation::update(tx, automation.id, None, None, None, Some(None)).expect("leave it unsaid");
+            automation::update(tx, automation.id, None, None, None, Some(None), None).expect("leave it unsaid");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::NoFailuresTo],
@@ -4695,9 +4735,103 @@ mod tests {
             )
             .expect("a role");
             let to_role = Some(Some(FailuresTo::Role { role_id: role.id }));
-            automation::update(tx, automation.id, None, None, None, to_role).expect("to the role");
+            automation::update(tx, automation.id, None, None, None, to_role, None).expect("to the role");
             assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), vec![]);
             launch(tx, automation.id, &here(&claude())).expect("launch");
+        });
+    }
+
+    /// **An axis the project requires that the failed round's classification gives no value is refused**
+    /// — by the check, by a launch and by a save, once per axis and beside nobody being chosen to file to
+    /// — while writing the classification itself is not. Naming a value on each is what lets it go. A
+    /// value of another project's, two values of one axis and a closed value are refused where they are
+    /// written. Removing a value the classification names takes it off, or moves it where the value's
+    /// tasks move.
+    #[test]
+    fn a_required_axis_the_failed_rounds_classification_leaves_empty_is_refused() {
+        use crate::ops::dimension::{self, NewDimension};
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let project = automation.project_id;
+            let named = |name: &str| NewDimension { name: name.into(), ..Default::default() };
+            // An axis is required only once it offers a value.
+            let require = |tx: &WriteTx<'_>, axis: i64| {
+                dimension::update(tx, axis, None, None, None, None, None, None, Some(true), None, None, None)
+                    .expect("required");
+            };
+            let theme = dimension::add(tx, project, named("テーマ")).expect("an axis");
+            let first = dimension::value_add(tx, theme.id, "画面", None).expect("a value");
+            let second = dimension::value_add(tx, theme.id, "記録", None).expect("a value");
+            require(tx, theme.id);
+            let closable = NewDimension { role: crate::model::DimensionRole::Closable, ..named("作業種別") };
+            let kind = dimension::add(tx, project, closable).expect("an axis");
+            let build = dimension::value_add(tx, kind.id, "実装", None).expect("a value");
+            let closed = dimension::value_add(tx, kind.id, "調査", None).expect("a value");
+            dimension::value_set_closed(tx, closed.id, true).expect("close it");
+            require(tx, kind.id);
+            let empty = |axis: &str| Unmet::FailureAxisEmpty { axis: axis.into() };
+
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
+                vec![empty("テーマ"), empty("作業種別")],
+            );
+            let refused = launch(tx, automation.id, &here(&claude())).expect_err("no value on a required axis");
+            assert_eq!(refused.error_code(), ErrorCode::NotReadyAutomation, "{refused}");
+            assert!(refused.to_string().contains("テーマ"), "{refused}");
+            let refused = automation::save(tx, automation.id, None).expect_err("a save asks the same");
+            assert!(matches!(refused, Error::NotReady(_)), "{refused}");
+            assert_eq!(empty("テーマ").placement(), None);
+            assert_eq!(empty("テーマ").code(), ErrorCode::NotReadyAutomationFailureAxisEmpty);
+
+            let written = automation::update(tx, automation.id, None, None, None, Some(None), Some(&[first.id][..]))
+                .expect("one axis at a time is written");
+            assert_eq!(written.failure_values.len(), 1);
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
+                vec![Unmet::NoFailuresTo, empty("作業種別")],
+                "both said together",
+            );
+
+            let other = mk_project(tx, "other");
+            let elsewhere = dimension::add(tx, other, named("テーマ")).expect("an axis");
+            let theirs = dimension::value_add(tx, elsewhere.id, "画面", None).expect("a value");
+            let both = [first.id, theirs.id];
+            automation::update(tx, automation.id, None, None, None, None, Some(&both[..]))
+                .expect_err("another project's value");
+            let both = [first.id, second.id];
+            automation::update(tx, automation.id, None, None, None, None, Some(&both[..]))
+                .expect_err("two values of one axis");
+            let both = [first.id, closed.id];
+            automation::update(tx, automation.id, None, None, None, None, Some(&both[..]))
+                .expect_err("a closed value");
+            let kept: Vec<i64> = read::automation(tx.conn(), automation.id)
+                .expect("read")
+                .expect("there")
+                .failure_values
+                .iter()
+                .map(|v| v.value_id)
+                .collect();
+            assert_eq!(kept, vec![first.id], "a refusal writes nothing");
+
+            let both = [first.id, build.id];
+            let to = Some(Some(crate::model::FailuresTo::Human));
+            automation::update(tx, automation.id, None, None, None, to, Some(&both[..])).expect("both axes");
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), vec![]);
+            launch(tx, automation.id, &here(&claude())).expect("launch");
+
+            dimension::value_delete(tx, first.id, Some(second.id)).expect("move what is on it");
+            let values_on = |tx: &WriteTx<'_>| -> Vec<i64> {
+                read::automation(tx.conn(), automation.id)
+                    .expect("read")
+                    .expect("there")
+                    .failure_values
+                    .iter()
+                    .map(|v| v.value_id)
+                    .collect()
+            };
+            assert_eq!(values_on(tx), vec![second.id, build.id], "moved where the tasks move");
+            dimension::delete(tx, kind.id).expect("the axis goes");
+            assert_eq!(values_on(tx), vec![second.id], "and its value with it");
         });
     }
 
@@ -5742,7 +5876,7 @@ mod tests {
             let startable = claude();
             let closed = Launcher { workspace_open: Some(false), ..here(&startable) };
             assert!(launch(tx, automation.id, &closed).is_err());
-            automation::update(tx, automation.id, None, None, Some(true), None).expect("archive");
+            automation::update(tx, automation.id, None, None, Some(true), None, None).expect("archive");
             assert!(launch(tx, automation.id, &here(&claude())).is_err());
         });
     }
@@ -5812,7 +5946,7 @@ mod tests {
             let again = automation::save(tx, automation.id, None).expect("save with nothing written");
             assert_eq!(again.id, first.id, "nothing written since, so no new version");
 
-            automation::update(tx, automation.id, Some("2件やりきる"), None, None, None).expect("rename");
+            automation::update(tx, automation.id, Some("2件やりきる"), None, None, None, None).expect("rename");
             assert!(
                 !automation::unsaved(tx.conn(), automation.id).expect("unsaved"),
                 "the name is not part of a version",
@@ -5831,7 +5965,7 @@ mod tests {
         with_tx(|tx| {
             let startable = claude();
             let (automation, _, _) = launchable(tx);
-            automation::update(tx, automation.id, None, None, Some(true), None).expect("archive");
+            automation::update(tx, automation.id, None, None, Some(true), None, None).expect("archive");
             let err = launch(tx, automation.id, &here(&startable)).expect_err("archived");
             let Error::Invalid(msg) = err else { panic!("an archived automation is invalid") };
             assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationArchived));
@@ -5840,7 +5974,7 @@ mod tests {
                 vec!["automation"],
             );
 
-            automation::update(tx, automation.id, None, None, Some(false), None).expect("bring back");
+            automation::update(tx, automation.id, None, None, Some(false), None, None).expect("bring back");
             let closed = Launcher { workspace_open: Some(false), ..here(&startable) };
             let err = launch(tx, automation.id, &closed).expect_err("closed");
             let Error::Invalid(msg) = err else { panic!("a closed workspace is invalid") };
@@ -6092,7 +6226,7 @@ mod tests {
             let Error::Invalid(msg) = err else { panic!("an automation with runs is invalid to delete") };
             assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationHasRuns));
             assert_eq!(msg.fields().iter().collect::<Vec<_>>(), vec![("count", "1")]);
-            automation::update(tx, automation.id, None, None, Some(true), None).expect("archiving is the way instead");
+            automation::update(tx, automation.id, None, None, Some(true), None, None).expect("archiving is the way instead");
         });
     }
 

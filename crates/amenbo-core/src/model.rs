@@ -1906,6 +1906,12 @@ pub struct Automation {
     /// it is the automation's, not part of a saved version.
     #[serde(default)]
     pub failures_to: Option<FailuresTo>,
+    /// **The classification a failed round's task is filed with** — one value per axis, each one of this
+    /// automation's project's own, in the order they were written. An axis the project requires with no
+    /// value here holds the save and the launch ([`crate::ops::automation_run::check`]). Like
+    /// `archived`, it is the automation's, not part of a saved version, and not part of its export.
+    #[serde(default)]
+    pub failure_values: Vec<AutomationFailureValue>,
     /// **A definition from before automations had roles, kept only to be written out.** Set on every
     /// automation a store already held when the definition took its present shape, and on none made or
     /// imported since. It is not turned into the new shape: which axis becomes a role, and which lines are
@@ -1928,6 +1934,19 @@ pub struct Automation {
     #[serde(default)]
     pub stopped: bool,
     pub order_key: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **One value of the classification a failed round's task is filed with** ([`Automation::failure_values`])
+/// — the row that says this automation answers the axis `dimension_id` with `value_id`. `dimension_id` is
+/// denormalised, as [`TaskDimensionValue`]'s is, so one row per axis is held by the table.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AutomationFailureValue {
+    pub id: i64,
+    pub automation_id: i64,
+    pub dimension_id: i64,
+    pub value_id: i64,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

@@ -1522,6 +1522,24 @@ pub const STEPS: &[Step] = &[
         // filled from now on. No task is touched.
         apply: Apply::Custom(take_the_wait_off_the_automation),
     },
+    Step {
+        to: 136,
+        name: "add automation_failure_value, the classification a failed round's task is filed with",
+        // **Not seeded: no row for any automation.** Which value of an axis a failed round's task should
+        // carry is the person's to say, not Amenbo's to guess. An automation in a project with a required
+        // axis is refused at its next save and launch until a person says. No task is touched.
+        apply: Apply::Sql(
+            "CREATE TABLE IF NOT EXISTS automation_failure_value (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    dimension_id BIGINT NOT NULL DEFAULT 0 REFERENCES dimension(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    value_id BIGINT NOT NULL DEFAULT 0 REFERENCES dimension_value(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    UNIQUE (automation_id, dimension_id)
+);",
+        ),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -13498,6 +13516,43 @@ mod tests {
         let n: i64 =
             engine.conn().query_row("SELECT COUNT(*) FROM automation_launch_role", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v136: an automation written before the step arrives with no classification for its failed round's
+    /// task — which value that is was nobody's to say — and one value per axis can be written after.
+    #[test]
+    fn an_automation_written_before_v136_names_no_failure_classification() {
+        let dir = scratch("automation-failure-value");
+        let engine = store_at(&dir, 135);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO dimension (id, project_id, name) VALUES (1, 1, 'テーマ');
+                 INSERT INTO dimension_value (id, dimension_id, name) VALUES (1, 1, '画面'), (2, 1, '記録');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let rows: i64 =
+            engine.conn().query_row("SELECT COUNT(*) FROM automation_failure_value", [], |r| r.get(0)).unwrap();
+        assert_eq!(rows, 0, "nothing is guessed");
+        engine
+            .conn()
+            .execute(
+                "INSERT INTO automation_failure_value (automation_id, dimension_id, value_id) VALUES (1, 1, 1)",
+                [],
+            )
+            .unwrap();
+        let second = engine.conn().execute(
+            "INSERT INTO automation_failure_value (automation_id, dimension_id, value_id) VALUES (1, 1, 2)",
+            [],
+        );
+        assert!(second.is_err(), "one value per axis");
         std::fs::remove_dir_all(&dir).ok();
     }
 

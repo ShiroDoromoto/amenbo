@@ -24,7 +24,7 @@ use crate::model::{
     AutomationEdge, AutomationExit, AutomationPlacement, AutomationPlacementStep, AutomationPort,
     AutomationLaunch, AutomationLaunchRole, AutomationRole, AutomationRun, AutomationRunDef,
     AutomationRunPass, AutomationRunStep, AutomationRunTask, AutomationRunValue,
-    AutomationStep, AutomationTrigger, AutomationVersion, TriggerTask, TriggerWhen,
+    AutomationFailureValue, AutomationStep, AutomationTrigger, AutomationVersion, TriggerTask, TriggerWhen,
     AutomationWire, Database, Decision, DecisionComment, DecisionDimensionValue,
     DecisionEdge, DecisionMadeIn, DecisionTaskLink,
     Dimension, DimensionValue, NotifyTarget,
@@ -567,6 +567,22 @@ pub fn automation(a: &Automation) -> Record {
             ],
             &a.created_at,
             &a.updated_at,
+        ),
+    )
+}
+
+pub fn automation_failure_value(v: &AutomationFailureValue) -> Record {
+    Record::new(
+        "automation_failure_value",
+        v.id,
+        with_audit(
+            vec![
+                ("automation_id", kv(v.automation_id)),
+                ("dimension_id", kv(v.dimension_id)),
+                ("value_id", kv(v.value_id)),
+            ],
+            &v.created_at,
+            &v.updated_at,
         ),
     )
 }

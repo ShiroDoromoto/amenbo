@@ -41,7 +41,8 @@ use crate::model::{
     AutomationPort, AutomationPortDirection, AutomationPortKind,
     AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunPass, AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
-    AutomationStep, AutomationStoppedReason, AutomationTrigger, AutomationVersion, AutomationWire, Database,
+    AutomationFailureValue, AutomationStep, AutomationStoppedReason, AutomationTrigger, AutomationVersion,
+    AutomationWire, Database,
     TakeOrder, TriggerCondition, TriggerTask, TriggerWhen,
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
     DecisionMadeIn, DecisionStatus, DecisionTaskLink,
@@ -607,8 +608,24 @@ pub(super) fn automation_trigger_row(r: &Row) -> rusqlite::Result<AutomationTrig
     })
 }
 
-/// An automation, read back from its own row. Its triggers are rows of their own, so they are left
-/// empty here, for the reader that holds the connection to fill in ([`super::read::automation`]).
+/// One value of the classification an automation's failed round's task is filed with, read back from its
+/// row.
+pub(super) fn automation_failure_value_row(r: &Row) -> rusqlite::Result<AutomationFailureValue> {
+    const C: col::automation_failure_value::Cols = col::automation_failure_value::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationFailureValue {
+        id: get(r, C.id)?,
+        automation_id: get(r, C.automation_id)?,
+        dimension_id: get(r, C.dimension_id)?,
+        value_id: get(r, C.value_id)?,
+        created_at,
+        updated_at,
+    })
+}
+
+/// An automation, read back from its own row. Its triggers and the classification its failed round's
+/// task is filed with are rows of their own, so they are left empty here, for the reader that holds the
+/// connection to fill in ([`super::read::automation`]).
 pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
     const C: col::automation::Cols = col::automation::ALL;
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
@@ -620,6 +637,7 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
         archived: get(r, C.archived)?,
         failures_to: failures_to(get(r, C.failures_to_kind)?, get(r, C.failures_to_role_id)?)?,
         export_only: get(r, C.export_only)?,
+        failure_values: Vec::new(),
         triggers: Vec::new(),
         stopped: get(r, C.stopped)?,
         order_key: get(r, C.order_key)?,

@@ -1,7 +1,15 @@
 // The roles of one automation, on its build screen: the list down the left with the press that adds
-// one, the head of the role picked from it — its icon and the press that draws it anew, and its name —
-// and the agent and model its steps fall back to where a step chose none (`AMB-D-960`). The head and
-// the agent and model are two pieces, because the picture of how the role works stands between them.
+// one, the head of the role picked from it — its icon and the press that draws it anew, its name, and
+// how its round starts — and the agent and model its steps fall back to where a step chose none
+// (`AMB-D-960`). The head and the agent and model are two pieces, because the picture of how the role
+// works stands between them.
+//
+// **How a role starts is two presses side by side under its head** (`AMB-D-1127`): by a task of the
+// role turning up, or by a trigger aimed at it. A role just added starts by a task. Pressing the other
+// takes away where its round starts (`AMB-D-1142`) and leaves what is placed on the picture; a role
+// failed rounds are filed to is not made to start by a trigger, and core's sentence says so under the
+// head. A role started by a trigger names the triggers aimed at it on a second line, each pressed to
+// open its card in the middle.
 //
 // **Every write here goes to the draft** (`AMB-D-1005`): a role is in the version the next save makes,
 // and "Discard changes" takes it back the way it takes back a box.
@@ -24,7 +32,14 @@ import { errText, t, tf } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { Identicon } from "../components/identicon";
 import { useAgents, useDraft, useModels } from "./automationPanel";
-import type { AutomationDetailDto, AutomationRoleDto } from "../bindings/bindings";
+import { whenLine } from "./AutomationTrigger";
+import type { AutomationDetailDto, AutomationRoleDto, AutomationTriggerDto } from "../bindings/bindings";
+
+/** The two ways a role's round starts, in the order they are offered in. */
+const STARTS_BY: { id: AutomationRoleDto["startsBy"]; label: () => string }[] = [
+  { id: "task", label: () => t("auto.build.roleStartsTask") },
+  { id: "trigger", label: () => t("auto.build.roleStartsTrigger") },
+];
 
 /** How many steps the role's round reaches, over every placement it is on. */
 export function roleStepCount(automation: AutomationDetailDto, roleId: number): number {
@@ -95,15 +110,21 @@ export function AutomationRoleList({
   );
 }
 
-/** The picked role's head: its icon and name, where it stands in the list, and the press that removes it. */
+/**
+ * The picked role's head: its icon and name, where it stands in the list, the press that removes it,
+ * how its round starts, and — for one started by a trigger — the triggers aimed at it.
+ */
 export function AutomationRoleHead({
   automation,
   role,
   onRemoved,
+  onOpenTrigger,
 }: {
   automation: AutomationDetailDto;
   role: AutomationRoleDto;
   onRemoved: () => void;
+  /** Open a trigger's card in the middle — the one pressed on the line of triggers aimed at the role. */
+  onOpenTrigger: (trigger: AutomationTriggerDto) => void;
 }) {
   const [name, setName] = useDraft(role.name);
   const [refused, setRefused] = useState<string | null>(null);
@@ -122,6 +143,7 @@ export function AutomationRoleHead({
       setRefused(errText(e));
     });
   };
+  const aimed = automation.triggers.filter((one) => one.roleId === role.id);
   const at = automation.roles.findIndex((one) => one.id === role.id);
   const before = automation.roles[at - 1];
   const after = automation.roles[at + 1];
@@ -173,6 +195,38 @@ export function AutomationRoleHead({
         <button type="button" className="btn" onClick={() => void remove()}>
           {t("auto.build.roleRemove")}
         </button>
+      </div>
+      <div className="autorole__start">
+        <div className="autorole__startline">
+          <span className="autorole__startlabel">{t("auto.build.roleStartsBy")}</span>
+          <span className="autorole__seg" role="group" aria-label={t("auto.build.roleStartsBy")}>
+            {STARTS_BY.map((one) => (
+              <button
+                key={one.id}
+                type="button"
+                aria-pressed={role.startsBy === one.id}
+                onClick={() => role.startsBy !== one.id && run(editAutomationRole(role.id, { startsBy: one.id }))}
+              >
+                {one.label()}
+              </button>
+            ))}
+          </span>
+        </div>
+        {role.startsBy === "trigger" && (
+          <div className="autorole__startline">
+            <span className="autorole__startlabel">{t("auto.build.roleTriggers")}</span>
+            <span className="autorole__triggers">
+              {aimed.length === 0 && <span className="autorole__startlabel">{t("auto.act.none")}</span>}
+              {aimed.map((one) => (
+                <button key={one.id} type="button" className="autorole__trigger" onClick={() => onOpenTrigger(one)}>
+                  {one.name.trim() === ""
+                    ? whenLine(one, automation.roles)
+                    : tf("auto.build.roleTrigger", { name: one.name.trim(), when: whenLine(one, automation.roles) })}
+                </button>
+              ))}
+            </span>
+          </div>
+        )}
       </div>
       {refused !== null && <span className="actpanel__refused" role="alert">{refused}</span>}
     </div>

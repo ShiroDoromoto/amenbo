@@ -47,7 +47,9 @@
 // own waiting tasks. On the left, a box for each place they come from — a failed round's incident,
 // each trigger with when it files, each task another role files for this one, the roles whose lines
 // come in, or a person filing it under the role where nothing else does (`Sources`); then the role's
-// waiting tasks (`.autopic__desk`); then the actions the round passes through from its start, each
+// waiting tasks (`.autopic__desk`) — for a role started by a trigger, a dashed box saying it starts by a
+// trigger and files no task, after the triggers aimed at it (`AMB-D-1127`); then the actions the round
+// passes through from its start, each
 // with its steps inside it, laid out across (`layOutAcross`); then a frame for each role it files a
 // task for, with that role's icon and name and the task by its title (`PicRound.passes`). A task
 // filed for another role is framed in the accent and dashed, on the side that files it and on the
@@ -243,14 +245,21 @@ function Source({ head, files, sub, title }: { head: string; files?: boolean; su
   );
 }
 
+/** Whether anything is said to start a role's round: an incident, a trigger, a filing or a line in. */
+function received(round: PicRound): boolean {
+  const { failures, triggers, filed, roles } = round.receives;
+  return failures || triggers.length > 0 || filed.length > 0 || roles.length > 0;
+}
+
 /**
  * Where the role's waiting tasks come from, one box each, one under another: a failed round's incident,
  * each trigger with when it files, each task another role files for this one, then the roles and
- * actions whose lines come in — or a person filing it under the role, where none of them does.
+ * actions whose lines come in — or a person filing it under the role, where none of them does. A role
+ * started by a trigger takes no task, so nobody files one for it, and its sources are its triggers.
  */
 function Sources({ round }: { round: PicRound }) {
   const { failures, triggers, filed, roles } = round.receives;
-  const none = !failures && triggers.length === 0 && filed.length === 0 && roles.length === 0;
+  const none = !received(round) && round.role.startsBy === "task";
   return (
     <div className="autopic__sources">
       {failures && <Source head={t("auto.pic.fromFailures")} />}
@@ -557,25 +566,39 @@ export function AutomationPicture({
     return stop;
   }, [selectedBoxId, drawn]);
   // A role's waiting tasks, and where they come from, on the left of its row: drawn whether or not
-  // the round reaches anything, since they are filed under the role all the same.
+  // the round reaches anything, since they are filed under the role all the same. A role started by a
+  // trigger has no waiting tasks (`AMB-D-1127`): in their place a dashed box says its round starts by a
+  // trigger and files no task, after the triggers aimed at it — or alone, where none is aimed at it yet.
+  const byTrigger = round?.role.startsBy === "trigger";
   const waiting = round !== undefined && (
     <>
-      <Sources round={round} />
-      <span className="autopic__flowarrow" aria-hidden="true">
-        →
-      </span>
-      <div className="autopic__desk">{t("auto.pic.waiting")}</div>
+      {(!byTrigger || received(round)) && (
+        <>
+          <Sources round={round} />
+          <span className="autopic__flowarrow" aria-hidden="true">
+            →
+          </span>
+        </>
+      )}
+      {byTrigger ? (
+        <div className="autopic__desk autopic__desk--trigger">
+          {t("auto.build.roleStartsTrigger")}
+          <span className="autopic__desksub">{t("auto.pic.filesNoTask")}</span>
+        </div>
+      ) : (
+        <div className="autopic__desk">{t("auto.pic.waiting")}</div>
+      )}
     </>
   );
   if (picture.nodes.length === 0) {
-    // A role whose round reaches nothing — it starts nowhere — and with no box on no round beside it,
-    // on an automation that has something on it: its waiting tasks with no line on from them, and that
-    // said in words, so the middle is not left blank. With nothing on the automation, the screen's
-    // press that gives the role its start says it.
-    return round !== undefined && round.whole.boxes.length > 0 ? (
+    // A role whose round reaches nothing — it starts nowhere — and with no box on no round beside it:
+    // where its round starts from, with no line on from it. On an automation that has something on it,
+    // that is said in words, so the middle is not left blank; with nothing on the automation, the
+    // screen's press that gives the role its start says it.
+    return round !== undefined ? (
       <div className="autopic__flow" ref={flowRef}>
         {waiting}
-        <p className="autopic__roundempty">{t("auto.pic.roundEmpty")}</p>
+        {round.whole.boxes.length > 0 && <p className="autopic__roundempty">{t("auto.pic.roundEmpty")}</p>}
       </div>
     ) : null;
   }

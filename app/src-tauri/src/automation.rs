@@ -46,7 +46,7 @@ use amenbo_core::model::{
     ActorKind, AutomationCfg, AutomationCfgKind, AutomationCfgOwner, AutomationEdge,
     AutomationOwner, AutomationPictureOwner, AutomationPort, AutomationPortDirection,
     AutomationPortKind, AutomationPortOwner, AutomationRole, AutomationRunStatus,
-    AutomationWire,
+    AutomationWire, RoleStart,
 };
 use amenbo_core::ops::automation::{
     ActionShelf, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep, RoleChange,
@@ -1378,9 +1378,14 @@ pub fn automation_role_add(
     Ok(WriteAck::new(&["automations"]))
 }
 
-/// **Change a role's name, how many are in it, icon, the placement its round starts at, or its default
-/// agent and model** ([`amenbo_core::ops::automation::role_update`]). Only the fields named are written.
-/// A headcount outside 1 to [`amenbo_core::model::MAX_ROLE_HEADCOUNT`] is refused by core.
+/// **Change a role's name, how many are in it, how its round starts, icon, the placement its round
+/// starts at, or its default agent and model** ([`amenbo_core::ops::automation::role_update`]). Only the
+/// fields named are written. A headcount outside 1 to [`amenbo_core::model::MAX_ROLE_HEADCOUNT`] is
+/// refused by core.
+///
+/// `starts_by` is `task` or `trigger` ([`RoleStart`], `AMB-D-1127`); any other word is refused here.
+/// Changing it takes away where the round starts, and a role failed rounds are filed to is not made to
+/// start by a trigger — both core's (`AMB-D-1142`).
 ///
 /// Each of the four taken-away fields has a third answer — written, cleared, or left alone — and is
 /// carried as the pair `x` / `clear_x` for the reason [`automation_step_edit`]'s `work_dir` is: the
@@ -1391,6 +1396,7 @@ pub fn automation_role_edit(
     id: i64,
     name: Option<String>,
     headcount: Option<u32>,
+    starts_by: Option<String>,
     icon: Option<String>,
     clear_icon: Option<bool>,
     entry_placement_id: Option<i64>,
@@ -1400,11 +1406,18 @@ pub fn automation_role_edit(
     model: Option<String>,
     clear_model: Option<bool>,
 ) -> Result<WriteAck, CmdError> {
+    let starts_by = starts_by
+        .map(|word| {
+            RoleStart::parse(&word).ok_or_else(|| {
+                amenbo_core::Error::invalid(format!("'{word}' is no way a role starts — say 'task' or 'trigger'"))
+            })
+        })
+        .transpose()?;
     let change = RoleChange {
         name,
         headcount,
         take_order: None,
-        starts_by: None,
+        starts_by,
         icon: write_or_clear(icon, clear_icon),
         entry_placement_id: write_or_clear(entry_placement_id, clear_entry),
         agent: write_or_clear(agent, clear_agent),
@@ -1436,6 +1449,42 @@ fn write_or_clear<T>(value: Option<T>, clear: Option<bool>) -> Option<Option<T>>
 pub fn automation_role_start_take_task(id: i64) -> Result<WriteAck, CmdError> {
     let started = with_store_mut(|store| Ok(store.automation_role_start_take_task(id)?))?;
     Ok(WriteAck::new(&["automations", "automationActions"]).placed(Some(&started.placement)))
+}
+
+/// **Give a role started by a trigger its start: an action off the shelf**
+/// ([`amenbo_core::ops::automation::role_start_at`], `AMB-D-1127`). It is put on the picture and made
+/// the role's start in one transaction. The reader picked it, so the ack names no placement put on for
+/// them. The built-in that takes a task, a role started by a task, and one that already starts somewhere
+/// are core's refusals, passed on.
+#[tauri::command]
+pub fn automation_role_start_at(id: i64, action: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_role_start_at(id, action)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
+/// [`automation_role_start_at`] for a built-in, named by its key — its library action written on the
+/// way where none was yet. `axis` as for [`automation_builtin_insert`].
+#[tauri::command]
+pub fn automation_role_start_at_builtin(id: i64, key: String, axis: Option<i64>) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_role_start_at_builtin(id, &key, axis)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations", "automationActions"]))
+}
+
+/// **Make an empty action and give a role started by a trigger its start there**
+/// ([`amenbo_core::ops::automation::role_start_new`]) — [`automation_role_start_at`] for an action made
+/// on the spot. The ack names the action made, for the screen to go and build it, as
+/// [`automation_placement_insert_new`]'s does.
+#[tauri::command]
+pub fn automation_role_start_new(id: i64, name: String, shelf: String) -> Result<WriteAck, CmdError> {
+    let shelf = action_shelf(&shelf)?;
+    let started = with_store_mut(|store| Ok(store.automation_role_start_new(id, shelf, &name)?))?;
+    Ok(WriteAck::new(&["automations", "automationActions"]).action(started.placement.action_id))
 }
 
 /// **Reorder a role among its automation's roles** ([`amenbo_core::ops::automation::role_move`]).
@@ -3959,15 +4008,15 @@ mod tests {
         assert!(automation_role_move(bob, "before".into(), None).is_err(), "before needs an anchor");
         assert!(automation_role_move(bob, "middle".into(), None).is_err());
 
-        automation_role_edit(bob, Some("Carol".into()), Some(3), None, Some(true), None, None, None, None, None, None).unwrap();
-        automation_role_edit(alice, None, None, None, None, None, None, None, Some(true), None, None).unwrap();
+        automation_role_edit(bob, Some("Carol".into()), Some(3), None, None, Some(true), None, None, None, None, None, None).unwrap();
+        automation_role_edit(alice, None, None, None, None, None, None, None, None, Some(true), None, None).unwrap();
         let listed = roles();
         assert_eq!(names(&listed), ["Devの係", "Carol", "Alice"]);
         assert_eq!(listed[1].icon, None, "the clear takes the icon away");
         assert_eq!(listed[1].headcount, 3);
         assert_eq!((listed[2].agent.as_deref(), listed[2].model.as_deref()), (None, None), "the model goes with the agent");
         assert!(
-            automation_role_edit(alice, None, None, None, None, None, None, None, None, Some("opus".into()), None).is_err(),
+            automation_role_edit(alice, None, None, None, None, None, None, None, None, None, Some("opus".into()), None).is_err(),
             "a model with no agent is refused on an edit too"
         );
 
@@ -4016,6 +4065,62 @@ mod tests {
 
         assert!(automation_role_start_take_task(alice).is_err(), "a role that starts somewhere is refused");
         assert_eq!(detail().placements.len(), after.placements.len(), "and nothing more is put on");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// **A role is made to start by a trigger by its word** (`AMB-D-1127`), which takes away where it
+    /// started; a word that is no way of starting is refused. A role started by a trigger is given its
+    /// start off the shelf — a built-in by its key, or an action made on the spot — but not the built-in
+    /// that takes a task. What the reader picked is not named as put on for them.
+    #[test]
+    fn a_role_started_by_a_trigger_is_given_its_start_off_the_shelf() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("automation-role-start-trigger");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        let automation_id = {
+            let mut store = amenbo_core::Store::open().unwrap();
+            let project = store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "Roles".into(),
+                    view: amenbo_core::model::View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap();
+            store.automation_add(project.id, NewAutomation { name: "Dev".into(), ..Default::default() }).unwrap().id
+        };
+        automation_role_add(automation_id, "Alice".into(), None, None, None, None, None).unwrap();
+        automation_role_add(automation_id, "Bob".into(), None, None, None, None, None).unwrap();
+        let detail = || automation_detail(automation_id).unwrap().expect("the automation");
+        let role = |name: &str| detail().roles.into_iter().find(|r| r.name == name).expect("the role");
+        let (alice, bob) = (role("Alice").id, role("Bob").id);
+        assert_eq!(role("Alice").starts_by, "task", "a role added starts by a task");
+
+        automation_role_start_take_task(alice).unwrap();
+        let edit = |id: i64, word: &str| {
+            automation_role_edit(id, None, None, Some(word.into()), None, None, None, None, None, None, None, None)
+        };
+        assert!(edit(alice, "timer").is_err(), "no way of starting");
+        edit(alice, "trigger").unwrap();
+        assert_eq!(role("Alice").starts_by, "trigger");
+        assert_eq!(role("Alice").entry_placement_id, None, "changing how it starts takes its start away");
+
+        assert!(automation_role_start_at_builtin(alice, "take_task".into(), None).is_err(), "never at take_task");
+        let ack = automation_role_start_at_builtin(alice, "fetch".into(), None).unwrap();
+        assert!(ack.placements.is_empty(), "the reader picked it");
+        let start = role("Alice").entry_placement_id.expect("Alice starts somewhere");
+        let placed = detail().placements.into_iter().find(|p| p.id == start).expect("on the picture");
+        assert_eq!(placed.builtin.as_deref(), Some("fetch"));
+
+        assert!(automation_role_start_new(bob, "決める".into(), "project".into()).is_err(), "Bob starts by a task");
+        edit(bob, "trigger").unwrap();
+        let ack = automation_role_start_new(bob, "決める".into(), "project".into()).unwrap();
+        assert_eq!(ack.actions.len(), 1, "the action made comes back");
+        let start = role("Bob").entry_placement_id.expect("Bob starts somewhere");
+        let placed = detail().placements.into_iter().find(|p| p.id == start).expect("on the picture");
+        assert_eq!(placed.action_id, ack.actions[0]);
+        assert!(automation_role_start_at(bob, ack.actions[0]).is_err(), "Bob starts somewhere already");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

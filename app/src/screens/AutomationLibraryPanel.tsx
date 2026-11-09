@@ -40,17 +40,22 @@
 // (`AMB-T-5797`): core puts it on after the action's done way out, and the placements it put on come
 // back through `onPlaced` for the picture to mark.
 //
-// **A role's start is not picked here** (`AMB-D-1123`): each role takes from its own waiting tasks, so
-// the built-in that takes a task is its only start, and the build screen puts it on with one press.
-// **Nor is that built-in offered here at all**: it stands nowhere but where a role that starts with a
-// task starts, which the launch check holds to, so the built-ins listed leave out the one core marks as
-// kept there (`startsARoleOnly`) — wherever the panel was opened.
+// **A role started by a task is not given its start here** (`AMB-D-1123`): the built-in that takes a
+// task is its only start, and the build screen puts it on with one press. **A role started by a trigger
+// is** (`AMB-D-1127`): it takes no task, so whatever is picked here is put on and made its start
+// (`startAutomationRoleAt`, `startAutomationRoleAtBuiltin`).
+// **The built-in that takes a task is not offered here at all**: it stands nowhere but where a role that
+// starts with a task starts, which the launch check holds to, so the built-ins listed leave out the one
+// core marks as kept there (`startsARoleOnly`) — wherever the panel was opened, a role's start among
+// them.
 import { useState } from "react";
 import {
   insertAutomationAction,
   insertAutomationActionAtExit,
   insertAutomationBuiltin,
   insertAutomationBuiltinAtExit,
+  startAutomationRoleAt,
+  startAutomationRoleAtBuiltin,
   useAutomationAction,
   useAutomationActions,
   useAutomationBuiltins,
@@ -104,12 +109,16 @@ function SplitAxis({
   );
 }
 
-/** Where the picked action goes: onto a line, or after a way out that says nothing yet. */
-export type PlaceTarget = { edgeId: number } | { fromId: number; exitName: string };
+/**
+ * Where the picked action goes: onto a line, after a way out that says nothing yet, or as the start of
+ * a role started by a trigger that starts nowhere yet (`roleStart`, the role's id).
+ */
+export type PlaceTarget = { edgeId: number } | { fromId: number; exitName: string } | { roleStart: number };
 
 /** One target as a key, so that a panel opened on another spot is another panel. */
 export function placeKey(target: PlaceTarget): string {
   if ("edgeId" in target) return `e${target.edgeId}`;
+  if ("roleStart" in target) return `r${target.roleStart}`;
   return `x${target.fromId}:${target.exitName}`;
 }
 
@@ -214,7 +223,9 @@ export function AutomationLibraryPanel({
     const write =
       "edgeId" in target
         ? insertAutomationAction(target.edgeId, actionId)
-        : insertAutomationActionAtExit({ boxId: target.fromId, exitName: target.exitName }, actionId);
+        : "roleStart" in target
+          ? startAutomationRoleAt(target.roleStart, actionId).then((): number[] => [])
+          : insertAutomationActionAtExit({ boxId: target.fromId, exitName: target.exitName }, actionId);
     void write.then((placed) => onPlaced(placed), (e: unknown) => setRefused(errText(e)));
   };
   const placeBuiltin = (key: string) => {
@@ -223,7 +234,9 @@ export function AutomationLibraryPanel({
     const write =
       "edgeId" in target
         ? insertAutomationBuiltin(target.edgeId, key, on)
-        : insertAutomationBuiltinAtExit({ boxId: target.fromId, exitName: target.exitName }, key, on);
+        : "roleStart" in target
+          ? startAutomationRoleAtBuiltin(target.roleStart, key, on)
+          : insertAutomationBuiltinAtExit({ boxId: target.fromId, exitName: target.exitName }, key, on);
     void write.then(() => onPlaced([]), (e: unknown) => setRefused(errText(e)));
   };
 

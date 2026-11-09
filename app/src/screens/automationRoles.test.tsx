@@ -6,13 +6,19 @@
 // What these guard: **each row counts the steps its role's round reaches**, over every placement it
 // is on; **the picked row is marked and a press picks another**; **"+ Add a role" writes one named
 // after where it goes** and says so once it is written; **the head renames, moves and removes the
-// role**, a blank name going back to what it was; and **the default agent and model are chosen the way
-// a step's are** (`AMB-D-960`) — the empty choice clears each, and with no agent there is no model to
-// pick.
+// role**, a blank name going back to what it was; **the head says how the role's round starts and
+// switches it** (`AMB-D-1127`), a role started by a trigger naming the triggers aimed at it, each opening
+// its card; and **the default agent and model are chosen the way a step's are** (`AMB-D-960`) — the
+// empty choice clears each, and with no agent there is no model to pick.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AutomationDetailDto, AutomationPlacementDto, AutomationRoleDto } from "../bindings/bindings";
+import type {
+  AutomationDetailDto,
+  AutomationPlacementDto,
+  AutomationRoleDto,
+  AutomationTriggerDto,
+} from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   add: vi.fn(),
@@ -37,6 +43,7 @@ vi.mock("../core/ipc", () => ({ invoke: () => Promise.resolve(null) }));
 
 import { t, tf } from "../core/i18n";
 import { AutomationRoleHead, AutomationRoleList, AutomationRoleWho, roleStepCount } from "./AutomationRoles";
+import { whenLine } from "./AutomationTrigger";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -159,8 +166,12 @@ describe("the role list", () => {
 });
 
 describe("the picked role's head", () => {
-  const head = (role: AutomationRoleDto, onRemoved = () => undefined) =>
-    draw(createElement(AutomationRoleHead, { automation: detail(), role, onRemoved }));
+  const head = (
+    role: AutomationRoleDto,
+    onRemoved = () => undefined,
+    automation = detail(),
+    onOpenTrigger: (trigger: AutomationTriggerDto) => void = () => undefined,
+  ) => draw(createElement(AutomationRoleHead, { automation, role, onRemoved, onOpenTrigger }));
   const nameBox = () => container.querySelector<HTMLInputElement>(".autorole__name")!;
 
   async function typeName(value: string) {
@@ -226,6 +237,64 @@ describe("the picked role's head", () => {
     await press(buttonNamed(t("auto.build.roleRemove")));
     expect(hoisted.remove).toHaveBeenCalledWith(2);
     expect(removed).toHaveBeenCalled();
+  });
+
+  const startsBy = () => [
+    ...container.querySelectorAll<HTMLButtonElement>(`[role="group"][aria-label="${t("auto.build.roleStartsBy")}"] button`),
+  ];
+  const daily: AutomationTriggerDto = {
+    id: 5,
+    enabled: true,
+    name: "毎朝の在庫確認",
+    roleId: 2,
+    when: { kind: "every", minutes: 1440 },
+    task: { kind: "fixed", title: "", notes: "" },
+    nextAt: "2026-11-07T00:00:00Z",
+  };
+  const watch: AutomationTriggerDto = { ...daily, id: 6, name: "", when: { kind: "script" } };
+  const elsewhere: AutomationTriggerDto = { ...daily, id: 7, name: "Alice's", roleId: 1 };
+
+  it("says a role started by a task starts so, and switches it to start by a trigger", async () => {
+    await head(alice);
+    expect(startsBy().map((one) => [one.textContent, one.getAttribute("aria-pressed")])).toEqual([
+      [t("auto.build.roleStartsTask"), "true"],
+      [t("auto.build.roleStartsTrigger"), "false"],
+    ]);
+    expect(container.textContent).not.toContain(t("auto.build.roleTriggers"));
+    await press(startsBy()[0]);
+    expect(hoisted.edit).not.toHaveBeenCalled();
+    await press(startsBy()[1]);
+    expect(hoisted.edit).toHaveBeenCalledWith(1, { startsBy: "trigger" });
+  });
+
+  it("puts core's refusal to switch on the head", async () => {
+    hoisted.edit.mockRejectedValue("failed rounds are filed to role 'Alice'");
+    await head(alice);
+    await press(startsBy()[1]);
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("failed rounds are filed to role 'Alice'");
+  });
+
+  it("names the triggers aimed at a role started by a trigger, each opening its card", async () => {
+    const opened = vi.fn();
+    const automation = detail({ triggers: [daily, watch, elsewhere] });
+    await head({ ...bob, startsBy: "trigger" }, () => undefined, automation, opened);
+    expect(startsBy().map((one) => one.getAttribute("aria-pressed"))).toEqual(["false", "true"]);
+    expect(container.textContent).toContain(t("auto.build.roleTriggers"));
+    const aimed = [...container.querySelectorAll<HTMLButtonElement>(".autorole__trigger")];
+    expect(aimed.map((one) => one.textContent)).toEqual([
+      tf("auto.build.roleTrigger", { name: "毎朝の在庫確認", when: whenLine(daily, automation.roles) }),
+      whenLine(watch, automation.roles),
+    ]);
+    await press(aimed[1]);
+    expect(opened).toHaveBeenCalledWith(watch);
+    await press(startsBy()[0]);
+    expect(hoisted.edit).toHaveBeenCalledWith(2, { startsBy: "task" });
+  });
+
+  it("says none is aimed at a role started by a trigger where none is", async () => {
+    await head({ ...bob, startsBy: "trigger" });
+    expect(container.querySelectorAll(".autorole__trigger")).toHaveLength(0);
+    expect(container.querySelector(".autorole__triggers")!.textContent).toBe(t("auto.act.none"));
   });
 });
 

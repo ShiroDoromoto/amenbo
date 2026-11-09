@@ -43,6 +43,7 @@ import type {
   AutomationLaunchCheckDto,
   AutomationLaunchStateDto,
   AutomationPortDto,
+  AutomationRoleDto,
   AutomationRunCardDto,
   AutomationRunHistoryDto,
   AutomationRunStartedDto,
@@ -815,16 +816,56 @@ export async function startAutomationRoleAtTakeTask(roleId: number): Promise<num
 }
 
 /**
- * **Rename a role, set how many it has, give it a new icon seed, or choose the agent and model its
- * steps fall back to** where a step chose none (`AMB-D-960`). `icon` / `agent` / `model` take `null`
- * to clear; clearing the agent clears the model with it, and a model is only named beside an agent.
- * A headcount outside 1 to the cap (`AutomationDetailDto.maxHeadcount`) is refused by core.
+ * **Give a role started by a trigger its start: an action off the shelf** (`AMB-D-1127`). It is put on
+ * the picture and made the role's start in one write. The built-in that takes a task is no start for
+ * such a role (`AMB-D-1132`), and core refuses it, a role started by a task, and one that already
+ * starts somewhere.
+ */
+export async function startAutomationRoleAt(roleId: number, actionId: number): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_role_start_at", { id: roleId, action: actionId });
+}
+
+/**
+ * `startAutomationRoleAt` for a built-in, named by its key — its library action written on the way.
+ * `axis` as for `insertAutomationBuiltin`.
+ */
+export async function startAutomationRoleAtBuiltin(
+  roleId: number,
+  key: string,
+  axis: number | null = null,
+): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_role_start_at_builtin", { id: roleId, key, axis });
+}
+
+/**
+ * **Make an empty action and give a role started by a trigger its start there**, and answer with the
+ * action's id — `startAutomationRoleAt` for an action made on the spot. `null` outside Tauri.
+ */
+export async function makeAutomationRoleStart(
+  roleId: number,
+  name: string,
+  shelf: ActionShelf,
+): Promise<Made | null> {
+  if (!inTauri()) return null;
+  return made(await forAck("automation_role_start_new", { id: roleId, name, shelf }));
+}
+
+/**
+ * **Rename a role, set how many it has, how its round starts, give it a new icon seed, or choose the
+ * agent and model its steps fall back to** where a step chose none (`AMB-D-960`). `icon` / `agent` /
+ * `model` take `null` to clear; clearing the agent clears the model with it, and a model is only named
+ * beside an agent. A headcount outside 1 to the cap (`AutomationDetailDto.maxHeadcount`) is refused by
+ * core. Changing how the round starts takes away where it starts (`AMB-D-1142`), and a role failed
+ * rounds are filed to is not made to start by a trigger — core's refusal.
  */
 export async function editAutomationRole(
   id: number,
   patch: {
     name?: string;
     headcount?: number;
+    startsBy?: AutomationRoleDto["startsBy"];
     icon?: string | null;
     agent?: string | null;
     model?: string | null;
@@ -835,6 +876,7 @@ export async function editAutomationRole(
     id,
     name: patch.name ?? null,
     headcount: patch.headcount ?? null,
+    startsBy: patch.startsBy ?? null,
     icon: patch.icon ?? null,
     clearIcon: patch.icon === null,
     agent: patch.agent ?? null,

@@ -27,12 +27,14 @@ import { createPortal } from "react-dom";
 import {
   makeAutomationAction,
   makeAutomationActionAtExit,
+  makeAutomationRoleStart,
   type ActionShelf,
 } from "../core/automations";
 import { errText, t } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
 import { WhereMark, type WhereTo } from "./automationParts";
+import type { PlaceTarget } from "./AutomationLibraryPanel";
 
 /** The two libraries an action made here can be kept in, this project's first. */
 const SHELVES: { id: ActionShelf; label: () => string }[] = [
@@ -49,10 +51,11 @@ export function AutomationActionMake({
   onClose,
 }: {
   /**
-   * Where the new action is placed: on the line pressed, or after a way out that says nothing yet. A
-   * role's round starts at the built-in that takes a task, never an action made here (`AMB-D-1123`).
+   * Where the new action is placed: on the line pressed, after a way out that says nothing yet, or as
+   * the start of a role started by a trigger (`AMB-D-1127`). A role started by a task starts at the
+   * built-in that takes a task, never an action made here (`AMB-D-1123`).
    */
-  into: { edgeId: number } | { fromId: number; exitName: string };
+  into: PlaceTarget;
   /** What the name box starts with. */
   name?: string;
   /** Where the new action goes, drawn over the fields. */
@@ -78,11 +81,13 @@ export function AutomationActionMake({
       const made =
         "edgeId" in into
           ? await makeAutomationAction(into.edgeId, name.trim(), shelfPicked)
-          : await makeAutomationActionAtExit(
-              { boxId: into.fromId, exitName: into.exitName },
-              name.trim(),
-              shelfPicked,
-            );
+          : "roleStart" in into
+            ? await makeAutomationRoleStart(into.roleStart, name.trim(), shelfPicked)
+            : await makeAutomationActionAtExit(
+                { boxId: into.fromId, exitName: into.exitName },
+                name.trim(),
+                shelfPicked,
+              );
       onClose();
       if (made !== null) onMade(made.action, made.placed);
     } catch (e) {

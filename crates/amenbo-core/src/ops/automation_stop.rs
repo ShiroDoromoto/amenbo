@@ -37,8 +37,8 @@
 //! **Paused holds its task.** The work is half done and nobody else should take it. Stopping does the
 //! opposite — hands the task back to `todo` — because a run that was cut off left no one carrying it.
 //! **A round that failed is filed**: a task goes to whoever the automation sends a failed round to
-//! ([`crate::model::Automation::failures_to`]), carrying why it failed and where, and the round's task
-//! waits on it. Its own assignee and role are left as they were, so the run that takes it once that
+//! ([`crate::model::Automation::failures_to`]), carrying what happened ([`failure_notes`]), and the round's
+//! task waits on it. Its own assignee and role are left as they were, so the run that takes it once that
 //! task is closed is the one that would have, and starts it from the first step. A run a person
 //! canceled gives the task to the human instead, with the report of the step it stopped on.
 //!
@@ -69,7 +69,7 @@ use crate::model::{
     AutomationRunStatus, AutomationRunStepStatus,
     AutomationRunTask, AutomationStoppedReason, FailuresTo, TaskStatus,
 };
-use crate::run_wording::Reached;
+use crate::run_wording::{FailedTask, Failure, Reached};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
@@ -313,7 +313,7 @@ fn hand_the_task_back(
     let line = said(tx, run, ending)?;
     match ending {
         Ending::Failed(_) => {
-            let filed = file_the_failure(tx, run, task_id, &line)?;
+            let filed = file_the_failure(tx, run, task_id, &line, ending)?;
             crate::ops::comment::add_comment(tx, task_id, ActorKind::Ai, &line)?;
             Ok(Some(filed))
         }
@@ -338,8 +338,9 @@ fn hand_the_task_back(
 /// round's task wait on it. Answers the task filed.
 ///
 /// - **What it says** is why the run failed and the step it got to — the line ([`said`]) as its title —
-///   and, in its notes, the line again with the report that step left, where it left one. Why it went
-///   wrong, how to put it right, and whether it is the same fault as another are not Amenbo's to say.
+///   and, in its notes, everything a person or a role it reaches needs to judge what happened
+///   ([`failure_notes`], `AMB-D-1139`). Why it went wrong, how to put it right, and whether it is the
+///   same fault as another are not Amenbo's to say.
 /// - **Who it goes to**: a person is the human assignee; a role is the task's role, worked by the AI.
 ///   An automation that names nobody — one launched before it had to — or a role that is not its own
 ///   any more files to the human, since a failure filed to nobody is one nobody reads.
@@ -354,15 +355,18 @@ fn hand_the_task_back(
 ///   refuses an automation whose classification leaves an axis its project requires with no value
 ///   ([`crate::ops::automation_run::Unmet::FailureAxisEmpty`]), so this task's creation is finished like
 ///   any other's (`AMB-D-554`), and finishing it failing is an error, not a task left being written.
-fn file_the_failure(tx: &WriteTx<'_>, run: &AutomationRun, task_id: i64, line: &str) -> Result<i64> {
+fn file_the_failure(
+    tx: &WriteTx<'_>,
+    run: &AutomationRun,
+    task_id: i64,
+    line: &str,
+    ending: Ending,
+) -> Result<i64> {
     let conn = tx.conn();
     let project_id = read::task(conn, task_id)?.and_then(|t| t.project_id);
     let to = failures_to(tx, run)?;
     let role_id = to.role_id().filter(|_| project_id == Some(run.project_id));
-    let notes = match last_report(tx, run)? {
-        Some(report) => format!("{line}\n\n{report}"),
-        None => line.to_string(),
-    };
+    let notes = failure_notes(tx, run, task_id, ending)?;
     let filed = crate::ops::task::add(
         tx,
         crate::ops::task::NewTask {
@@ -422,13 +426,50 @@ fn failures_to(tx: &WriteTx<'_>, run: &AutomationRun) -> Result<FailuresTo> {
     })
 }
 
-/// The report of the step the run stopped at, whole — whether or not the step also carried it onto the
-/// task. `None` where it left none.
-fn last_report(tx: &WriteTx<'_>, run: &AutomationRun) -> Result<Option<String>> {
-    let Some(last) = read::automation_run_steps_of(tx.conn(), run.id)?.pop() else {
-        return Ok(None);
+/// **The notes of a failed round's filed task**, in the language the write was opened in
+/// ([`crate::run_wording::failure`]): why the run stopped, the step it stopped on and the report that
+/// step left whole — whether or not the step also carried it onto the task — the run, the task, and how
+/// many times in a row that task has stopped ([`stopped_in_a_row`]).
+fn failure_notes(tx: &WriteTx<'_>, run: &AutomationRun, task_id: i64, ending: Ending) -> Result<String> {
+    let conn = tx.conn();
+    let walked = read::automation_run_steps_of(conn, run.id)?;
+    let last = walked.last();
+    let def = match last {
+        Some(step) => read::automation_run_def(conn, step.run_def_id)?,
+        None => None,
     };
-    Ok((!last.report.trim().is_empty()).then_some(last.report))
+    let reached = match (last, &def) {
+        (Some(_), Some(def)) => Reached::Step(&def.name),
+        (Some(_), None) => Reached::Gone,
+        (None, _) => Reached::Nothing,
+    };
+    let title = read::task(conn, task_id)?.map(|t| t.title).unwrap_or_default();
+    let failure = Failure {
+        why: why(ending),
+        exit_code: last.and_then(|step| step.exit_code),
+        reached,
+        step_no: walked.len(),
+        report: last.map(|step| step.report.as_str()).filter(|report| !report.trim().is_empty()),
+        run: run.id,
+        task: Some(FailedTask { id: task_id, title: &title, streak: stopped_in_a_row(conn, task_id)? }),
+    };
+    Ok(crate::run_wording::failure(tx.language(), &failure))
+}
+
+/// **How many times in a row the task has stopped, this time counted** — its stretches that ended
+/// filed as a failure ([`crate::model::AutomationRunTask::incident_task_id`]), counted back from the
+/// latest until one ended otherwise, and one for the round failing now. The round failing now is not
+/// filed yet, and a stretch still open — this one, or another run's — has not ended either way, so
+/// neither is counted among them. A failure deleted since names nothing, so the count starts again past
+/// it. How many there are changes nothing about where the failure is filed (`AMB-D-1139`).
+fn stopped_in_a_row(conn: &Connection, task_id: i64) -> Result<usize> {
+    let before = read::automation_run_tasks_for_task(conn, task_id)?
+        .into_iter()
+        .rev()
+        .filter(|stretch| stretch.ended_at.is_some())
+        .take_while(|stretch| stretch.incident_task_id.is_some())
+        .count();
+    Ok(before + 1)
 }
 
 /// The report of the step the run stopped at, with that execution's id — unless it is empty, or the
@@ -1599,6 +1640,65 @@ mod tests {
             assert!(filed.title.contains("直す"), "the title names the step: {}", filed.title);
             assert!(filed.title.contains(&format!("run {}", run.id)), "{}", filed.title);
             assert!(filed.notes.contains("Which currency should the total be in?"), "{}", filed.notes);
+        });
+    }
+
+    /// **A filed round's notes say what happened, item by item** (`AMB-D-1139`) — why it stopped, the
+    /// step and its report, the run, the task — and how many times in a row the task has stopped: one
+    /// more for each failure after another, and one again once a round of it ended otherwise. Each filed
+    /// task is closed before the task is taken again, as whoever it was filed to would close it — the
+    /// task waits on it until then.
+    #[test]
+    fn a_filed_round_says_what_happened_and_how_many_times_in_a_row_its_task_stopped() {
+        with_tx_in("ja", |tx| {
+            let p = picture(tx, false);
+            let fail = |task: Option<i64>| -> (AutomationRun, i64) {
+                let run = a_run(tx, &p.automation);
+                let first = opened(tx, &run, &p.first);
+                let task = match task {
+                    Some(task) => {
+                        crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
+                        task
+                    }
+                    None => a_task_in_hand(tx, p.project, first.run_step.id),
+                };
+                step_ended(tx, first.run_step.id).expect("step ended").expect("a run to end");
+                (run, task)
+            };
+
+            let closed = |filed: i64| {
+                crate::ops::task::set_status(tx, filed, TaskStatus::Done, crate::model::ActorKind::Ai)
+                    .expect("closed without fixing what stopped it");
+            };
+
+            let (run, task) = fail(None);
+            let filed = filed_for(tx, run.id, task);
+            for said in [
+                format!("止まりました：AMB-T-{task} 見る\n\n"),
+                "- 止まった理由：オートメーションの実行が失敗しました。".to_string(),
+                "- 止まったステップ：1. 調べる\n".to_string(),
+                "- そのステップの報告：（報告なし）\n".to_string(),
+                format!("- 実行の番号：#{}\n", run.id),
+                format!("- 元のタスク：AMB-T-{task} 見る\n"),
+                "- 続けて止まった回数：1 回目".to_string(),
+            ] {
+                assert!(filed.notes.contains(&said), "{said:?} is not in {}", filed.notes);
+            }
+            closed(filed.id);
+
+            let (run, _) = fail(Some(task));
+            let filed = filed_for(tx, run.id, task);
+            assert!(filed.notes.ends_with("続けて止まった回数：2 回目"), "{}", filed.notes);
+            closed(filed.id);
+
+            let run = a_run(tx, &p.automation);
+            let first = opened(tx, &run, &p.first);
+            crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
+            stop(tx, run.id, Ending::Canceled).expect("cancel");
+
+            let (run, _) = fail(Some(task));
+            let filed = filed_for(tx, run.id, task);
+            assert!(filed.notes.ends_with("続けて止まった回数：1 回目"), "a round ended otherwise starts it again: {}", filed.notes);
         });
     }
 

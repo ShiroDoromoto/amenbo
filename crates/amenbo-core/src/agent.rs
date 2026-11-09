@@ -2351,7 +2351,7 @@ fn all_commands() -> Value {
                    { "name": "--to <id>", "help": "go on to this box" },
                    { "name": "--exit-to [name]", "help": "leave the action by the way out it declares under this name — bare, the done one (--in-action only)" },
                    { "name": "--done", "help": "close the run — or, in a run whose role's round starts at take_task, the round whose task it closed, which goes round to where the round starts" },
-                   { "name": "--halt", "help": "end the run failed (halted): its task goes back to todo, keeping its assignee and role, and waits on a task filed to whoever the automation sends a failed round to (--failures-to), carrying why it failed and the step's report" },
+                   { "name": "--halt", "help": "end the run failed (halted): its task goes back to todo, keeping its assignee and role, and waits on a task filed to whoever the automation sends a failed round to (--failures-to), its notes saying why it stopped, the step it stopped on and that step's report, the run, the task, and how many times in a row the task has stopped" },
                    { "name": "--max-times <n>", "help": "how often this edge may be taken for one task (default 10)" },
                    { "name": "--no-max", "help": "let it be taken as often as the run reaches it" }]),
             json!(["amenbo automation edge-add --from 11:approved --done",

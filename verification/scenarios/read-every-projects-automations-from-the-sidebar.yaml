@@ -35,7 +35,6 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, to: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
 
   # Another project's automation, which the list draws beside this project's.
   - { type: action, domain: project, op: create, with: { name: SCENARIO PROJECT — another }, as: another }

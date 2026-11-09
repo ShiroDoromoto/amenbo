@@ -22,8 +22,9 @@
 //! **Nobody is chosen to carry one out.** A built-in step names no agent, so the launch check asks no
 //! agent of it (`AMB-D-960`) and a placement refuses one for it.
 //!
-//! **One can be set to wait** ([`Waits`], `AMB-D-969`). Until what it waits for turns up, opening it
-//! writes nothing, and the run stands before it as `running`; the watch opens it again on every look.
+//! **The one that takes a task waits for one** ([`waiting`], `AMB-D-969`, `AMB-D-1130`). A run that
+//! comes to it with no task to take ends there, its step never opened, and the launch fills its seat
+//! once a task turns up.
 //!
 //! **What drives git is done before the transaction, not in it** ([`Work::Outside`]). Opening a step is
 //! one write transaction, and a fetch from a slow remote held inside it would keep every other writer to
@@ -91,9 +92,6 @@ pub struct Builtin {
     /// The ways out it leaves by, each with what it hands on. The error way out every step carries is
     /// not listed: a built-in that could not finish leaves by it, as any step does.
     pub exits: &'static [BuiltinExit],
-    /// How it waits, for one that can be set to ([`Waits`]).
-    #[serde(skip)]
-    pub waits: Option<Waits>,
     /// Which of two ways out it leaves by, for one whose setting chooses ([`Chooses`]).
     #[serde(skip)]
     pub chooses: Option<Chooses>,
@@ -237,8 +235,8 @@ pub struct BuiltinExit {
     pub outs: &'static [BuiltinPort],
 }
 
-/// **How a built-in waits** where it is set to, rather than leave by the way out that says there was
-/// nothing to do.
+/// **How the built-in that takes a task waits for one** (`AMB-D-969`, `AMB-D-1130`) — always, where it
+/// finds none: there is no way out for nothing to take.
 ///
 /// **Amenbo waits, not the run.** A run that comes to it with nothing for it to act on ends there, its
 /// step never opened, and its seat is free again ([`crate::ops::automation_run::end_with_no_task`]); a
@@ -247,25 +245,12 @@ pub struct BuiltinExit {
 /// ([`crate::ops::automation_run::top_up`], `AMB-D-1126`). So the time spent waiting leaves no run, no
 /// step and no stretch behind it.
 ///
-/// **What is asked is only whether one has turned up** ([`Waits::turned_up`]): it is asked on every
-/// look, and a count or a list of every candidate would be asked of every task there is.
-pub struct Waits {
-    /// The setting that says whether it waits, and the choice on it that means it does.
-    pub setting: &'static str,
-    pub answer: &'static str,
-    /// The way out it would otherwise leave by. Set to wait, it never does, so the launch check asks
-    /// no line of it.
-    pub instead_of: &'static str,
-    /// Whether what it waits for is there now in the project, read from the answers where it was
-    /// placed — of the role the run is a seat of, where it has one (`roles_started`).
-    pub turned_up: fn(&Connection, i64, &[i64], &[RunDefCfg]) -> Result<bool>,
-    /// What it looks for, as a person reads it beside the automation while it waits — read from the
-    /// same answers. What it would find is not listed or counted: that is asked of every task there is.
-    pub looks_for: fn(&[RunDefCfg]) -> String,
-    /// **What is keeping it waiting** ([`HeldBack`], `AMB-D-999`) — read from the same answers, and
-    /// only when a person is about to look. Never by the watch's look, which is the reason
-    /// [`Waits::looks_for`] counts nothing.
-    pub held_back: fn(&Connection, i64, &[i64], &[RunDefCfg]) -> Result<HeldBack>,
+/// **What is asked is only whether one has turned up** ([`there_to_take`]): it is asked on every look,
+/// and a count or a list of every candidate would be asked of every task there is. What it looks for
+/// ([`looks_for`]) and what is keeping it waiting ([`held_back`]) are read by the built-in's own module,
+/// from the answers where it was placed.
+fn waits(key: Option<&str>) -> bool {
+    key == Some(TAKE_TASK.key)
 }
 
 /// **What keeps the tasks a waiting built-in looks for from being taken** (`AMB-D-999`): the tasks its
@@ -307,14 +292,6 @@ pub struct HeldByRecord {
     pub id: i64,
     pub title: String,
     pub count: usize,
-}
-
-impl Waits {
-    /// Whether the answer written for [`Waits::setting`] is the one that means it waits. Left
-    /// unanswered, it does not.
-    pub fn chosen(&self, answer: Option<&str>) -> bool {
-        answer.and_then(|value| serde_json::from_str::<String>(value).ok()).as_deref() == Some(self.answer)
-    }
 }
 
 /// **Which of two ways out a built-in leaves by, as one setting chooses.** Every placement of it leaves
@@ -363,8 +340,8 @@ pub fn answer<'c>(cfg: &'c [RunDefCfg], name: &str) -> Option<&'c str> {
     cfg.iter().find(|c| c.name == name).and_then(|c| c.value.as_deref())
 }
 
-/// **Whether this copy of a step waits** rather than be opened now: a built-in set to wait, with
-/// nothing yet for it to act on ([`Waits`]). Anything else — an agent's step, a built-in that never
+/// **Whether this copy of a step waits** rather than be opened now: the built-in that takes a task,
+/// with no task yet for it to take ([`waits`]). Anything else — an agent's step, a built-in that never
 /// waits, a key this build does not know — is opened as it always is.
 pub fn waiting(conn: &Connection, run: &AutomationRun, def: &AutomationRunDef) -> Result<bool> {
     let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
@@ -381,35 +358,14 @@ pub fn waits_now(
     key: Option<&str>,
     cfg: &[RunDefCfg],
 ) -> Result<bool> {
-    let Some(waits) = waits_of(key) else { return Ok(false) };
-    if !waits.chosen(answer(cfg, waits.setting)) {
-        return Ok(false);
-    }
-    Ok(!(waits.turned_up)(conn, project_id, roles, cfg)?)
-}
-
-/// **Whether what the built-in `key` waits for has turned up** in `project_id`, for a run starting
-/// rounds of `roles` ([`Waits::turned_up`]) — `None` for a built-in that never waits, or is not set to
-/// wait by the answers `cfg`.
-pub fn turned_up(
-    conn: &Connection,
-    project_id: i64,
-    roles: &[i64],
-    key: Option<&str>,
-    cfg: &[RunDefCfg],
-) -> Result<Option<bool>> {
-    match waits_of(key) {
-        Some(waits) if waits.chosen(answer(cfg, waits.setting)) => {
-            Ok(Some((waits.turned_up)(conn, project_id, roles, cfg)?))
-        }
-        _ => Ok(None),
-    }
+    Ok(there_to_take(conn, project_id, roles, key, cfg)? == Some(false))
 }
 
 /// **Whether there is something for the built-in `key` to take now** in `project_id`, for a run
-/// starting rounds of `roles` ([`Waits::turned_up`]), whether or not it is set to wait for it — `None`
-/// for a built-in that has nothing it could wait for. What a launch asks before starting one more run
-/// beside those under way ([`crate::ops::automation_run::top_up`]).
+/// starting rounds of `roles`, read from the answers `cfg` where it was placed — `None` for a built-in
+/// that has nothing it could wait for. What the watch asks while it waits, and what a launch asks before
+/// starting one more run beside those under way ([`crate::ops::automation_run::top_up`]). One row is
+/// read, however many there are.
 pub fn there_to_take(
     conn: &Connection,
     project_id: i64,
@@ -417,20 +373,22 @@ pub fn there_to_take(
     key: Option<&str>,
     cfg: &[RunDefCfg],
 ) -> Result<Option<bool>> {
-    match waits_of(key) {
-        Some(waits) => Ok(Some((waits.turned_up)(conn, project_id, roles, cfg)?)),
-        None => Ok(None),
+    match waits(key) {
+        true => Ok(Some(crate::ops::automation_builtin_take::turned_up(conn, project_id, roles, cfg)?)),
+        false => Ok(None),
     }
 }
 
-/// **What the built-in `key` looks for while it waits** ([`Waits::looks_for`]), or `None` for one that
-/// never waits.
+/// **What the built-in `key` looks for while it waits**, as a person reads it beside the automation —
+/// read from the answers where it was placed. What it would find is not listed or counted: that is
+/// asked of every task there is. `None` for one that never waits.
 pub fn looks_for(key: Option<&str>, cfg: &[RunDefCfg]) -> Option<String> {
-    waits_of(key).map(|waits| (waits.looks_for)(cfg))
+    waits(key).then(|| crate::ops::automation_builtin_take::looks_for(cfg))
 }
 
 /// **What is keeping the built-in `key` waiting** in `project_id`, for a run starting rounds of `roles`
-/// ([`Waits::held_back`]), or `None` for one that never waits.
+/// ([`HeldBack`], `AMB-D-999`) — read only when a person is about to look, never by the watch's look,
+/// which is the reason [`looks_for`] counts nothing. `None` for one that never waits.
 pub fn held_back(
     conn: &Connection,
     project_id: i64,
@@ -438,26 +396,16 @@ pub fn held_back(
     key: Option<&str>,
     cfg: &[RunDefCfg],
 ) -> Result<Option<HeldBack>> {
-    match waits_of(key) {
-        Some(waits) => Ok(Some((waits.held_back)(conn, project_id, roles, cfg)?)),
-        None => Ok(None),
+    match waits(key) {
+        true => Ok(Some(crate::ops::automation_builtin_take::held_back(conn, project_id, roles, cfg)?)),
+        false => Ok(None),
     }
-}
-
-fn waits_of(key: Option<&str>) -> Option<&'static Waits> {
-    key.and_then(find).and_then(|b| b.waits.as_ref())
 }
 
 /// **The way out a placed built-in never leaves by**, as it is set there — the launch check asks no
 /// line of it. `answer` reads the placement's answer to one setting.
 pub fn never_leaves_by<'a>(key: &str, answer: impl Fn(&str) -> Option<&'a str>) -> Option<&'static str> {
-    let builtin = find(key)?;
-    if let Some(waits) = &builtin.waits {
-        if waits.chosen(answer(waits.setting)) {
-            return Some(waits.instead_of);
-        }
-    }
-    let chooses = builtin.chooses.as_ref()?;
+    let chooses = find(key)?.chooses.as_ref()?;
     let chosen = answer(chooses.setting).and_then(|value| serde_json::from_str::<String>(value).ok());
     Some(match chosen.as_deref() == Some(chooses.answer) {
         true => chooses.otherwise,
@@ -976,7 +924,6 @@ mod tests {
             },
             BuiltinExit { name: DONE_EXIT, outs: &[] },
         ],
-        waits: None,
         chooses: None,
         needs_task: NeedsTask::No,
         work: Work::InStore(|carry| {
@@ -999,7 +946,6 @@ mod tests {
         settings: &[],
         ins: &[],
         exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }],
-        waits: None,
         chooses: None,
         needs_task: NeedsTask::No,
         work: Work::InStore(|_| Err(Error::invalid("the floor gave way"))),
@@ -1090,7 +1036,7 @@ mod tests {
     fn a_built_in_working_outside_is_held_back_by_nothing_the_opening_decides() {
         for builtin in all().iter().filter(|b| matches!(b.work, Work::Outside(_))) {
             assert!(builtin.ins.is_empty(), "{} takes an input", builtin.key);
-            assert!(builtin.waits.is_none(), "{} can wait", builtin.key);
+            assert_ne!(builtin.key, TAKE_TASK.key, "{} waits for a task", builtin.key);
             let takes = builtin.exits.iter().flat_map(|e| e.outs).any(|p| p.kind == AutomationPortKind::TaskTake);
             assert!(!takes, "{} takes a task", builtin.key);
         }

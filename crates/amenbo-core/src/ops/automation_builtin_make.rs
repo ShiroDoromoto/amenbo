@@ -170,7 +170,6 @@ pub(super) const MAKE_TASK: Builtin = Builtin {
             outs: &[BuiltinPort { name: TASK, kind: AutomationPortKind::TaskTake, required: true }],
         },
     ],
-    waits: None,
     chooses: Some(Chooses { setting: WHAT_THEN, answer: TAKE_IT, chosen: MADE_AND_TAKEN, otherwise: MADE }),
     needs_task: NeedsTask::When { setting: DEPENDS_ON, answer: THE_RUNS_TASK },
     work: Work::InStore(make),
@@ -1642,7 +1641,7 @@ mod tests {
     /// step after it and the built-in that closes the task, the run ending where there is none to take —
     /// what a task filed at launch is worked by.
     fn entry(tx: &WriteTx<'_>) -> (Automation, AutomationPlacement, i64) {
-        use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
+        use crate::ops::automation_builtin_take::TAKEN;
         let project = mk_project(tx, "amenbo");
         let automation =
             automation::add(tx, project, NewAutomation { name: "entry".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
@@ -1652,7 +1651,6 @@ mod tests {
         let (_, work) = mk_placed(tx, &automation, "work", "work on it", "claude");
         let on = AutomationPictureOwner::Automation;
         automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
-        automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
         crate::ops::test_support::mk_closed_after(tx, &automation, work.id, None);
         start_at(tx, automation.id, take.id);
         (automation, take, project)

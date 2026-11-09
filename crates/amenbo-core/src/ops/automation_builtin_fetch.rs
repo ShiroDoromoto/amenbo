@@ -96,7 +96,6 @@ pub(super) const FETCH: Builtin = Builtin {
         },
         BuiltinExit { name: NOT_FOUND, outs: &[] },
     ],
-    waits: None,
     chooses: None,
     needs_task: NeedsTask::No,
     work: Work::Outside(fetch),
@@ -296,7 +295,7 @@ mod tests {
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_builtin_cut::fixture::bind;
-    use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
+    use crate::ops::automation_builtin_take::TAKEN;
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{launch_past_the_task_checks as launch, nothing_asked, Launcher};
     use crate::ops::automation_step::Opened;
@@ -322,7 +321,6 @@ mod tests {
         automation::cfg_set(tx, fetch.id, TARGET, Some(&serde_json::to_string(target).unwrap())).expect("target");
         let (_, work) = mk_placed(tx, &automation, "file", "file it", "claude");
         automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(fetch.id), None).expect("take → fetch");
-        automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
         automation::edge_add(tx, on, fetch.id, Some(FETCHED), EdgeTarget::Go(work.id), None).expect("on");
         automation::edge_add(tx, on, fetch.id, Some(NOT_FOUND), EdgeTarget::Go(close.id), None).expect("none");
         automation::edge_add(tx, on, work.id, None, EdgeTarget::Done, None).expect("work → done");

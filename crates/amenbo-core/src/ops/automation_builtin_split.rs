@@ -61,7 +61,6 @@ pub(crate) const SPLIT_BY_DIM: Builtin = Builtin {
     settings: &[],
     ins: &[],
     exits: &[BuiltinExit { name: UNSORTED, outs: &[] }],
-    waits: None,
     chooses: None,
     needs_task: NeedsTask::Always,
     work: Work::Named(split),
@@ -230,7 +229,7 @@ mod tests {
         AutomationRun, AutomationRunStatus, AutomationStoppedReason, DimensionRole,
     };
     use crate::ops::automation::{EdgeTarget, NewAutomation, NewRole};
-    use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
+    use crate::ops::automation_builtin_take::TAKEN;
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{check, launch, nothing_asked, Launcher, Unmet};
     use crate::ops::automation_step::Opened;
@@ -389,7 +388,6 @@ mod tests {
         let split = automation::placement_add(tx, automation.id, action(tx, role).expect("split").id)
             .expect("place the split");
         automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(split.id), None).expect("take → split");
-        automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
         for name in ["技術", "デザイン", UNSORTED] {
             crate::ops::test_support::mk_closed_after(tx, &automation, split.id, Some(name));
         }
@@ -548,7 +546,6 @@ mod tests {
             let on = AutomationPictureOwner::Automation;
             let take = crate::ops::automation_builtin::action(tx, "take_task").expect("take");
             let take = automation::placement_add(tx, automation.id, take.id).expect("place take");
-            automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
             let split = automation::placement_add(tx, automation.id, action(tx, role).expect("split").id)
                 .expect("place the split");
             automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(split.id), None).expect("take → split");

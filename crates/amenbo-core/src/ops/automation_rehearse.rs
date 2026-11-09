@@ -32,10 +32,14 @@
 //!
 //! **Which way out a step takes is chosen here**, since nobody is doing the work that would decide it.
 //! The first time a step is reached it leaves by the first way out it declares; each time it is reached
-//! again, by the next one. That walks a picture that goes round — a step that takes tasks until there
-//! are none — once round and then out. The error way out is never chosen, and neither is one a
-//! built-in's answers say it never leaves by. A step reached again with no way out left untried ends the
-//! walk ([`Cut::Looped`]). Which ways out were taken is counted again for each role's run.
+//! again, by the next one. The error way out is never chosen, and neither is one a built-in's answers
+//! say it never leaves by. A step reached again with no way out left untried ends the walk
+//! ([`Cut::Looped`]). Which ways out were taken is counted again for each role's run.
+//!
+//! **The built-in that takes a task, reached again, finds none** (`AMB-D-1130`): the run ends there
+//! before the step, completed, as a real one with nothing to take does
+//! ([`automation_run::end_with_no_task`]). That walks a picture that goes round — a round that comes
+//! back to take the next task — once round and then out.
 
 use std::collections::BTreeMap;
 
@@ -49,6 +53,7 @@ use crate::model::{
 use crate::ops::automation_builtin_close;
 use crate::ops::automation_builtin_defer;
 use crate::ops::automation_builtin_hand_back;
+use crate::ops::automation_builtin_take;
 use crate::ops::automation_report::{self, Next, Produced};
 use crate::ops::automation_run::{self, HandedAtLaunch, Launcher, ReadsFrom, Waiting};
 use crate::ops::automation_step::{self, Opened};
@@ -173,6 +178,14 @@ fn walk_run(
     while let Waiting::Step(def) = automation_run::next_def(tx.conn(), run.id)? {
         if rehearsal.steps.len() >= MOST {
             rehearsal.cut = Some(Cut::TooLong);
+            break;
+        }
+        if visits.get(&def.id).is_some_and(|seen| *seen > 0)
+            && def.builtin.as_deref() == Some(automation_builtin_take::TAKE_TASK.key)
+        {
+            let standing = read::automation_run(tx.conn(), run.id)?
+                .ok_or_else(|| Error::not_found(format!("automation run '{}' not found", run.id)))?;
+            automation_run::end_with_no_task(tx, standing)?;
             break;
         }
         let opening = match automation_step::open_rehearsing(tx, run.id, def.id, by.startable)? {
@@ -340,7 +353,7 @@ mod tests {
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_builtin_close::COMMIT;
     use crate::ops::automation_builtin_make::{MADE_AND_TAKEN, TAKE_IT, WHAT_THEN};
-    use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
+    use crate::ops::automation_builtin_take::TAKEN;
     use crate::ops::automation_run::nothing_asked;
     use crate::ops::test_support::{
         mk_closed_after, mk_out, mk_placed, mk_project, mk_task_in, only_step, start_at, with_tx,
@@ -372,14 +385,13 @@ mod tests {
         let close = automation::placement_add(tx, automation.id, action(tx, "close_task").expect("close").id)
             .expect("place close");
         automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
-        automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
         automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(close.id), None).expect("work → close");
         automation::edge_add(tx, on, close.id, None, EdgeTarget::Go(take.id), None).expect("close → take");
         take.id
     }
 
     /// **A picture that goes round is walked once round and then out** — the take leaves by the way out
-    /// that took a task the first time and by the one that found none the second, the work is handed
+    /// that took a task the first time, and the run ends before it the second, the work is handed
     /// placeholders and its prompt is composed, and no real task is taken or closed on the way.
     #[test]
     fn a_picture_that_goes_round_is_walked_once_round_and_out() {
@@ -398,7 +410,6 @@ mod tests {
             let close = automation::placement_add(tx, automation.id, action(tx, "close_task").expect("close").id)
                 .expect("place close");
             automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
-            automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
             automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(close.id), None).expect("work → close");
             automation::edge_add(tx, on, close.id, None, EdgeTarget::Go(take.id), None).expect("close → take");
             automation::wire_add(tx, on, work.id, None, COMMIT, close.id, COMMIT).expect("wire the commit");
@@ -411,7 +422,6 @@ mod tests {
                     ("タスクに着手する", TAKEN),
                     ("work", DONE_EXIT),
                     ("タスクを閉じる", DONE_EXIT),
-                    ("タスクに着手する", NONE_TO_TAKE),
                 ],
                 "{rehearsal:?}",
             );
@@ -441,7 +451,6 @@ mod tests {
             let back = automation::placement_add(tx, automation.id, action(tx, "hand_back_task").expect("back").id)
                 .expect("place hand back");
             automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
-            automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
             automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(back.id), None).expect("work → back");
             automation::edge_add(tx, on, back.id, None, EdgeTarget::Go(take.id), None).expect("back → take");
             start_at(tx, automation.id, take.id);
@@ -453,7 +462,6 @@ mod tests {
                     ("タスクに着手する", TAKEN),
                     ("look", DONE_EXIT),
                     ("タスクを人に返す", DONE_EXIT),
-                    ("タスクに着手する", NONE_TO_TAKE),
                 ],
                 "{rehearsal:?}",
             );
@@ -485,7 +493,6 @@ mod tests {
                 .expect("take it");
             let (_, work) = mk_placed(tx, &automation, "work", "write it", "claude");
             automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(write.id), None).expect("take → write");
-            automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
             automation::edge_add(tx, on, write.id, None, EdgeTarget::Go(close.id), None).expect("write → close");
             automation::edge_add(tx, on, close.id, None, EdgeTarget::Go(make.id), None).expect("close → make");
             automation::edge_add(tx, on, make.id, Some(MADE_AND_TAKEN), EdgeTarget::Go(work.id), None)
@@ -498,7 +505,7 @@ mod tests {
             let exits: Vec<&str> = rehearsal.steps.iter().map(|s| s.exit.as_str()).collect();
             assert_eq!(
                 exits,
-                vec![TAKEN, DONE_EXIT, DONE_EXIT, MADE_AND_TAKEN, DONE_EXIT, DONE_EXIT, NONE_TO_TAKE],
+                vec![TAKEN, DONE_EXIT, DONE_EXIT, MADE_AND_TAKEN, DONE_EXIT, DONE_EXIT],
                 "{rehearsal:?}",
             );
             assert_eq!(rehearsal.status, AutomationRunStatus::Completed);
@@ -527,14 +534,13 @@ mod tests {
             mk_out(tx, &plan_action, None, "plan", AutomationPortKind::File, true);
             let on = AutomationPictureOwner::Automation;
             automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(plan.id), None).expect("take → plan");
-            automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
             mk_closed_after(tx, &automation, plan.id, None);
             start_at(tx, automation.id, take.id);
 
             let handed = HandedAtLaunch { title: Some("梅雨どきの家事の記事".into()), ..Default::default() };
             let rehearsal = walk(tx, &automation, &handed);
             let exits: Vec<&str> = rehearsal.steps.iter().map(|s| s.exit.as_str()).collect();
-            assert_eq!(exits, vec![TAKEN, DONE_EXIT, DONE_EXIT, NONE_TO_TAKE], "{rehearsal:?}");
+            assert_eq!(exits, vec![TAKEN, DONE_EXIT, DONE_EXIT], "{rehearsal:?}");
             assert_eq!(rehearsal.steps[1].name, "plan", "{rehearsal:?}");
             assert_eq!(rehearsal.status, AutomationRunStatus::Completed, "{rehearsal:?}");
             assert_eq!(rehearsal.cut, None);
@@ -563,16 +569,14 @@ mod tests {
                     ("タスクに着手する", TAKEN),
                     ("draft", DONE_EXIT),
                     ("タスクを閉じる", DONE_EXIT),
-                    ("タスクに着手する", NONE_TO_TAKE),
                     ("タスクに着手する", TAKEN),
                     ("finish", DONE_EXIT),
                     ("タスクを閉じる", DONE_EXIT),
-                    ("タスクに着手する", NONE_TO_TAKE),
                 ],
                 "{rehearsal:?}",
             );
             let roles: Vec<Option<i64>> = rehearsal.steps.iter().map(|s| s.role_id).collect();
-            assert_eq!(roles, [[Some(drafting); 4], [Some(finishing); 4]].concat(), "{rehearsal:?}");
+            assert_eq!(roles, [[Some(drafting); 3], [Some(finishing); 3]].concat(), "{rehearsal:?}");
             assert_eq!(rehearsal.status, AutomationRunStatus::Completed);
             assert_eq!(rehearsal.cut, None);
         });
@@ -599,7 +603,6 @@ mod tests {
             automation::step_update(tx, step.id, None, None, None, None, None, None, None, None, None, script, None)
                 .expect("make it a script");
             automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
-            automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
             mk_closed_after(tx, &automation, work.id, None);
             start_at(tx, automation.id, take.id);
 

@@ -444,8 +444,8 @@ task?: AutomationRunTaskDto,
  */
 finished: boolean, 
 /**
- * **Whether it is waiting for something to turn up** rather than being carried out — a built-in
- * set to wait, with nothing yet for it (`AMB-D-969`).
+ * **Whether it is waiting for something to turn up** rather than being carried out — the built-in
+ * that takes a task, with none yet for it to take (`AMB-D-969`, `AMB-D-1130`).
  */
 waiting: boolean, 
 /**
@@ -970,7 +970,7 @@ version?: number,
 latestVersion?: number, 
 /**
  * **The way out this spot never leaves by**, as its settings stand — a built-in that leaves by one
- * of two ways out as a setting chooses, or that waits instead of leaving by one
+ * of two ways out as a setting chooses
  * ([`amenbo_core::ops::automation_builtin::never_leaves_by`]). What it would hand on through that way
  * out does not make the spot one that takes a task. Absent where it may leave by any of them.
  */

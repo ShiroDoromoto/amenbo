@@ -244,7 +244,7 @@ fn this_devices_own_tables_move_nobodys_version() {
 fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in() {
     use amenbo_core::model::AutomationPictureOwner;
     use amenbo_core::ops::automation::{EdgeTarget, NewAutomation, RoleChange};
-    use amenbo_core::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
+    use amenbo_core::ops::automation_builtin_take::TAKEN;
     use amenbo_core::ops::automation_run::{Launcher, Started};
 
     let mut store = temp_store();
@@ -266,8 +266,10 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
     let on = AutomationPictureOwner::Automation;
     let close = store.automation_builtin_place(automation.id, "close_task", None).unwrap();
     store.automation_edge_add(on, take.id, Some(TAKEN), EdgeTarget::Go(close.id), None).unwrap();
-    store.automation_edge_add(on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).unwrap();
     store.automation_edge_add(on, close.id, None, EdgeTarget::Done, None).unwrap();
+    // A start with nothing to take makes no run, so there is one for the AI of the role to take.
+    let ours = filed(&mut store, amenbo_core::ops::task::NewTask { role_id: Some(born), ..new_task("取る1件", mine) });
+    store.set_task_assignee(ours, Some(ActorKind::Ai), ActorKind::Ai).unwrap();
 
     let startable = ["claude".to_string()];
     let by = Launcher {
@@ -280,7 +282,7 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
         by: Some(ActorKind::Ai),
     };
     let Started::Run(run) = store.automation_launch(automation.id, &by).unwrap() else {
-        panic!("a start that does not wait makes a run");
+        panic!("a start with a task to take makes a run");
     };
 
     let mine_before = version_of(&store, mine);
@@ -301,7 +303,7 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
 fn a_test_run_moves_no_version_and_takes_no_task() {
     use amenbo_core::model::{AutomationPictureOwner, AutomationRunStatus};
     use amenbo_core::ops::automation::{EdgeTarget, NewAutomation, RoleChange};
-    use amenbo_core::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
+    use amenbo_core::ops::automation_builtin_take::TAKEN;
     use amenbo_core::ops::automation_run::Launcher;
 
     let mut store = temp_store();
@@ -317,7 +319,6 @@ fn a_test_run_moves_no_version_and_takes_no_task() {
     let on = AutomationPictureOwner::Automation;
     let close = store.automation_builtin_place(automation.id, "close_task", None).unwrap();
     store.automation_edge_add(on, take.id, Some(TAKEN), EdgeTarget::Go(close.id), None).unwrap();
-    store.automation_edge_add(on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).unwrap();
     store.automation_edge_add(on, close.id, None, EdgeTarget::Done, None).unwrap();
 
     let startable = ["claude".to_string()];
@@ -332,8 +333,9 @@ fn a_test_run_moves_no_version_and_takes_no_task() {
     let walked = store.automation_rehearse(automation.id, &by, &Default::default()).unwrap();
 
     let exits: Vec<&str> = walked.steps.iter().map(|s| s.exit.as_str()).collect();
-    // The round closes its task and goes back to where it starts, which finds nothing left to take.
-    assert_eq!(exits, vec![TAKEN, "完了", NONE_TO_TAKE], "{walked:?}");
+    // The round closes its task and goes back to where it starts, which finds nothing left to take: the
+    // run ends there.
+    assert_eq!(exits, vec![TAKEN, "完了"], "{walked:?}");
     assert_eq!(walked.status, AutomationRunStatus::Completed);
     assert_eq!(version_of(&store, mine), before, "nothing it wrote was kept");
     let task = store.task(waiting).unwrap().expect("the task");

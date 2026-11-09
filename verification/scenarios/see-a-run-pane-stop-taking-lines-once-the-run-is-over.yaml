@@ -36,7 +36,6 @@ given:
   # The done way out of the step ends the run halted: no built-in after it to end the terminal.
   - { type: action, domain: automation, op: edge-add, with: { target: at_work, halt: true } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_work } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
 
 steps_gui:
   - type: action

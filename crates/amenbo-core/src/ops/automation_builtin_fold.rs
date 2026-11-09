@@ -68,7 +68,6 @@ pub(super) const FOLD_WORKTREE: Builtin = Builtin {
     }],
     ins: &[],
     exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }, BuiltinExit { name: UNMERGED, outs: &[] }],
-    waits: None,
     chooses: None,
     needs_task: NeedsTask::Always,
     work: Work::Outside(fold),
@@ -107,7 +106,7 @@ mod tests {
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_builtin_cut::fixture::{bind, git, repositories};
-    use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
+    use crate::ops::automation_builtin_take::TAKEN;
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{launch_past_the_task_checks as launch, nothing_asked, Launcher};
     use crate::ops::automation_step::Opened;
@@ -132,7 +131,6 @@ mod tests {
             automation::cfg_set(tx, fold.id, WHEN_UNMERGED, Some(&value)).expect("answer the setting");
         }
         automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(fold.id), None).expect("take → fold");
-        automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
         automation::edge_add(tx, on, fold.id, None, EdgeTarget::Done, None).expect("folded");
         automation::edge_add(tx, on, fold.id, Some(UNMERGED), EdgeTarget::Done, None).expect("unmerged");
         start_at(tx, automation.id, take.id);

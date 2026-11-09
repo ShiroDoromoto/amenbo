@@ -9,18 +9,19 @@
 # done says the round is over and the run has read the newer version.
 #
 # ── What tells the copies apart ───────────────────────────────────────────────────────────────────────
-# The first automation is started on a version where finding no task stops the run and calls a person,
-# and saved where it ends the run. The run finds no task once its round is over, so it completes only
-# if it took the new version up.
+# The first automation is started on a version whose wait holds a task for a minute and a half, and
+# saved where it holds one for a second. The next task of its role is waiting once the first round is
+# over, so that task is done well inside the minute and a half only if the run took the new version
+# up.
 #
 # ── Why the agent is taken away ──────────────────────────────────────────────────────────────────────
 # A save asks the launch check without this machine's agents, and a run taking up the newer version
 # asks it with them. So the version the second run is turned away from is one the save lets through:
 # its step's agent is gone from the machine by the time it is saved. The build screen is opened twice
 # after that, since the first opening sets the look off and the second draws what it found — the
-# answer the run's take-up reads as well. The step stands where finding no task leads, so the first
-# round, which takes a task, never opens it; the check still reads its agent, as it reads every step a
-# line reaches.
+# answer the run's take-up reads as well. The step stands after the wait's error way out, which the
+# wait never leaves by, so no round opens it; the check still reads its agent, as it reads every step
+# a line reaches.
 #
 # The failed run stays on the running tab until it is acknowledged, and its line says nothing of why:
 # the screen has no word for this reason yet, so the road reads only that it failed.
@@ -29,9 +30,10 @@
 id: fail-a-run-waiting-for-a-task-on-a-newer-definition-that-does-not-pass
 title: A run takes up the automation saved while it works a task, and fails if that version does not pass
 description: >
-  Start a run whose first box takes a task, filed with its role, and holds it in a wait; finding no
-  task stops the run and calls a person. While it waits, say that finding no task ends the run and
-  save: once the task is done the run takes the new version up and, finding no task, completes. Start
+  Start a run whose first box takes a task, filed with its role, and holds it in a wait of a minute and
+  a half. While it waits, shorten the wait to a second and save: once the task is done the run takes
+  the new version up, takes the next task of its role and has it done well inside the minute and a
+  half, and then, finding no task, completes. Start
   a run of a second automation the same way. While it waits, take Codex CLI, the agent of a step on
   its picture, off the machine, and open the build screen twice so it says the automation could not be
   started. Change how long it waits and save: the save goes through, and once the task is done the run
@@ -44,19 +46,22 @@ given:
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task worked while a passing version is saved }, as: seed_passes }
   - { type: action, domain: task, op: assign, with: { target: seed_passes, assignee: me-ai } }
   - { type: action, domain: task, op: finish-creating, with: { target: seed_passes } }
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task taken on the passing version }, as: next_passes }
+  - { type: action, domain: task, op: assign, with: { target: next_passes, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: next_passes } }
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task worked while a failing version is saved }, as: seed_fails }
   - { type: action, domain: task, op: assign, with: { target: seed_fails, assignee: me-ai } }
   - { type: action, domain: task, op: finish-creating, with: { target: seed_fails } }
 
-  # The first: take → wait → close. Finding no task stops the run and calls a person.
+  # The first: take → wait → close.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one saved to pass while its run works" }, as: passes }
   - { type: action, domain: automation, op: place-add, with: { target: passes, builtin: take_task, starts: true }, as: passes_take }
   # The task is the born role's, whose round starts there: a run takes only its role's tasks.
   - { type: action, domain: task, op: update, with: { target: seed_passes, role_of: passes } }
+  - { type: action, domain: task, op: update, with: { target: next_passes, role_of: passes } }
   - { type: action, domain: automation, op: place-add, with: { target: passes, builtin: wait }, as: passes_wait }
   - { type: action, domain: automation, op: place-add, with: { target: passes, builtin: close_task }, as: passes_close }
   - { type: action, domain: automation, op: edge-add, with: { target: passes_take, exit: 着手した, to: passes_wait } }
-  - { type: action, domain: automation, op: edge-add, with: { target: passes_take, exit: 着手できるタスクが無い, halt: true } }
   - { type: action, domain: automation, op: edge-add, with: { target: passes_wait, exit: 完了, to: passes_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: passes_close } }
 
@@ -66,8 +71,8 @@ given:
   - { type: action, domain: automation, op: action-entry, with: { target: review, step: read } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: read, exit_to: "" } }
 
-  # The second: take → wait → close, and the review once there is nothing to take. The first round
-  # takes a task, so it never opens the review; the check reads its agent all the same.
+  # The second: take → wait → close, and the review after the wait's error way out. The wait never
+  # leaves by it, so no round opens the review; the check reads its agent all the same.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one saved to fail while its run works" }, as: fails }
   - { type: action, domain: automation, op: place-add, with: { target: fails, builtin: take_task, starts: true }, as: fails_take }
   - { type: action, domain: task, op: update, with: { target: seed_fails, role_of: fails } }
@@ -76,8 +81,8 @@ given:
   - { type: action, domain: automation, op: place-add, with: { target: fails, builtin: close_task }, as: fails_close }
   - { type: action, domain: automation, op: agent-set, with: { target: fails_review, step: read, agent: codex-cli } }
   - { type: action, domain: automation, op: edge-add, with: { target: fails_take, exit: 着手した, to: fails_wait } }
-  - { type: action, domain: automation, op: edge-add, with: { target: fails_take, exit: 着手できるタスクが無い, to: fails_review } }
   - { type: action, domain: automation, op: edge-add, with: { target: fails_wait, exit: 完了, to: fails_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: fails_wait, exit: "*", to: fails_review } }
   - { type: action, domain: automation, op: edge-add, with: { target: fails_review, to: fails_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: fails_close } }
 
@@ -96,12 +101,14 @@ steps_gui:
   - { type: action, domain: automation, op: start, with: { target: passes }, as: first }
   - { type: assert, domain: task, op: field, with: { target: seed_passes, field: status, equals: in_progress } }
 
-  # Saved to end the run once there is no task. The run takes that version up at its next entry,
-  # finds no task, and ends — where the version it started on would have it stopped, calling a person.
-  - { type: action, domain: automation, op: pick-box, with: { builtin: take_task } }
-  - { type: action, domain: automation, op: set-next, with: { builtin: take_task, exit: 着手できるタスクが無い, ends: done } }
+  # Saved to hold a task for a second. The run takes that version up at its next entry, takes the
+  # next task and has it done well inside the minute and a half the version it started on would have
+  # held it, then finds no task and ends.
+  - { type: action, domain: automation, op: pick-box, with: { builtin: wait } }
+  - { type: action, domain: automation, op: answer-text, with: { builtin: wait, setting: 秒, value: "1" } }
   - { type: action, domain: automation, op: save, with: { target: passes } }
   - { type: action, domain: task, op: wait-field, with: { target: seed_passes, field: status, equals: done, seconds: 240 } }
+  - { type: action, domain: task, op: wait-field, with: { target: next_passes, field: status, equals: done, seconds: 45 } }
   - { type: action, domain: automation, op: screen, with: { tab: history } }
   - { type: assert, domain: automation, op: history-row, with: { target: first, state: completed } }
 

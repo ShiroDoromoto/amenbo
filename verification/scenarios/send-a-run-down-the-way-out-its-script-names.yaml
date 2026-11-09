@@ -73,7 +73,6 @@ given:
   # Where each way out leads. The second script's done way out goes straight to closing the task, so
   # a run that reached the agent's step went by the way out the program named.
   - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_look } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_look, to: at_judge } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_judge, exit: red, to: at_review } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_judge, to: at_close } }

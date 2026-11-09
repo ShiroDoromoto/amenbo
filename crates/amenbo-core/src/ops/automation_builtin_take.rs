@@ -22,26 +22,29 @@
 //! hands a task back to a person gives it to the human, and so does a run a person canceled; a filter
 //! that did not ask for the AI's would take it straight back.
 //!
-//! It leaves by [`TAKEN`] with the task it reserved, or by [`NONE_TO_TAKE`] with nothing —
-//! the step that went looking and found none, which owes no report and keeps no stretch
-//! ([`super::automation_report::done`]).
+//! It leaves by [`TAKEN`] with the task it reserved. There is no way out for nothing to take
+//! (`AMB-D-1131`).
 //!
-//! **Or Amenbo waits for one** (`AMB-D-969`), where [`WHEN_NONE`] is answered [`WAIT`]. A run or a
-//! session closing a task can make another one ready, and so can a new one being filed, so there is no
-//! point at which none will ever turn up. The run that found none ends there, its seat left free with
-//! no run under way, until a task turns up and a run is started on it in that seat
-//! ([`crate::ops::automation_run::end_with_no_task`], [`crate::ops::automation_run::top_up`]). Left
-//! unanswered it does not wait, so an automation nobody chose to keep waiting does not. What is keeping
-//! it waiting is counted apart from that look (`AMB-D-999`): the tasks the filter matches that are not
-//! started and not ready, by what stops them ([`held_back`]).
+//! **Where there is none, Amenbo waits for one** (`AMB-D-969`, `AMB-D-1130`) — always: a role whose
+//! round starts here waits for a task of its own to turn up. A run or a session closing a task can make
+//! another one ready, and so can a new one being filed, so there is no point at which none will ever
+//! turn up. The run that found none ends before this step is opened, its seat left free with no run
+//! under way, until a task turns up and a run is started on it in that seat
+//! ([`crate::ops::automation_run::end_with_no_task`], [`crate::ops::automation_run::top_up`]). What is
+//! keeping it waiting is counted apart from that look (`AMB-D-999`): the tasks the filter matches that
+//! are not started and not ready, by what stops them ([`held_back`]).
+//!
+//! **A step opened with nothing it could reserve leaves by the error way out** — every task it listed
+//! was reserved by somebody else, or stopped being ready, in the moment between the look that found one
+//! and the reservation. The look and the opening are one transaction, so this is a safety net.
 
 use rusqlite::Connection;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::model::{AutomationCfgKind, AutomationPortKind, AutomationRun, RunDefCfg, TakeOrder};
 use crate::ops::automation_builtin::{
     answer, Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry, HeldBack, HeldByRecord,
-    HeldByValue, NeedsTask, Waits, Work,
+    HeldByValue, NeedsTask, Work,
 };
 use crate::ops::automation_report;
 use crate::ops::automation_run::{roles_started, take_order};
@@ -53,19 +56,11 @@ use crate::store_engine::read;
 
 /// The way out it leaves by once it has reserved a task.
 pub const TAKEN: &str = "着手した";
-/// The way out it leaves by when no task the filter matches could be reserved.
-pub const NONE_TO_TAKE: &str = "着手できるタスクが無い";
 /// The setting that says which tasks it takes — and in what order, for a run that takes tasks of no one
 /// role ([`take_order`]).
 pub const FILTER: &str = "絞り込み";
 /// The output the reserved task is handed on through.
 pub const TASK: &str = "タスク";
-/// The setting that says what it does when there is no task to take.
-pub const WHEN_NONE: &str = "着手できるタスクが無いとき";
-/// The choice on [`WHEN_NONE`] that waits for one.
-pub const WAIT: &str = "着手できるタスクが出るまで待つ";
-/// The choice on [`WHEN_NONE`] that leaves by [`NONE_TO_TAKE`] — also what it does left unanswered.
-pub const GO_ON: &str = "待たずに出口「着手できるタスクが無い」へ進む";
 
 /// What every search adds to the filter, whatever the setting says.
 const TAKEABLE: &str = "status:todo ready:yes";
@@ -82,40 +77,23 @@ const COUNT_PAGE: usize = 200;
 
 pub(crate) const TAKE_TASK: Builtin = Builtin {
     key: "take_task",
-    version: 1,
+    version: 2,
     name: "タスクに着手する",
     does: "絞り込みに合い、着手できる未着手のタスクを並び順どおりに探し、先頭から予約して進行中にする",
     steps: &[
         "設定の絞り込みに合うタスクのうち、未着手で着手できるものを、並び順どおりに探す。絞り込みが空なら、AI が担当のタスクを探す",
         "先頭のタスクから予約して進行中にし、「着手した」から出てそのタスクを渡す。ほかで先に予約されたタスクは飛ばして、次を試す",
-        "1件も予約できなければ「着手できるタスクが無い」から出る。設定で待つと決めてあれば、着手できるタスクが出るまで待つ",
+        "着手できるタスクが無ければ、出るまで待つ。この実行はここで終わり、タスクが出たら、この役割の空いた席で次の実行が着手する",
     ],
-    halts: &[],
-    settings: &[
-        BuiltinSetting { name: FILTER, kind: AutomationCfgKind::TaskFilter, required: false, options: None },
-        BuiltinSetting {
-            name: WHEN_NONE,
-            kind: AutomationCfgKind::Choice,
-            required: false,
-            options: Some(r#"["待たずに出口「着手できるタスクが無い」へ進む","着手できるタスクが出るまで待つ"]"#),
-        },
-    ],
+    halts: &["着手できるタスクがあったのに、予約する前にすべてほかで予約された"],
+    settings: &[BuiltinSetting { name: FILTER, kind: AutomationCfgKind::TaskFilter, required: false, options: None }],
     ins: &[],
     exits: &[
         BuiltinExit {
             name: TAKEN,
             outs: &[BuiltinPort { name: TASK, kind: AutomationPortKind::TaskTake, required: true }],
         },
-        BuiltinExit { name: NONE_TO_TAKE, outs: &[] },
     ],
-    waits: Some(Waits {
-        setting: WHEN_NONE,
-        answer: WAIT,
-        instead_of: NONE_TO_TAKE,
-        turned_up,
-        looks_for: |cfg| expression(answer(cfg, FILTER)),
-        held_back,
-    }),
     chooses: None,
     needs_task: NeedsTask::No,
     work: Work::InStore(take),
@@ -149,19 +127,25 @@ fn take(carry: &Carry<'_, '_>) -> Result<Carried> {
         }
         offset += PAGE;
     }
-    Ok(Carried { exit: NONE_TO_TAKE, report: say(carry.tx.language(), "noneToTake", &[("filter", &expr)]) })
+    Err(Error::invalid(say(carry.tx.language(), "noneToTake", &[("filter", &expr)])))
 }
 
 /// **Whether there is a task to take now** — the one question asked while it waits. One row is read,
 /// however many the filter matches, and none is counted or sorted.
-fn turned_up(conn: &Connection, project_id: i64, roles: &[i64], cfg: &[RunDefCfg]) -> Result<bool> {
+pub(crate) fn turned_up(conn: &Connection, project_id: i64, roles: &[i64], cfg: &[RunDefCfg]) -> Result<bool> {
     query::any_in_roles(conn, Reach::binding(project_id), &expression(answer(cfg, FILTER)), roles)
+}
+
+/// **What it looks for while it waits**, as a person reads it beside the automation: the filter it
+/// searches with.
+pub(crate) fn looks_for(cfg: &[RunDefCfg]) -> String {
+    expression(answer(cfg, FILTER))
 }
 
 /// **What is keeping it waiting** (`AMB-D-999`): every task the filter matches that is not started and
 /// not ready, counted by what stops it. The reasons are the five the list already carries on each row
 /// (`view::is_ready`), so a reason counted here is one the reservation would refuse by.
-fn held_back(conn: &Connection, project_id: i64, roles: &[i64], cfg: &[RunDefCfg]) -> Result<HeldBack> {
+pub(crate) fn held_back(conn: &Connection, project_id: i64, roles: &[i64], cfg: &[RunDefCfg]) -> Result<HeldBack> {
     let expr = with_asked(narrowing(answer(cfg, FILTER)), HELD);
     let mut held = HeldBack::default();
     let (mut blockers, mut decisions): (Counts, Counts) = (Vec::new(), Vec::new());
@@ -353,8 +337,9 @@ mod tests {
     use crate::store_engine::{read, WriteTx};
 
     /// An automation whose role starts its round at the built-in. What it takes goes on to an agent's
-    /// step, since a run does not end with its task still in progress (`AMB-D-967`); nothing to take
-    /// closes the run.
+    /// step, since a run does not end with its task still in progress (`AMB-D-967`). Nothing has to
+    /// follow it for nothing to take: there is no such way out, and a run with nothing to take ends
+    /// before it.
     fn picture(tx: &WriteTx<'_>, project: i64) -> (Automation, AutomationPlacement) {
         let automation =
             automation::add(tx, project, NewAutomation { name: "take".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
@@ -364,7 +349,6 @@ mod tests {
         let on = AutomationPictureOwner::Automation;
         let (_, work) = mk_placed(tx, &automation, "work", "work on it", "claude");
         automation::edge_add(tx, on, spot.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("onward");
-        automation::edge_add(tx, on, spot.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("closes");
         crate::ops::test_support::mk_closed_after(tx, &automation, work.id, None);
         start_at(tx, automation.id, spot.id);
         (as_it_stands(tx, &automation), spot)
@@ -378,13 +362,6 @@ mod tests {
     /// The role an automation here was born with, which its round starts as.
     fn born(tx: &WriteTx<'_>, automation: &Automation) -> i64 {
         read::automation_roles_of(tx.conn(), automation.id).expect("roles")[0].id
-    }
-
-    /// Where the role an automation here was born with starts its round ([`born`]).
-    fn start_of(tx: &WriteTx<'_>, automation: &Automation) -> i64 {
-        read::automation_roles_of(tx.conn(), automation.id).expect("roles")[0]
-            .entry_placement_id
-            .expect("where the role starts")
     }
 
     /// A task for the AI of the role `automation`'s round starts as ([`born`]) — one a run of it takes.
@@ -492,40 +469,23 @@ mod tests {
         });
     }
 
-    /// **Nothing to take leaves by [`NONE_TO_TAKE`]** — with no task touched and no stretch kept.
+    /// **With nothing to take, the run ends before the step** (`AMB-D-1130`) — completed, with no task
+    /// touched, no execution written and no stretch kept. There is no way out for nothing to take.
     #[test]
-    fn with_nothing_to_take_it_leaves_by_the_way_out_that_says_so() {
+    fn with_nothing_to_take_the_run_ends_before_the_step() {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let (automation, _) = picture(tx, project);
             let people = mk_task_in(tx, "a person's", Some(project));
             give_to(tx, people, born(tx, &automation));
 
-            let (run, run_step_id, next) = carried(tx, &automation);
-            assert!(matches!(next, Next::Closed(_)), "the line after it closes the run: {next:?}");
-            assert_eq!(status(tx, people), TaskStatus::Todo);
-            let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
-            assert_eq!(ran.exit_id, way_out(tx, run_step_id, NONE_TO_TAKE));
-            assert_eq!(ran.run_task_id, None, "it went looking and found none");
-            let run = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
+            let run = launched(tx, &automation);
+            let Opened::LeftToWait { run } = open_entry(tx, &run) else { panic!("the run ends before the step") };
             assert_eq!(run.status, AutomationRunStatus::Completed);
+            assert_eq!(status(tx, people), TaskStatus::Todo);
+            assert!(read::automation_run_steps_of(tx.conn(), run.id).expect("steps").is_empty(), "no step was opened");
+            assert!(read::automation_run_task_last(tx.conn(), run.id).expect("read").is_none(), "no stretch");
         });
-    }
-
-    /// The same picture, set to wait: nothing follows [`NONE_TO_TAKE`], since it is never taken.
-    fn waiting_picture(tx: &WriteTx<'_>, project: i64) -> Automation {
-        let automation =
-            automation::add(tx, project, NewAutomation { name: "wait".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
-                .expect("automation");
-        let written = action(tx, "take_task").expect("the built-in's action");
-        let spot = automation::placement_add(tx, automation.id, written.id).expect("place it");
-        let on = AutomationPictureOwner::Automation;
-        let (_, work) = mk_placed(tx, &automation, "work", "work on it", "claude");
-        automation::edge_add(tx, on, spot.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("onward");
-        crate::ops::test_support::mk_closed_after(tx, &automation, work.id, None);
-        automation::cfg_set(tx, spot.id, WHEN_NONE, Some(&format!("\"{WAIT}\""))).expect("wait");
-        start_at(tx, automation.id, spot.id);
-        as_it_stands(tx, &automation)
     }
 
     fn launched(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
@@ -559,18 +519,18 @@ mod tests {
         read::automation_launch_standing(tx.conn(), automation.id).expect("read").expect("a launch stands").id
     }
 
-    /// **Set to wait, with nothing to take, the run ends there and its seat is free again**
+    /// **With nothing to take, the run ends there and its seat is free again**
     /// (`AMB-D-1126`) — no step, no stretch, no run left standing, and nothing marked on the automation.
     /// Once a task turns up, the launch fills the seat with a run, and that run takes it.
     #[test]
-    fn set_to_wait_the_run_ends_and_a_run_is_started_once_a_task_turns_up() {
+    fn with_nothing_to_take_the_run_ends_and_a_run_is_started_once_a_task_turns_up() {
         use crate::ops::automation_run::{launches_to_top_up, top_up};
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
-            let automation = waiting_picture(tx, project);
+            let automation = picture(tx, project).0;
             let startable = ["claude".to_string()];
             let unmet = check(tx.conn(), automation.id, Some(&startable), nothing_asked(), None).expect("check");
-            assert!(unmet.is_empty(), "nothing has to follow the way out it never takes: {unmet:?}");
+            assert!(unmet.is_empty(), "nothing has to follow it for nothing to take: {unmet:?}");
 
             let run = launched(tx, &automation);
             let launch = run.launch_id.expect("a launch");
@@ -608,7 +568,7 @@ mod tests {
         use crate::ops::automation_run::top_up;
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
-            let automation = waiting_picture(tx, project);
+            let automation = picture(tx, project).0;
             let Started::Waits(_) = start(tx, automation.id, &launcher()).expect("start") else {
                 panic!("no run with nothing to take");
             };
@@ -639,7 +599,7 @@ mod tests {
         use crate::ops::automation_run::{launches_to_top_up, top_up};
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
-            let automation = waiting_picture(tx, project);
+            let automation = picture(tx, project).0;
             assert!(matches!(
                 start(tx, automation.id, &launcher()).expect("start"),
                 Started::Waits(_)
@@ -654,22 +614,15 @@ mod tests {
         });
     }
 
-    /// **A role set to wait with nothing to take holds back no other role** (`AMB-D-1126`): where a run
-    /// of one role comes to its start set to wait and finds nothing, it ends, and a task filed under
-    /// another role with a free seat is started on in the same launch.
+    /// **A role with nothing to take holds back no other role** (`AMB-D-1126`): where a run of one role
+    /// comes to its start and finds nothing, it ends, and a task filed under another role with a free
+    /// seat is started on in the same launch.
     #[test]
     fn a_role_waiting_for_a_task_holds_back_no_other_role() {
         use crate::ops::automation_run::{launches_to_top_up, top_up};
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let (automation, [(builder, _), (reviewer, _)]) = by_role(tx, project);
-            let builder_start = read::automation_role(tx.conn(), builder)
-                .expect("read")
-                .expect("role")
-                .entry_placement_id
-                .expect("where it starts");
-            automation::cfg_set(tx, builder_start, WHEN_NONE, Some(&format!("\"{WAIT}\""))).expect("wait");
-            let automation = as_it_stands(tx, &automation);
 
             let run = launched(tx, &automation);
             let launch = run.launch_id.expect("a launch");
@@ -695,7 +648,7 @@ mod tests {
         use crate::ops::automation_run::held_back as run_held_back;
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
-            let automation = waiting_picture(tx, project);
+            let automation = picture(tx, project).0;
             // A person's task, which the filter does not take, is what two of the AI's wait on.
             let first = mk_task_in(tx, "the part before", Some(project));
             let after_a = ours(tx, "after it, a", &automation, None);
@@ -747,7 +700,7 @@ mod tests {
     fn a_pause_takes_hold_where_it_would_wait_and_a_resume_starts_it_again() {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
-            let automation = waiting_picture(tx, project);
+            let automation = picture(tx, project).0;
             let run = launched(tx, &automation);
 
             automation_stop::pause(tx, run.id).expect("pause");
@@ -773,7 +726,7 @@ mod tests {
     }
 
     /// The picture a run goes round: take a task, work on it, close it, and back to take the next —
-    /// nothing to take closes the run.
+    /// nothing to take ends the run there.
     fn round_picture(tx: &WriteTx<'_>, project: i64) -> Automation {
         let automation =
             automation::add(tx, project, NewAutomation { name: "round".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
@@ -785,7 +738,6 @@ mod tests {
         let close = automation::placement_add(tx, automation.id, action(tx, "close_task").expect("close").id)
             .expect("place close");
         automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
-        automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
         automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(close.id), None).expect("work → close");
         automation::edge_add(tx, on, close.id, None, EdgeTarget::Go(take.id), None).expect("close → take");
         start_at(tx, automation.id, take.id);
@@ -990,7 +942,7 @@ mod tests {
     fn a_run_standing_before_a_take_that_would_wait_is_paused_as_soon_as_it_is_asked() {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
-            let automation = waiting_picture(tx, project);
+            let automation = picture(tx, project).0;
             let run = launched(tx, &automation);
             assert!(is_waiting(tx.conn(), run.id).expect("waiting"));
 
@@ -1018,7 +970,7 @@ mod tests {
         use crate::ops::automation_run::launches_to_top_up;
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
-            let waits = waiting_picture(tx, project);
+            let waits = picture(tx, project).0;
             let run = launched(tx, &waits);
             let launch = run.launch_id.expect("a launch");
             assert!(matches!(open_entry(tx, &run), Opened::LeftToWait { .. }));
@@ -1065,7 +1017,7 @@ mod tests {
     fn a_run_standing_at_its_entry_takes_up_the_version_saved_since() {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
-            let automation = waiting_picture(tx, project);
+            let automation = picture(tx, project).0;
             let run = launched(tx, &automation);
             assert!(matches!(take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look"), TakenUp::Same));
             let launched_with = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
@@ -1115,7 +1067,7 @@ mod tests {
     fn a_run_standing_at_its_entry_fails_on_a_version_that_would_not_launch() {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
-            let automation = waiting_picture(tx, project);
+            let automation = picture(tx, project).0;
             let run = launched(tx, &automation);
             let copies = read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len();
             start_at(tx, automation.id, placed(tx, run.id, "work"));
@@ -1129,7 +1081,7 @@ mod tests {
             let kept = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
             assert_eq!(kept.stopped_reason, Some(AutomationStoppedReason::FailedCheck));
             let detail = kept.stopped_detail.expect("what it did not pass is kept");
-            assert!(detail.starts_with("cannot launch 'wait'"), "{detail}");
+            assert!(detail.starts_with("cannot launch 'take'"), "{detail}");
             assert_eq!(read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len(), copies);
         });
     }
@@ -1142,7 +1094,7 @@ mod tests {
         use crate::ops::automation_builtin_make::{MADE_AND_TAKEN, TAKE_IT, TITLE, WHAT_THEN};
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
-            let automation = waiting_picture(tx, project);
+            let automation = picture(tx, project).0;
             let run = launched(tx, &automation);
             let written = action(tx, "make_task").expect("the built-in's action");
             let make = automation::placement_add(tx, automation.id, written.id).expect("place it");
@@ -1176,7 +1128,7 @@ mod tests {
     fn a_run_asked_to_pause_at_the_end_of_its_action_is_answered_as_it_stands() {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
-            let run = launched(tx, &waiting_picture(tx, project));
+            let run = launched(tx, &picture(tx, project).0);
             let automation_stop::Paused::Asked(pausing) = automation_stop::pause(tx, run.id).expect("pause") else {
                 panic!("asked to pause at the end of its action");
             };
@@ -1203,7 +1155,7 @@ mod tests {
             ours(tx, "a", &rounds, Some(Priority::High));
             let run = launched(tx, &rounds);
             assert!(matches!(open_entry(tx, &run), Opened::Carried { next: Next::Step(_), .. }));
-            let other = launched(tx, &waiting_picture(tx, project));
+            let other = launched(tx, &picture(tx, project).0);
 
             let automation_stop::Paused::Asked(asked) =
                 automation_stop::pause_run_before_next_task(tx, run.id).expect("ask")
@@ -1258,38 +1210,16 @@ mod tests {
         });
     }
 
-    /// **Left unanswered, or answered not to wait, it does not** — and then the way out that says
-    /// there was nothing to take is one the launch check asks a line of. The reason carries the
-    /// built-in's key, so a screen can write its words in its own language.
+    /// **It reads no answer about what to do with nothing to take, and has no way out for it**
+    /// (`AMB-D-1130`, `AMB-D-1131`): its one setting is the filter, and it leaves by [`TAKEN`] or by the
+    /// error way out. So the launch check asks a line of nothing but [`TAKEN`].
     #[test]
-    fn not_set_to_wait_the_way_out_for_nothing_to_take_needs_a_line() {
-        with_tx(|tx| {
-            let project = mk_project(tx, "amenbo");
-            let automation = waiting_picture(tx, project);
-            let spot = start_of(tx, &automation);
-            let startable = ["claude".to_string()];
-            for answer in [None, Some(format!("\"{GO_ON}\""))] {
-                automation::cfg_set(tx, spot, WHEN_NONE, answer.as_deref()).expect("answer");
-                let unmet = check(tx.conn(), automation.id, Some(&startable), nothing_asked(), None).expect("check");
-                let open = unmet
-                    .iter()
-                    .find(|u| matches!(u, Unmet::OpenExit { exit: e, .. } if e == NONE_TO_TAKE))
-                    .unwrap_or_else(|| panic!("{answer:?}: {unmet:?}"));
-                assert!(
-                    open.msg().fields().iter().any(|field| field == ("builtin", TAKE_TASK.key)),
-                    "{open:?}",
-                );
-            }
-        });
-    }
-
-    /// The choices written out on the setting are the two the code reads, the one it does unanswered
-    /// first.
-    #[test]
-    fn the_choices_offered_are_the_ones_it_reads() {
-        let options = TAKE_TASK.settings.iter().find(|s| s.name == WHEN_NONE).and_then(|s| s.options);
-        let offered: Vec<String> = serde_json::from_str(options.expect("a choice list")).expect("JSON");
-        assert_eq!(offered, vec![GO_ON, WAIT]);
+    fn it_is_set_only_by_its_filter_and_leaves_only_having_taken_one() {
+        let settings: Vec<&str> = TAKE_TASK.settings.iter().map(|s| s.name).collect();
+        assert_eq!(settings, vec![FILTER]);
+        let exits: Vec<&str> = TAKE_TASK.exits.iter().map(|e| e.name).collect();
+        assert_eq!(exits, vec![TAKEN]);
+        assert_eq!(TAKE_TASK.version, 2, "its ways out and settings changed from the first");
     }
 
     #[test]
@@ -1326,7 +1256,6 @@ mod tests {
         let mut roles = Vec::new();
         for name in ["実装", "レビュー"] {
             let take = automation::placement_add(tx, automation.id, written.id).expect("place it");
-            automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("closes");
             let (_, work) = mk_placed(tx, &automation, name, "work on it", "claude");
             automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("onward");
             crate::ops::test_support::mk_closed_after(tx, &automation, work.id, None);
@@ -1367,16 +1296,15 @@ mod tests {
         });
     }
 
-    /// **Where every task left has no role, there is none to take.**
+    /// **Where every task left has no role, there is none to take**, and the run ends before the step.
     #[test]
     fn a_task_with_no_role_is_not_taken_where_roles_say_where_rounds_start() {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let (automation, _) = by_role(tx, project);
             let roleless = for_ai(tx, "no role", project, None);
-            let (_, run_step_id, _) = carried(tx, &automation);
-            let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
-            assert_eq!(ran.exit_id, way_out(tx, run_step_id, NONE_TO_TAKE));
+            let run = launched(tx, &automation);
+            assert!(matches!(open_entry(tx, &run), Opened::LeftToWait { .. }));
             assert_eq!(status(tx, roleless), TaskStatus::Todo);
         });
     }
@@ -1978,7 +1906,7 @@ mod tests {
         use crate::ops::automation_run::top_up;
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
-            let automation = waiting_picture(tx, project);
+            let automation = picture(tx, project).0;
 
             let run = launched(tx, &automation);
             let launch = run.launch_id.expect("a launch");
@@ -2071,7 +1999,7 @@ mod tests {
     fn a_start_that_waits_opens_a_launch_that_stays_open() {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
-            let automation = waiting_picture(tx, project);
+            let automation = picture(tx, project).0;
             let started = start(tx, automation.id, &launcher()).expect("start");
             assert!(matches!(started, Started::Waits(_)), "nothing to take, so it waits");
             let launch = read::automation_launch_standing(tx.conn(), automation.id)

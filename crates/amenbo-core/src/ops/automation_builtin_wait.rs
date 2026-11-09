@@ -13,9 +13,9 @@
 //! once, and a run caught `running` when the app closed is stopped at the next start
 //! ([`super::automation_stop::sweep`]).
 //!
-//! **Not the waiting a built-in set to wait does** ([`super::automation_builtin::Waits`]). A step that
-//! waits there has not been opened, so a pause takes hold at once — this one would pause unlike any
-//! other step.
+//! **Not the waiting the built-in that takes a task does** ([`super::automation_builtin::waiting`]).
+//! A step that waits there has not been opened, so a pause takes hold at once — this one would pause
+//! unlike any other step.
 
 use chrono::Duration;
 
@@ -47,7 +47,6 @@ pub(super) const WAIT: Builtin = Builtin {
     ],
     ins: &[],
     exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }],
-    waits: None,
     chooses: None,
     needs_task: NeedsTask::No,
     work: Work::Holds(how_long),
@@ -96,7 +95,7 @@ mod tests {
     };
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_builtin::{action, due, held_until, time_up, time_up_at};
-    use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
+    use crate::ops::automation_builtin_take::TAKEN;
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{launch_past_the_task_checks as launch, nothing_asked, Launcher};
     use crate::ops::automation_step::Opened;
@@ -143,7 +142,6 @@ mod tests {
         };
         let (take, wait, close) = (place("take_task"), place("wait"), place("close_task"));
         automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(wait.id), None).expect("on");
-        automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("closes");
         automation::edge_add(tx, on, wait.id, None, EdgeTarget::Go(close.id), None).expect("on");
         automation::edge_add(tx, on, close.id, None, EdgeTarget::Done, None).expect("closes");
         let role = start_at(tx, automation.id, take.id);
@@ -209,7 +207,7 @@ mod tests {
             else {
                 panic!("the round is over, and the run goes round to its entry");
             };
-            assert!(matches!(open(tx, run.id, again.id, None).expect("take again"), Opened::Carried { next: Next::Closed(_), .. }));
+            assert!(matches!(open(tx, run.id, again.id, None).expect("take again"), Opened::LeftToWait { .. }));
             let run = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
             assert_eq!(run.status, AutomationRunStatus::Completed);
         });

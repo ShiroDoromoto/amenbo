@@ -16,7 +16,7 @@ afterEach(() => {
 describe("a built-in's words", () => {
   it("are drawn in the screen's language where the key is given", () => {
     expect(builtinWord("take_task", "タスクに着手する")).toBe("Take a task");
-    expect(builtinWord("take_task", "着手できるタスクが無い")).toBe("No task to take");
+    expect(builtinWord("take_task", "着手した")).toBe("Took a task");
     expect(builtinWord("fold_worktree", "未マージ")).toBe("Unmerged");
     expect(builtinWord("hand_back_task", "タスクを人に返す")).toBe("Hand the task back to a person");
     expect(builtinWord("defer_task", "タスクを後回しにする")).toBe("Put the task off");
@@ -26,7 +26,7 @@ describe("a built-in's words", () => {
 
   it("stay the store's in Japanese", () => {
     lang.now = "ja";
-    expect(builtinWord("take_task", "着手できるタスクが出るまで待つ")).toBe("着手できるタスクが出るまで待つ");
+    expect(builtinWord("take_task", "着手した")).toBe("着手した");
   });
 
   it("are left alone without the key, or where that built-in has no such word", () => {
@@ -42,13 +42,12 @@ describe("a built-in's words", () => {
       key: "take_task",
       name: "タスクに着手する",
       does: "絞り込みに合い、着手できる未着手のタスクを並び順どおりに探し、先頭から予約して進行中にする",
-      steps: ["1件も予約できなければ「着手できるタスクが無い」から出る。設定で待つと決めてあれば、着手できるタスクが出るまで待つ"],
-      halts: [],
+      steps: ["着手できるタスクが無ければ、出るまで待つ。この実行はここで終わり、タスクが出たら、この役割の空いた席で次の実行が着手する"],
+      halts: ["着手できるタスクがあったのに、予約する前にすべてほかで予約された"],
       settings: [{ name: "絞り込み", kind: "taskfilter", required: false }],
       inputs: [],
       exits: [
         { name: "着手した", outputs: [{ name: "タスク", kind: "task_take", required: true }] },
-        { name: "着手できるタスクが無い", outputs: [] },
       ],
       usedBy: 2,
     };
@@ -57,10 +56,13 @@ describe("a built-in's words", () => {
     expect(shown.usedBy).toBe(2);
     expect(shown.name).toBe("Take a task");
     expect(shown.steps).toEqual([
-      "If none can be reserved, it leaves by “No task to take”. If the setting says to wait, it waits until a task that can be taken turns up",
+      "If there is none to take, it waits until one turns up. This run ends here, and once a task turns up the next run takes it in the role’s free seat",
+    ]);
+    expect(shown.halts).toEqual([
+      "There was a task to take, but every one was reserved elsewhere before it could reserve it",
     ]);
     expect(shown.settings.map((one) => one.name)).toEqual(["Filter"]);
-    expect(shown.exits.map((one) => one.name)).toEqual(["Took a task", "No task to take"]);
+    expect(shown.exits.map((one) => one.name)).toEqual(["Took a task"]);
     expect(shown.exits[0].outputs.map((one) => one.name)).toEqual(["Task"]);
   });
 });

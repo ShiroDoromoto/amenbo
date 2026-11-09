@@ -79,10 +79,10 @@ pub enum Opened {
     LeftTaskOpen { run: AutomationRun },
     /// **The run was paused before this step, which was not opened.** A run asked to pause before its
     /// next task that has come to the step that takes one (`AMB-D-1009`), whether or not a task stands
-    /// ready; or one asked to pause that came to a built-in set to wait with nothing for it yet — a step
-    /// never opened never reports, so this is where the pause takes hold.
+    /// ready; or one asked to pause that came to the step that takes a task with none to take yet — a
+    /// step never opened never reports, so this is where the pause takes hold.
     Waiting { run: AutomationRun },
-    /// **The step is a built-in set to wait, and nothing has turned up for it** (`AMB-D-969`). The run
+    /// **The step takes a task, and there is none to take** (`AMB-D-969`, `AMB-D-1130`). The run
     /// ended here, completed with the step never opened, and its seat is left for the launch to fill
     /// once a task turns up ([`super::automation_run::end_with_no_task`]).
     LeftToWait { run: AutomationRun },
@@ -294,10 +294,10 @@ fn open_as(
         let stopped = stop(tx, run)?;
         return Ok(Opened::Stopped { run: stopped.run, missing });
     }
-    // Asked before anything is written, so a built-in that would wait leaves no execution behind it
-    // (`super::automation_builtin::Waits`). The run ends here, its seat left for the launch to fill once
-    // a task turns up — unless a pause was asked for, which takes hold here instead, since a step that
-    // is never opened never reports.
+    // Asked before anything is written, so the built-in that takes a task, with none to take, leaves
+    // no execution behind it (`super::automation_builtin::waiting`). The run ends here, its seat left
+    // for the launch to fill once a task turns up — unless a pause was asked for, which takes hold here
+    // instead, since a step that is never opened never reports.
     if !rehearsing && super::automation_builtin::waiting(conn, &run, &def)? {
         return Ok(match run.pause_requested {
             true => Opened::Waiting {

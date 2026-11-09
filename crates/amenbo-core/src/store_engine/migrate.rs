@@ -1547,6 +1547,15 @@ pub const STEPS: &[Step] = &[
         // not taken for one changed since. That is how every role started until now. No task is touched.
         apply: Apply::Custom(let_each_role_start_by_a_task),
     },
+    Step {
+        to: 138,
+        name: "take the setting for when there is no task to take, and the way out for it, off the built-in that takes a task",
+        // **A role whose round starts at the built-in that takes a task always waits for one**
+        // (`AMB-D-1130`), so the setting that chose whether it waits and the way out it left by when it
+        // did not are gone (`AMB-D-1131`): off the library's action and its step, the answers and the
+        // lines on every automation, in the draft and in every saved version. No task is touched.
+        apply: Apply::Custom(take_the_way_out_for_nothing_to_take_off),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -1971,6 +1980,140 @@ fn let_each_role_start_by_a_task(ctx: &Ctx<'_>) -> Result<()> {
     }
     Ok(())
 }
+
+/// v138: **the built-in that takes a task loses the setting that chose whether it waits, and the way
+/// out it left by when it did not** (`AMB-D-1130`, `AMB-D-1131`). A role whose round starts there always
+/// waits for a task now, so nothing is left to choose and nothing ever leaves by that way out.
+///
+/// What goes, wherever the built-in's own rows hold it — found through the action's `builtin` key, so
+/// a person's action that names a setting or a way out the same keeps its own:
+///
+/// - the way out [`V138_NONE_TO_TAKE`] of the library's action and of its step, with what it hands on,
+///   the lines inside the action that join the two, and every wire from either;
+/// - the setting [`V138_WHEN_NONE`] the action declares;
+/// - on every automation, each line drawn from that way out and each answer a placement of the
+///   built-in gave the setting — in the draft and in every saved version alike, so a draft that read
+///   as its newest version still does (`ops::automation::unsaved`), and a version read again names no
+///   way out that is gone.
+///
+/// **The action keeps its version** (`AMB-D-1000`): a placement goes on standing on the version it was
+/// placed at, now without the setting and the way out, and this build writes its own version beside it
+/// for the next placement. **A run's copy is not touched**: one under way never leaves by the way out
+/// the code no longer names, and copies the newest saved version afresh where its round starts again;
+/// one that has ended still draws what it was run with. No `updated_at` is moved.
+///
+/// **Only the automation tables are read and written.** A store with no automation writes nothing.
+fn take_the_way_out_for_nothing_to_take_off(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let ids = |sql: &str, params: &[&dyn rusqlite::ToSql]| -> Result<Vec<i64>> {
+        let mut stmt = tx.prepare(sql)?;
+        let rows = stmt.query_map(params, |r| r.get(0))?;
+        Ok(rows.collect::<std::result::Result<Vec<i64>, _>>()?)
+    };
+    let actions =
+        ids("SELECT id FROM automation_action WHERE builtin = ?1 ORDER BY id", rusqlite::params![V138_TAKE_TASK])?;
+    if actions.is_empty() {
+        return Ok(());
+    }
+    // The way out on the action, which the automations' lines hang on, and the one on its step, which
+    // the lines inside the action hang on.
+    let action_exits = ids(
+        "SELECT x.id FROM automation_exit x JOIN automation_action a ON a.id = x.owner_id \
+         WHERE x.owner_kind = 'action' AND a.builtin = ?1 AND x.name = ?2 ORDER BY x.id",
+        rusqlite::params![V138_TAKE_TASK, V138_NONE_TO_TAKE],
+    )?;
+    let step_exits = ids(
+        "SELECT x.id FROM automation_exit x \
+         JOIN automation_action_step s ON s.id = x.owner_id \
+         JOIN automation_action a ON a.id = s.action_id \
+         WHERE x.owner_kind = 'step' AND a.builtin = ?1 AND x.name = ?2 ORDER BY x.id",
+        rusqlite::params![V138_TAKE_TASK, V138_NONE_TO_TAKE],
+    )?;
+    let placements = ids(
+        "SELECT p.id FROM automation_placement p JOIN automation_action a ON a.id = p.action_id \
+         WHERE a.builtin = ?1 ORDER BY p.id",
+        rusqlite::params![V138_TAKE_TASK],
+    )?;
+    let gone: Vec<i64> = action_exits.iter().chain(&step_exits).copied().collect();
+    let list = |ids: &[i64]| ids.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+    let exits = list(&gone);
+    if !gone.is_empty() {
+        tx.execute_batch(&format!(
+            "DELETE FROM automation_edge WHERE exit_id IN ({exits}) OR exit_to_id IN ({exits});
+             DELETE FROM automation_wire WHERE from_exit_id IN ({exits});
+             DELETE FROM automation_port WHERE owner_kind = 'exit' AND owner_id IN ({exits});
+             DELETE FROM automation_exit WHERE id IN ({exits});"
+        ))?;
+    }
+    tx.execute(
+        &format!(
+            "DELETE FROM automation_cfg WHERE name = ?1 \
+             AND ((owner_kind = 'action' AND owner_id IN ({})) OR (owner_kind = 'placement' AND owner_id IN ({})))",
+            list(&actions),
+            if placements.is_empty() { "NULL".to_string() } else { list(&placements) },
+        ),
+        [V138_WHEN_NONE],
+    )?;
+
+    let mut versions: Vec<(i64, String, String, String, String)> = Vec::new();
+    {
+        let mut stmt = tx.prepare("SELECT id, placements, cfgs, edges, wires FROM automation_version ORDER BY id")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?;
+        for row in rows {
+            versions.push(row?);
+        }
+    }
+    let field = |row: &serde_json::Value, key: &str| row.get(key).and_then(serde_json::Value::as_i64);
+    for (version_id, placed, cfgs, edges, wires) in versions {
+        let Ok(placed) = serde_json::from_str::<Vec<serde_json::Value>>(&placed) else { continue };
+        let taking: Vec<i64> = placed
+            .iter()
+            .filter(|p| field(p, "action_id").is_some_and(|a| actions.contains(&a)))
+            .filter_map(|p| field(p, "id"))
+            .collect();
+        let kept = |json: &str, drops: &dyn Fn(&serde_json::Value) -> bool| -> Option<String> {
+            let rows = serde_json::from_str::<Vec<serde_json::Value>>(json).ok()?;
+            let before = rows.len();
+            let rows: Vec<serde_json::Value> = rows.into_iter().filter(|row| !drops(row)).collect();
+            (rows.len() != before).then(|| serde_json::Value::Array(rows).to_string())
+        };
+        let answer = |row: &serde_json::Value| {
+            row.get("owner_kind").and_then(serde_json::Value::as_str) == Some("placement")
+                && row.get("name").and_then(serde_json::Value::as_str) == Some(V138_WHEN_NONE)
+                && field(row, "owner_id").is_some_and(|p| taking.contains(&p))
+        };
+        let line = |row: &serde_json::Value| {
+            field(row, "exit_id").is_some_and(|x| action_exits.contains(&x))
+                || field(row, "exit_to_id").is_some_and(|x| action_exits.contains(&x))
+        };
+        let wire = |row: &serde_json::Value| field(row, "from_exit_id").is_some_and(|x| action_exits.contains(&x));
+        let changed = [
+            ("cfgs", kept(cfgs.as_str(), &answer)),
+            ("edges", kept(edges.as_str(), &line)),
+            ("wires", kept(wires.as_str(), &wire)),
+        ];
+        for (column, now) in changed {
+            if let Some(now) = now {
+                tx.execute(
+                    &format!("UPDATE automation_version SET {column} = ?1 WHERE id = ?2"),
+                    rusqlite::params![now, version_id],
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The key of the built-in that takes a task, as it stood at v138.
+const V138_TAKE_TASK: &str = "take_task";
+
+/// The way out of the built-in that takes a task which it left by when none could be taken, as it stood
+/// before v138.
+const V138_NONE_TO_TAKE: &str = "着手できるタスクが無い";
+
+/// The setting of the built-in that takes a task which chose whether it waited for one, as it stood
+/// before v138.
+const V138_WHEN_NONE: &str = "着手できるタスクが無いとき";
 
 /// v130: `automation_launch_role`, **how many are in each role for one launch** — copied from the
 /// definition when the launch opens, and changed on the launch alone from then on.
@@ -13979,6 +14122,147 @@ mod tests {
             .query_row("SELECT status, updated_at FROM task WHERE id = 1", [], |r| Ok((r.get(0)?, r.get(1)?)))
             .unwrap();
         assert_eq!(task_after, task_before, "no task is touched");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v138: the built-in that takes a task loses the setting that chose whether it waits and the way
+    /// out for nothing to take — off the library's action and its step, and off every automation's
+    /// draft and saved versions: the lines from that way out and the answers to that setting go, and
+    /// everything else stays. A person's action that names the same setting and way out keeps its own.
+    /// The action keeps its version, and no `updated_at` or task is moved.
+    #[test]
+    fn the_way_out_for_nothing_to_take_and_its_setting_are_gone_at_v138() {
+        let dir = scratch("take-task-none-gone");
+        let engine = store_at(&dir, 137);
+        let at = "2026-11-09T00:00:00Z";
+        let filter = r#"{\"assignee\":[\"ai\"]}"#;
+        let cfgs = |placement: i64| {
+            format!(
+                r#"[{{"id":{a},"owner_kind":"placement","owner_id":{placement},"name":"絞り込み","value":"{filter}"}},{{"id":{b},"owner_kind":"placement","owner_id":{placement},"name":"着手できるタスクが無いとき","value":"\"着手できるタスクが出るまで待つ\""}}]"#,
+                a = placement * 10 + 1,
+                b = placement * 10 + 2,
+            )
+        };
+        let edges = |from: i64, none: i64, taken: i64, to: i64| {
+            format!(
+                r#"[{{"id":{a},"from_id":{from},"exit_id":{taken},"to_id":{to},"ends":"go"}},{{"id":{b},"from_id":{from},"exit_id":{none},"to_id":null,"ends":"done"}}]"#,
+                a = from * 10 + 1,
+                b = from * 10 + 2,
+            )
+        };
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO task (id, title, status, project_id, created_at, updated_at)
+                 VALUES (1, 'work', 'todo', 1, '{at}', '{at}');
+                 INSERT INTO automation_action (id, project_id, name, builtin, builtin_version, order_key)
+                 VALUES (1, NULL, 'タスクに着手する', 'take_task', 1, 'm'), (2, 1, 'mine', NULL, NULL, 'n');
+                 INSERT INTO automation_action_step (id, action_id, name) VALUES (1, 1, 'タスクに着手する'), (2, 2, 'mine');
+                 INSERT INTO automation_exit (id, owner_kind, owner_id, name, order_key)
+                 VALUES (1, 'action', 1, '着手した', 'm'), (2, 'action', 1, '着手できるタスクが無い', 'n'),
+                        (3, 'step', 1, '着手した', 'm'), (4, 'step', 1, '着手できるタスクが無い', 'n'),
+                        (5, 'action', 2, '着手できるタスクが無い', 'm'), (6, 'step', 2, '着手できるタスクが無い', 'm');
+                 INSERT INTO automation_port (id, owner_kind, owner_id, direction, name, kind)
+                 VALUES (1, 'exit', 1, 'out', 'タスク', 'task_take'), (2, 'exit', 3, 'out', 'タスク', 'task_take');
+                 INSERT INTO automation_cfg (id, owner_kind, owner_id, name, kind, options, value)
+                 VALUES (1, 'action', 1, '絞り込み', 'taskfilter', NULL, NULL),
+                        (2, 'action', 1, '着手できるタスクが無いとき', 'choice', '["a","b"]', NULL),
+                        (3, 'placement', 1, '絞り込み', 'taskfilter', NULL, '{filter}'),
+                        (4, 'placement', 1, '着手できるタスクが無いとき', 'choice', NULL, '"着手できるタスクが出るまで待つ"'),
+                        (5, 'action', 2, '着手できるタスクが無いとき', 'choice', '["a"]', NULL),
+                        (6, 'placement', 2, '着手できるタスクが無いとき', 'choice', NULL, '"a"');
+                 INSERT INTO automation (id, project_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 1, '開発', 'm', '{at}', '{at}');
+                 INSERT INTO automation_placement (id, automation_id, action_id, order_key, created_at, updated_at)
+                 VALUES (1, 1, 1, 'm', '{at}', '{at}'), (2, 1, 2, 'n', '{at}', '{at}');
+                 INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_id, to_id, ends, exit_to_id, order_key, created_at, updated_at)
+                 VALUES (1, 'action', 1, 1, 3, NULL, 'exit', 1, 'm', '{at}', '{at}'),
+                        (2, 'action', 1, 1, 4, NULL, 'exit', 2, 'n', '{at}', '{at}'),
+                        (3, 'automation', 1, 1, 1, 2, 'go', NULL, 'm', '{at}', '{at}'),
+                        (4, 'automation', 1, 1, 2, NULL, 'done', NULL, 'n', '{at}', '{at}'),
+                        (5, 'automation', 1, 2, 5, NULL, 'done', NULL, 'o', '{at}', '{at}');
+                 INSERT INTO automation_wire (id, owner_kind, owner_id, from_id, from_exit_id, from_port_id, to_id, to_port_id)
+                 VALUES (1, 'action', 1, 1, 3, 2, 0, 1);
+                 INSERT INTO automation_role (id, automation_id, name, entry_placement_id, order_key, created_at, updated_at)
+                 VALUES (1, 1, 'さくら', 1, 'm', '{at}', '{at}');
+                 INSERT INTO automation_version (id, automation_id, version, placements, cfgs, placement_steps, edges, wires, roles, created_at, updated_at)
+                 VALUES (1, 1, 1, '{placed}', '{c1}', '[]', '{e1}', '[]', '[]', '{at}', '{at}'),
+                        (2, 1, 2, '{placed}', '{c1}', '[]', '{e1}', '[]', '[]', '{at}', '{at}');"#,
+                placed = r#"[{"id":1,"automation_id":1,"action_id":1},{"id":2,"automation_id":1,"action_id":2}]"#,
+                c1 = cfgs(1),
+                e1 = edges(1, 2, 1, 2),
+            ))
+            .unwrap();
+        let task_before: (String, String) = engine
+            .conn()
+            .query_row("SELECT status, updated_at FROM task WHERE id = 1", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let conn = engine.conn();
+        let ids = |sql: &str| -> Vec<i64> {
+            let mut stmt = conn.prepare(sql).unwrap();
+            stmt.query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+        };
+        assert_eq!(ids("SELECT id FROM automation_exit ORDER BY id"), vec![1, 3, 5, 6], "the built-in's way out is gone");
+        assert_eq!(ids("SELECT id FROM automation_port ORDER BY id"), vec![1, 2], "what 着手した hands on stays");
+        assert_eq!(ids("SELECT id FROM automation_cfg ORDER BY id"), vec![1, 3, 5, 6], "the setting and its answer are gone");
+        assert_eq!(ids("SELECT id FROM automation_edge ORDER BY id"), vec![1, 3, 5], "the lines from that way out are gone");
+        assert_eq!(ids("SELECT id FROM automation_wire ORDER BY id"), vec![1]);
+        assert_eq!(
+            ids("SELECT builtin_version FROM automation_action WHERE id = 1"),
+            vec![1],
+            "the action keeps the version its placements stand on",
+        );
+        for version in [1, 2] {
+            let (cfgs, edges, updated_at): (String, String, String) = conn
+                .query_row("SELECT cfgs, edges, updated_at FROM automation_version WHERE id = ?1", [version], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+                })
+                .unwrap();
+            let names: Vec<serde_json::Value> = serde_json::from_str::<Vec<serde_json::Value>>(&cfgs)
+                .unwrap()
+                .into_iter()
+                .map(|c| c["name"].clone())
+                .collect();
+            assert_eq!(names, vec![serde_json::json!("絞り込み")], "version {version}: the filter's answer stays");
+            let exits: Vec<serde_json::Value> = serde_json::from_str::<Vec<serde_json::Value>>(&edges)
+                .unwrap()
+                .into_iter()
+                .map(|e| e["exit_id"].clone())
+                .collect();
+            assert_eq!(exits, vec![serde_json::json!(1)], "version {version}: the line from 着手した stays");
+            assert_eq!(updated_at, at);
+        }
+        let automations_moved: i64 = conn
+            .query_row("SELECT COUNT(*) FROM automation WHERE updated_at <> ?1", [at], |r| r.get(0))
+            .unwrap();
+        assert_eq!(automations_moved, 0, "no automation's updated_at is moved");
+        let task_after: (String, String) = conn
+            .query_row("SELECT status, updated_at FROM task WHERE id = 1", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!(task_after, task_before, "no task is touched");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v138: a store with no automation is raised past it with nothing written.
+    #[test]
+    fn a_store_with_no_automation_is_raised_past_v138_with_nothing_written() {
+        let dir = scratch("take-task-none-gone-empty");
+        let engine = store_at(&dir, 137);
+
+        run(&engine, &dir, steps_through(138), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 138);
+        let count = |table: &str| -> i64 {
+            engine.conn().query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0)).unwrap()
+        };
+        for table in ["automation_action", "automation_exit", "automation_edge", "automation_cfg", "automation_version"] {
+            assert_eq!(count(table), 0, "{table}");
+        }
         std::fs::remove_dir_all(&dir).ok();
     }
 

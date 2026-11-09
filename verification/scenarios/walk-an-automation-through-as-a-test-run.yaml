@@ -6,8 +6,9 @@
 # picture, round and out again, and that the store is as it was before the walk.
 #
 # Which way out a step is left by is chosen by the test run, since nobody is doing the work that
-# would decide it: the first it declares the first time, the next each time it is reached again. That
-# is what walks a picture that takes tasks until there are none once round and then out.
+# would decide it: the first it declares the first time, the next each time it is reached again. The
+# take reached again finds no task, and the run ends there as a real one with nothing to take does.
+# That is what walks a picture that takes tasks until there are none once round and then out.
 #
 # What a way out hands on is put down in the walk as a stand-in of its kind, and a file is one. The
 # work step's done way out hands one on, so the walk has to get past putting it down — which is where
@@ -19,7 +20,7 @@ description: >
   with a task in the project it could take. Walk it as a test run, from the terminal or from its build
   screen, where a pane beside the picture steps through the walk one step at a time: the take leaves by
   the way out that took a task, the work and the close each by their done one — the work's handing
-  on a file — and the second take by the way out that found none, which ends the run completed.
+  on a file — and at the second take the run finds none and ends completed.
   Afterwards the automation has no run behind it, the project holds the one task it held, and that
   task is still waiting to be taken.
 given:
@@ -48,7 +49,6 @@ given:
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: fix, agent: claude-code } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_work } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_work, to: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_close, to: at_take } }
 
@@ -59,8 +59,8 @@ steps_cli:
     with: { target: auto }
 
   # Once round and out: the first take is left by the way out that took a task, the work by the one
-  # that hands on a file, the second take by the one that found none, and the run ends completed
-  # rather than being cut short.
+  # that hands on a file, and at the second take the run finds none and ends completed rather than
+  # being cut short.
   - type: assert
     domain: automation
     op: test-run-walked
@@ -70,7 +70,6 @@ steps_cli:
         - [タスクに着手する, 着手した]
         - [fix, 完了]
         - [タスクを閉じる, 完了]
-        - [タスクに着手する, 着手できるタスクが無い]
       status: completed
       runs: 0
       tasks: 1
@@ -89,27 +88,22 @@ steps_gui:
   - { type: action, domain: automation, op: test-run, with: { target: auto } }
 
   # The same walk, a step at a time: the take by the way out that took a task, the step inside the
-  # action with the prompt an agent would be started on, the close, and the second take by the way
-  # out that found none.
+  # action with the prompt an agent would be started on, and the close. The run ends at the second
+  # take, which finds none.
   - type: assert
     domain: automation
     op: test-pane
-    with: { step: 1, total: 4, builtin: take_task, exit: 着手した }
+    with: { step: 1, total: 3, builtin: take_task, exit: 着手した }
   - { type: action, domain: automation, op: test-move, with: { press: next } }
   - type: assert
     domain: automation
     op: test-pane
-    with: { step: 2, total: 4, name: fix, prompt: fix what the task asks for, box: work }
+    with: { step: 2, total: 3, name: fix, prompt: fix what the task asks for, box: work }
   - { type: action, domain: automation, op: test-move, with: { press: next } }
   - type: assert
     domain: automation
     op: test-pane
-    with: { step: 3, total: 4, builtin: close_task }
-  - { type: action, domain: automation, op: test-move, with: { press: next } }
-  - type: assert
-    domain: automation
-    op: test-pane
-    with: { step: 4, total: 4, builtin: take_task, exit: 着手できるタスクが無い }
+    with: { step: 3, total: 3, builtin: close_task }
   - { type: action, domain: automation, op: test-move, with: { press: next } }
   - { type: assert, domain: automation, op: test-pane-ended, with: { ended: completed } }
 

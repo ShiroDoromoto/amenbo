@@ -52,7 +52,6 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { target: at_after, to: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
 
 # No terminal pauses a launch as a whole — that is the pane's header — so the terminal road reads the
 # role's stop and resume, and leaves the paused launch to the screen. A run started from the terminal

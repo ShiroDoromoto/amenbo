@@ -40,7 +40,6 @@ pub(crate) const DEFER_TASK: Builtin = Builtin {
     settings: &[],
     ins: &[],
     exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }],
-    waits: None,
     chooses: None,
     needs_task: NeedsTask::Always,
     work: Work::InStore(defer),
@@ -74,7 +73,7 @@ mod tests {
     use crate::model::{Automation, AutomationPictureOwner, AutomationPlacement, AutomationRunStatus};
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_builtin::action;
-    use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
+    use crate::ops::automation_builtin_take::TAKEN;
     use crate::ops::automation_report::{self, Next};
     use crate::ops::automation_run::{launch, nothing_asked, Launcher};
     use crate::ops::automation_step::Opened;
@@ -103,7 +102,6 @@ mod tests {
         let later = automation::placement_add(tx, automation.id, action(tx, "defer_task").expect("defer").id)
             .expect("place defer");
         automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
-        automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
         automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(later.id), None).expect("work → defer");
         automation::edge_add(tx, on, later.id, None, EdgeTarget::Go(take.id), None).expect("defer → take");
         let role = start_at(tx, automation.id, take.id);
@@ -180,12 +178,11 @@ mod tests {
             assert_eq!(deferred.assignee_kind, Some(ActorKind::Ai));
             assert_eq!(comments(tx, task), vec!["Waits for the fix on main.".to_string()]);
 
-            let Opened::Carried { next: Next::Closed(ended), .. } =
-                open(tx, run.id, take.id, Some(&claude)).expect("take again")
+            let Opened::LeftToWait { run: ended } = open(tx, run.id, take.id, Some(&claude)).expect("take again")
             else {
                 panic!("with the task waiting on the fix, there is nothing to take and the run ends");
             };
-            assert_eq!(ended.run.status, AutomationRunStatus::Completed, "{:?}", ended.run.stopped_reason);
+            assert_eq!(ended.status, AutomationRunStatus::Completed, "{:?}", ended.stopped_reason);
             assert_eq!(read::task_status(tx.conn(), task).expect("read"), Some(TaskStatus::Todo));
 
             crate::ops::task::set_status(tx, fix, TaskStatus::Done, ActorKind::Human).expect("the fix lands");
@@ -220,7 +217,6 @@ mod tests {
             let later = automation::placement_add(tx, automation.id, action(tx, "defer_task").expect("defer").id)
                 .expect("place defer");
             automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(later.id), None).expect("take → defer");
-            automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
             automation::edge_add(tx, on, later.id, None, EdgeTarget::Done, None).expect("defer → done");
             let role = start_at(tx, automation.id, take.id);
             let task = mk_task_in(tx, "main の赤で落ちたもの", Some(project));

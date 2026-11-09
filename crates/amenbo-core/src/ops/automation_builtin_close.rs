@@ -46,7 +46,6 @@ pub(crate) const CLOSE_TASK: Builtin = Builtin {
     settings: &[],
     ins: &[BuiltinPort { name: COMMIT, kind: AutomationPortKind::Value, required: false }],
     exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }],
-    waits: None,
     chooses: None,
     needs_task: NeedsTask::Always,
     work: Work::InStore(close),
@@ -134,7 +133,7 @@ mod tests {
     };
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_builtin::action;
-    use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
+    use crate::ops::automation_builtin_take::TAKEN;
     use crate::ops::automation_report::{self, Next, Produced};
     use crate::ops::automation_run::{launch, next_def, nothing_asked, Launcher, Waiting};
     use crate::ops::automation_step::Opened;
@@ -165,7 +164,6 @@ mod tests {
         let close = automation::placement_add(tx, automation.id, action(tx, "close_task").expect("close").id)
             .expect("place close");
         automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
-        automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
         automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(close.id), None).expect("work → close");
         automation::edge_add(tx, on, close.id, None, EdgeTarget::Done, None).expect("close → done");
         automation::wire_add(tx, on, work.id, None, COMMIT, close.id, COMMIT).expect("wire the commit");
@@ -252,7 +250,7 @@ mod tests {
             assert_eq!(shas, vec![SHA.to_string()]);
             assert_eq!(comments(tx, task), vec!["Fixed it.\n\nThe test covers it.".to_string()]);
 
-            let Opened::Carried { next: Next::Closed(_), .. } =
+            let Opened::LeftToWait { .. } =
                 open(tx, run.id, again.id, Some(&["claude".to_string()])).expect("take again")
             else {
                 panic!("with nothing left to take, the run comes to its end");
@@ -310,9 +308,7 @@ mod tests {
             let held: Vec<Option<i64>> = rounds.iter().map(|r| r.task_id).collect();
             assert!(held.contains(&Some(first)) && held.contains(&Some(second)), "{held:?}");
 
-            let Opened::Carried { next: Next::Closed(_), .. } =
-                open(tx, run.id, entry.id, Some(&claude)).expect("take again")
-            else {
+            let Opened::LeftToWait { .. } = open(tx, run.id, entry.id, Some(&claude)).expect("take again") else {
                 panic!("with nothing left to take, the run comes to its end");
             };
             let run = read::automation_run(tx.conn(), run.id).expect("read").expect("run");

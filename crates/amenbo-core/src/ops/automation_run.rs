@@ -1183,8 +1183,8 @@ fn check_picture(
         let def = &defs[&placement.id];
         let name = action_name(conn, placement.action_id)?;
         let builtin = action_builtin(conn, placement.action_id)?;
-        // A built-in set to wait never leaves by the way out it waits instead of (`AMB-D-969`), and one
-        // whose setting chooses its way out never by the other, so nothing has to follow it.
+        // A built-in whose setting chooses its way out never leaves by the other, so nothing has to
+        // follow that one.
         let never_taken = never_taken(conn, pic, placement, def)?;
         let settings = answers(pic, placement, def);
         for exit in def.action_exits() {
@@ -2511,9 +2511,9 @@ fn seat(conn: &Connection, project_id: i64, pic: &Picture, open: &[&Seats]) -> R
     Ok(first.role_id)
 }
 
-/// **Whether every one of these seats would wait for a task where its round starts** (`AMB-D-969`) —
-/// each starts at a built-in set to wait, with nothing of its role turned up yet. A launch then makes no
-/// run ([`start`]). `false` for no seats at all.
+/// **Whether every one of these seats would wait for a task where its round starts** (`AMB-D-969`,
+/// `AMB-D-1130`) — each starts at the built-in that takes a task, with nothing of its role turned up
+/// yet. A launch then makes no run ([`start`]). `false` for no seats at all.
 fn waits_at_every_start(conn: &Connection, project_id: i64, pic: &Picture, open: &[&Seats]) -> Result<bool> {
     for &s in open {
         let Some(start) = start_builtin(conn, pic, s.role_id)? else { return Ok(false) };
@@ -2531,14 +2531,13 @@ fn waits_at_every_start(conn: &Connection, project_id: i64, pic: &Picture, open:
     Ok(!open.is_empty())
 }
 
-/// **End a run whose built-in would wait for a task, as one that found nothing to do** (`AMB-D-1126`)
-/// — where the run came back to where its round starts with no task to take.
+/// **End a run that came to the built-in that takes a task with none to take, as one that found
+/// nothing to do** (`AMB-D-1126`, `AMB-D-1130`) — where the run came back to where its round starts.
 ///
-/// **The run completes** there, its step never opened: it found nothing to do, as one leaving by the
-/// way out for nothing to take does. It holds no task, so there is none to hand back. Nothing is marked
-/// on the automation: the run's seat is free again, and the launch standing fills it once a task of
-/// that role turns up ([`top_up`]). So waiting leaves no run standing, counted among those under way,
-/// and no step or stretch.
+/// **The run completes** there, its step never opened: it found nothing to do. It holds no task, so
+/// there is none to hand back. Nothing is marked on the automation: the run's seat is free again, and
+/// the launch standing fills it once a task of that role turns up ([`top_up`]). So waiting leaves no
+/// run standing, counted among those under way, and no step or stretch.
 pub(crate) fn end_with_no_task(tx: &WriteTx<'_>, run: AutomationRun) -> Result<AutomationRun> {
     let ended = crate::ops::automation_stop::ended(tx, run, crate::ops::automation_stop::Ending::Completed)?;
     Ok(ended.run)
@@ -2617,9 +2616,8 @@ pub fn launches_to_top_up(conn: &Connection, launches: &[i64]) -> Result<Vec<i64
 /// ([`seats`]), its round starting, in the newest saved version, at the built-in that takes a task — a
 /// role starting anywhere else is never topped up, its run walking the picture once — a task of its own
 /// to take there, and no run of it standing about to take one, which would take the task found here
-/// ([`with_a_task`]). Whether any role is set to wait for a task does not count (`AMB-D-1126`). The
-/// seats are as many as the launch holds for each role ([`seats`]), so a headcount raised on the launch
-/// takes hold at once ([`launch_headcount_set`]).
+/// ([`with_a_task`]). The seats are as many as the launch holds for each role ([`seats`]), so a
+/// headcount raised on the launch takes hold at once ([`launch_headcount_set`]).
 fn tops_up(conn: &Connection, launch_id: i64) -> Result<bool> {
     let Some(launch) = read::automation_launch(conn, launch_id)? else { return Ok(false) };
     if launch.status != AutomationLaunchStatus::Running {
@@ -4431,10 +4429,10 @@ pub(crate) fn goes_round(
 }
 
 /// **Whether this run stands before a built-in that would wait** for something to turn up
-/// (`AMB-D-969`) — `running`, with nothing under way, and the step it would open next set to wait with
-/// nothing yet for it. Such a run is ended the next time that step is opened, its seat left for the
-/// launch to fill once a task turns up ([`end_with_no_task`]); until then a pause before its next task
-/// takes hold at once.
+/// (`AMB-D-969`) — `running`, with nothing under way, and the step it would open next the built-in that
+/// takes a task, with none yet for it to take. Such a run is ended the next time that step is opened,
+/// its seat left for the launch to fill once a task turns up ([`end_with_no_task`]); until then a pause
+/// before its next task takes hold at once.
 pub fn is_waiting(conn: &Connection, run_id: i64) -> Result<bool> {
     let Waiting::Step(def) = next_def(conn, run_id)? else { return Ok(false) };
     let Some(run) = read::automation_run(conn, run_id)? else { return Ok(false) };
@@ -4698,7 +4696,7 @@ mod tests {
     use super::*;
     use crate::model::{AutomationAction, AutomationEdge, AutomationPlacement};
     use crate::ops::automation::{self, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep};
-    use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
+    use crate::ops::automation_builtin_take::TAKEN;
     use crate::ops::test_support::{
         exit_id, give_to, mk_exit, mk_in, mk_out, mk_placed, mk_project, only_step, start_at, with_tx,
     };
@@ -4736,21 +4734,11 @@ mod tests {
     }
 
     /// **The built-in that takes a task, placed on `automation`** — the only thing that takes one
-    /// (`AMB-D-964`). With nothing to take, the run ends; what follows a task taken is the caller's to
-    /// draw.
+    /// (`AMB-D-964`). With nothing to take, the run ends before it; what follows a task taken is the
+    /// caller's to draw.
     fn takes_first(tx: &WriteTx<'_>, automation: &Automation) -> AutomationPlacement {
         let take = crate::ops::automation_builtin::action(tx, "take_task").expect("the built-in's action");
-        let taking = automation::placement_add(tx, automation.id, take.id).expect("place it");
-        automation::edge_add(
-            tx,
-            AutomationPictureOwner::Automation,
-            taking.id,
-            Some(NONE_TO_TAKE),
-            EdgeTarget::Done,
-            None,
-        )
-        .expect("nothing to take ends the run");
-        taking
+        automation::placement_add(tx, automation.id, take.id).expect("place it")
     }
 
     /// Declare a `task_take` output on one way out of a person's own action — what a store written

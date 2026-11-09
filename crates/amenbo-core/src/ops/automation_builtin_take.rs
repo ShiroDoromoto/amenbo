@@ -178,9 +178,15 @@ pub(crate) fn held_back(conn: &Connection, project_id: i64, roles: &[i64], cfg: 
             }
             task.blocked_by_open.iter().for_each(|id| bump(&mut blockers, *id));
             task.blocked_by_decisions.iter().for_each(|id| bump(&mut decisions, *id));
-            if let Some(day) = task.not_started_until {
+            if let Some(start) = task.not_started_until {
                 held.not_started += 1;
-                held.first_start = Some(held.first_start.map_or(day, |first| first.min(day)));
+                // A day weighs in at the moment it begins for the reader, an instant at its own; at a tie
+                // the day is named, as `waiting_on_start` names it.
+                let weight = |s: crate::model::Schedule| (s.begins(), s.at().is_some());
+                held.first_start = Some(match held.first_start {
+                    Some(first) if weight(first) <= weight(start) => first,
+                    _ => start,
+                });
             }
             if task.draft {
                 held.drafts += 1;
@@ -684,9 +690,20 @@ mod tests {
                 held.decisions,
                 vec![HeldByRecord { id: premise.id, title: "the premise".into(), count: 1 }],
             );
-            assert_eq!((held.not_started, held.first_start), (1, Some(day)));
+            assert_eq!((held.not_started, held.first_start), (1, Some(crate::model::Schedule::Day(day))));
             assert!(held.values.is_empty());
             assert_eq!(held.drafts, 0);
+
+            // A start at an instant before that day is the first, and it is carried to the instant.
+            let sooner = ours(tx, "sooner", &automation, None);
+            let at = crate::time::Timestamp(crate::time::Timestamp::now().0 + chrono::Duration::hours(2));
+            task::update(tx, sooner, TaskPatch { start: Some(crate::model::Schedule::At(at)), ..Default::default() })
+                .expect("start");
+            let held = run_held_back(tx.conn(), run.id).expect("held back").expect("still waiting");
+            assert_eq!((held.not_started, held.first_start), (2, Some(crate::model::Schedule::At(at))));
+            let json = serde_json::to_value(&held).expect("json");
+            assert_eq!(json["first_start"], serde_json::json!(at.local_date().to_string()), "the day, as it always was");
+            assert_eq!(json["first_start_at"], serde_json::json!(at.to_rfc3339_z()), "and the instant beside it");
 
             ours(tx, "one it can take", &automation, None);
             assert_eq!(run_held_back(tx.conn(), run.id).expect("held back"), None, "no longer waiting");
@@ -1991,6 +2008,124 @@ mod tests {
             assert!(round.incident_task_id.is_some(), "filed to the person");
             assert!(incidents_waiting_in_launch(tx.conn(), launch).expect("incidents").is_empty());
             assert_eq!(launch_of(tx, launch).status, crate::model::AutomationLaunchStatus::Running);
+        });
+    }
+
+    /// **A task whose round failed stands stopped in its launch until the task its failure was filed as
+    /// closes** — filed to a person or to a role alike. Another launch has nothing that needs a hand.
+    #[test]
+    fn a_task_whose_round_failed_stands_stopped_until_its_failure_closes() {
+        use crate::model::FailuresTo;
+        use crate::ops::automation_run::{attention_in_launch, AttentionKind, LaunchAttention};
+        for to_a_role in [false, true] {
+            with_tx(|tx| {
+                let project = mk_project(tx, "amenbo");
+                let (automation, [(builder, _), (reviewer, _)]) = by_role(tx, project);
+                if to_a_role {
+                    let to = Some(Some(FailuresTo::Role { role_id: reviewer }));
+                    automation::update(tx, automation.id, None, None, None, to, None).expect("to the reviewer");
+                }
+                let built = for_ai(tx, "to build", project, None);
+                give_to(tx, built, builder);
+
+                let (run, launch) = failed_in_a_launch(tx, &automation);
+                let round = read::automation_run_task_last(tx.conn(), run.id).expect("read").expect("the round");
+                let filed = round.incident_task_id.expect("the round was filed");
+                assert_eq!(
+                    attention_in_launch(tx.conn(), launch).expect("attention"),
+                    vec![LaunchAttention {
+                        kind: AttentionKind::Stopped,
+                        task_id: Some(built),
+                        title: Some("to build".into()),
+                        role_id: Some(builder),
+                        run_id: run.id,
+                        run_task_id: Some(round.id),
+                        incident_task_id: Some(filed),
+                        step_name: None,
+                        since: round.ended_at,
+                    }],
+                    "filed to a role: {to_a_role}",
+                );
+                let state = crate::ops::automation_run::launch_state(tx.conn(), launch).expect("state");
+                assert_eq!(state.attention.len(), 1, "the pane reads it in the same read");
+
+                let (other, _) = picture(tx, project);
+                let elsewhere = launched(tx, &other).launch_id.expect("a launch");
+                assert!(attention_in_launch(tx.conn(), elsewhere).expect("attention").is_empty());
+
+                task::set_status(tx, filed, TaskStatus::Done, ActorKind::Human).expect("close the failure");
+                assert!(attention_in_launch(tx.conn(), launch).expect("attention").is_empty(), "no longer stopped");
+            });
+        }
+    }
+
+    /// Launch `automation` (made [`by_role`]) with its builder's step made one that may wait for a person,
+    /// a task for the builder, and open that step. Answers the run, its launch, the opening, the task
+    /// and the builder.
+    fn waiting_on_a_person(
+        tx: &WriteTx<'_>,
+    ) -> (AutomationRun, i64, crate::ops::automation_step::Opening, i64, i64) {
+        let project = mk_project(tx, "amenbo");
+        let (automation, [(builder, work), _]) = by_role(tx, project);
+        let action = read::automation_action(tx.conn(), work.action_id).expect("read").expect("the action");
+        let step = action.entry_step_id.expect("an entry step");
+        automation::step_update(tx, step, None, None, Some(true), None, None, None, None, None, None, None, None)
+            .expect("make the step interactive");
+        let automation = as_it_stands(tx, &automation);
+        let built = for_ai(tx, "to build", project, None);
+        give_to(tx, built, builder);
+
+        let claude = ["claude".to_string()];
+        let run = launched(tx, &automation);
+        let launch = run.launch_id.expect("a launch");
+        let Opened::Carried { next: Next::Step(def), .. } = open_entry(tx, &run) else {
+            panic!("the take goes on to the work");
+        };
+        let Opened::Ready(opening) = open(tx, run.id, def.id, Some(&claude)).expect("open the work") else {
+            panic!("the work opens a terminal");
+        };
+        (run, launch, *opening, built, builder)
+    }
+
+    /// **A run standing on an open step that may wait for a person is named in its launch**, with the
+    /// task it is on and its role, until the step leaves.
+    #[test]
+    fn a_run_on_a_step_that_waits_for_a_person_is_named_until_the_step_leaves() {
+        use crate::ops::automation_run::{attention_in_launch, AttentionKind, LaunchAttention};
+        with_tx(|tx| {
+            let (run, launch, opening, built, builder) = waiting_on_a_person(tx);
+            let round = read::automation_run_task_last(tx.conn(), run.id).expect("read").expect("the round");
+            assert_eq!(
+                attention_in_launch(tx.conn(), launch).expect("attention"),
+                vec![LaunchAttention {
+                    kind: AttentionKind::AwaitsPerson,
+                    task_id: Some(built),
+                    title: Some("to build".into()),
+                    role_id: Some(builder),
+                    run_id: run.id,
+                    run_task_id: Some(round.id),
+                    incident_task_id: None,
+                    step_name: Some(opening.run_def.name.clone()),
+                    since: opening.run_step.started_at,
+                }],
+            );
+
+            report_done(tx, &opening);
+            assert!(attention_in_launch(tx.conn(), launch).expect("attention").is_empty(), "the step has left");
+        });
+    }
+
+    /// **A run waiting for a person that is stopped waits for nobody**, and its launch is left with nothing
+    /// that needs a hand.
+    #[test]
+    fn a_run_waiting_for_a_person_is_no_longer_named_once_stopped() {
+        use crate::ops::automation_run::attention_in_launch;
+        with_tx(|tx| {
+            let (run, launch, _, _, _) = waiting_on_a_person(tx);
+            assert_eq!(attention_in_launch(tx.conn(), launch).expect("attention").len(), 1);
+
+            automation_stop::stop(tx, run.id, automation_stop::Ending::Canceled).expect("stop");
+            assert!(attention_in_launch(tx.conn(), launch).expect("attention").is_empty());
         });
     }
 

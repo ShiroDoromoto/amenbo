@@ -5127,7 +5127,7 @@ pub fn hydrate_task_cards(
             b.draft,
             !waiting_on_values.is_empty(),
         );
-        let not_started_until = crate::view::not_started_until(b.start, today, now).map(|s| s.day());
+        let not_started_until = crate::view::not_started_until(b.start, today, now);
         out.push(TaskCompact {
             id: b.id,
             title: b.title.clone(),

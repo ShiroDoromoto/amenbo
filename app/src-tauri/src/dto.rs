@@ -471,7 +471,7 @@ pub struct PremiseChangeDto {
 /// form of [`amenbo_core::model::Schedule`]. A day (`YYYY-MM-DD`) is the reader's own calendar day; an
 /// instant (RFC3339 UTC) is shown in the reader's zone, and wherever the screen cuts by day it is read on
 /// the reader's day it falls on.
-#[derive(Serialize, TS, Debug, PartialEq)]
+#[derive(Serialize, TS, Debug, Clone, PartialEq)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum ScheduleDto {
@@ -4135,13 +4135,23 @@ impl From<AutomationTriggerConditionDto> for amenbo_core::model::TriggerConditio
     }
 }
 
-/// **What the task a trigger files says** — the wire form of [`amenbo_core::model::TriggerTask`]:
-/// `fixed` with its title and notes, `file` read from its full path, `script` written by a program.
+/// **What a trigger hands on** — the wire form of [`amenbo_core::model::TriggerTask`]: `fixed` with its
+/// title, notes, data (JSON text, absent for none) and the full paths of its files (absent for none),
+/// `file` read from its full path, `script` written by a program.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum AutomationTriggerTaskDto {
-    Fixed { title: String, notes: String },
+    Fixed {
+        title: String,
+        notes: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        data: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        files: Option<Vec<String>>,
+    },
     File { path: String },
     Script { script: AutomationStepScriptDto },
 }
@@ -4150,20 +4160,32 @@ impl From<amenbo_core::model::TriggerTask> for AutomationTriggerTaskDto {
     fn from(t: amenbo_core::model::TriggerTask) -> Self {
         use amenbo_core::model::TriggerTask;
         match t {
-            TriggerTask::Fixed { title, notes } => AutomationTriggerTaskDto::Fixed { title, notes },
+            TriggerTask::Fixed { title, notes, data, files } => {
+                AutomationTriggerTaskDto::Fixed { title, notes, data, files: (!files.is_empty()).then_some(files) }
+            }
             TriggerTask::File { path } => AutomationTriggerTaskDto::File { path },
             TriggerTask::Script { script } => AutomationTriggerTaskDto::Script { script: script.into() },
         }
     }
 }
 
-/// **What the task a trigger files is written to say** ([`amenbo_core::ops::automation::NewTriggerTask`])
-/// — [`AutomationTriggerTaskDto`] with the program's timeout left out where it is the default.
+/// **What a trigger is written to hand on** ([`amenbo_core::ops::automation::NewTriggerTask`]) —
+/// [`AutomationTriggerTaskDto`] with the program's timeout left out where it is the default, and a
+/// `fixed`'s data and files left out where it has none.
 #[derive(Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum AutomationTriggerTaskInputDto {
-    Fixed { title: String, notes: String },
+    Fixed {
+        title: String,
+        notes: String,
+        #[serde(default)]
+        #[ts(optional)]
+        data: Option<String>,
+        #[serde(default)]
+        #[ts(optional)]
+        files: Option<Vec<String>>,
+    },
     File { path: String },
     Script { script: AutomationScriptInputDto },
 }
@@ -4172,7 +4194,12 @@ impl From<AutomationTriggerTaskInputDto> for amenbo_core::ops::automation::NewTr
     fn from(t: AutomationTriggerTaskInputDto) -> Self {
         use amenbo_core::ops::automation::NewTriggerTask;
         match t {
-            AutomationTriggerTaskInputDto::Fixed { title, notes } => NewTriggerTask::Fixed { title, notes },
+            AutomationTriggerTaskInputDto::Fixed { title, notes, data, files } => NewTriggerTask::Fixed {
+                title,
+                notes,
+                data: data.unwrap_or_default(),
+                files: files.unwrap_or_default(),
+            },
             AutomationTriggerTaskInputDto::File { path } => NewTriggerTask::File { path },
             AutomationTriggerTaskInputDto::Script { script } => NewTriggerTask::Script(script.into()),
         }
@@ -4522,13 +4549,13 @@ pub struct AutomationHeldBackDto {
     pub(crate) blockers: Vec<AutomationHeldByRecordDto>,
     /// The linked decisions that are not live grounds, most tasks first.
     pub(crate) decisions: Vec<AutomationHeldByRecordDto>,
-    /// How many wait for their start day.
+    /// How many wait for their start.
     #[ts(type = "number")]
     pub(crate) not_started: usize,
-    /// The first of those start days (`YYYY-MM-DD`). Absent when none waits for one.
+    /// The first of those starts — a day, or an instant (`AMB-D-1082`). Absent when none waits for one.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub(crate) first_start: Option<String>,
+    pub(crate) first_start: Option<ScheduleDto>,
     /// How many are still being created.
     #[ts(type = "number")]
     pub(crate) drafts: usize,
@@ -4790,6 +4817,62 @@ pub struct AutomationLaunchStateDto {
     /// **The launch's failed rounds that were filed as a task**, newest first, up to the newest
     /// [`amenbo_core::ops::automation_run::FAILED_NAMED`] — one line each under the pane.
     pub(crate) failed: Vec<AutomationLaunchFailedDto>,
+    /// **What needs a person's hand now** — the stopped tasks first, then the runs waiting for a
+    /// person. Drawn under the launch's heading, and not at all where it is empty.
+    pub(crate) attention: Vec<AutomationLaunchAttentionDto>,
+}
+
+/// **One thing in a launch that needs a person's hand now**
+/// ([`amenbo_core::ops::automation_run::LaunchAttention`]): a task stopped until the task its round's
+/// failure was filed as closes, or a run standing on a step that waits for a person.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationLaunchAttentionDto {
+    /// `stopped` for a stopped task, `awaits_person` for a run waiting for a person.
+    #[ts(type = "\"stopped\" | \"awaits_person\"")]
+    pub(crate) kind: &'static str,
+    /// The task it is about, by its id. Absent only for a run waiting while on no task.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) task: Option<i64>,
+    /// The task's reference.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) task_ref: Option<String>,
+    /// The task's title.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) title: Option<String>,
+    /// The role whose seat it is in — the failed round's role, or the waiting run's — by its id. Absent
+    /// where it had none, and where the role has since been taken out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) role: Option<i64>,
+    /// The run whose round failed, or the run waiting, by its id.
+    #[ts(type = "number")]
+    pub(crate) run: i64,
+    /// The round, by its id (`automation_run_task`). Absent for a run waiting while on no round.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) run_task: Option<i64>,
+    /// The task the failure was filed as, by its id — what the stopped task waits on. Absent for a
+    /// waiting run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) incident: Option<i64>,
+    /// That task's reference.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) incident_ref: Option<String>,
+    /// The step the run waits on. Absent for a stopped task.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) step_name: Option<String>,
+    /// Since when, as RFC 3339: when the round failed and was filed, or when the step was opened.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) since: Option<String>,
 }
 
 /// **One failed round of a launch** ([`amenbo_core::ops::automation_run::LaunchFailedRound`]): whose

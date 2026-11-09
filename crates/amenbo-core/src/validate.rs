@@ -728,7 +728,7 @@ mod tests {
         // foreign keys are off in this fixture, and what the check reads is the execution's own id.
         e.put_record("automation_run_step", 50, &[("seq", Value::Integer(1)), ("status", text("done"))])
             .unwrap();
-        // The sixth is a run as a whole — what was handed over when launching it.
+        // The sixth is a run as a whole — what the trigger that started it handed on.
         e.put_record("automation_run", 60, &[("status", text("completed"))]).unwrap();
         // Even ids hang off what is there; odd ids off a number nothing was ever issued under.
         for (id, target_type, target_id) in [

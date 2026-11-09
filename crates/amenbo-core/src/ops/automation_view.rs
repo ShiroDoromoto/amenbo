@@ -821,7 +821,7 @@ mod tests {
                 when: TriggerWhen::Every { minutes: 24 * 60 },
                 condition: None,
                 script: None,
-                task: NewTriggerTask::Fixed { title: "在庫を見る".into(), notes: String::new() },
+                task: NewTriggerTask::Fixed { title: "在庫を見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
             };
             trigger_set(tx, automation.id, Some(daily)).unwrap();
             let read = crate::store_engine::read::automation(tx.conn(), automation.id).unwrap().unwrap();

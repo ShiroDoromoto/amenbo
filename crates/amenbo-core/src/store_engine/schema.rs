@@ -898,7 +898,7 @@ datasets! {
         // The fifth kind is not a record a person wrote: it is one step of one automation run, and what
         // hangs off it is the file that step produced (`automation_run_value.attachment_id`). Without
         // it there is nowhere in the store for those bytes to live. The sixth is the run as a whole:
-        // a file a person handed over when launching it (`AMB-D-970`).
+        // a file the trigger that started it handed on (`AMB-D-1133`).
         target_type: enum_col(
             "task",
             "decision",
@@ -1302,9 +1302,9 @@ datasets! {
         script_program: col(OPT),
         script_args: col(REQ),
         script_timeout_minutes: col(INT_OPT),
-        // What the task says: `fixed` is the title and notes written here; `file` is what the file at
-        // `task_path` says when the task is filed; `script` is what the program in `task_script_*` writes
-        // then, as a script step's is written. Each leaves the others' columns NULL (the program's
+        // What it hands on: `fixed` is the title, notes, data and files written here; `file` is what the
+        // file at `task_path` says when it starts a run; `script` is what the program in `task_script_*`
+        // writes then, as a script step's is written. Each leaves the others' columns NULL (the program's
         // arguments '').
         task_kind: enum_col("fixed", "file", "script"),
         task_title: col(OPT),
@@ -1323,6 +1323,11 @@ datasets! {
         // NULL to count them whatever their role, and always NULL where there is no condition.
         // `RESTRICT`, as `role_id` is, so a role that goes lets go of it first (`ops::automation`).
         condition_role_id: fk_opt("automation_role", "RESTRICT"),
+        // What a `fixed` hands on beside its title and notes: data as JSON text (at most 64 KiB), and the
+        // full paths of its files as a JSON array of strings, read afresh each time it starts a run. NULL
+        // for none, and always NULL for a `file` or a `script`.
+        task_data: col(OPT),
+        task_files: col(OPT),
     }
 
     // **The classification a failed round's task is filed with**: one value per axis, each one of the
@@ -1589,9 +1594,17 @@ datasets! {
         // last round. `SET NULL` rather than `RESTRICT`, so taking a role out is not stopped by the runs
         // that sat in it — they are a record of what ran, as `automation_run_task.role_id` is.
         role_id: fk_opt("automation_role", "SET NULL"),
+        // What the trigger that started the run handed on, kept with it: the trigger's name as it was
+        // then ('' for blank), and the title, notes and data (JSON) it handed — each NULL where it handed
+        // none, and all NULL on a run no trigger started. Its files are attached to the run
+        // (`attachment.target_type = 'automation_run'`).
+        start_trigger: col(OPT),
+        start_title: col(OPT),
+        start_notes: col(OPT),
+        start_data: col(OPT),
         // The trigger that started the run in a role started by a trigger, set at launch. NULL for a run
         // started any other way — a trigger aimed at a role started by a task files a task, and the run
-        // is the task's — for one started before v139, and where the trigger has since been taken out
+        // is the task's — for one started before v140, and where the trigger has since been taken out
         // (`SET NULL`, for the reason `role_id` is).
         trigger_id: fk_opt("automation_trigger", "SET NULL"),
         // The task filed where a run started by a trigger failed (`AMB-D-1128`): the trigger starts no

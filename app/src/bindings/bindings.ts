@@ -687,13 +687,13 @@ blockers: Array<AutomationHeldByRecordDto>,
  */
 decisions: Array<AutomationHeldByRecordDto>, 
 /**
- * How many wait for their start day.
+ * How many wait for their start.
  */
 notStarted: number, 
 /**
- * The first of those start days (`YYYY-MM-DD`). Absent when none waits for one.
+ * The first of those starts — a day, or an instant (`AMB-D-1082`). Absent when none waits for one.
  */
-firstStart?: string, 
+firstStart?: ScheduleDto, 
 /**
  * How many are still being created.
  */
@@ -718,6 +718,59 @@ export type AutomationHeldByValueDto = { dimensionId: number, axis: string, valu
  * a value on each of `axes` and files, `AMB-D-981`) is no longer answered.
  */
 export type AutomationLaunchAsksDto = { reads: "task" | "nothing", axes: Array<AutomationLaunchAxisDto>, };
+
+/**
+ * **One thing in a launch that needs a person's hand now**
+ * ([`amenbo_core::ops::automation_run::LaunchAttention`]): a task stopped until the task its round's
+ * failure was filed as closes, or a run standing on a step that waits for a person.
+ */
+export type AutomationLaunchAttentionDto = { 
+/**
+ * `stopped` for a stopped task, `awaits_person` for a run waiting for a person.
+ */
+kind: "stopped" | "awaits_person", 
+/**
+ * The task it is about, by its id. Absent only for a run waiting while on no task.
+ */
+task?: number, 
+/**
+ * The task's reference.
+ */
+taskRef?: string, 
+/**
+ * The task's title.
+ */
+title?: string, 
+/**
+ * The role whose seat it is in — the failed round's role, or the waiting run's — by its id. Absent
+ * where it had none, and where the role has since been taken out.
+ */
+role?: number, 
+/**
+ * The run whose round failed, or the run waiting, by its id.
+ */
+run: number, 
+/**
+ * The round, by its id (`automation_run_task`). Absent for a run waiting while on no round.
+ */
+runTask?: number, 
+/**
+ * The task the failure was filed as, by its id — what the stopped task waits on. Absent for a
+ * waiting run.
+ */
+incident?: number, 
+/**
+ * That task's reference.
+ */
+incidentRef?: string, 
+/**
+ * The step the run waits on. Absent for a stopped task.
+ */
+stepName?: string, 
+/**
+ * Since when, as RFC 3339: when the round failed and was filed, or when the step was opened.
+ */
+since?: string, };
 
 /**
  * **An axis a launch asks a value on**, with the values open on it in the axis's own order.
@@ -922,7 +975,12 @@ roles: Array<AutomationLaunchRoleStateDto>,
  * **The launch's failed rounds that were filed as a task**, newest first, up to the newest
  * [`amenbo_core::ops::automation_run::FAILED_NAMED`] — one line each under the pane.
  */
-failed: Array<AutomationLaunchFailedDto>, };
+failed: Array<AutomationLaunchFailedDto>, 
+/**
+ * **What needs a person's hand now** — the stopped tasks first, then the runs waiting for a
+ * person. Drawn under the launch's heading, and not at all where it is empty.
+ */
+attention: Array<AutomationLaunchAttentionDto>, };
 
 /**
  * **One automation an action is placed on**, with the project it is in — a global action stands on
@@ -1681,16 +1739,18 @@ lastFiledAt?: string, };
 export type AutomationTriggerInputDto = { name: string, roleId?: number, when: AutomationTriggerWhenDto, condition?: AutomationTriggerConditionDto, script?: AutomationScriptInputDto, task: AutomationTriggerTaskInputDto, };
 
 /**
- * **What the task a trigger files says** — the wire form of [`amenbo_core::model::TriggerTask`]:
- * `fixed` with its title and notes, `file` read from its full path, `script` written by a program.
+ * **What a trigger hands on** — the wire form of [`amenbo_core::model::TriggerTask`]: `fixed` with its
+ * title, notes, data (JSON text, absent for none) and the full paths of its files (absent for none),
+ * `file` read from its full path, `script` written by a program.
  */
-export type AutomationTriggerTaskDto = { "kind": "fixed", title: string, notes: string, } | { "kind": "file", path: string, } | { "kind": "script", script: AutomationStepScriptDto, };
+export type AutomationTriggerTaskDto = { "kind": "fixed", title: string, notes: string, data?: string, files?: Array<string>, } | { "kind": "file", path: string, } | { "kind": "script", script: AutomationStepScriptDto, };
 
 /**
- * **What the task a trigger files is written to say** ([`amenbo_core::ops::automation::NewTriggerTask`])
- * — [`AutomationTriggerTaskDto`] with the program's timeout left out where it is the default.
+ * **What a trigger is written to hand on** ([`amenbo_core::ops::automation::NewTriggerTask`]) —
+ * [`AutomationTriggerTaskDto`] with the program's timeout left out where it is the default, and a
+ * `fixed`'s data and files left out where it has none.
  */
-export type AutomationTriggerTaskInputDto = { "kind": "fixed", title: string, notes: string, } | { "kind": "file", path: string, } | { "kind": "script", script: AutomationScriptInputDto, };
+export type AutomationTriggerTaskInputDto = { "kind": "fixed", title: string, notes: string, data?: string, files?: Array<string>, } | { "kind": "file", path: string, } | { "kind": "script", script: AutomationScriptInputDto, };
 
 /**
  * **What a trigger's own parts said, tried as it is typed** — the wire form of

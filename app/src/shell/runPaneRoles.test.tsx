@@ -112,7 +112,7 @@ const HELD: AutomationHeldBackDto = {
 
 /** The launch 5, with the roles `roles` and the failed rounds `failed`, newest first. */
 const launchOf = (roles: AutomationLaunchRoleStateDto[], failed: AutomationLaunchFailedDto[] = []): AutomationLaunchStateDto => ({
-  launch: 5, project: 1, automation: 3, automationName: "Nightly", status: "running", maxHeadcount: 10, roles, failed,
+  launch: 5, project: 1, automation: 3, automationName: "Nightly", status: "running", maxHeadcount: 10, roles, failed, attention: [],
 });
 
 /** A failed round of the run `run`, of the role `role` on the task `task`, filed as the task `id` to the

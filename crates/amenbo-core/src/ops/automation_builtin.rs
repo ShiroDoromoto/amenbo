@@ -279,9 +279,13 @@ pub struct HeldBack {
     pub blockers: Vec<HeldByRecord>,
     /// The linked decisions that are not live grounds.
     pub decisions: Vec<HeldByRecord>,
-    /// How many are waiting for their start day, and the first of those days.
+    /// How many are waiting for their start.
     pub not_started: usize,
-    pub first_start: Option<chrono::NaiveDate>,
+    /// The first of those starts — a day, or an instant (`AMB-D-1082`). Written as `first_start`, the
+    /// reader's day it falls on, and `first_start_at`, the instant when it is one
+    /// ([`crate::view::reader_day_wire`]).
+    #[serde(flatten, with = "crate::view::reader_day_wire::first_start")]
+    pub first_start: Option<crate::model::Schedule>,
     /// How many are still being created.
     pub drafts: usize,
 }

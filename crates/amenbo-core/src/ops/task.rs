@@ -1467,23 +1467,20 @@ mod tests {
                     .expect("the task is listed whatever its start day")
             };
             let detail = |tx: &WriteTx<'_>| crate::query::task_detail(tx.conn(), tid).unwrap();
+            let in_hours = |h| Timestamp(Timestamp::now().0 + chrono::Duration::hours(h));
+            let soon = in_hours(2);
 
             for (start, want, what) in [
                 (None, None, "no start day declared"),
-                (Some(today - chrono::Duration::days(1)), None, "started yesterday"),
-                (Some(today), None, "starts today"),
-                (Some(tomorrow), Some(tomorrow), "starts tomorrow"),
+                (Some(Schedule::Day(today - chrono::Duration::days(1))), None, "started yesterday"),
+                (Some(Schedule::Day(today)), None, "starts today"),
+                (Some(Schedule::Day(tomorrow)), Some(Schedule::Day(tomorrow)), "starts tomorrow"),
+                (Some(Schedule::At(in_hours(-1))), None, "started an hour ago"),
+                // An instant still ahead is carried to the instant, not rounded to the day it falls on
+                // (`AMB-D-1082`).
+                (Some(Schedule::At(soon)), Some(Schedule::At(soon)), "starts in two hours"),
             ] {
-                update(
-                    tx,
-                    tid,
-                    TaskPatch {
-                        start: start.map(Schedule::Day),
-                        clear_start: start.is_none(),
-                        ..TaskPatch::default()
-                    },
-                )
-                .unwrap();
+                update(tx, tid, TaskPatch { start, clear_start: start.is_none(), ..TaskPatch::default() }).unwrap();
                 let (card, detail) = (card(tx), detail(tx));
                 assert_eq!(card.not_started_until, want, "card: {what}");
                 assert_eq!(detail.not_started_until, want, "detail: {what}");

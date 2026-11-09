@@ -68,7 +68,7 @@ use crate::dto::{
     AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationFailuresToDto, AutomationHeldBackDto,
     AutomationHeldByRecordDto, AutomationHeldByValueDto, AutomationLaunchAsksDto,
     AutomationCarrierDto, AutomationLaunchBlockDto,
-    AutomationLaunchCheckDto, AutomationLaunchFailedDto, AutomationLaunchIncidentDto, AutomationLaunchRoleStateDto,
+    AutomationLaunchAttentionDto, AutomationLaunchCheckDto, AutomationLaunchFailedDto, AutomationLaunchIncidentDto, AutomationLaunchRoleStateDto,
     AutomationLaunchStateDto,
     AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRoleDto, AutomationRolePassDto, AutomationRunCardDto,
@@ -79,7 +79,7 @@ use crate::dto::{
     AutomationTriggerTriedDto,
     AutomationStepOpenDto, AutomationStepRunDto, AutomationTestRunDto, AutomationTestStepDto,
     AutomationWaitingTaskDto, AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
-    WriteAck,
+    ScheduleDto, WriteAck,
 };
 use crate::error::CmdError;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -2090,9 +2090,7 @@ fn run_card(
     let placement = last_def.as_ref().and_then(|def| def.placement_id);
     // Whether the step under way may wait for a person: read only of a step still open on a run still
     // going, for a step that has left or a run that has stopped waits for nobody.
-    let interactive = run.status == amenbo_core::model::AutomationRunStatus::Running
-        && steps.last().is_some_and(|last| last.ended_at.is_none())
-        && last_def.as_ref().is_some_and(|def| def.interactive);
+    let interactive = amenbo_core::ops::automation_run::waits_for_person(&run, steps.last(), last_def.as_ref());
     let step_name = last_def.map(|def| def.name);
     // The version it goes on from: the newest copy of its entry, which a run back at its entry has
     // taken afresh before its first step is opened (`take_up_newer`).
@@ -2222,8 +2220,9 @@ pub fn automation_launch_incidents(launch_id: i64) -> Result<Vec<AutomationLaunc
 /// **One launch as its pane draws it, read at once** ([`automation_run::launch_state`]) — where the launch
 /// stands, and for every role, in the order they are defined in, its headcount beside the definition's,
 /// how many are under way and still to go, whether it is held, the runs in its seats, its tasks
-/// waiting to be taken with the first three of them, and what keeps them from being taken where none
-/// is (`AMB-D-999`). The pane draws one launch from this one read, and
+/// waiting to be taken with the first three of them, what keeps them from being taken where none
+/// is (`AMB-D-999`), and what needs a person's hand now — the tasks stopped by a failure and the runs
+/// waiting for a person. The pane draws one launch from this one read, and
 /// reads it again when the store changes.
 #[tauri::command]
 pub fn automation_launch_state(launch_id: i64) -> Result<AutomationLaunchStateDto, CmdError> {
@@ -2266,7 +2265,28 @@ pub fn automation_launch_state(launch_id: i64) -> Result<AutomationLaunchStateDt
         max_headcount: amenbo_core::model::MAX_ROLE_HEADCOUNT,
         roles,
         failed: failed_in_launch(&store, launch_id)?,
+        attention: state.attention.into_iter().map(attention_dto).collect(),
     })
+}
+
+/// **One line of what needs a person's hand in a launch**, as its pane draws it.
+fn attention_dto(line: automation_run::LaunchAttention) -> AutomationLaunchAttentionDto {
+    AutomationLaunchAttentionDto {
+        kind: match line.kind {
+            automation_run::AttentionKind::Stopped => "stopped",
+            automation_run::AttentionKind::AwaitsPerson => "awaits_person",
+        },
+        task: line.task_id,
+        task_ref: line.task_id.map(amenbo_core::idref::task),
+        title: line.title,
+        role: line.role_id,
+        run: line.run_id,
+        run_task: line.run_task_id,
+        incident: line.incident_task_id,
+        incident_ref: line.incident_task_id.map(amenbo_core::idref::task),
+        step_name: line.step_name,
+        since: line.since.map(|at| at.to_rfc3339_z()),
+    }
 }
 
 /// **The failed rounds of one launch**, newest first ([`automation_run::failed_rounds_in_launch`]) —
@@ -2345,7 +2365,7 @@ fn held_back_dto(project: i64, held: automation_builtin::HeldBack) -> Automation
         blockers: held.blockers.into_iter().map(record).collect(),
         decisions: held.decisions.into_iter().map(record).collect(),
         not_started: held.not_started,
-        first_start: held.first_start.map(|day| day.format("%Y-%m-%d").to_string()),
+        first_start: held.first_start.map(ScheduleDto::from),
         drafts: held.drafts,
     }
 }
@@ -3745,7 +3765,7 @@ mod tests {
             blockers: vec![automation_builtin::HeldByRecord { id: 9, title: "the part before".into(), count: 1 }],
             decisions: Vec::new(),
             not_started: 1,
-            first_start: chrono::NaiveDate::from_ymd_opt(2026, 12, 1),
+            first_start: chrono::NaiveDate::from_ymd_opt(2026, 12, 1).map(amenbo_core::model::Schedule::Day),
             drafts: 0,
         };
         assert_eq!(
@@ -3757,9 +3777,21 @@ mod tests {
                 "blockers": [{ "id": 9, "title": "the part before", "count": 1 }],
                 "decisions": [],
                 "notStarted": 1,
-                "firstStart": "2026-12-01",
+                "firstStart": { "kind": "day", "day": "2026-12-01" },
                 "drafts": 0,
             }),
+        );
+        // A first start at an instant is handed on to the instant, not rounded to the day it falls on.
+        let at = amenbo_core::time::Timestamp::parse_rfc3339("2026-12-01T05:00:00Z").expect("instant");
+        let held = automation_builtin::HeldBack {
+            tasks: 1,
+            not_started: 1,
+            first_start: Some(amenbo_core::model::Schedule::At(at)),
+            ..Default::default()
+        };
+        assert_eq!(
+            serde_json::to_value(held_back_dto(2, held)).expect("json")["firstStart"],
+            serde_json::json!({ "kind": "at", "at": "2026-12-01T05:00:00Z" }),
         );
 
         let role = |held_back: Option<AutomationHeldBackDto>| {
@@ -4140,7 +4172,7 @@ mod tests {
             when: TriggerWhen::Every { minutes: 60 },
             condition: None,
             script: None,
-            task: TriggerTask::Fixed { title: "見る".into(), notes: "メモ".into() },
+            task: TriggerTask::Fixed { title: "見る".into(), notes: "メモ".into(), data: None, files: Vec::new() },
             next_at,
             last_filed_at: None,
             order_key: "a0".into(),
@@ -4181,8 +4213,25 @@ mod tests {
         assert_eq!(json(AutomationTrigger { when: TriggerWhen::Idle, ..base.clone() })["when"], serde_json::json!({ "kind": "idle" }));
         assert_eq!(json(AutomationTrigger { when: TriggerWhen::Script, ..base.clone() })["when"], serde_json::json!({ "kind": "script" }));
         assert_eq!(
-            json(AutomationTrigger { task: TriggerTask::File { path: "/tmp/next.md".into() }, ..base })["task"],
+            json(AutomationTrigger { task: TriggerTask::File { path: "/tmp/next.md".into() }, ..base.clone() })["task"],
             serde_json::json!({ "kind": "file", "path": "/tmp/next.md" }),
+        );
+        let handing = TriggerTask::Fixed {
+            title: String::new(),
+            notes: String::new(),
+            data: Some(r#"{"issue": 123}"#.into()),
+            files: vec!["/tmp/brief.md".into()],
+        };
+        assert_eq!(
+            json(AutomationTrigger { task: handing, ..base })["task"],
+            serde_json::json!({
+                "kind": "fixed",
+                "title": "",
+                "notes": "",
+                "data": r#"{"issue": 123}"#,
+                "files": ["/tmp/brief.md"],
+            }),
+            "a fixed one's data and files go out where it has them",
         );
     }
 
@@ -4267,7 +4316,7 @@ mod tests {
 
     /// **A trigger as a screen writes it reads into core's** ([`amenbo_core::ops::automation::NewTrigger`]):
     /// every kind of `when` and `task`, and what the screen leaves out — the name, the role, the
-    /// condition, the script and a script's timeout — read as none.
+    /// condition, the script, a script's timeout and a fixed one's data and files — read as none.
     #[test]
     fn a_trigger_written_by_a_screen_reads_into_cores() {
         use amenbo_core::model::{TriggerCondition, TriggerWhen};
@@ -4285,7 +4334,7 @@ mod tests {
                 when: TriggerWhen::Every { minutes: 30 },
                 condition: None,
                 script: None,
-                task: NewTriggerTask::Fixed { title: "見る".into(), notes: String::new() },
+                task: NewTriggerTask::Fixed { title: "見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
             },
         );
         let full = read(serde_json::json!({
@@ -4309,6 +4358,20 @@ mod tests {
         let when = |v: serde_json::Value| read(serde_json::json!({ "when": v, "task": { "kind": "file", "path": "/x" } }));
         assert_eq!(when(serde_json::json!({ "kind": "idle" })).when, TriggerWhen::Idle);
         assert_eq!(when(serde_json::json!({ "kind": "tasks" })).task, NewTriggerTask::File { path: "/x".into() });
+        assert_eq!(
+            read(serde_json::json!({
+                "when": { "kind": "idle" },
+                "task": { "kind": "fixed", "title": "", "notes": "", "data": "{\"issue\": 123}", "files": ["/tmp/brief.md"] },
+            }))
+            .task,
+            NewTriggerTask::Fixed {
+                title: String::new(),
+                notes: String::new(),
+                data: r#"{"issue": 123}"#.into(),
+                files: vec!["/tmp/brief.md".into()],
+            },
+            "a fixed one's data and files are read where the screen writes them",
+        );
         assert!(
             serde_json::from_value::<AutomationTriggerInputDto>(serde_json::json!({
                 "when": { "kind": "hourly" },

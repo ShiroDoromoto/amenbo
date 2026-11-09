@@ -30,7 +30,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Say } from "../talk/nameplate";
 import type {
-  AutomationLaunchFailedDto, AutomationLaunchRoleStateDto, AutomationLaunchStateDto, AutomationRunCardDto, TaskRoleDto,
+  AutomationHeldBackDto, AutomationLaunchFailedDto, AutomationLaunchRoleStateDto, AutomationLaunchStateDto, AutomationRunCardDto, TaskRoleDto,
 } from "../bindings/bindings";
 import type { BuiltinRun } from "../talk/automationStep";
 import { TerminalPane } from "./TerminalPane";
@@ -103,6 +103,12 @@ const liveRun = (run: number, more: Partial<AutomationRunCardDto> = {}): Automat
 const launchRole = (role: number, name: string, runs: AutomationRunCardDto[], headcount = runs.length): AutomationLaunchRoleStateDto => ({
   role, name, defined: headcount, headcount, underWay: runs.length, toLetGo: 0, held: false, runs, waiting: 0, firstWaiting: [],
 });
+
+/** What holds three tasks back: the value v1, still open before theirs on the dimension 7. */
+const HELD: AutomationHeldBackDto = {
+  project: 1, tasks: 3, values: [{ dimensionId: 7, axis: "Release", value: "v1", count: 3 }],
+  blockers: [], decisions: [], notStarted: 0, drafts: 0,
+};
 
 /** The launch 5, with the roles `roles` and the failed rounds `failed`, newest first. */
 const launchOf = (roles: AutomationLaunchRoleStateDto[], failed: AutomationLaunchFailedDto[] = []): AutomationLaunchStateDto => ({
@@ -425,6 +431,20 @@ describe("the desks of a launch", () => {
     expect(desks().map((one) => one.dataset.held)).toEqual(["true", "true", "true"]);
   });
 
+  it("says under a role on the bar the value holding its tasks back and how many, and presses it to the dimension", async () => {
+    const went: string[] = [];
+    launched = launchOf([{ ...launchRole(14, "山田", [], 2), heldBack: HELD }, launchRole(15, "さくら", [], 1)]);
+    await pane(null, { launch: 5, nav: { openDimension: (project, dimension) => went.push(`${project}:${dimension}`) } });
+    const [yamada, sakura] = idle();
+    expect(yamada!.querySelector(".slot__held-head")?.textContent).toBe(tf("auto.run.heldBack", { count: 3 }));
+    const value = yamada!.querySelector<HTMLButtonElement>(".slot__held-list button")!;
+    expect(value.textContent?.trim()).toBe("v1 (Release)");
+    expect(value.closest("li")?.querySelector(".slot__held-count")?.textContent).toBe("3");
+    expect(sakura!.querySelector(".slot__held"), "a role nothing holds back says nothing more").toBeNull();
+    act(() => value.click());
+    expect(went).toEqual(["1:7"]);
+  });
+
   it("says no role has a task where none has, and nothing while the launch is read", async () => {
     launched = launchOf([launchRole(12, "Bob", [], 1)]);
     await pane(FRONT, { launch: 5 });
@@ -607,7 +627,17 @@ describe("desksOf", () => {
       [4, "seed", [6, 7], 0, 0],
     ]);
     expect(got.desks[1]!.first).toEqual([{ task: 9, ref: "AMB-T-9", title: "T", from: "A" }]);
-    expect(got.idle).toEqual([{ role: 2, name: "B", icon: null, headcount: 3 }]);
+    expect(got.idle).toEqual([{ role: 2, name: "B", icon: null, headcount: 3, heldBack: null }]);
+  });
+
+  it("carries what holds a role's tasks back onto the bar, and nothing where none is held", () => {
+    const held = { ...HELD, tasks: 0, values: [] };
+    const got = desksOf(launchOf([
+      { ...launchRole(1, "A", [], 2), heldBack: HELD },
+      { ...launchRole(2, "B", [], 1), heldBack: held },
+      launchRole(3, "C", [], 1),
+    ]), null);
+    expect(got.idle.map((one) => [one.role, one.heldBack])).toEqual([[1, HELD], [2, null], [3, null]]);
   });
 
   it("names the roles a seat's round passed a task on to once each, leaving out an earlier round's and a role gone", () => {

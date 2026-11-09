@@ -4596,11 +4596,11 @@ impl Instructor {
                 "In the workspace, on the band under the row of this run in the pane it is drawn in, press the button that shows it on the picture. Confirm the ledger comes forward on the automation's build screen, with {} picked out on the picture and its panel open beside it.",
                 box_named(with, "box", "builtin")?
             ),
-            // Following a waiting run to the value that holds its tasks back. The line is named by what
-            // it says, since the card lists a line for every thing stopping them and only a value's
-            // opens the panel its axis is managed in.
+            // Following a waiting launch to the value that holds its role's tasks back. The line is
+            // named by what it says, since the role lists a line for every thing stopping them and only
+            // a value's opens the panel its axis is managed in.
             (Domain::Automation, "open-held-value") => format!(
-                "In the workspace, with the pane this run is drawn in {TO_ITS_TERMINAL}, on the card it stands on while it waits for a task, press the line \"{} ({})\" among the things keeping its tasks from being taken.",
+                "In the workspace, in the pane standing for this automation's launch, on the bar of its roles, under the role whose tasks cannot be taken, press the line \"{} ({})\" among the things keeping them from being taken.",
                 req(with, "value")?,
                 req(with, "dimension")?
             ),
@@ -6855,11 +6855,12 @@ impl Instructor {
                 "terminal" => "In the workspace, confirm the body of the pane this run is drawn in is a terminal — or the card of the built-in under way — rather than the desks of its roles, with a bar over it carrying \"← Back to the roles\", the name of this run's role and its seat.".to_string(),
                 other => return Err(format!("`face` does not know `{other}` — it is roles / terminal")),
             },
-            // What keeps a waiting run waiting, read off the card its pane stands on. An eye closes it:
-            // the count sits beside the line rather than in its words, and which line it belongs to is a
-            // matter of where it is drawn.
+            // What keeps a launch's role waiting, read off the role on the bar of the launch's pane
+            // (`app/src/shell/RunPicture.tsx`, `RunRoles`). An eye closes it: the count sits beside the
+            // line rather than in its words, and which line it belongs to is a matter of where it is
+            // drawn.
             (Domain::Automation, "held-back") => format!(
-                "In the workspace, with the pane this run is drawn in {TO_ITS_TERMINAL}, on the card it stands on while it waits for a task, confirm it says how many tasks it cannot take yet ({}), and that among the lines under it, one per thing keeping them from being taken, the line \"{} ({})\" carries the count {} beside it.",
+                "In the workspace, in the pane standing for this automation's launch, on the bar of its roles, confirm that under one role's name and headcount it says how many of its tasks cannot be taken yet ({}), and that among the lines under that, one per thing keeping them from being taken, the line \"{} ({})\" carries the count {} beside it.",
                 count(with, "tasks")?,
                 req(with, "value")?,
                 req(with, "dimension")?,
@@ -14838,10 +14839,11 @@ steps_gui:
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// The road this was found on. Its start is pressed with no workspace open, and the app turns it
-    /// away; whatever the screen read, the store holding no new run reds it.
+    /// The road this was found on. Its start now waits (`waits: true`): the one task its role would
+    /// take is held back, so the launch opens and no run does. Whatever the screen read, the store
+    /// holding a new run reds it — the task was taken while it should have been held.
     #[test]
-    fn the_waiting_run_road_is_red_when_its_start_raises_no_run() {
+    fn the_waiting_launch_road_is_red_when_its_start_raises_a_run() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .expect("verification/")
@@ -14849,7 +14851,7 @@ steps_gui:
         let s = load(&std::fs::read_to_string(path).expect("the road"));
         let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-start-road-{}", std::process::id()));
 
-        for (after, green) in [(0usize, false), (1, true)] {
+        for (after, green) in [(0usize, true), (1, false)] {
             let _ = std::fs::remove_dir_all(&dir);
             let mut asked = 0;
             let outcome = walk(
@@ -14879,7 +14881,7 @@ steps_gui:
             let want = if green { Verdict::Read } else { Verdict::Fail };
             assert_eq!(start.verdict, want, "told: {:?}", start.told);
             if !green {
-                assert!(!outcome.passed, "a refused start is not green");
+                assert!(!outcome.passed, "a start that took the held task is not green");
             }
         }
         let _ = std::fs::remove_dir_all(&dir);

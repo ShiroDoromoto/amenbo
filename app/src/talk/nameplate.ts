@@ -238,10 +238,10 @@ export type Plate = {
   readonly dot: Dot;
   /** The run this pane is drawing, or null for an ordinary pane. */
   readonly run: Say | null;
-  /** **A launch's header stands over this row** (`../shell/LaunchHead`): the run is one seat of a
-   *  launch, and the header already says it is automatic and which automation it is. The row leaves
-   *  out the mark and the name, so the pane is headed once, and keeps the rest of what it says about
-   *  the seat's run. Absent on every other pane. */
+  /** **A launch's header stands in this row's place** (`../shell/LaunchHead`): the run is one seat of a
+   *  launch, and no one seat stands for the launch (`AMB-D-1141`). The row is not drawn — the seat's
+   *  number, step and time are on its own row in the roles, and on the bar over its terminal. Absent on
+   *  every other pane. */
   readonly headed?: boolean;
   /** The moment the step's time is counted up to, in milliseconds since the epoch: the clock where
    *  absent, and the moment the run was seen to stop once it has (`./plate`). */
@@ -355,7 +355,10 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
   peek.append(peekTask);
   host.append(peek);
 
-  return (plate: Plate | null) => {
+  return (given: Plate | null) => {
+    // Under a launch's header there is no row: the header is the launch's, and a seat's run is said in
+    // the roles.
+    const plate = given?.headed === true ? null : given;
     row.hidden = plate === null;
     // A run's lines are drawn on a run's pane and nowhere else. A run on no task yet leaves the task's
     // line empty rather than taking it down: a header that grew a line when the run took a task would
@@ -377,13 +380,10 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void
     // And the same name again, unelided, in the panel that drops under the header. **The row carries
     // no tooltip of its own**: the machine draws one wherever the pointer happens to stop, and one of
     // those over the panel is the same word twice in two shapes.
-    peekName.textContent = plate.headed === true ? "" : plate.name ?? "";
+    peekName.textContent = plate.name ?? "";
     // A run's pane is drawn as its own kind of pane, and an ordinary one is left exactly as it was:
     // the mark is away, the run's lines are down, and the panel says only the name.
     auto.hidden = runNo.hidden = plate.run === null;
-    // Under a launch's header, the mark and the name are the header's (`../shell/LaunchHead`).
-    if (plate.headed === true) auto.hidden = true;
-    name.hidden = plate.headed === true;
     builtin.hidden = plate.run?.builtin !== true;
     const who = plate.run?.by ?? null;
     by.hidden = who === null;

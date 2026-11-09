@@ -190,6 +190,12 @@ pub(crate) fn held_back(conn: &Connection, project_id: i64, roles: &[i64], cfg: 
             }
             if task.draft {
                 held.drafts += 1;
+                if held.first_draft.is_none() {
+                    held.first_draft = Some(task.id);
+                }
+            }
+            if !task.waiting_on_values.is_empty() || !task.blocked_by_decisions.is_empty() || task.draft {
+                held.awaits_person += 1;
             }
         }
         if page.tasks.len() < COUNT_PAGE {
@@ -693,6 +699,8 @@ mod tests {
             assert_eq!((held.not_started, held.first_start), (1, Some(crate::model::Schedule::Day(day))));
             assert!(held.values.is_empty());
             assert_eq!(held.drafts, 0);
+            assert_eq!(held.awaits_person, 1, "only the task on the decision waits for a person's hand");
+            assert_eq!(held.first_draft, None);
 
             // A start at an instant before that day is the first, and it is carried to the instant.
             let sooner = ours(tx, "sooner", &automation, None);
@@ -1663,7 +1671,7 @@ mod tests {
     #[test]
     fn a_launch_read_at_once_names_what_holds_each_roles_tasks_back() {
         use crate::model::DimensionRole;
-        use crate::ops::automation_run::launch_state;
+        use crate::ops::automation_run::{launch_state, AwaitsPerson};
         use crate::ops::dimension::{self, NewDimension};
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
@@ -1699,6 +1707,12 @@ mod tests {
             assert_eq!(build.name, "実装");
             assert_eq!(build.waiting, 1);
             assert_eq!(build.held_back, None, "a role with a task to take is not kept waiting");
+            let awaits = |tasks| Some(AwaitsPerson { tasks, dimension_id: Some(axis.id), decision_id: None, task_id: None });
+            assert_eq!(
+                build.awaits_person,
+                awaits(1),
+                "its task behind v1 waits for a person all the same, and the value is where to go",
+            );
             assert_eq!(review.name, "レビュー");
             assert_eq!(review.waiting, 0);
             let held = review.held_back.as_ref().expect("the reviewer has nothing to take");
@@ -1707,6 +1721,7 @@ mod tests {
                 held.values,
                 vec![HeldByValue { dimension_id: axis.id, axis: "リリース".into(), value: "v1".into(), count: 2 }],
             );
+            assert_eq!(review.awaits_person, awaits(2));
         });
     }
 

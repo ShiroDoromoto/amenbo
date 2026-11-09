@@ -1,0 +1,96 @@
+# A run is watched in its pane, and read on the ledger once it is over. The launch's header carries the
+# way across: "See the history" opens the history tab, whichever seat is in front.
+#
+# The run takes the task handed to it, closes it and, finding no other, ends without failing — a
+# failed run is kept on the running tab until somebody acknowledges it, so it is one that ends well
+# that the history shows at once. A start with nothing to take makes no run, so it is handed a task.
+id: go-from-a-run-pane-to-its-history
+title: A run's pane goes to the history once the run is over
+description: >
+  Start an automation that takes the task handed to it and closes it: once the task is closed and no
+  other is there, the run is over; stop its launch from the pane's header, and the header's "see the
+  history" opens the history tab with the run on it.
+given:
+  - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
+
+  # Take → close, with a task of its role handed to the AI.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the run closes }, as: closed }
+  - { type: action, domain: task, op: assign, with: { target: closed, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: closed } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that closes the task it took" }, as: closes }
+  - { type: action, domain: automation, op: place-add, with: { target: closes, builtin: take_task, starts: true }, as: closes_take }
+  - { type: action, domain: task, op: update, with: { target: closed, role_of: closes } }
+  - { type: action, domain: automation, op: place-add, with: { target: closes, builtin: close_task }, as: closes_close }
+  - { type: action, domain: automation, op: edge-add, with: { target: closes_take, exit: 着手した, to: closes_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: closes_close } }
+
+steps_gui:
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: workspace
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: automations
+
+  - type: action
+    domain: automation
+    op: open
+    with:
+      target: closes
+
+  - type: action
+    domain: automation
+    op: start
+    with:
+      target: closes
+    as: finished
+
+  # Over, and the pane says where it is read from now.
+  - type: assert
+    domain: automation
+    op: run-pane
+    with:
+      target: finished
+      state: completed
+      present: true
+
+  # The run is over, and its launch is not: a launch outlasts its runs and waits for the next task to
+  # take until somebody stops it. So it is stopped from its pane's header first.
+  - type: action
+    domain: automation
+    op: press-run
+    with:
+      target: finished
+      press: stop
+      on: pane
+
+  - type: assert
+    domain: automation
+    op: launch-head
+    with:
+      target: finished
+      state: ended
+
+  - type: action
+    domain: automation
+    op: see-history
+    with:
+      target: finished
+
+  - type: assert
+    domain: automation
+    op: history-row
+    with:
+      target: finished
+      state: completed

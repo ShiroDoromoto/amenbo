@@ -1018,6 +1018,18 @@ describe("the pane a launch is drawn in", () => {
     expect(hoisted.opened[hoisted.opened.length - 1]!.session).toBe("step-9");
   });
 
+  it("draws no band for a failed seat: no one run speaks for the launch", async () => {
+    // The seat in front failed. On a run's own pane that is a band under the row; on a launch's it
+    // would speak for one failure of the launch's and stay once seen (`AMB-D-1141`).
+    hoisted.cards = [runCard({ status: "failed", stoppedReason: "halted", exitName: "*" })];
+    await mount();
+    await seat(7, "step-7");
+
+    expect(panes()[0]!.getAttribute("data-hand")).toBe("launch-3");
+    expect(q(".slot__band")).toHaveLength(0);
+    expect(q(".slot__bandact")).toHaveLength(0);
+  });
+
   it("stands the launch's pane with its roles where Start found no task and opened no run", async () => {
     // Every role waits with nobody at work and no task to take.
     const idle = (id: number, name: string, headcount: number) => ({
@@ -1026,7 +1038,7 @@ describe("the pane a launch is drawn in", () => {
     });
     hoisted.launch = {
       launch: 3, project: 1, automation: 3, automationName: "サンプル制作チーム", status: "running",
-      maxHeadcount: 10, failed: [], attention: [], roles: [idle(1, "エンジニア", 2), idle(2, "レビュアー", 1)],
+      maxHeadcount: 10, attention: [], roles: [idle(1, "エンジニア", 2), idle(2, "レビュアー", 1)],
     };
     await mount();
     await act(async () => {
@@ -1063,9 +1075,10 @@ describe("the pane a launch is drawn in", () => {
   });
 });
 
-// **The header of a launch's pane** (`./LaunchHead`): the launch and the moves made on the whole of it.
-// Its moves are the launch's — pause every role once its task is over, pick it up again, stop it —
-// and a seat's own moves are not drawn beside them.
+// **The header of a launch's pane** (`./LaunchHead`): the launch and the moves made on the whole of it,
+// and nothing of any one run (`AMB-D-1141`). Its moves are the launch's — pause every seat once its task
+// is over, pick it up again, stop it — and a seat's own moves are not drawn beside them. Under it, what
+// needs a person's hand.
 describe("the header of a launch's pane", () => {
   /** Launch 3 with two roles: three in the first, one working and one waiting for a task to turn up, and
    *  two in the second, one paused. */
@@ -1081,7 +1094,6 @@ describe("the header of a launch's pane", () => {
       automationName: "サンプル制作チーム",
       status: "running",
       maxHeadcount: 10,
-      failed: [],
       attention: [],
       roles: [
         role(1, "エンジニア", 3, [runCard({ run: 7, launch: 3 }), runCard({ run: 8, launch: 3, waiting: true })]),
@@ -1103,47 +1115,87 @@ describe("the header of a launch's pane", () => {
     await mount();
     await arrive({ run: 7, launch: 3, step: step({ runStep: 70, session: "step-7" }) });
   }
+  /** The pane stood up afresh on the launch as it now is: the mock answers `useLaunchState` without
+   *  telling anyone it changed, and the pane is drawn again only when its props change. */
+  async function again(state: AutomationLaunchStateDto) {
+    act(() => root.unmount());
+    root = createRoot(container);
+    hoisted.launch = state;
+    await standLaunch();
+  }
 
-  it("says the launch, where it stands, and how many of its seats are working a task", async () => {
+  it("says the launch and where it stands, and nothing of the seat in front", async () => {
     hoisted.launch = launchState();
     await standLaunch();
     expect(head()).not.toBeNull();
     expect(head()!.querySelector(".launchhead__chip--auto")!.textContent).toBe(t("face.auto"));
     expect(head()!.querySelector(".launchhead__name")!.textContent).toBe("サンプル制作チーム");
     expect(head()!.querySelector(".launchhead__chip--run")!.textContent).toBe(t("auto.launch.running"));
-    // One running with a task: the run waiting for one and the paused one work nothing. Five in all.
-    const count = head()!.querySelector(".launchhead__count")!;
-    expect(count.querySelector("b")!.textContent).toBe("1");
-    expect(count.textContent).toBe(tf("auto.launch.working", { n: 1, m: 5 }));
+    // How many are at work is the roles' to say, each its own.
+    expect(head()!.textContent).not.toContain("/");
+    // The header stands in the pane's row, and the seat's row is not drawn under it: its run's number,
+    // step and time are on its own row in the roles.
+    const bar = container.querySelector<HTMLElement>(".slot__bar")!;
+    expect(head()!.parentElement).toBe(bar);
+    expect(bar.querySelector<HTMLElement>(".plate")!.hidden).toBe(true);
     // The seat's own moves are not drawn on the launch's pane.
     expect(container.querySelector(".slot__runacts")).toBeNull();
-    // Nor are the mark and the name again on the seat's row: the pane is headed once. The row keeps
-    // which run the seat is.
-    const bar = container.querySelector<HTMLElement>(".slot__bar")!;
-    expect(bar.querySelector<HTMLElement>(".plate__auto")!.hidden).toBe(true);
-    expect(bar.querySelector<HTMLElement>(".plate__name")!.hidden).toBe(true);
-    expect(bar.querySelector(".plate__no")!.textContent).toBe("#7");
   });
 
-  it("pauses every role once its task is over, and says so pressed in the same place", async () => {
+  it("pauses every seat once its task is over, says how many have stopped, and resumes from either", async () => {
     hoisted.launch = launchState();
     await standLaunch();
-    expect(button(t("auto.run.pauseAfterTask"))!.getAttribute("aria-pressed")).toBe("false");
-    await press(t("auto.run.pauseAfterTask"));
+    expect(button(t("auto.launch.pauseAll"))!.getAttribute("aria-pressed")).toBe("false");
+    await press(t("auto.launch.pauseAll"));
     expect(hoisted.launchMoves).toEqual(["pause 3"]);
 
-    // The mock answers `useLaunchState` without telling anyone it changed, and the pane is drawn again
-    // only when its props change, so the paused launch is stood up afresh.
-    act(() => root.unmount());
-    root = createRoot(container);
-    hoisted.launch = launchState({ status: "paused" });
-    await standLaunch();
-    expect(head()!.querySelector(".launchhead__chip--hold")!.textContent).toBe(t("auto.run.pauseAfterTask"));
+    // One seat still works its task: the one waiting for a task and the paused one have stopped.
+    await again(launchState({ status: "paused" }));
+    expect(head()!.querySelector(".launchhead__chip--hold")!.textContent).toBe(tf("auto.launch.pausing", { n: 2, m: 3 }));
     expect(head()!.querySelector(".launchhead__chip--run")).toBeNull();
-    const resume = button(t("auto.launch.resume"))!;
-    expect(resume.getAttribute("aria-pressed")).toBe("true");
-    await press(t("auto.launch.resume"));
+    expect(button(t("auto.launch.resume")), "resume offered while a seat still works").toBeUndefined();
+    const unpause = button(t("auto.launch.unpause"))!;
+    expect(unpause.getAttribute("aria-pressed")).toBe("true");
+    await press(t("auto.launch.unpause"));
     expect(hoisted.launchMoves).toEqual(["pause 3", "resume 3"]);
+
+    // Every seat has stopped.
+    const stopped = launchState({ status: "paused" });
+    await again({
+      ...stopped,
+      roles: stopped.roles.map((role) => ({ ...role, runs: role.runs.map((run) => ({ ...run, status: "paused" as const })) })),
+    });
+    expect(head()!.querySelector(".launchhead__chip--hold")!.textContent).toBe(t("auto.launch.paused"));
+    await press(t("auto.launch.resume"));
+    expect(hoisted.launchMoves).toEqual(["pause 3", "resume 3", "resume 3"]);
+  });
+
+  it("says under the header what needs a person's hand, the stopped tasks first, and nothing where none does", async () => {
+    hoisted.launch = launchState();
+    await standLaunch();
+    expect(container.querySelector(".launchattn"), "a band with nothing in it").toBeNull();
+
+    await again(launchState({
+      attention: [
+        { kind: "stopped", task: 150, taskRef: "AMB-T-150", title: "ステージ3の BGM を作る", role: 1, run: 7, runTask: 70, incident: 231, incidentRef: "AMB-T-231" },
+        { kind: "awaits_person", task: 198, taskRef: "AMB-T-198", title: "ステージ2の当たり判定", role: 2, run: 9, stepName: "どちらの案にするか決める" },
+      ],
+    }));
+    const band = container.querySelector<HTMLElement>(".launchattn")!;
+    expect(band.getAttribute("role")).toBe("status");
+    expect(container.querySelector(".slot__bar")!.nextElementSibling, "the band is not straight under the header").toBe(band);
+    const rows = [...band.querySelectorAll<HTMLElement>(".launchattn__row")];
+    expect(rows.map((one) => one.querySelector(".launchattn__kind")?.textContent)).toEqual([
+      t("auto.launch.attn.stopped"),
+      t("auto.launch.attn.asks"),
+    ]);
+    expect(rows.map((one) => one.querySelector(".launchattn__what")?.textContent)).toEqual([
+      tf("auto.launch.attn.seat", { what: "AMB-T-150 ステージ3の BGM を作る", role: "エンジニア" }),
+      tf("auto.launch.attn.seat", { what: "AMB-T-198 ステージ2の当たり判定", role: "レビュアー" }),
+    ]);
+    expect(rows[0]!.querySelector(".launchattn__why")?.textContent).toBe(tf("auto.launch.attn.until", { ref: "AMB-T-231" }));
+    expect(rows[0]!.querySelector(".launchattn__go")?.textContent).toBe(tf("auto.launch.attn.openTask", { ref: "AMB-T-231" }));
+    expect(rows[1]!.querySelector(".launchattn__go")?.textContent).toBe(t("auto.launch.attn.openSeat"));
   });
 
   it("asks before it stops the launch, and stops nothing where the answer is no", async () => {
@@ -1161,8 +1213,8 @@ describe("the header of a launch's pane", () => {
     hoisted.launch = launchState({ status: "ended" });
     await standLaunch();
     expect(head()!.querySelector(".launchhead__name")!.textContent).toBe("サンプル制作チーム");
-    expect(head()!.querySelectorAll("button")).toHaveLength(0);
-    expect(head()!.querySelector(".launchhead__count")).toBeNull();
+    expect(head()!.querySelector(".launchhead__hold")).toBeNull();
+    expect(head()!.querySelector(".btn--danger")).toBeNull();
   });
 
   it("is not drawn on a run's own pane", async () => {

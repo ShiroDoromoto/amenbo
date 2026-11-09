@@ -122,7 +122,7 @@ steps_gui:
       field: status
       equals: in_progress
 
-  # In the launch's pane that was standing, with that run's row now under its header.
+  # In the launch's pane that was standing, with that run now in a seat among its desks.
   - type: assert
     domain: automation
     op: run-pane

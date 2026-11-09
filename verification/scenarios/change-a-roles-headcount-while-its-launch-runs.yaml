@@ -2,7 +2,7 @@
 # headcount for this launch alone, and the new seat takes a task at once; lowered again, no task under
 # way is cut off — the seat past the headcount goes once its run finishes the task it is on, and the
 # desk counts the seats still to go. Raised again before they have gone, the cut is called off. Put
-# back at the definition, the note saying the headcount is this launch's alone is gone. The definition
+# back at the definition, the role's menu offers no way back to the default any more. The definition
 # itself is never touched: what the next launch copies is the same throughout. Raised once more and
 # the launch then stopped from its header, the role reads back at its definition — the headcount was
 # the launch's alone, and ends with it.
@@ -247,8 +247,6 @@ steps_gui:
     with:
       target: run
       state: running
-      working: 1
-      of: 1
 
   - type: assert
     domain: automation
@@ -261,8 +259,8 @@ steps_gui:
       under_way: 1
       to_let_go: 0
 
-  # Raised, the seat added takes the other task at once: a second run starts into it, and the desk says
-  # the headcount is this launch's alone.
+  # Raised, the seat added takes the other task at once: a second run starts into it, and the role's
+  # menu says the default beside the headcount this launch alone has.
   - type: action
     domain: automation
     op: launch-headcount-set
@@ -288,8 +286,6 @@ steps_gui:
     with:
       target: run
       state: running
-      working: 2
-      of: 2
 
   # Lowered below the seats working: neither run is stopped, and the desk counts the one still to go.
   - type: action
@@ -331,8 +327,8 @@ steps_gui:
       under_way: 2
       to_let_go: 0
 
-  # Back at the definition, from the button the menu carries while the two differ. The note saying the
-  # headcount is this launch's alone is gone, and the seat past it is to go once more.
+  # Back at the definition, from the button the menu carries while the two differ. The menu offers it no
+  # more, and the seat past it is to go once more.
   - type: action
     domain: automation
     op: launch-headcount-reset
@@ -352,7 +348,7 @@ steps_gui:
       to_let_go: 1
 
   # Raised once more, then the launch stopped from its header: once it has ended the role reads back at
-  # its definition, and the note saying the headcount is this launch's alone is gone with the menu. The
+  # its definition, and the menu is gone. The
   # terminal has no way to end a launch, so this is read on the screen alone.
   - type: action
     domain: automation

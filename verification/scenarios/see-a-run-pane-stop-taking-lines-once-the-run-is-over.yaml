@@ -95,7 +95,6 @@ steps_gui:
       step: do
       action: work
       state: failed
-      reason: halted
       present: true
 
   # The run is over, so its last step's program is too — the pane keeps what it said and takes no more.

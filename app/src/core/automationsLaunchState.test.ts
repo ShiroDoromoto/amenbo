@@ -8,7 +8,7 @@ vi.mock("./snapshot", async (importOriginal) => ({
   inTauri: () => tauri.on,
 }));
 
-import { fetchLaunchState, launchHeadcount, launchWorking, roleHeld } from "./automations";
+import { fetchLaunchState, launchPause, roleHeld } from "./automations";
 import type { AutomationLaunchStateDto, AutomationRunCardDto } from "../bindings/bindings";
 
 beforeEach(() => {
@@ -32,7 +32,7 @@ describe("reading one launch", () => {
   });
 });
 
-// The pane header's "N / M working" and the hold a role's seats read.
+// The pane header's "Paused: n / m seats stopped" and the hold a role's seats read.
 describe("counting one launch", () => {
   const run = (over: Partial<AutomationRunCardDto>) => ({ status: "running", waiting: false, ...over }) as unknown as AutomationRunCardDto;
   const role = (headcount: number, runs: AutomationRunCardDto[], held = false) => ({
@@ -40,7 +40,7 @@ describe("counting one launch", () => {
     waiting: 0, firstWaiting: [],
   });
   const state = (over: Partial<AutomationLaunchStateDto> = {}): AutomationLaunchStateDto => ({
-    launch: 3, project: 1, automation: 2, automationName: "Alice", status: "running", maxHeadcount: 10, failed: [], attention: [],
+    launch: 3, project: 1, automation: 2, automationName: "Alice", status: "running", maxHeadcount: 10, attention: [],
     roles: [
       role(3, [run({ run: 1 }), run({ run: 2, waiting: true }), run({ run: 3, pauseBeforeNextTask: true })]),
       role(2, [run({ run: 4, status: "paused" })], true),
@@ -48,16 +48,22 @@ describe("counting one launch", () => {
     ...over,
   });
 
-  it("counts the seats working a task: running, and not waiting for one to turn up", () => {
-    expect(launchWorking(state())).toBe(2);
+  it("says nothing of seats stopped while the launch is not paused", () => {
+    expect(launchPause(state())).toBeNull();
+    expect(launchPause(state({ status: "ended" }))).toBeNull();
   });
 
-  it("counts nothing working once the launch has ended", () => {
-    expect(launchWorking(state({ status: "ended" }))).toBe(0);
+  it("counts a paused launch's seats stopped: paused, or waiting for something to turn up", () => {
+    // Four seats: one still working its task, one waiting, one asked to pause and still working, one paused.
+    expect(launchPause(state({ status: "paused" }))).toEqual({ stopped: 2, seats: 4 });
   });
 
-  it("adds every role's headcount up", () => {
-    expect(launchHeadcount(state())).toBe(5);
+  it("counts every seat stopped once none is working a task", () => {
+    const stopped = state({
+      status: "paused",
+      roles: [role(2, [run({ run: 1, status: "paused" }), run({ run: 2, waiting: true })])],
+    });
+    expect(launchPause(stopped)).toEqual({ stopped: 2, seats: 2 });
   });
 
   it("holds a role stopped on its own, and every role of a paused launch", () => {

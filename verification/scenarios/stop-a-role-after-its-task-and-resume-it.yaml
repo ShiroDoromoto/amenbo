@@ -234,7 +234,8 @@ steps_gui:
       held: false
 
   # The whole launch paused from its header. Every role takes no task then, so the role's own stop is
-  # not offered: the menu's item is shut and says why, and the desk already reads as stopped.
+  # not offered: the menu's item is shut and says why, and the desk already reads as stopped. Its one
+  # seat still works its task, so the pause is still taking hold.
   - type: action
     domain: automation
     op: press-run
@@ -248,7 +249,9 @@ steps_gui:
     op: launch-head
     with:
       target: run
-      state: paused
+      state: pausing
+      stopped: 0
+      seats: 1
 
   - type: action
     domain: automation

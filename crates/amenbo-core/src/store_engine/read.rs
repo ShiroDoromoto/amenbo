@@ -7841,23 +7841,6 @@ pub fn automation_run_tasks_of(
     )
 }
 
-/// **The failed rounds of these runs** — every stretch filed as a task when it failed
-/// ([`crate::model::AutomationRunTask::incident_task_id`]), newest failure first, the later round first
-/// where two failed in the same second. None for no runs.
-pub fn automation_run_tasks_filed_of(
-    conn: &Connection,
-    run_ids: &[i64],
-) -> Result<Vec<crate::model::AutomationRunTask>> {
-    const T: col::automation_run_task::Cols = col::automation_run_task::ALL;
-    automation_rows(
-        conn,
-        T.table,
-        &Pred::is_in(T.run_id, run_ids.iter().copied()).and(Pred::is_not_null(T.incident_task_id)),
-        &[Sort::by(T.ended_at).desc(), Sort::by(T.id).desc()],
-        super::hydrate::automation_run_task_row,
-    )
-}
-
 /// **Every stretch of every run that worked one task** — the chain from a task back to what handled it.
 ///
 /// A task is reached from a run rather than the other way round everywhere else, and this is the one

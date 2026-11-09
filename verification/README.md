@@ -787,10 +787,13 @@ not among them, and neither is declaring one: both are moves a reader makes, on 
 takes them on or behind the flags the command does.
 **The pane a run is drawn in is its launch's**: one launch, one pane, however many seats its roles
 have. Its header is the launch's (`launch-head`), and so are the moves on it — `press-run` with
-`on: pane` pauses the launch after the current task, picks it up again or stops it — while a run's own
-moves, the pause at the end of the action under way, the pause after the task it is on
-(`press: pause-before-next-task`) and the cancel among them, are on its row on the running tab. The
-row under the header is the seat in front (`run-pane`). The pane opens on the desks of the roles
+`on: pane` pauses every seat after its current task, picks the launch up again or stops it — while a
+run's own moves, the pause at the end of the action under way, the pause after the task it is on
+(`press: pause-before-next-task`) and the cancel among them, are on its row on the running tab. No row
+of any one run stands under the header: a run is read off its seat among the desks, its number and
+step there, and a run that has ended has left its seat (`run-pane`). No one run speaks for the pane,
+so no band on it says a run failed: why a run failed is read on its row on the running tab
+(`run-row`), and the history is reached by the header's "See the history" (`see-history`). The pane opens on the desks of the roles
 (`run-roles`); a seat pressed turns it to that seat's terminal, and the bar over the terminal is the
 one way back (`press-run` with `press: terminal` / `roles`). A start with no task to take, on an
 automation that waits for one (`start` with `waits: true`), opens the launch and no run, so it binds
@@ -801,7 +804,7 @@ the terminal alike, the role named by its name (`role`) and the launch by a run 
 headcount (`launch-headcount-set`, 1 to 10, and `launch-headcount-reset` back to the definition) and
 whether it stops after the task (`launch-role-hold` / `launch-role-release`). `launch-role` reads what
 the launch holds for it beside the definition — off `launch-show` at the terminal, off the desk's
-count, notes and tag on the screen. None and past ten are refused at the terminal alone, since the
+count, note and tag on the screen, and the default headcount off its "⋯" menu. None and past ten are refused at the terminal alone, since the
 screen's stepper stops at 1 and 10; the role's stop while the launch is paused as a whole is refused on
 the screen alone, since no terminal pauses a launch as a whole, and so is the role read back at its
 definition once the launch has ended, since no terminal ends one.
@@ -816,7 +819,7 @@ it is typed at a plain shell in whatever pane is up, with the step the window wo
 into the environment by hand — the run's number off its row on the running tab, the step's off
 `run-show`. Both are typed as `human`, since that shell may sit in another project than the run's.
 `acknowledge-in-shell` says a failed run has been seen with `automation acknowledge`, typed at a
-plain shell in whatever pane is up rather than pressed on the run's row or its pane — the road a
+plain shell in whatever pane is up rather than pressed on the run's row — the road a
 person's AI takes when it says so for them. The run's number comes off its row on the running tab, as
 `done-outside-pane`'s does.
 `quit-in-pane` is the step's program ending by itself before it reports — `exit` typed at a stand-in

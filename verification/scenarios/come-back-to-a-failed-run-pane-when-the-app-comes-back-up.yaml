@@ -5,17 +5,18 @@
 # where no step arrives in it the run's row is said off the run (`app/src/core/runWords.ts`,
 # `runSayOf`). What the terminal printed does not come back: that died with the process. Nor does the
 # pane offer to open one: a terminal opened by hand there would be an ordinary session with nothing to
-# do with the run, under a row still naming the run's step.
+# do with the run, under a row still naming the run's step. The pane that comes back is the run's
+# launch's, which no one run speaks for, so the failure is read on the running tab's row.
 #
 # The app is quit while the run's step is under way. A run that was going when the app ended is
 # failed on the way up, which makes it a failure nobody has acknowledged — one of the runs whose pane
 # comes back (`withoutRuns` leaves behind only the runs that need nobody).
 id: come-back-to-a-failed-run-pane-when-the-app-comes-back-up
-title: A run the app ended under comes back as its own pane, saying it failed and at which step
+title: A run the app ended under comes back with its launch's pane, and its row says it failed
 description: >
-  Start a run and quit the app while its step is under way. The app comes back up with the run's
-  pane standing for the run: its row names the step it was on and says it failed because the step
-  ended without reporting. It offers no terminal to open in its place.
+  Start a run and quit the app while its step is under way. The app comes back up with the pane of
+  the run's launch standing, the run gone from its seat, and the running tab's row says the run
+  failed because the step ended without reporting. The pane offers no terminal to open in its place.
 given:
   # `runs` keeps the stand-in standing, so the step is still under way when the app is quit.
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
@@ -100,8 +101,8 @@ steps_gui:
     with:
       answer: leave
 
-  # The goal. The run's pane is back, standing for the run: its row names the step the run was on
-  # and says it failed because that step ended without reporting.
+  # The goal. The launch's pane is back, and the run has left its seat. No one run speaks for a
+  # launch's pane, so why it failed is read on the running tab's row: the step ended without reporting.
   - type: action
     domain: workspace
     op: show-face
@@ -116,5 +117,25 @@ steps_gui:
       step: do
       action: work
       state: failed
-      reason: crashed
       present: true
+
+  - type: action
+    domain: workspace
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: automation
+    op: screen
+    with:
+      tab: running
+
+  # A failure nobody has acknowledged stays on the running tab, with the reason under its state.
+  - type: assert
+    domain: automation
+    op: run-row
+    with:
+      target: run
+      state: failed
+      reason: crashed

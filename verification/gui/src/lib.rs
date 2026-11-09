@@ -4598,24 +4598,17 @@ impl Instructor {
                 "In the workspace, press the control that takes away the pane this run is drawn in. Confirm it goes without a question: the run is over, and there is nothing of it left to lose."
                     .to_string()
             }
-            // From a run's pane to the ledger. What the press lands on is said in the
-            // same line, the way `press-reason` says it: the box picked out is the whole point of the
-            // press, and a build that opened the screen on nothing would pass a line that stopped at
-            // the screen.
-            (Domain::Automation, "see-picture") => format!(
-                "In the workspace, on the band under the row of this run in the pane it is drawn in, press the button that shows it on the picture. Confirm the ledger comes forward on the automation's build screen, with {} picked out on the picture and its panel open beside it.",
-                box_named(with, "box", "builtin")?
-            ),
-            // Following a waiting launch to the value that holds its role's tasks back. The line is
-            // named by what it says, since the role lists a line for every thing stopping them and only
-            // a value's opens the panel its axis is managed in.
-            (Domain::Automation, "open-held-value") => format!(
-                "In the workspace, in the pane standing for this automation's launch, on the bar of its roles, under the role whose tasks cannot be taken, press the line \"{} ({})\" among the things keeping them from being taken.",
-                req(with, "value")?,
-                req(with, "dimension")?
-            ),
+            // Following a waiting launch to what a person has to do for its role's tasks: the role's
+            // one line counting them, which goes to where the first of them is done — for a task held
+            // by a value, the panel its axis is managed in. Which value is not drawn on the pane;
+            // `dimension focused` reads where the press landed.
+            (Domain::Automation, "open-held-value") => {
+                "In the workspace, in the pane standing for this automation's launch, on the bar of its roles under the desks, on the line of the role whose tasks cannot be taken, press \"Tasks waiting for a person\" with its count.".to_string()
+            }
+            // The header's own link (`app/src/shell/LaunchHead.tsx`), whichever seat is in front: no
+            // row of any one run is drawn under it.
             (Domain::Automation, "see-history") => {
-                "In the workspace, on the row of this run in the pane it is drawn in — the line under the launch's header — press the button that shows it in the history. Confirm the ledger comes forward on the automations' history tab."
+                "In the workspace, on the header of the pane this run is drawn in, press \"See the history\". Confirm the ledger comes forward on the automations' history tab."
                     .to_string()
             }
             // **What a step of a run types.** The command is written out because it is the whole of
@@ -6793,50 +6786,61 @@ impl Instructor {
                     }
                 ),
             },
-            // The pane a run is drawn in — its launch's — and what the row of the seat in front carries
-            // under the launch's header: the run on its first line, its step on the line under it, and
-            // the task with how many tasks in on the third. The mark and the automation's name are the
-            // header's (`app/src/talk/nameplate.ts`, `headed`). `label` reads a pane's name and nothing
-            // else, which is why this one is here. Where the run stands is read off the same row, in
-            // the words `run-row` reads the tab in.
+            // The pane a run is drawn in — its launch's. Its header is the launch's alone, with no row of
+            // any one run under it (`app/src/talk/nameplate.ts`'s `headed`): a run is read
+            // off its seat among the desks (`app/src/shell/RunPicture.tsx`'s `SeatRow`) — the task on
+            // its first line, and on the second its number, written "#" and the number, and the step
+            // it is on. A run that has ended has left its seat, so the road reads that it is gone, and
+            // which step it ended on is the tab's to say (`run-row`); `step`, `action` and `task` are
+            // not read for it. How many tasks into the run it is is drawn nowhere on the pane now.
+            // `label` reads a pane's name and nothing else, which is why this one is here.
             (Domain::Automation, "run-pane") => match present(with) {
                 // A road that bound no run — its start waited for a task (`start` with `waits`) — reads
                 // the one launch's pane it stood, and the run that came to it since.
-                true => format!(
-                    "In the workspace, confirm a pane is standing for {}, headed with the chip saying it is automatic and the automation's name, and that the row under that header carries on its first line {}, and on the line under it which step it is on{}{}{}{}.",
-                    match with.contains_key("target") {
-                        true => "the launch this run is a seat of",
-                        false => "the launch",
-                    },
-                    match with.contains_key("target") {
+                true => {
+                    if with.contains_key("nth") {
+                        return Err("`nth` was said on the run's row under the header, which a launch's pane no longer draws".to_string());
+                    }
+                    let number = match with.contains_key("target") {
                         true => "this run's own number",
                         false => "the number of the run it opened",
-                    },
-                    // The step and the action it was opened from are one value on the screen, in the
-                    // order the reader's language puts them — so the line names both and leaves the
-                    // order to the eye.
-                    match (arg_str(with, "step"), arg_str(with, "action")) {
-                        (Some(step), Some(action)) => format!(" (\"{step}\", said with the action \"{action}\" it belongs to)"),
-                        (Some(step), None) => format!(" (\"{step}\")"),
-                        (None, Some(action)) => format!(" (said with the action \"{action}\" it belongs to)"),
-                        (None, None) => String::new(),
-                    },
-                    match with.get("nth") {
-                        Some(_) => format!(", with how many tasks into the run it is on the third line ({})", count(with, "nth")?),
-                        None => String::new(),
-                    },
-                    // The third line is empty while the run is on no task, so a road that names none
-                    // says nothing of it — a run on no task yet, or one that failed before it took
-                    // one, has nothing there to point at.
-                    match with.get("task") {
-                        Some(_) => format!(", and on the third line the number of the task it is working (\"{}\")", self.labels
-                            .get(with.get("task").and_then(|v| v.as_str()).unwrap_or(""))
-                            .cloned()
-                            .unwrap_or_else(|| "<the task>".to_string())),
-                        None => String::new(),
-                    },
-                    pane_state(arg_str(with, "state"), arg_str(with, "reason"))?
-                ),
+                    };
+                    let state = arg_str(with, "state");
+                    let seat = match state {
+                        Some("completed" | "canceled" | "failed") => format!(
+                            ". Confirm no seat on the desks of its roles carries {number} any more: a run that has ended leaves its seat"
+                        ),
+                        _ => format!(
+                            ". On the desks of its roles — pressing \"← Back to the roles\" first where the pane is on a terminal — confirm a seat whose second line starts with {number}, written \"#\" and the number, followed by which step it is on{}{}",
+                            // The step and the action it was opened from are one value on the screen, in
+                            // the order the reader's language puts them — so the line names both and
+                            // leaves the order to the eye.
+                            match (arg_str(with, "step"), arg_str(with, "action")) {
+                                (Some(step), Some(action)) => format!(" (\"{step}\", said with the action \"{action}\" it belongs to)"),
+                                (Some(step), None) => format!(" (\"{step}\")"),
+                                (None, Some(action)) => format!(" (said with the action \"{action}\" it belongs to)"),
+                                (None, None) => String::new(),
+                            },
+                            // The first line is empty while the run is on no task, so a road that names
+                            // none says nothing of it.
+                            match with.get("task") {
+                                Some(_) => format!(", and whose first line names the task it is working (\"{}\")", self.labels
+                                    .get(with.get("task").and_then(|v| v.as_str()).unwrap_or(""))
+                                    .cloned()
+                                    .unwrap_or_else(|| "<the task>".to_string())),
+                                None => String::new(),
+                            },
+                        ),
+                    };
+                    format!(
+                        "In the workspace, confirm a pane is standing for {}, headed with the chip saying it is automatic and the automation's name, with no row of any one run under that header{seat}{}.",
+                        match with.contains_key("target") {
+                            true => "the launch this run is a seat of",
+                            false => "the launch",
+                        },
+                        pane_state(state)?
+                    )
+                }
                 // Where the road bound no run, there is none to speak of: what it is saying is that
                 // the press it just made stood nothing up.
                 false => match with.contains_key("target") {
@@ -6866,47 +6870,55 @@ impl Instructor {
                 other => return Err(format!("`face` does not know `{other}` — it is roles / terminal")),
             },
             // What keeps a launch's role waiting, read off the role on the bar of the launch's pane
-            // (`app/src/shell/RunPicture.tsx`, `RunRoles`). An eye closes it: the count sits beside the
-            // line rather than in its words, and which line it belongs to is a matter of where it is
-            // drawn.
+            // (`app/src/shell/RunPicture.tsx`, `RunRoles`). Only the tasks a person has to do something
+            // for are counted, in one line per role: which value, decision or unfinished
+            // task holds them is where the line goes, not something it lists.
             (Domain::Automation, "held-back") => format!(
-                "In the workspace, in the pane standing for this automation's launch, on the bar of its roles, confirm that under one role's name and headcount it says how many of its tasks cannot be taken yet ({}), and that among the lines under that, one per thing keeping them from being taken, the line \"{} ({})\" carries the count {} beside it.",
-                count(with, "tasks")?,
-                req(with, "value")?,
-                req(with, "dimension")?,
-                count(with, "count")?
+                "In the workspace, in the pane standing for this automation's launch, on the bar of its roles under the desks, confirm that one role's line carries, after its name and headcount, \"Tasks waiting for a person: {}\", and that no task is listed one by one under it.",
+                count(with, "tasks")?
             ),
             // The header of the launch's pane (`app/src/shell/LaunchHead.tsx`). Where the launch stands
             // is said by the chip after its name and by which moves are drawn: a launch going has the
-            // pause or the resume beside "Stop", and one that has ended has none.
+            // pause, the pause's cancel or the resume beside "Stop", and one that has ended has none. It
+            // says nothing of any one run and counts no one at work: that is the roles'.
+            // A pause asked for is `pausing` while a seat still works its task — the chip then counts the
+            // seats stopped (`stopped` of `seats`, both or neither) — and `paused` once every seat has.
             (Domain::Automation, "launch-head") => {
-                // The two counts are one phrase on the header, so a road names both or neither.
-                let counts = match (with.contains_key("working"), with.contains_key("of")) {
-                    (false, false) => String::new(),
-                    (true, true) => format!(", that it says \"Working {} / {}\"", count(with, "working")?, count(with, "of")?),
-                    _ => return Err("`working` and `of` are one phrase on the header — name both or neither".to_string()),
-                };
-                let state = req(with, "state")?;
-                if state == "ended" && !counts.is_empty() {
-                    return Err("`working` and `of` are read while the launch is going — an ended one draws no count".to_string());
+                if with.contains_key("working") || with.contains_key("of") {
+                    return Err("the header counts no one at work — read a role's count with `launch-role`".to_string());
                 }
-                let said = match state {
-                    "running" => format!("the chip after the automation's name says \"Running\"{counts}, and that its buttons are \"Pause after the current task\" and \"Stop\""),
-                    "paused" => format!("the chip after the automation's name says \"Pause after the current task\"{counts}, and that its buttons are \"Resume\", pressed, and \"Stop\""),
-                    "ended" => "it carries the chip saying it is automatic and the automation's name and nothing after them — no chip saying where the launch stands, no count of seats working, and neither \"Pause after the current task\", \"Resume\" nor \"Stop\"".to_string(),
-                    other => return Err(format!("`state` does not know `{other}` on the launch's header — it is running / paused / ended")),
+                let state = req(with, "state")?;
+                let counts = match (with.contains_key("stopped"), with.contains_key("seats")) {
+                    (false, false) => None,
+                    (true, true) if state == "pausing" => Some((count(with, "stopped")?, count(with, "seats")?)),
+                    (true, true) => return Err("`stopped` and `seats` are read while a pause is taking hold — `state: pausing`".to_string()),
+                    _ => return Err("`stopped` and `seats` are one phrase on the header — name both or neither".to_string()),
                 };
-                format!("In the workspace, on the header of the pane this run is drawn in — the line over the row of the seat in front — confirm {said}.")
+                let said = match state {
+                    "running" => "the chip after the automation's name says \"Running\", and that beside \"See the history\" its buttons are \"Everyone pauses after their current task\" and \"Stop\"".to_string(),
+                    "pausing" => format!(
+                        "the chip after the automation's name says \"Pausing: {} seats stopped\", and that beside \"See the history\" its buttons are \"Cancel the pause\", pressed, and \"Stop\"",
+                        match counts {
+                            Some((stopped, seats)) => format!("{stopped} / {seats}"),
+                            None => "n / m".to_string(),
+                        }
+                    ),
+                    "paused" => "the chip after the automation's name says \"Paused\" and nothing more, and that beside \"See the history\" its buttons are \"Resume\", pressed, and \"Stop\"".to_string(),
+                    "ended" => "it carries the chip saying it is automatic, the automation's name and \"See the history\" and nothing else — no chip saying where the launch stands, and neither a pause, \"Resume\" nor \"Stop\"".to_string(),
+                    other => return Err(format!("`state` does not know `{other}` on the launch's header — it is running / pausing / paused / ended")),
+                };
+                format!("In the workspace, on the header of the pane this run is drawn in — the top line of the pane, with no row of any one run under it — confirm {said}.")
             }
             // The pane of a launch with no run yet (`app/src/talk/layout.ts`'s `stoodForLaunch`), named by
             // its automation since there is no run to name it by. Its body is the roles, which stand on
             // the bar while none has a task; no seat's row, no terminal and no button to open one.
             (Domain::Automation, "launch-pane") => "In the workspace, confirm a pane is standing for this automation's launch, headed with the chip saying it is automatic, the automation's name and the chip saying \"Running\", with no row of a run under that header and no terminal or button to open one in it, and that its body is the roles of the launch — each role on the bar under the desks, by its name and its headcount.".to_string(),
             // One role of the launch, read off its desk (`app/src/shell/RunPicture.tsx`, `DeskView` and
-            // `deskNotes`): the count of seats working out of the headcount on its head, the two notes
-            // under it, and the tag a role stopped after the task carries. A note is drawn only while
-            // there is something to say, so a road that names the numbers is also saying which notes are
-            // not there.
+            // `deskLetGo`): the count of seats working out of the headcount on its head, the note of the
+            // seats still to go under it, and the tag a role stopped after the task carries. The note is
+            // drawn only while there is something to say, so a road that names the numbers is also
+            // saying it is not there. The default headcount is said in the desk's "⋯" menu alone, beside
+            // the stepper, with the way back to it where the two differ.
             (Domain::Automation, "launch-role") => {
                 let role = req(with, "role")?;
                 let headcount = match with.contains_key("headcount") {
@@ -6929,8 +6941,9 @@ impl Instructor {
                     let d = count(with, "defined")?;
                     let h = headcount.ok_or("`defined` is read against the headcount on the desk — name `headcount` too")?;
                     said.push(match d == h {
-                        true => "no note under its head says the headcount is for this run only".to_string(),
-                        false => format!("a note under its head says \"{h} for this run only (defined as {d})\""),
+                        // A launch that has ended draws no menu, and its roles are back at the default.
+                        true => format!("where its head has a \"⋯\" menu, that menu, opened, says \"Default: {d}\" beside the headcount and offers no \"Back to the default headcount\" (close the menu again with Escape)"),
+                        false => format!("its \"⋯\" menu, opened, says \"Default: {d}\" beside the headcount of {h} and offers \"Back to the default headcount\" (close the menu again with Escape)"),
                     });
                 }
                 if with.contains_key("to_let_go") {
@@ -7557,14 +7570,15 @@ fn run_press(press: &str) -> Result<&'static str, String> {
 }
 
 /// What is pressed on the pane a run is drawn in. **The pane is its launch's**
-/// (`app/src/shell/LaunchHead.tsx`), so its moves are the launch's, on the header over the seat in
-/// front: the pause there is the one after the current task, for every role at once, and there is no
+/// (`app/src/shell/LaunchHead.tsx`), so its moves are the launch's, on its header: the pause there is the one after the current task, for every role at once, and there is no
 /// cancel. The other two turn its body: the seat this run sits in, among the desks, and the way back
 /// on the bar over a seat's terminal (`app/src/shell/RunPicture.tsx`).
 fn launch_press(press: &str) -> Result<&'static str, String> {
     Ok(match press {
-        "pause" => "on the header, press \"Pause after the current task\". Confirm the header's chip now says the same, and that the button in its place says \"Resume\", pressed",
-        "resume" => "on the header, press \"Resume\". Confirm the header's chip says \"Running\" again, and that the button in its place says \"Pause after the current task\"",
+        "pause" => "on the header, press \"Everyone pauses after their current task\". Confirm the header's chip now says the launch is pausing or paused, and that the button in its place says \"Cancel the pause\" or \"Resume\", pressed",
+        // "Cancel the pause" while a seat still works its task, "Resume" once every one has stopped:
+        // the same press either way (`resumeLaunch`).
+        "resume" => "on the header, press \"Cancel the pause\" or \"Resume\", whichever stands there. Confirm the header's chip says \"Running\" again, and that the button in its place says \"Everyone pauses after their current task\"",
         "stop" => "on the header, press \"Stop\". A question asks first, saying every role's step under way ends where it stands and that changes made partway and worktrees may be left behind — answer it with \"Stop\", the press that goes through with it",
         "terminal" => "where the desks of its roles are up, press the seat this run sits in — the one carrying its task. Confirm the pane turns to that seat's terminal, with a bar over it naming the role and the seat",
         "roles" => "on the bar over the terminal, press \"← Back to the roles\". Confirm the pane turns back to the desks of its roles",
@@ -7607,48 +7621,27 @@ fn run_ending(reason: &str) -> Result<&'static str, String> {
     })
 }
 
-/// **Where a run stands, as its row in the pane says it** — the end of the row's first line, under the
-/// launch's header, and for a failure the band under the row that says why and holds the press that
-/// acknowledges it. Nothing where the road did not ask.
+/// **Where a run stands, as its launch's pane says it** — on its seat among the desks while it holds
+/// one. Nothing where the road did not ask.
 ///
-/// The words are the running tab's (`run_state`). The band says nothing of where: the row names the
-/// step already. A failure at a way out calling for a person is said by that way out, as
-/// the picture draws it; every other failure by its reason. A run going or held is one whose pane
-/// cannot be taken away, and the control that would do it is read for that.
-fn pane_state(state: Option<&str>, reason: Option<&str>) -> Result<String, String> {
+/// A seat at work ends its first line with how long its round has run; a paused one, and one going to
+/// hold at the end of the action it is on, with a chip saying so in its place. A run that has ended has
+/// left its seat (`run-pane`). No one run speaks for a launch's pane, so no band under its header says
+/// a run failed, whatever the run: why a run failed is the running tab's row's to say (`run-row`). A run
+/// going or held is one whose pane cannot be taken away, and the control that would do it is read for
+/// that.
+fn pane_state(state: Option<&str>) -> Result<String, String> {
     let Some(state) = state else {
-        return match reason {
-            Some(_) => Err("`reason` is why a failed run failed, so it goes with `state: failed`".to_string()),
-            None => Ok(String::new()),
-        };
+        return Ok(String::new());
     };
-    let word = match state {
-        "failed" => "failed",
-        other => run_state(other)?,
-    };
-    Ok(match (state, reason) {
-        // Running has no word at the end of the line: it is the one state that is about now, and the
-        // header says the launch is going.
-        ("running", None) => ". Confirm too that the end of the row's first line carries no word for where the run stands, that no band under the row says it failed, and that the control that takes the pane away cannot be pressed".to_string(),
-        ("failed", Some("halted")) => format!(
-            ". Confirm too that the end of the row's first line says the run is {word}, and that a band under the row says it stopped at a way out, drawn as that way out's chip, with a press beside it that acknowledges the failure"
-        ),
-        ("failed", Some(reason)) => format!(
-            ". Confirm too that the end of the row's first line says the run is {word}, and that a band under the row says {}, with a press beside it that acknowledges the failure",
-            run_ending(reason)?
-        ),
-        ("failed", None) => format!(
-            ". Confirm too that the end of the row's first line says the run is {word}, and that a band under the row says it failed, with a press beside it that acknowledges the failure"
-        ),
-        (_, Some(_)) => return Err(format!("`reason` goes with `state: failed`, not `{state}`")),
+    run_state(state)?;
+    Ok(match state {
+        "running" => ". Confirm too that the seat's first line ends with how long its round has run and no chip for where the run stands, that no band under the header says it failed, and that the control that takes the pane away cannot be pressed".to_string(),
         // Pausing is still `running` until the action it is on ends, so the pane stays as fixed as
         // a held one.
-        ("paused" | "pausing", None) => format!(
-            ". Confirm too that the end of the row's first line says the run is {word}, that no band under the row says it failed, and that the control that takes the pane away cannot be pressed"
-        ),
-        (_, None) => format!(
-            ". Confirm too that the end of the row's first line says the run is {word}, and that no band under the row says it failed"
-        ),
+        "pausing" => ". Confirm too that the seat's first line ends with a chip saying it is pausing, that no band under the header says it failed, and that the control that takes the pane away cannot be pressed".to_string(),
+        "paused" => ". Confirm too that the seat's first line ends with a chip saying it has stopped, that no band under the header says it failed, and that the control that takes the pane away cannot be pressed".to_string(),
+        _ => ". Confirm too that no band under the header says it failed".to_string(),
     })
 }
 
@@ -9444,7 +9437,7 @@ steps_gui:
   - type: assert
     domain: automation
     op: run-pane
-    with: { target: run, step: work, action: build, nth: 1, task: seed, present: true }
+    with: { target: run, step: work, action: build, task: seed, present: true }
   - type: assert
     domain: automation
     op: run-row
@@ -9758,32 +9751,20 @@ steps_gui:
         assert!(close.contains("the way out for having closed the task") && !close.contains("\"完了\""), "{close}");
     }
 
-    /// A run's pane goes to the ledger two ways, and the picture's says which box it
-    /// lands on — a built-in's by what it is, the way `pick-box` names one.
+    /// A run's pane goes to the ledger by its header's "See the history".
     #[test]
-    fn a_run_pane_goes_to_the_picture_it_stopped_on_and_to_the_history() {
+    fn a_run_pane_goes_to_the_history() {
         let s = load(r#"
 id: x
 title: y
 steps_gui:
   - type: action
     domain: automation
-    op: see-picture
-    with: { builtin: take_task }
-  - type: action
-    domain: automation
-    op: see-picture
-    with: { box: work }
-  - type: action
-    domain: automation
     op: see-history
 "#);
         let mut ins = Instructor::new();
-        let lines: Vec<String> =
-            s.steps(Driver::Gui).iter().map(|st| ins.render(st).expect("every step renders")).collect();
-        assert!(lines[0].contains("band under the row") && lines[0].contains("the box of"), "{}", lines[0]);
-        assert!(lines[1].contains("the box \"work\" picked out"), "{}", lines[1]);
-        assert!(lines[2].contains("history tab"), "{}", lines[2]);
+        let line = ins.render(&s.steps(Driver::Gui)[0]).expect("renders");
+        assert!(line.contains("on the header") && line.contains("history tab"), "{line}");
     }
 
     /// A run's pane is read for the face it is turned to, and on the roles for the desk that stands and
@@ -9906,16 +9887,17 @@ steps_gui:
         let steps = s.steps(Driver::Gui);
         let line = |ins: &mut Instructor, i: usize| ins.render(&steps[i]).expect("the press renders");
         let pause = line(&mut ins, 0);
-        assert!(pause.contains("on the header") && pause.contains("\"Pause after the current task\""), "{pause}");
-        assert!(line(&mut ins, 1).contains("press \"Resume\""));
+        assert!(pause.contains("on the header") && pause.contains("\"Everyone pauses after their current task\""), "{pause}");
+        let resume = line(&mut ins, 1);
+        assert!(resume.contains("\"Cancel the pause\" or \"Resume\""), "{resume}");
         let stop = line(&mut ins, 2);
         assert!(stop.contains("press \"Stop\"") && stop.contains("A question asks first"), "{stop}");
         let refused = ins.render(&steps[3]).expect_err("a launch's header has no cancel");
         assert!(refused.contains("the row's"), "{refused}");
     }
 
-    /// The launch's header is read for where the launch stands and how many of its seats are working,
-    /// and an ended one for having no moves left.
+    /// The launch's header is read for where the launch stands — a pause taking hold by how many of its
+    /// seats have stopped — and an ended one for having no moves left. It counts no one at work.
     #[test]
     fn a_launch_header_is_read_for_where_it_stands() {
         let s = load(r#"
@@ -9925,7 +9907,11 @@ steps_gui:
   - type: assert
     domain: automation
     op: launch-head
-    with: { state: running, working: 1, of: 1 }
+    with: { state: running }
+  - type: assert
+    domain: automation
+    op: launch-head
+    with: { state: pausing, stopped: 1, seats: 3 }
   - type: assert
     domain: automation
     op: launch-head
@@ -9937,22 +9923,29 @@ steps_gui:
   - type: assert
     domain: automation
     op: launch-head
-    with: { state: ended, working: 0, of: 1 }
+    with: { state: running, working: 1, of: 1 }
   - type: assert
     domain: automation
     op: launch-head
-    with: { state: running, working: 1 }
+    with: { state: paused, stopped: 1, seats: 1 }
+  - type: assert
+    domain: automation
+    op: launch-head
+    with: { state: pausing, stopped: 1 }
 "#);
         let mut ins = Instructor::new();
         let steps = s.steps(Driver::Gui);
         let running = ins.render(&steps[0]).expect("renders");
-        assert!(running.contains("says \"Running\"") && running.contains("\"Working 1 / 1\""), "{running}");
-        let paused = ins.render(&steps[1]).expect("renders");
-        assert!(paused.contains("\"Resume\", pressed") && !paused.contains("Working"), "{paused}");
-        let ended = ins.render(&steps[2]).expect("renders");
+        assert!(running.contains("says \"Running\"") && running.contains("\"Everyone pauses after their current task\""), "{running}");
+        let pausing = ins.render(&steps[1]).expect("renders");
+        assert!(pausing.contains("\"Pausing: 1 / 3 seats stopped\"") && pausing.contains("\"Cancel the pause\", pressed"), "{pausing}");
+        let paused = ins.render(&steps[2]).expect("renders");
+        assert!(paused.contains("says \"Paused\"") && paused.contains("\"Resume\", pressed"), "{paused}");
+        let ended = ins.render(&steps[3]).expect("renders");
         assert!(ended.contains("neither") && ended.contains("\"Stop\""), "{ended}");
-        assert!(ins.render(&steps[3]).is_err(), "an ended launch draws no count");
-        assert!(ins.render(&steps[4]).is_err(), "the two counts are one phrase");
+        assert!(ins.render(&steps[4]).is_err(), "the header counts no one at work");
+        assert!(ins.render(&steps[5]).is_err(), "the seats stopped are counted while a pause takes hold");
+        assert!(ins.render(&steps[6]).is_err(), "the two counts are one phrase");
     }
 
     /// A start with no task to take is said as the press that stands the launch's pane, and that pane
@@ -9998,11 +9991,11 @@ steps_gui:
     #[test]
     fn a_run_pane_going_to_hold_cannot_be_taken_away() {
         for state in ["running", "pausing", "paused"] {
-            let line = pane_state(Some(state), None).expect("the state renders");
+            let line = pane_state(Some(state)).expect("the state renders");
             assert!(line.contains("the control that takes the pane away cannot be pressed"), "{state}: {line}");
         }
-        let line = pane_state(Some("pausing"), None).expect("the state renders");
-        assert!(line.contains("going to hold at the end of the action it is on"), "{line}");
+        let line = pane_state(Some("pausing")).expect("the state renders");
+        assert!(line.contains("a chip saying it is pausing"), "{line}");
     }
 
     /// `held-by` reads the band a run is named in, so a road reading it names which run; only the

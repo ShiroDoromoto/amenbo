@@ -187,10 +187,11 @@ pub fn delete(tx: &WriteTx<'_>, id: i64, actor: ActorKind) -> Result<Vec<String>
         crate::ops::dimension::delete_subtree(tx, dimension_id)?;
     }
     // The automations built in this project, what was launched from them, and the project's own library
-    // of actions. The runs go first: a definition with a run behind it refuses to be deleted, because
-    // the run is filed under it (`crate::ops::automation::delete`). The library goes last, since an
-    // action refuses while a step runs it and this project's steps have only just gone — no other
-    // project's can reach this library (a step reads its own project's and the device's, and no other).
+    // of actions. The runs go first: a definition that is not archived refuses to be deleted with a run
+    // behind it, because the run is filed under it (`crate::ops::automation::delete`). The library goes
+    // last, since an action refuses while a step runs it and this project's steps have only just gone —
+    // no other project's can reach this library (a step reads its own project's and the device's, and no
+    // other).
     for run_id in read::automation_run_ids_in_project(tx.conn(), id)? {
         orphaned.extend(crate::ops::automation::run_delete(tx, run_id)?);
     }
@@ -200,7 +201,7 @@ pub fn delete(tx: &WriteTx<'_>, id: i64, actor: ActorKind) -> Result<Vec<String>
         crate::ops::automation::launch_delete(tx, launch_id)?;
     }
     for automation_id in read::automation_ids_in_project(tx.conn(), id)? {
-        crate::ops::automation::delete(tx, automation_id)?;
+        orphaned.extend(crate::ops::automation::delete(tx, automation_id)?);
     }
     for action_id in read::automation_action_ids_in_project(tx.conn(), id)? {
         crate::ops::automation::action_delete(tx, action_id)?;

@@ -2063,16 +2063,22 @@ pub fn version_add(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVer
 
 /// Delete an automation and everything built onto it — wires, edges, the roles defined in it, the
 /// placements with the answers written on them, and the versions saved of it. The library actions
-/// those placements stood on are left where they are: the library outlives any one picture.
+/// those placements stood on are left where they are: the library outlives any one picture. Returns
+/// the blob hashes of the attachments that went with its runs, for the caller to reclaim once the
+/// transaction commits.
 ///
-/// **Refused while a run stands behind it**, naming how many (`invalid_automation_has_runs`). A run
-/// carries its own copy of the steps and would go on reading correctly, but it is filed under the
-/// automation it was launched from, and deleting that leaves the record unable to say what was run.
-/// Archiving is what takes such an automation out of the way.
-pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
+/// **One that is not archived is refused while a run stands behind it**, naming how many
+/// (`invalid_automation_has_runs`). The run is filed under the automation it was launched from, and
+/// archiving is what says nobody will read that record again (`AMB-D-1143`).
+///
+/// **An archived one goes with every run launched from it** — each run with what is filed under it
+/// ([`run_delete`]), then each launch ([`launch_delete`]), the order the project delete takes. The tasks
+/// the runs worked on stay; the role goes off them. It is refused while a run is still running or
+/// paused, or a launch has not ended: those are still at work, and would be cut off half-way.
+pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     let automation = live_automation(tx, id)?;
     let runs = read::automation_run_ids(tx.conn(), id)?;
-    if !runs.is_empty() {
+    if !runs.is_empty() && !automation.archived {
         return Err(Error::Invalid(
             Msg::new(format!(
                 "{} run(s) were launched from this automation — it is what they are filed under, so it \
@@ -2082,6 +2088,27 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
             .coded(ErrorCode::InvalidAutomationHasRuns)
             .with("count", runs.len()),
         ));
+    }
+    // Only an archived one is held back by what is still at work: one that is not archived reaches here
+    // with no run behind it, and goes with any launch left standing, as it always has.
+    if automation.archived {
+        let under_way = read::automation_run_ids_under_way(tx.conn(), id)?;
+        if !under_way.is_empty() {
+            return Err(Error::invalid(format!(
+                "{} run(s) of this automation are still running or paused — stop them before deleting it",
+                under_way.len()
+            )));
+        }
+        if let Some(launch) = read::automation_launch_standing(tx.conn(), id)? {
+            return Err(Error::invalid(format!(
+                "launch {} of this automation has not ended — stop it before deleting the automation",
+                launch.id
+            )));
+        }
+    }
+    let mut orphaned = Vec::new();
+    for run in runs {
+        orphaned.extend(run_delete(tx, run)?);
     }
     for wire in read::automation_wire_ids(tx.conn(), AutomationPictureOwner::Automation, id)? {
         tx.delete_record("automation_wire", wire)?;
@@ -2109,13 +2136,13 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     for version in read::automation_version_ids(tx.conn(), id)? {
         tx.delete_record("automation_version", version)?;
     }
-    // A launch with no run behind it — one opened for an entry that waited, and never started one —
-    // is filed under nothing a person reads, and goes with the automation.
+    // Every launch goes with the automation: the ones the runs above were launched by, whose runs have
+    // just gone, and any opened for an entry that waited and never started a run.
     for launch in read::automation_launch_ids(tx.conn(), id)? {
         launch_delete(tx, launch)?;
     }
     tx.delete_record("automation", id)?;
-    Ok(())
+    Ok(orphaned)
 }
 
 /// Delete one launch, with how many were in each role for it, which names it. Its runs have to be gone
@@ -2133,9 +2160,10 @@ pub(crate) fn launch_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 /// snapshots it took at launch and on each resume that copied it down afresh. Returns the blob hashes
 /// those attachments pointed at, for the caller to reclaim once the transaction commits.
 ///
-/// **Nothing refuses this, and nothing calls it but the project delete.** A run is the record of what
-/// happened, so there is no reason to reach for it while the project it is filed under is still there —
-/// and no reason to keep it once that project is gone.
+/// **Nothing refuses this, and only a delete of what it is filed under calls it** — the project's, or
+/// an archived automation's ([`delete`]). A run is the record of what happened, so there is no reason to
+/// reach for it while what it is filed under is still there — and no reason to keep it once that is
+/// gone.
 ///
 /// The order is what the `RESTRICT` clauses insist on: a value names the execution that produced it as
 /// well as the one that received it (`from_run_step_id`), so every value of the run goes before any

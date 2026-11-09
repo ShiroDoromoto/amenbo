@@ -443,6 +443,34 @@ fn deleting_an_automation_is_confirmed() {
 
     let gone = cli.json(&["automation", "rm", &a, "--yes", "--json"]);
     assert_eq!(gone["automation"]["deleted"], serde_json::json!(true));
+    assert_eq!(gone["automation"]["runs"], serde_json::json!(0), "{gone}");
+    assert_eq!(gone["automation"]["rounds"], serde_json::json!(0), "{gone}");
+}
+
+/// **An automation a run was launched from is deleted only once archived** (`AMB-D-1143`): before that
+/// the refusal points at archiving and then `rm`, and after it a launch that has not ended still holds
+/// it back — the confirmation it would have asked for names the runs and rounds that would go.
+#[test]
+fn an_automation_with_runs_is_deleted_only_once_archived_and_nothing_is_at_work() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, _, _) = a_saved_launchable(&cli);
+    let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
+    cli.json(&["automation", "cancel", &run, "--force", "--json"]);
+
+    let (refused, code) = cli.run_err(&["automation", "rm", &a, "--yes", "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("invalid_automation_has_runs"), "{refused}");
+    assert!(refused.contains("automation rm"), "the hint names deleting it after archiving: {refused}");
+
+    let (asked, code) = cli.run_err(&["automation", "rm", &a, "--json"]);
+    assert_ne!(code, 0, "{asked}");
+    assert!(asked.contains("with its 1 run(s)"), "{asked}");
+
+    cli.json(&["automation", "update", &a, "--archived", "true", "--json"]);
+    let (refused, code) = cli.run_err(&["automation", "rm", &a, "--yes", "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("has not ended"), "{refused}");
 }
 
 /// A run is reached from a record already in hand — the task it worked, or the automation it came

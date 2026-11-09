@@ -399,8 +399,9 @@ pub enum ErrorCode {
     // A library action that cannot be deleted or moved for the placements standing on it. The screen
     // shows the refusal under the action's row, so it names itself and carries what it counts and names.
     InvalidActionStillPlaced,
-    // An automation that cannot be deleted for the runs filed under it. Archiving is the way it goes
-    // out of sight instead, and the CLI names that by this code; it carries how many runs there are.
+    // An automation that cannot be deleted for the runs filed under it while it is not archived.
+    // Archiving is the way it goes out of sight, or is deleted with its runs after, and the CLI names
+    // that by this code; it carries how many runs there are.
     InvalidAutomationHasRuns,
     InvalidActionPlacedElsewhere,
     NotReadyAutomation,

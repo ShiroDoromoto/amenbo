@@ -970,6 +970,15 @@ impl Store {
         Ok(out)
     }
 
+    /// **How many runs, and rounds of them, one automation has behind it**
+    /// ([`crate::store_engine::read::automation_history`]) — what deleting it, once archived, takes away.
+    pub fn automation_history(&self, automation_id: i64) -> Result<crate::model::AutomationHistory> {
+        self.reachable(&format!("automation #{automation_id}"), |c| {
+            super::owner::automation(c, automation_id)
+        })?;
+        Ok(crate::store_engine::read::automation_history(self.engine.conn(), automation_id)?)
+    }
+
     /// **The launch of one automation that has not ended** — running or paused — or `None` where there
     /// is none ([`crate::store_engine::read::automation_launch_standing`]).
     pub fn automation_launch_standing(&self, automation_id: i64) -> Result<Option<crate::model::AutomationLaunch>> {

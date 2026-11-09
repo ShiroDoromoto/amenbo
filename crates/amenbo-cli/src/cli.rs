@@ -2011,8 +2011,9 @@ pub enum AutomationCmd {
         #[arg(long)]
         off: bool,
     },
-    /// Delete an automation with every placement, edge and wire built onto it — confirms unless -y.
-    /// One that runs were launched from cannot be deleted: archive it (`update --archived true`)
+    /// Delete an automation with every placement, edge and wire built onto it — confirms unless -y,
+    /// naming how many runs and rounds go with it. One that runs were launched from has to be archived
+    /// first (`update --archived true`); it then goes with its runs, unless one is running or paused
     Rm {
         /// automation id
         id: i64,

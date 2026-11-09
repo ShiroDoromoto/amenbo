@@ -31,16 +31,20 @@ import { useRefNav } from "../core/refNav";
  * stays, for a workspace that closes while the launch is on its way. The line goes once the
  * workspace opens.
  *
- * **A run that starts is gone to** (`AMB-T-5530`): `onGoToRun` is handed the run the launch answered
- * with, the same road a row of the "running" tab travels. Left where the press was made, the reader
- * would have to go looking for where it is going on — and a run opens its own pane without moving the
- * screen, because it may be one nobody here asked for (`../shell/WorkspaceFace`'s `stepArrived`).
- * This one somebody did.
+ * **A launch that starts is gone to** (`AMB-T-5530`): `onGoToRun` is handed the run and the launch the
+ * press answered with, the same road a row of the "running" tab travels. Left where the press was made,
+ * the reader would have to go looking for where it is going on — and a run opens its own pane without
+ * moving the screen, because it may be one nobody here asked for (`../shell/WorkspaceFace`'s
+ * `stepArrived`). This one somebody did.
+ *
+ * **Where the automation waits for a task to take, the run is null and the launch is gone to** — its
+ * pane, with the roles and no seat in front. A press that opened nothing on the screen would read as a
+ * press that did nothing.
  */
 export function useAutomationStart(
   projectId: number | null,
   workspaceOpen: boolean,
-  onGoToRun?: (project: number, run: number, launch?: number | null) => void,
+  onGoToRun?: (project: number, run: number | null, launch?: number | null) => void,
 ) {
   const [refused, setRefused] = useState<string | null>(null);
   // A press turned away because the workspace was closed — drawn only while it still is.
@@ -59,8 +63,9 @@ export function useAutomationStart(
     setStarting(true);
     try {
       const started = await launchAutomation(id, projectId, folders, workspaceOpen);
-      // No run where the automation waits for a task to take instead: there is nothing to go to yet.
-      if (started !== null && started.run !== null) onGoToRun?.(projectId, started.run, started.launch);
+      if (started !== null && (started.run !== null || started.launch != null)) {
+        onGoToRun?.(projectId, started.run, started.launch);
+      }
     } catch (e) {
       setRefused(errText(e));
     } finally {

@@ -96,7 +96,7 @@ function Host({
 }: {
   start: AutoPlace;
   workspaceOpen: boolean;
-  onGoToRun?: (project: number, run: number) => void;
+  onGoToRun?: (project: number, run: number | null, launch?: number | null) => void;
 }) {
   const [places, setPlaces] = useState<AutoPlace[]>([start]);
   trail = places;

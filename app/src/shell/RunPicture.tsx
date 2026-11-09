@@ -202,12 +202,13 @@ export type IdleRole = {
   readonly headcount: number | null;
 };
 
-/** How the run in a seat stands: off its row, and off the pane's own run where it is that one. */
-export function seatStateOf(seat: AutomationRunCardDto, front: Say): SeatState {
+/** How the run in a seat stands: off its row, and off the pane's own run where it is that one — null
+ *  on a launch's pane with no seat in front yet. */
+export function seatStateOf(seat: AutomationRunCardDto, front: Say | null): SeatState {
   if (seat.status === "failed") return "failed";
   if (seat.status === "paused") return "paused";
   if (seat.waiting || seat.waitsForRoom) return "waiting";
-  return seat.interactive === true || (seat.run === front.run && front.interactive) ? "asks" : "running";
+  return seat.interactive === true || (front !== null && seat.run === front.run && front.interactive) ? "asks" : "running";
 }
 
 /** When the round in a seat began, in milliseconds since the epoch, or null where nothing is written. */
@@ -218,10 +219,10 @@ function seatSince(seat: AutomationRunCardDto): number | null {
 
 /**
  * **The desks of the launch `launch` and the roles on the bar**, each in the order the roles are
- * defined in, with `front` the pane's own run. A role is a desk where a run is in one of its seats or
- * a task is waiting for it.
+ * defined in, with `front` the pane's own run — null where the launch has no seat in front yet, waiting
+ * for a task to take. A role is a desk where a run is in one of its seats or a task is waiting for it.
  */
-export function desksOf(launch: AutomationLaunchStateDto, front: Say): { desks: Desk[]; idle: IdleRole[] } {
+export function desksOf(launch: AutomationLaunchStateDto, front: Say | null): { desks: Desk[]; idle: IdleRole[] } {
   const names = new Map(launch.roles.map((role) => [role.role, role.name]));
   const nameOf = (role: number | undefined) => (role === undefined ? undefined : names.get(role));
   const desks: Desk[] = [];
@@ -801,7 +802,7 @@ function underEnd(button: HTMLElement): { x: number; y: number } {
 
 /** One role with a task: its head, a row per seat at work, its free seats, and the tasks waiting for it. */
 function DeskView({ desk, front, now, silenceAt, onOpen, menuAt, onMenu }: {
-  desk: Desk; front: number; now: number; silenceAt: (seat: Seat) => Silence; onOpen?: (run: number) => void;
+  desk: Desk; front: number | null; now: number; silenceAt: (seat: Seat) => Silence; onOpen?: (run: number) => void;
   /** Where its menu is open, or null where it is not. */
   menuAt: { x: number; y: number } | null;
   /** Open its menu at a place, or close it with null. */
@@ -942,7 +943,9 @@ function DeskView({ desk, front, now, silenceAt, onOpen, menuAt, onMenu }: {
  */
 export const RunRoles = memo(
   function RunRoles({ run, project, launch = null, onOpen, lastOutput, expected }: {
-    run: Say;
+    /** The seat in front; null on a launch's pane no seat has arrived on yet (`../talk/layout`'s
+     *  `stoodForLaunch`), whose roles are drawn off the launch alone. */
+    run: Say | null;
     project: number;
     /** The launch the pane draws; null for a run kept from before launches were, which sits in no seat. */
     launch?: number | null;
@@ -956,12 +959,14 @@ export const RunRoles = memo(
     // A launch not read back yet draws nothing rather than the run alone, which it would then take back.
     const reading = launch !== null && launchState === null;
     const { desks, idle } = useMemo(
-      () => (launchState !== null ? desksOf(launchState, run) : reading ? { desks: [], idle: [] } : runDesks(run, roles)),
+      () => (launchState !== null
+        ? desksOf(launchState, run)
+        : reading || run === null ? { desks: [], idle: [] } : runDesks(run, roles)),
       [launchState, reading, run, roles],
     );
     const filed = useMemo(() => {
       if (launchState !== null) return filedLines(launchState, roles);
-      const own = reading ? null : filedLine(run, roles);
+      const own = reading || run === null ? null : filedLine(run, roles);
       return own === null ? [] : [own];
     }, [launchState, reading, run, roles]);
     // The one role whose menu is open, and where; one at a time.
@@ -975,10 +980,10 @@ export const RunRoles = memo(
     // quiet, which is measured whether or not the round's start was read.
     const now = useNow(desks.some((desk) => desk.seats.some((seat) => underWay(seat.state))));
     // The terminals out of sight are read only while a seat out of sight is at work.
-    const outputs = useRunOutputs(desks.some((desk) => desk.seats.some((seat) => seat.run !== run.run && underWay(seat.state))));
+    const outputs = useRunOutputs(desks.some((desk) => desk.seats.some((seat) => seat.run !== run?.run && underWay(seat.state))));
     const last = lastOutput?.() ?? null;
     // The terminal in front is the pane's own, and newer than the last reading; the rest are Rust's.
-    const silenceAt = (seat: Seat) => seat.run === run.run
+    const silenceAt = (seat: Seat) => run !== null && seat.run === run.run
       ? silenceOf(seat.state, last ?? outputs.get(seat.run) ?? null, now, run.expectedMinutes ?? expected?.get(runFrameId(seat.run)) ?? null)
       : silenceOf(seat.state, outputs.get(seat.run) ?? null, now, expected?.get(runFrameId(seat.run)) ?? null);
     return (
@@ -993,7 +998,7 @@ export const RunRoles = memo(
                   <DeskView
                     key={desk.role ?? "run"}
                     desk={desk}
-                    front={run.run}
+                    front={run?.run ?? null}
                     now={now}
                     silenceAt={silenceAt}
                     onOpen={onOpen}
@@ -1038,27 +1043,35 @@ export const RunRoles = memo(
     before.launch === after.launch &&
     (before.onOpen === undefined) === (after.onOpen === undefined) &&
     (before.lastOutput === undefined) === (after.lastOutput === undefined) &&
-    before.run.run === after.run.run &&
-    before.run.automation === after.run.automation &&
-    before.run.automationId === after.run.automationId &&
-    before.run.step === after.run.step &&
-    before.run.interactive === after.run.interactive &&
-    before.run.expectedMinutes === after.run.expectedMinutes &&
     before.expected === after.expected &&
-    before.run.task?.ref === after.run.task?.ref &&
-    before.run.task?.title === after.run.task?.title &&
-    before.run.round?.role === after.run.round?.role &&
-    before.run.round?.startedAt === after.run.round?.startedAt &&
-    before.run.round?.incident?.id === after.run.round?.incident?.id &&
-    before.run.round?.incident?.ref === after.run.round?.incident?.ref &&
-    before.run.round?.incident?.at === after.run.round?.incident?.at &&
-    before.run.round?.incident?.seat === after.run.round?.incident?.seat &&
-    before.run.round?.incident?.role === after.run.round?.incident?.role &&
-    before.run.round?.incident?.person === after.run.round?.incident?.person &&
-    before.run.state?.status === after.run.state?.status &&
-    before.run.state?.word === after.run.state?.word &&
-    (before.run.state?.waiting === true) === (after.run.state?.waiting === true),
+    sameFront(before.run, after.run),
 );
+
+/** Whether two seats in front draw the same desks — both none, or the same run said the same way. */
+function sameFront(a: Say | null, b: Say | null): boolean {
+  if (a === null || b === null) return a === b;
+  return (
+    a.run === b.run &&
+    a.automation === b.automation &&
+    a.automationId === b.automationId &&
+    a.step === b.step &&
+    a.interactive === b.interactive &&
+    a.expectedMinutes === b.expectedMinutes &&
+    a.task?.ref === b.task?.ref &&
+    a.task?.title === b.task?.title &&
+    a.round?.role === b.round?.role &&
+    a.round?.startedAt === b.round?.startedAt &&
+    a.round?.incident?.id === b.round?.incident?.id &&
+    a.round?.incident?.ref === b.round?.incident?.ref &&
+    a.round?.incident?.at === b.round?.incident?.at &&
+    a.round?.incident?.seat === b.round?.incident?.seat &&
+    a.round?.incident?.role === b.round?.incident?.role &&
+    a.round?.incident?.person === b.round?.incident?.person &&
+    a.state?.status === b.state?.status &&
+    a.state?.word === b.state?.word &&
+    (a.state?.waiting === true) === (b.state?.waiting === true)
+  );
+}
 
 /** **Which seat the run `run` sits in** in the launch `launch` — its role and its number from 1 — or
  *  null where it sits in none of them. */

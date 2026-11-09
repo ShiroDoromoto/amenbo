@@ -4250,6 +4250,10 @@ const REGISTRY: &[OpSpec] = &[
     //
     // A start hands the run nothing: work reaches it as a task filed under one of its
     // roles (`task create`, `task update` with `role_of`), its files attached to that task.
+    //
+    // `waits: true` is a start with no task there to take, on an automation whose entry waits for
+    // one: the launch opens and no run does — the first run comes once a task turns up. Such a start
+    // binds nothing (there is no run to bind), and its launch's pane is read with `launch-pane`.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start", required: &[], refs: &["target"], strings: &[], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pause", required: &[], refs: &["target"], strings: &[], binds: false },
     // A run paused at the end of an action goes on from the copy it has. One paused before its next
@@ -4675,6 +4679,12 @@ const REGISTRY: &[OpSpec] = &[
     // while the launch is going; a road names what it is sure of and leaves the rest out.
     // `target` is a run of the launch, whose pane is read.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "launch-head", required: &["state"], refs: &["target"], strings: &["state"], binds: false },
+    // **The pane of a launch with no run yet** — Start pressed on an automation that waits for a task
+    // to take, with none there (`start` with `waits: true`). `target` is the automation, since there is
+    // no run to name the pane by. The pane stands all the same: the launch's header, no seat's row
+    // under it, and its body the roles — every role on the bar under the desks, by its name and
+    // headcount, while none has a task.
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "launch-pane", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // **Which face that pane's body is turned to** (`face`): the desks of its roles, or the terminal of
     // one seat. A pane opens on its roles, and is turned to the terminal while a step that may wait
     // for a person runs. On the roles, a role whose round is under way is a desk the width of the pane,
@@ -5346,7 +5356,7 @@ impl Scenario {
             // task the run is on and the run's story so far, `executable` whether a fixture's copy
             // may be run as a program, `saved` whether a definition is read off its newest saved
             // version rather than off the draft, and `held` whether a role of a launch is stopped once
-            // its task is done.
+            // its task is done, and `waits` whether a start finds no task and opens its launch alone.
             // The query, in whichever of its two spellings — one of them, never both and never
             // neither. `spelled` belongs to the number alone: a word is typed as it is written, so a
             // step naming a shape for one is a step that means a number and left the record out.
@@ -5463,11 +5473,26 @@ impl Scenario {
                 "executable",
                 "saved",
                 "held",
+                "waits",
             ] {
                 if let Some(v) = step.with().get(key) {
                     if v.as_bool().is_none() {
                         errs.push(at(i, format!("`{key}` must be a boolean")));
                     }
+                }
+            }
+
+            // A start that waits opens no run, so it has nothing to bind and nothing to be refused with:
+            // it is a press that went through and stood the launch up alone.
+            if step.domain() == Domain::Automation
+                && step.op() == "start"
+                && step.with().get("waits").and_then(|v| v.as_bool()) == Some(true)
+            {
+                if matches!(step, Step::Action { bind: Some(_), .. }) {
+                    errs.push(at(i, "a start that `waits` opens no run, so it binds nothing — read its launch's pane with `launch-pane`".to_string()));
+                }
+                if step.with().contains_key("refused") {
+                    errs.push(at(i, "a start that `waits` went through — `refused` and `waits` are two different answers".to_string()));
                 }
             }
 
@@ -6335,6 +6360,31 @@ steps_gui:
         assert!(errs("{ field: history }").iter().any(|e| e.message.contains("naming neither")));
         assert!(errs("{ field: history, value: x, on: true }").iter().any(|e| e.message.contains("not both")));
         assert!(errs("{ field: history, on: yes }").iter().any(|e| e.message.contains("`on` must be a boolean")));
+    }
+
+    /// A start that waits opens no run: it binds nothing and is not refused, and its launch's pane is
+    /// read by the automation.
+    #[test]
+    fn a_start_that_waits_binds_nothing_and_is_not_refused() {
+        let road = |start: &str| {
+            format!(
+                "id: x\ntitle: y\ngiven:\n  - {{ type: action, domain: automation, op: create, with: {{ name: a }}, as: auto }}\nsteps_gui:\n  - {start}\n  - {{ type: assert, domain: automation, op: launch-pane, with: {{ target: auto }} }}\n"
+            )
+        };
+        let errs = |start: &str| load_str(&road(start)).unwrap().validate().unwrap_err();
+        assert!(load_str(&road("{ type: action, domain: automation, op: start, with: { target: auto, waits: true } }"))
+            .unwrap()
+            .validate()
+            .is_ok());
+        assert!(errs("{ type: action, domain: automation, op: start, with: { target: auto, waits: true }, as: run }")
+            .iter()
+            .any(|e| e.message.contains("binds nothing")));
+        assert!(errs("{ type: action, domain: automation, op: start, with: { target: auto, waits: true, refused: x } }")
+            .iter()
+            .any(|e| e.message.contains("two different answers")));
+        assert!(errs("{ type: action, domain: automation, op: start, with: { target: auto, waits: yes } }")
+            .iter()
+            .any(|e| e.message.contains("`waits` must be a boolean")));
     }
 
     #[test]

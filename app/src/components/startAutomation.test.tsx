@@ -5,9 +5,9 @@
 // What these guard: **the press only opens the run, and carries nothing** (`AMB-D-1123`) — the
 // automation, the project, the folders and whether the workspace is standing, and no title, notes,
 // value or file; **no dialog opens on the press**, which starts the run at once; **what the press
-// comes back with is said where the press was made**, core's refusal in core's words; and **a run that
-// starts is gone to** (`AMB-T-5530`), while a refused press, or one that leaves the automation
-// waiting for a task, moves nothing.
+// comes back with is said where the press was made**, core's refusal in core's words; and **a launch
+// that starts is gone to** (`AMB-T-5530`) — with the run it started in front, or with none where the
+// automation waits for a task — while a refused press moves nothing.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -107,11 +107,18 @@ describe("the press", () => {
     expect(goToRun).toHaveBeenCalledWith(1, 31, 5);
   });
 
-  it("goes nowhere when the automation waits for a task to take", async () => {
-    hoisted.launch.mockResolvedValue({ run: null });
+  it("goes to the launch's pane, with no run in front, when the automation waits for a task to take", async () => {
+    hoisted.launch.mockResolvedValue({ run: null, launch: 5 });
     await render();
     await press();
     expect(hoisted.launch).toHaveBeenCalledTimes(1);
+    expect(goToRun).toHaveBeenCalledWith(1, null, 5);
+  });
+
+  it("goes nowhere when the answer names neither a run nor a launch", async () => {
+    hoisted.launch.mockResolvedValue({ run: null });
+    await render();
+    await press();
     expect(goToRun).not.toHaveBeenCalled();
   });
 

@@ -4515,9 +4515,16 @@ impl Instructor {
             // nothing: work reaches a run as a task filed under one of its roles, so no
             // dialog opens, and a road naming something to hand over is refused rather than said. A
             // closed workspace is refused at the same press.
+            //
+            // **A start that waits** (`waits: true`) is the same press on an automation that waits for a
+            // task to take, with none there: the launch opens and no run does, and the screen goes to
+            // the launch's pane all the same (`app/src/components/StartAutomation.tsx`).
             (Domain::Automation, "start") => {
                 hands_nothing_at_start(with)?;
-                "On the build screen's head, press the button that starts a run.".to_string()
+                match with.get("waits").and_then(|v| v.as_bool()) {
+                    Some(true) => "On the build screen's head, press the button that starts a run. There is no task for it to take yet, so no run starts: expect the workspace to come up on a pane standing for the launch rather than nothing happening.".to_string(),
+                    _ => "On the build screen's head, press the button that starts a run.".to_string(),
+                }
             }
             // **A test run**, pressed on the same head. It asks in a dialog of its own, which says no
             // agent is started and nothing is kept, and asks for no file. What comes back opens beside
@@ -6783,8 +6790,18 @@ impl Instructor {
             // else, which is why this one is here. Where the run stands is read off the same row, in
             // the words `run-row` reads the tab in.
             (Domain::Automation, "run-pane") => match present(with) {
+                // A road that bound no run — its start waited for a task (`start` with `waits`) — reads
+                // the one launch's pane it stood, and the run that came to it since.
                 true => format!(
-                    "In the workspace, confirm a pane is standing for the launch this run is a seat of, headed with the chip saying it is automatic and the automation's name, and that the row under that header carries on its first line this run's own number, and on the line under it which step it is on{}{}{}{}.",
+                    "In the workspace, confirm a pane is standing for {}, headed with the chip saying it is automatic and the automation's name, and that the row under that header carries on its first line {}, and on the line under it which step it is on{}{}{}{}.",
+                    match with.contains_key("target") {
+                        true => "the launch this run is a seat of",
+                        false => "the launch",
+                    },
+                    match with.contains_key("target") {
+                        true => "this run's own number",
+                        false => "the number of the run it opened",
+                    },
                     // The step and the action it was opened from are one value on the screen, in the
                     // order the reader's language puts them — so the line names both and leaves the
                     // order to the eye.
@@ -6870,6 +6887,10 @@ impl Instructor {
                 };
                 format!("In the workspace, on the header of the pane this run is drawn in — the line over the row of the seat in front — confirm {said}.")
             }
+            // The pane of a launch with no run yet (`app/src/talk/layout.ts`'s `stoodForLaunch`), named by
+            // its automation since there is no run to name it by. Its body is the roles, which stand on
+            // the bar while none has a task; no seat's row, no terminal and no button to open one.
+            (Domain::Automation, "launch-pane") => "In the workspace, confirm a pane is standing for this automation's launch, headed with the chip saying it is automatic, the automation's name and the chip saying \"Running\", with no row of a run under that header and no terminal or button to open one in it, and that its body is the roles of the launch — each role on the bar under the desks, by its name and its headcount.".to_string(),
             // One role of the launch, read off its desk (`app/src/shell/RunPicture.tsx`, `DeskView` and
             // `deskNotes`): the count of seats working out of the headcount on its head, the two notes
             // under it, and the tag a role stopped after the task carries. A note is drawn only while
@@ -8599,7 +8620,8 @@ pub fn step_reads_the_store(step: &Step) -> bool {
 }
 
 /// Whether this step is the press that starts a run, and if so, whether the road expects a run to
-/// come of it: `Some(true)` for a plain start, `Some(false)` for one written with `refused:`.
+/// come of it: `Some(true)` for a plain start, `Some(false)` for one written with `refused:` — and
+/// for one written with `waits: true`, which opens the launch and no run until a task turns up.
 ///
 /// It is the one action the walk judges, and the store is what judges it. A start the app turned
 /// away leaves a screen that reads like one it took — the pane a road reads next is a `Review`, and
@@ -8612,7 +8634,7 @@ pub fn step_reads_the_store(step: &Step) -> bool {
 pub fn starts_a_run(step: &Step) -> Option<bool> {
     match step {
         Step::Action { domain: Domain::Automation, op, with, .. } if op == "start" => {
-            Some(!with.contains_key("refused"))
+            Some(!with.contains_key("refused") && with.get("waits").and_then(|v| v.as_bool()) != Some(true))
         }
         _ => None,
     }
@@ -9924,6 +9946,46 @@ steps_gui:
         assert!(ended.contains("neither") && ended.contains("\"Stop\""), "{ended}");
         assert!(ins.render(&steps[3]).is_err(), "an ended launch draws no count");
         assert!(ins.render(&steps[4]).is_err(), "the two counts are one phrase");
+    }
+
+    /// A start with no task to take is said as the press that stands the launch's pane, and that pane
+    /// is read by the automation, with its roles on the bar and no run's row.
+    #[test]
+    fn a_start_that_waits_is_read_on_its_launch_pane() {
+        let s = load(r#"
+id: x
+title: y
+given:
+  - { type: action, domain: automation, op: create, with: { name: a }, as: auto }
+steps_gui:
+  - type: action
+    domain: automation
+    op: start
+    with: { waits: true }
+  - type: action
+    domain: automation
+    op: start
+  - type: assert
+    domain: automation
+    op: launch-pane
+    with: { target: auto }
+  - type: assert
+    domain: automation
+    op: run-pane
+    with: { step: build, present: true }
+"#);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        let waits = ins.render(&steps[0]).expect("renders");
+        assert!(waits.contains("no run starts") && waits.contains("a pane standing for the launch"), "{waits}");
+        let plain = ins.render(&steps[1]).expect("renders");
+        assert!(!plain.contains("no run starts"), "{plain}");
+        let pane = ins.render(&steps[2]).expect("renders");
+        assert!(pane.contains("no row of a run") && pane.contains("on the bar") && pane.contains("headcount"), "{pane}");
+        // The run the launch opened once a task turned up, read in that pane with no run bound.
+        let seated = ins.render(&steps[3]).expect("renders");
+        assert!(seated.contains("for the launch,") && seated.contains("the number of the run it opened"), "{seated}");
+        assert!(!seated.contains("this run"), "{seated}");
     }
 
     #[test]
@@ -14649,6 +14711,9 @@ steps_gui:
         let mut refused = Args::new();
         refused.insert("refused".to_string(), "workspace_closed".into());
         assert_eq!(starts_a_run(&start(refused)), Some(false));
+        let mut waits = Args::new();
+        waits.insert("waits".to_string(), true.into());
+        assert_eq!(starts_a_run(&start(waits)), Some(false), "a start that waits opens no run");
         assert!(step_reads_the_store(&start(Args::new())), "a road with no world cannot count runs");
         assert_eq!(
             starts_a_run(&Step::Action {

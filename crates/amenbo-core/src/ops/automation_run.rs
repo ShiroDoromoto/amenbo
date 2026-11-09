@@ -2734,6 +2734,10 @@ pub struct LaunchRoleState {
     pub waiting: usize,
     /// The first [`WAITING_NAMED`] of them, in the order the role takes them in.
     pub first_waiting: Vec<WaitingTask>,
+    /// **What keeps its tasks from being taken** (`AMB-D-999`) — read only where none is waiting to be
+    /// taken, from the same filter, and counted by what stops them. `None` where one is waiting, where
+    /// no task is held back either, and where its round starts at no "take a task".
+    pub held_back: Option<crate::ops::automation_builtin::HeldBack>,
 }
 
 /// **One task waiting for a role to take it** ([`LaunchRoleState::first_waiting`]).
@@ -2748,7 +2752,8 @@ pub struct WaitingTask {
 }
 
 /// **One launch as its pane draws it** ([`LaunchState`]) — its headcounts as [`launch_headcounts`] reads
-/// them, and each role's tasks waiting to be taken. The tasks are listed as the built-in that takes one
+/// them, each role's tasks waiting to be taken, and what keeps them from being taken where none is
+/// ([`LaunchRoleState::held_back`]). The tasks are listed as the built-in that takes one
 /// lists them for a seat of the role, in the order the role takes them in. An ended launch answers the
 /// same way, its roles back at their definition, so what is still waiting for them is read.
 pub fn launch_state(conn: &Connection, launch_id: i64) -> Result<LaunchState> {
@@ -2773,7 +2778,7 @@ pub fn launch_state(conn: &Connection, launch_id: i64) -> Result<LaunchState> {
             Some((seat, _, _)) => start_builtin(conn, &pic, *seat)?.filter(StartBuiltin::takes_a_task),
             None => None,
         };
-        let (waiting, first_waiting) = match (&start, takes) {
+        let (waiting, first_waiting, held_back) = match (&start, takes) {
             (Some(e), Some((_, of, order))) => {
                 let found = crate::ops::automation_builtin_take::waiting_to_be_taken(
                     conn,
@@ -2791,9 +2796,22 @@ pub fn launch_state(conn: &Connection, launch_id: i64) -> Result<LaunchState> {
                         title: task.title,
                     });
                 }
-                (found.total_matched, first)
+                // Counted only where nothing is there to take: the read goes through every task the
+                // filter matches, and a role with a task to take is not kept waiting.
+                let held = match found.total_matched {
+                    0 => crate::ops::automation_builtin::held_back(
+                        conn,
+                        launch.project_id,
+                        &of,
+                        e.builtin.as_deref(),
+                        &e.cfg,
+                    )?
+                    .filter(|held| held.tasks > 0),
+                    _ => None,
+                };
+                (found.total_matched, first, held)
             }
-            _ => (0, Vec::new()),
+            _ => (0, Vec::new(), None),
         };
         roles.push(LaunchRoleState {
             name: role.name.clone(),
@@ -2801,6 +2819,7 @@ pub fn launch_state(conn: &Connection, launch_id: i64) -> Result<LaunchState> {
             headcount,
             waiting,
             first_waiting,
+            held_back,
         });
     }
     Ok(LaunchState { launch, automation_name: automation.name, roles })

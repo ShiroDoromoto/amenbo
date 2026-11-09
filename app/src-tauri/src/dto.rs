@@ -4790,6 +4790,62 @@ pub struct AutomationLaunchStateDto {
     /// **The launch's failed rounds that were filed as a task**, newest first, up to the newest
     /// [`amenbo_core::ops::automation_run::FAILED_NAMED`] — one line each under the pane.
     pub(crate) failed: Vec<AutomationLaunchFailedDto>,
+    /// **What needs a person's hand now** — the stopped tasks first, then the runs waiting for a
+    /// person. Drawn under the launch's heading, and not at all where it is empty.
+    pub(crate) attention: Vec<AutomationLaunchAttentionDto>,
+}
+
+/// **One thing in a launch that needs a person's hand now**
+/// ([`amenbo_core::ops::automation_run::LaunchAttention`]): a task stopped until the task its round's
+/// failure was filed as closes, or a run standing on a step that waits for a person.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationLaunchAttentionDto {
+    /// `stopped` for a stopped task, `awaits_person` for a run waiting for a person.
+    #[ts(type = "\"stopped\" | \"awaits_person\"")]
+    pub(crate) kind: &'static str,
+    /// The task it is about, by its id. Absent only for a run waiting while on no task.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) task: Option<i64>,
+    /// The task's reference.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) task_ref: Option<String>,
+    /// The task's title.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) title: Option<String>,
+    /// The role whose seat it is in — the failed round's role, or the waiting run's — by its id. Absent
+    /// where it had none, and where the role has since been taken out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) role: Option<i64>,
+    /// The run whose round failed, or the run waiting, by its id.
+    #[ts(type = "number")]
+    pub(crate) run: i64,
+    /// The round, by its id (`automation_run_task`). Absent for a run waiting while on no round.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) run_task: Option<i64>,
+    /// The task the failure was filed as, by its id — what the stopped task waits on. Absent for a
+    /// waiting run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) incident: Option<i64>,
+    /// That task's reference.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) incident_ref: Option<String>,
+    /// The step the run waits on. Absent for a stopped task.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) step_name: Option<String>,
+    /// Since when, as RFC 3339: when the round failed and was filed, or when the step was opened.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) since: Option<String>,
 }
 
 /// **One failed round of a launch** ([`amenbo_core::ops::automation_run::LaunchFailedRound`]): whose

@@ -937,6 +937,132 @@ pub fn incidents_waiting_in_launch(conn: &Connection, launch_id: i64) -> Result<
     Ok(waiting)
 }
 
+/// **Whether a run's step may be waiting for a person now** — the step it is on is still open, the run
+/// is still going, and the step says it may wait for one (`interactive`). A step that has left, and a
+/// run that has stopped or paused, waits for nobody. `last` is the run's newest step and `def` the copy
+/// it was opened from.
+pub fn waits_for_person(
+    run: &AutomationRun,
+    last: Option<&crate::model::AutomationRunStep>,
+    def: Option<&AutomationRunDef>,
+) -> bool {
+    run.status == AutomationRunStatus::Running
+        && last.is_some_and(|step| step.ended_at.is_none())
+        && def.is_some_and(|def| def.interactive)
+}
+
+/// What one line of a launch's "needs attention" says ([`LaunchAttention`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AttentionKind {
+    /// A task a round failed on, kept from being taken until the task its failure was filed as closes.
+    Stopped,
+    /// A run standing on an open step that waits for a person.
+    AwaitsPerson,
+}
+
+/// **One thing in a launch that needs a person's hand now** ([`attention_in_launch`]) — a task stopped
+/// by the failure of its round, or a run waiting for a person. Only what stands now: a failure since
+/// closed and a step since left are not in it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct LaunchAttention {
+    pub kind: AttentionKind,
+    /// The task it is about — the stopped task, or the task the waiting run is on. `None` only for a run
+    /// waiting for a person while on no task.
+    pub task_id: Option<i64>,
+    /// That task's title.
+    pub title: Option<String>,
+    /// The role whose seat it is in — the failed round's role, or the waiting run's. `None` where it had
+    /// none, and where the role has since been taken out.
+    pub role_id: Option<i64>,
+    /// The run: the one whose round failed, or the one waiting.
+    pub run_id: i64,
+    /// The round: the one that failed, or the one under way. `None` for a waiting run on no round.
+    pub run_task_id: Option<i64>,
+    /// **The task the failure was filed as**, which the stopped task waits on. `None` for a waiting run.
+    pub incident_task_id: Option<i64>,
+    /// The step the run waits on. `None` for a stopped task.
+    pub step_name: Option<String>,
+    /// Since when: when the round failed and was filed, or when the waiting step was opened.
+    pub since: Option<Timestamp>,
+}
+
+/// **What in one launch needs a person's hand now** — the stopped tasks first, in the order they were
+/// filed, then the runs waiting for a person, oldest run first. Empty where nothing does, and the pane
+/// then draws no such line.
+///
+/// - **A task is stopped** while a round of the launch failed on it, the task its failure was filed as
+///   is still open, and the task still waits on that one. Whoever the failure was filed to, a person or
+///   a role, the task is stopped the same way. One that failed again is named once, by its newest
+///   failure. A round that failed on no task — one started by a trigger — stops no task and is not
+///   named; the failure filed stands in the tasks as any other.
+/// - **A run waits for a person** while it is going and stands on an open step that may wait for one
+///   ([`waits_for_person`]).
+///
+/// What has ended is left to the history: a closed failure, a step that has left, a run that has
+/// stopped.
+pub fn attention_in_launch(conn: &Connection, launch_id: i64) -> Result<Vec<LaunchAttention>> {
+    let mut stopped: BTreeMap<i64, LaunchAttention> = BTreeMap::new();
+    for run_id in read::automation_launch_run_ids(conn, launch_id)? {
+        for round in read::automation_run_tasks_of(conn, run_id)? {
+            let (Some(task_id), Some(incident_id)) = (round.task_id, round.incident_task_id) else { continue };
+            let Some(task) = read::task(conn, task_id)? else { continue };
+            let Some(incident) = read::task(conn, incident_id)? else { continue };
+            if task.status.is_closed()
+                || incident.status.is_closed()
+                || read::dependency_id(conn, task_id, incident_id)?.is_none()
+            {
+                continue;
+            }
+            let line = LaunchAttention {
+                kind: AttentionKind::Stopped,
+                task_id: Some(task_id),
+                title: Some(task.title),
+                role_id: round.role_id,
+                run_id,
+                run_task_id: Some(round.id),
+                incident_task_id: Some(incident_id),
+                step_name: None,
+                since: round.ended_at,
+            };
+            let newer = |seen: &LaunchAttention| (seen.since, seen.run_task_id) <= (line.since, line.run_task_id);
+            if stopped.get(&task_id).is_none_or(newer) {
+                stopped.insert(task_id, line);
+            }
+        }
+    }
+    let mut found: Vec<LaunchAttention> = stopped.into_values().collect();
+    found.sort_by_key(|line| (line.since, line.run_task_id));
+
+    for run_id in read::automation_launch_run_ids_under_way(conn, launch_id)? {
+        let Some(run) = read::automation_run(conn, run_id)? else { continue };
+        let steps = read::automation_run_steps_of(conn, run_id)?;
+        let Some(last) = steps.last() else { continue };
+        let Some(def) = read::automation_run_def(conn, last.run_def_id)? else { continue };
+        if !waits_for_person(&run, Some(last), Some(&def)) {
+            continue;
+        }
+        let round = read::automation_run_task_last(conn, run_id)?.filter(|round| round.ended_at.is_none());
+        let task_id = round.as_ref().and_then(|round| round.task_id);
+        let title = match task_id {
+            Some(id) => read::task_title(conn, id)?,
+            None => None,
+        };
+        found.push(LaunchAttention {
+            kind: AttentionKind::AwaitsPerson,
+            task_id: title.as_ref().and(task_id),
+            title,
+            role_id: run.role_id.or_else(|| round.as_ref().and_then(|round| round.role_id)),
+            run_id,
+            run_task_id: round.as_ref().map(|round| round.id),
+            incident_task_id: None,
+            step_name: Some(def.name),
+            since: last.started_at,
+        });
+    }
+    Ok(found)
+}
+
 /// How many of a launch's failed rounds its pane names, the newest ([`failed_rounds_in_launch`]).
 pub const FAILED_NAMED: usize = 20;
 
@@ -2784,6 +2910,9 @@ pub struct LaunchState {
     /// Every role the newest saved version holds, in the order they are defined in — one with no task
     /// under way and none waiting among them.
     pub roles: Vec<LaunchRoleState>,
+    /// **What needs a person's hand now** ([`attention_in_launch`]) — drawn under the launch's heading,
+    /// and not at all where it is empty.
+    pub attention: Vec<LaunchAttention>,
 }
 
 /// **One role of a launch** — what it is, how many are in it ([`RoleHeadcount`]), and the tasks waiting
@@ -2820,8 +2949,9 @@ pub struct WaitingTask {
 
 /// **One launch as its pane draws it** ([`LaunchState`]) — its headcounts as [`launch_headcounts`] reads
 /// them, each role's tasks waiting to be taken, and what keeps them from being taken where none is
-/// ([`LaunchRoleState::held_back`]). The tasks are listed as the built-in that takes one
-/// lists them for a seat of the role, in the order the role takes them in. An ended launch answers the
+/// ([`LaunchRoleState::held_back`]), and what needs a person's hand ([`attention_in_launch`]). The tasks
+/// are listed as the built-in that takes one lists them for a seat of the role, in the order the role
+/// takes them in. An ended launch answers the
 /// same way, its roles back at their definition, so what is still waiting for them is read.
 pub fn launch_state(conn: &Connection, launch_id: i64) -> Result<LaunchState> {
     let launch = read::automation_launch(conn, launch_id)?.ok_or_else(|| not_found("launch", launch_id))?;
@@ -2889,7 +3019,8 @@ pub fn launch_state(conn: &Connection, launch_id: i64) -> Result<LaunchState> {
             held_back,
         });
     }
-    Ok(LaunchState { launch, automation_name: automation.name, roles })
+    let attention = attention_in_launch(conn, launch.id)?;
+    Ok(LaunchState { launch, automation_name: automation.name, roles, attention })
 }
 
 /// **The role a task was last passed on to `role_id` from** ([`WaitingTask::from_role_id`]).

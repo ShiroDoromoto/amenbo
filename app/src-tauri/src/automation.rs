@@ -68,7 +68,7 @@ use crate::dto::{
     AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationFailuresToDto, AutomationHeldBackDto,
     AutomationHeldByRecordDto, AutomationHeldByValueDto, AutomationLaunchAsksDto,
     AutomationCarrierDto, AutomationLaunchBlockDto,
-    AutomationLaunchCheckDto, AutomationLaunchFailedDto, AutomationLaunchIncidentDto, AutomationLaunchRoleStateDto,
+    AutomationLaunchAttentionDto, AutomationLaunchCheckDto, AutomationLaunchFailedDto, AutomationLaunchIncidentDto, AutomationLaunchRoleStateDto,
     AutomationLaunchStateDto,
     AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRoleDto, AutomationRolePassDto, AutomationRunCardDto,
@@ -2090,9 +2090,7 @@ fn run_card(
     let placement = last_def.as_ref().and_then(|def| def.placement_id);
     // Whether the step under way may wait for a person: read only of a step still open on a run still
     // going, for a step that has left or a run that has stopped waits for nobody.
-    let interactive = run.status == amenbo_core::model::AutomationRunStatus::Running
-        && steps.last().is_some_and(|last| last.ended_at.is_none())
-        && last_def.as_ref().is_some_and(|def| def.interactive);
+    let interactive = amenbo_core::ops::automation_run::waits_for_person(&run, steps.last(), last_def.as_ref());
     let step_name = last_def.map(|def| def.name);
     // The version it goes on from: the newest copy of its entry, which a run back at its entry has
     // taken afresh before its first step is opened (`take_up_newer`).
@@ -2222,8 +2220,9 @@ pub fn automation_launch_incidents(launch_id: i64) -> Result<Vec<AutomationLaunc
 /// **One launch as its pane draws it, read at once** ([`automation_run::launch_state`]) — where the launch
 /// stands, and for every role, in the order they are defined in, its headcount beside the definition's,
 /// how many are under way and still to go, whether it is held, the runs in its seats, its tasks
-/// waiting to be taken with the first three of them, and what keeps them from being taken where none
-/// is (`AMB-D-999`). The pane draws one launch from this one read, and
+/// waiting to be taken with the first three of them, what keeps them from being taken where none
+/// is (`AMB-D-999`), and what needs a person's hand now — the tasks stopped by a failure and the runs
+/// waiting for a person. The pane draws one launch from this one read, and
 /// reads it again when the store changes.
 #[tauri::command]
 pub fn automation_launch_state(launch_id: i64) -> Result<AutomationLaunchStateDto, CmdError> {
@@ -2266,7 +2265,28 @@ pub fn automation_launch_state(launch_id: i64) -> Result<AutomationLaunchStateDt
         max_headcount: amenbo_core::model::MAX_ROLE_HEADCOUNT,
         roles,
         failed: failed_in_launch(&store, launch_id)?,
+        attention: state.attention.into_iter().map(attention_dto).collect(),
     })
+}
+
+/// **One line of what needs a person's hand in a launch**, as its pane draws it.
+fn attention_dto(line: automation_run::LaunchAttention) -> AutomationLaunchAttentionDto {
+    AutomationLaunchAttentionDto {
+        kind: match line.kind {
+            automation_run::AttentionKind::Stopped => "stopped",
+            automation_run::AttentionKind::AwaitsPerson => "awaits_person",
+        },
+        task: line.task_id,
+        task_ref: line.task_id.map(amenbo_core::idref::task),
+        title: line.title,
+        role: line.role_id,
+        run: line.run_id,
+        run_task: line.run_task_id,
+        incident: line.incident_task_id,
+        incident_ref: line.incident_task_id.map(amenbo_core::idref::task),
+        step_name: line.step_name,
+        since: line.since.map(|at| at.to_rfc3339_z()),
+    }
 }
 
 /// **The failed rounds of one launch**, newest first ([`automation_run::failed_rounds_in_launch`]) —

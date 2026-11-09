@@ -970,12 +970,6 @@ impl Store {
         Ok(out)
     }
 
-    /// **Whether an automation is waiting for a task** to start a run on, since when, and what it looks
-    /// for ([`crate::ops::automation_run::task_wait`]).
-    pub fn automation_task_wait(&self, automation_id: i64) -> Result<Option<crate::ops::automation_run::TaskWait>> {
-        crate::ops::automation_run::task_wait(self.engine.conn(), automation_id)
-    }
-
     /// **How many are in each role for one launch, beside its definition**
     /// ([`crate::ops::automation_run::launch_headcounts`]).
     pub fn automation_launch_headcounts(

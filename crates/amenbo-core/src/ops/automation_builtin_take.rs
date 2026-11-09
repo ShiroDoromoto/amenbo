@@ -28,12 +28,12 @@
 //!
 //! **Or Amenbo waits for one** (`AMB-D-969`), where [`WHEN_NONE`] is answered [`WAIT`]. A run or a
 //! session closing a task can make another one ready, and so can a new one being filed, so there is no
-//! point at which none will ever turn up. The run that found none ends there, and its automation waits
-//! for one with no run under way, until a task turns up and a run is started on it or a person stops
-//! the wait ([`crate::ops::automation_run::wait_for_a_task`]). Left unanswered it does not wait, so an
-//! automation nobody chose to keep waiting does not. What is keeping it waiting is counted apart from
-//! that look (`AMB-D-999`): the tasks the filter matches that are not started and not ready, by what
-//! stops them ([`held_back`]).
+//! point at which none will ever turn up. The run that found none ends there, its seat left free with
+//! no run under way, until a task turns up and a run is started on it in that seat
+//! ([`crate::ops::automation_run::end_with_no_task`], [`crate::ops::automation_run::top_up`]). Left
+//! unanswered it does not wait, so an automation nobody chose to keep waiting does not. What is keeping
+//! it waiting is counted apart from that look (`AMB-D-999`): the tasks the filter matches that are not
+//! started and not ready, by what stops them ([`held_back`]).
 
 use rusqlite::Connection;
 
@@ -341,8 +341,7 @@ mod tests {
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{
-        check, is_waiting, launch, launch_past_the_task_checks, next_def, nothing_asked, start,
-        start_waiting, stop_waiting, take_up_newer, task_wait, task_wait_held_back, tasks_turned_up,
+        check, is_waiting, launch, launch_past_the_task_checks, next_def, nothing_asked, start, take_up_newer,
         Launcher, Started, TakenUp, Unmet, Waiting,
     };
     use crate::ops::automation_step::Opened;
@@ -549,20 +548,22 @@ mod tests {
     }
 
     /// Who starts a run once a task turns up: nobody, with no agent probe and no window — as the app's
-    /// watch starts one.
+    /// watch starts one ([`crate::ops::automation_run::top_up`]).
     fn launcher() -> Launcher<'static> {
         Launcher { default_agent: None, startable: None, models: nothing_asked(), workspace_open: None, by: None }
     }
 
-    fn waits_since(tx: &WriteTx<'_>, automation: &Automation) -> Option<crate::time::Timestamp> {
-        read::automation(tx.conn(), automation.id).expect("read").expect("automation").waits_for_task_since
+    /// **The launch standing for an automation**, with no run in it or with some.
+    fn standing(tx: &WriteTx<'_>, automation: &Automation) -> i64 {
+        read::automation_launch_standing(tx.conn(), automation.id).expect("read").expect("a launch stands").id
     }
 
-    /// **Set to wait, with nothing to take, the run ends there and Amenbo waits instead** — no step,
-    /// no stretch, and no run left standing. Once a task turns up, a run is started on it, and that run
-    /// takes it.
+    /// **Set to wait, with nothing to take, the run ends there and its seat is free again**
+    /// (`AMB-D-1126`) — no step, no stretch, no run left standing, and nothing marked on the automation.
+    /// Once a task turns up, the launch fills the seat with a run, and that run takes it.
     #[test]
     fn set_to_wait_the_run_ends_and_a_run_is_started_once_a_task_turns_up() {
+        use crate::ops::automation_run::{launches_to_top_up, top_up};
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = waiting_picture(tx, project);
@@ -571,6 +572,7 @@ mod tests {
             assert!(unmet.is_empty(), "nothing has to follow the way out it never takes: {unmet:?}");
 
             let run = launched(tx, &automation);
+            let launch = run.launch_id.expect("a launch");
             assert!(is_waiting(tx.conn(), run.id).expect("waiting"), "it stands before a take that would wait");
             match open_entry(tx, &run) {
                 Opened::LeftToWait { run: ended } => assert_eq!(ended.status, AutomationRunStatus::Completed),
@@ -579,16 +581,14 @@ mod tests {
             assert!(read::automation_run_steps_of(tx.conn(), run.id).expect("steps").is_empty(), "nothing written");
             assert!(read::automation_run_task_last(tx.conn(), run.id).expect("read").is_none(), "no stretch");
             assert!(read::automation_run_ids_under_way(tx.conn(), automation.id).expect("runs").is_empty());
-            assert!(waits_since(tx, &automation).is_some(), "the automation waits in its place");
-            assert!(tasks_turned_up(tx.conn(), &[automation.id]).expect("ask").is_empty(), "nothing yet");
-            assert!(start_waiting(tx, automation.id, &launcher()).expect("start").is_none(), "nothing started");
-            assert!(waits_since(tx, &automation).is_some(), "it goes on waiting");
+            assert!(launches_to_top_up(tx.conn(), &[launch]).expect("ask").is_empty(), "nothing yet");
+            assert!(top_up(tx, launch, &launcher()).expect("top up").is_none(), "nothing started");
 
             let turned_up = ours(tx, "new", &automation, None);
-            assert_eq!(tasks_turned_up(tx.conn(), &[automation.id]).expect("ask"), vec![automation.id]);
-            let next = start_waiting(tx, automation.id, &launcher()).expect("start").expect("a run");
+            assert_eq!(launches_to_top_up(tx.conn(), &[launch]).expect("ask"), vec![launch]);
+            let next = top_up(tx, launch, &launcher()).expect("top up").expect("a run");
             assert_eq!(next.status, AutomationRunStatus::Running);
-            assert_eq!(waits_since(tx, &automation), None, "the wait is over");
+            assert_eq!(next.launch_id, Some(launch), "it joins the launch standing");
             let run_step_id = match open_entry(tx, &next) {
                 Opened::Carried { run_step_id, .. } => run_step_id,
                 other => panic!("the task that turned up is taken, not {other:?}"),
@@ -599,34 +599,31 @@ mod tests {
         });
     }
 
-    /// **A start with nothing to take makes no run**: the automation waits instead, saying since when
-    /// and what it looks for. A person stopping the wait leaves nothing to start, and a start with a
-    /// task to take makes a run as always.
+    /// **A start with nothing to take makes no run**, and leaves the launch open with no run in it. A
+    /// start again with still nothing to take makes none either, in the same launch. Once a task turns
+    /// up, the launch fills its seat, and a start with a task to take makes a run as always.
     #[test]
-    fn a_start_with_nothing_to_take_makes_no_run_and_waits() {
+    fn a_start_with_nothing_to_take_makes_no_run_and_opens_the_launch() {
+        use crate::ops::automation_run::top_up;
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = waiting_picture(tx, project);
-            let Started::Waits(waits) = start(tx, automation.id, &launcher()).expect("start") else {
+            let Started::Waits(_) = start(tx, automation.id, &launcher()).expect("start") else {
                 panic!("no run with nothing to take");
             };
-            let since = waits.waits_for_task_since.expect("it waits");
             assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty(), "no run made");
-            let wait = task_wait(tx.conn(), automation.id).expect("read").expect("waiting");
-            assert_eq!(wait.since, since);
-            assert_eq!(wait.looks_for.as_deref(), Some("assignee:me-ai status:todo ready:yes"));
-            let Started::Waits(again) = start(tx, automation.id, &launcher()).expect("start") else {
+            let launch = standing(tx, &automation);
+            assert_eq!(launch_of(tx, launch).status, crate::model::AutomationLaunchStatus::Running);
+            let Started::Waits(_) = start(tx, automation.id, &launcher()).expect("start") else {
                 panic!("still nothing to take");
             };
-            assert_eq!(again.waits_for_task_since, Some(since), "waiting since the first time");
+            assert_eq!(standing(tx, &automation), launch, "the same launch");
 
-            let stopped = stop_waiting(tx, automation.id).expect("stop");
-            assert_eq!(stopped.waits_for_task_since, None);
-            assert_eq!(task_wait(tx.conn(), automation.id).expect("read"), None);
             ours(tx, "new", &automation, None);
-            assert!(tasks_turned_up(tx.conn(), &[automation.id]).expect("ask").is_empty(), "not waiting");
-            assert!(start_waiting(tx, automation.id, &launcher()).expect("start").is_none());
-
+            let topped = top_up(tx, launch, &launcher()).expect("top up").expect("a run for the task");
+            assert_eq!(topped.launch_id, Some(launch));
+            ours(tx, "another", &automation, None);
+            crate::ops::test_support::room_for(tx, automation.id, 2);
             let Started::Run(run) = start(tx, automation.id, &launcher()).expect("start") else {
                 panic!("a task to take makes a run");
             };
@@ -634,10 +631,11 @@ mod tests {
         });
     }
 
-    /// **A version saved since that no longer waits ends the wait** with no run started: a run started
-    /// then would start for no task.
+    /// **A task turning up starts no run past the seats of its role** — nothing is written, and the
+    /// launch is asked again later.
     #[test]
-    fn a_version_that_no_longer_waits_ends_the_wait() {
+    fn a_task_turning_up_starts_no_run_past_the_seats_of_its_role() {
+        use crate::ops::automation_run::{launches_to_top_up, top_up};
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = waiting_picture(tx, project);
@@ -645,42 +643,55 @@ mod tests {
                 start(tx, automation.id, &launcher()).expect("start"),
                 Started::Waits(_)
             ));
-            automation::cfg_set(tx, start_of(tx, &automation), WHEN_NONE, None).expect("no longer wait");
-            automation::version_add(tx, automation.id).expect("save the automation");
-
-            assert_eq!(tasks_turned_up(tx.conn(), &[automation.id]).expect("ask"), vec![automation.id]);
-            assert!(start_waiting(tx, automation.id, &launcher()).expect("start").is_none(), "no run");
-            assert_eq!(waits_since(tx, &automation), None, "the wait is over");
-            assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
-        });
-    }
-
-    /// **A task turning up starts no run past the most the automation may have under way** — it goes on
-    /// waiting, with nothing written, and is asked again later.
-    #[test]
-    fn a_task_turning_up_starts_no_run_past_the_most_under_way() {
-        with_tx(|tx| {
-            let project = mk_project(tx, "amenbo");
-            let automation = waiting_picture(tx, project);
-            assert!(matches!(
-                start(tx, automation.id, &launcher()).expect("start"),
-                Started::Waits(_)
-            ));
-            let standing = launched(tx, &automation);
+            let standing_run = launched(tx, &automation);
+            let launch = standing(tx, &automation);
             ours(tx, "new", &automation, None);
 
-            assert!(tasks_turned_up(tx.conn(), &[automation.id]).expect("ask").is_empty(), "no room");
-            assert!(start_waiting(tx, automation.id, &launcher()).expect("start").is_none());
-            assert!(waits_since(tx, &automation).is_some(), "it goes on waiting");
-            assert_eq!(read::automation_run_ids(tx.conn(), automation.id).expect("runs"), vec![standing.id]);
+            assert!(launches_to_top_up(tx.conn(), &[launch]).expect("ask").is_empty(), "no room");
+            assert!(top_up(tx, launch, &launcher()).expect("top up").is_none());
+            assert_eq!(read::automation_run_ids(tx.conn(), automation.id).expect("runs"), vec![standing_run.id]);
         });
     }
 
-    /// **While it waits, what keeps it waiting is counted** (`AMB-D-999`): the tasks the filter matches
-    /// that cannot be taken, by what stops them — a task stopped twice counted under both and once in
-    /// the whole. An automation that is not waiting has nothing to say.
+    /// **A role set to wait with nothing to take holds back no other role** (`AMB-D-1126`): where a run
+    /// of one role comes to its start set to wait and finds nothing, it ends, and a task filed under
+    /// another role with a free seat is started on in the same launch.
+    #[test]
+    fn a_role_waiting_for_a_task_holds_back_no_other_role() {
+        use crate::ops::automation_run::{launches_to_top_up, top_up};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, [(builder, _), (reviewer, _)]) = by_role(tx, project);
+            let builder_start = read::automation_role(tx.conn(), builder)
+                .expect("read")
+                .expect("role")
+                .entry_placement_id
+                .expect("where it starts");
+            automation::cfg_set(tx, builder_start, WHEN_NONE, Some(&format!("\"{WAIT}\""))).expect("wait");
+            let automation = as_it_stands(tx, &automation);
+
+            let run = launched(tx, &automation);
+            let launch = run.launch_id.expect("a launch");
+            assert_eq!(run.role_id, Some(builder), "the first role, where none has a task");
+            assert!(matches!(open_entry(tx, &run), Opened::LeftToWait { .. }));
+
+            let reviewed = for_ai(tx, "to review", project, None);
+            give_to(tx, reviewed, reviewer);
+            assert_eq!(launches_to_top_up(tx.conn(), &[launch]).expect("ask"), vec![launch]);
+            let next = top_up(tx, launch, &launcher()).expect("top up").expect("a run for the reviewer");
+            assert_eq!(next.role_id, Some(reviewer), "the reviewer's seat is filled");
+            open_entry(tx, &next);
+            assert_eq!(status(tx, reviewed), TaskStatus::InProgress);
+        });
+    }
+
+    /// **While a run stands before a take that would wait, what keeps it waiting is counted**
+    /// (`AMB-D-999`): the tasks the filter matches that cannot be taken, by what stops them — a task
+    /// stopped twice counted under both and once in the whole. Once a task it can take turns up, there
+    /// is nothing to say.
     #[test]
     fn while_it_waits_the_tasks_it_cannot_take_are_counted_by_what_stops_them() {
+        use crate::ops::automation_run::held_back as run_held_back;
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = waiting_picture(tx, project);
@@ -709,8 +720,7 @@ mod tests {
             task::update(tx, later, TaskPatch { start: Some(crate::model::Schedule::Day(day)), ..Default::default() }).expect("start");
 
             let run = launched(tx, &automation);
-            assert!(matches!(open_entry(tx, &run), Opened::LeftToWait { .. }));
-            let held = task_wait_held_back(tx.conn(), automation.id).expect("held back").expect("it is waiting");
+            let held = run_held_back(tx.conn(), run.id).expect("held back").expect("it is waiting");
             assert_eq!(held.tasks, 3, "each task once, however many things stop it");
             assert_eq!(
                 held.blockers,
@@ -725,8 +735,7 @@ mod tests {
             assert_eq!(held.drafts, 0);
 
             ours(tx, "one it can take", &automation, None);
-            start_waiting(tx, automation.id, &launcher()).expect("start").expect("a run");
-            assert_eq!(task_wait_held_back(tx.conn(), automation.id).expect("held back"), None, "no longer waiting");
+            assert_eq!(run_held_back(tx.conn(), run.id).expect("held back"), None, "no longer waiting");
         });
     }
 
@@ -1001,21 +1010,21 @@ mod tests {
         });
     }
 
-    /// **An automation waiting for a task stops waiting as soon as a person stops it**, with no run to
-    /// pause, and a run that comes back round to take its next task pauses there without taking it.
+    /// **A stopped automation has no seat of its launch filled**, a task turning up or not, with no run
+    /// to pause; and a run that comes back round to take its next task pauses there without taking it.
     #[test]
-    fn stopping_the_automation_ends_its_wait_and_pauses_its_runs_before_their_next_task() {
+    fn stopping_the_automation_fills_no_seat_and_pauses_its_runs_before_their_next_task() {
+        use crate::ops::automation_run::launches_to_top_up;
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let waits = waiting_picture(tx, project);
             let run = launched(tx, &waits);
+            let launch = run.launch_id.expect("a launch");
             assert!(matches!(open_entry(tx, &run), Opened::LeftToWait { .. }));
-            assert!(waits_since(tx, &waits).is_some(), "the automation waits in the run's place");
             let stopped = automation::stop(tx, waits.id, true).expect("stop");
             assert!(stopped.paused.is_empty(), "no run stands waiting for a task");
-            assert_eq!(stopped.automation.waits_for_task_since, None, "the wait ends");
-            assert_eq!(waits_since(tx, &waits), None);
-            assert!(tasks_turned_up(tx.conn(), &[waits.id]).expect("ask").is_empty(), "not waiting");
+            ours(tx, "new", &waits, None);
+            assert!(launches_to_top_up(tx.conn(), &[launch]).expect("ask").is_empty(), "stopped");
             let again = automation::stop(tx, waits.id, true).expect("stop again");
             assert!(again.paused.is_empty(), "stopping a stopped one writes nothing");
 
@@ -1961,10 +1970,11 @@ mod tests {
         });
     }
 
-    /// **A launch whose automation waits for a task stays standing**, and the run started once one turns
-    /// up joins it. It stays standing once that run ends too.
+    /// **A launch whose runs found no task stays standing**, and the run started once one turns up joins
+    /// it ([`crate::ops::automation_run::top_up`]). It stays standing once that run ends too.
     #[test]
     fn a_waiting_launch_stands_and_the_run_started_on_a_task_joins_it() {
+        use crate::ops::automation_run::top_up;
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = waiting_picture(tx, project);
@@ -1975,7 +1985,7 @@ mod tests {
             assert_eq!(launch_of(tx, launch).status, crate::model::AutomationLaunchStatus::Running);
 
             ours(tx, "new", &automation, None);
-            let next = start_waiting(tx, automation.id, &launcher()).expect("start").expect("a run");
+            let next = top_up(tx, launch, &launcher()).expect("top up").expect("a run");
             assert_eq!(next.launch_id, Some(launch), "it joins the launch standing");
             open_entry(tx, &next);
             automation_stop::stop(tx, next.id, automation_stop::Ending::Canceled).expect("stop");
@@ -2055,9 +2065,9 @@ mod tests {
     }
 
     /// **A start of an automation whose round starts at a take that would wait opens the launch the run
-    /// joins later**, and it stays open once a person ends the wait: only stopping the launch ends it.
+    /// joins later**, and it stays open with no run in it: only stopping the launch ends it.
     #[test]
-    fn a_start_that_waits_opens_a_launch_that_outlasts_the_wait() {
+    fn a_start_that_waits_opens_a_launch_that_stays_open() {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = waiting_picture(tx, project);
@@ -2066,7 +2076,7 @@ mod tests {
             let launch = read::automation_launch_standing(tx.conn(), automation.id)
                 .expect("read")
                 .expect("a launch stands with no run");
-            stop_waiting(tx, automation.id).expect("stop waiting");
+            assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
             assert_eq!(launch_of(tx, launch.id).status, crate::model::AutomationLaunchStatus::Running);
         });
     }

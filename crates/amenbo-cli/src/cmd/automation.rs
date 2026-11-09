@@ -32,7 +32,7 @@ use amenbo_core::model::{AutomationRole, FailuresTo};
 use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep, RoleChange};
 use amenbo_core::ops::automation_report::{Next, Produced};
 use amenbo_core::ops::automation_run::{
-    Carrier, ChosenAt, ForRoom, HandedAtLaunch, Launcher, ReadsFrom, RoleHeadcount, Started, TaskWait,
+    Carrier, ChosenAt, ForRoom, HandedAtLaunch, Launcher, ReadsFrom, RoleHeadcount, Started,
 };
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
 use amenbo_core::ops::automation_view::{
@@ -423,8 +423,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     default_agent.as_deref(),
                 )
                 .map_err(CliError::from)?;
-                let waits = store.automation_task_wait(id).map_err(CliError::from)?;
-                render_automation(flags, &view, &carriers, waits.as_ref());
+                render_automation(flags, &view, &carriers);
             }
         }
         AutomationCmd::Export { id, out, force } => {
@@ -1248,11 +1247,11 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     let line = format!("✓ Run {} started from version {}", r.id, saved.version);
                     write_envelope(flags, "automation.start", "automation_run", serde_json::to_value(&r).unwrap(), None, false, line);
                 }
-                // Its entry would have waited for a task with none to take: no run is made, and the app
-                // starts one once a task turns up (`AMB-D-969`).
+                // Every role's start would have waited for a task with none to take: no run is made, and
+                // the app starts one in the launch once a task turns up (`AMB-D-1126`).
                 Started::Waits(a) => {
                     let line = format!(
-                        "✓ Automation {} ({}) waits for a task to take — the app starts a run once one turns up",
+                        "✓ Automation {} ({}) has no task to take — the app starts a run once one turns up",
                         a.name, a.id
                     );
                     write_envelope(flags, "automation.start", "automation", serde_json::to_value(&a).unwrap(), None, false, line);
@@ -1260,7 +1259,13 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
         }
         AutomationCmd::StopWaiting { id } => {
-            let a = store.automation_wait_stop(id).map_err(CliError::from)?;
+            // An automation no longer waits for a task as a whole (`AMB-D-1126`), so there is nothing to
+            // stop: it is answered as it stands.
+            let a = store
+                .automation_detail(id)
+                .map_err(CliError::from)?
+                .ok_or_else(|| CliError::from(amenbo_core::Error::not_found(format!("automation '{id}' not found"))))?
+                .automation;
             let line = format!("✓ Automation {} ({}) is not waiting for a task", a.name, a.id);
             write_envelope(flags, "automation.stop-waiting", "automation", serde_json::to_value(&a).unwrap(), None, false, line);
         }
@@ -1616,7 +1621,6 @@ fn render_automation(
     flags: &Flags,
     view: &AutomationView,
     carriers: &BTreeMap<(i64, i64), Carrier>,
-    waits: Option<&TaskWait>,
 ) {
     let a = &view.automation;
     human(flags, format!("Automation {}  {}", a.id, a.name));
@@ -1637,9 +1641,6 @@ fn render_automation(
     }
     for trigger in &a.triggers {
         human(flags, trigger_line(trigger));
-    }
-    if let Some(waits) = waits {
-        human(flags, task_wait_line(a.id, waits));
     }
     human(flags, saved_line(view.saved.as_ref(), view.unsaved));
     if let Some(line) = showing_line(view.showing, view.saved.as_ref()) {
@@ -1702,16 +1703,6 @@ fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
     format!(
         "trigger {} {state}: starts a run on its own{called} {when}, filing {task}{under} — {next}; {last}",
         trigger.id
-    )
-}
-
-/// An automation Amenbo is waiting on a task for: since when, what for, and how to stop it.
-fn task_wait_line(id: i64, waits: &TaskWait) -> String {
-    let what = waits.looks_for.as_deref().map(|f| format!(" ({f})")).unwrap_or_default();
-    format!(
-        "waiting for a task to take{what} since {} — the app starts a run once one turns up; \
-         `automation stop-waiting {id}` stops it",
-        waits.since.to_rfc3339_z()
     )
 }
 
@@ -2164,7 +2155,8 @@ fn one_edge(
 /// **A run waiting for room says so** before an action that takes one run at a time, naming the action
 /// and the run it waits behind. Its stretch is still going: the task it took is not done with yet.
 ///
-/// No run waits for a task: one that would ends, and its automation waits instead (`automation show`).
+/// No run waits for a task: one that would ends, and its seat is filled once a task turns up
+/// (`AMB-D-1126`).
 fn render_run(
     store: &mut Store,
     flags: &Flags,

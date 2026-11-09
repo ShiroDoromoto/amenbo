@@ -37,7 +37,7 @@ import { useRefNav } from "../core/refNav";
  * moving the screen, because it may be one nobody here asked for (`../shell/WorkspaceFace`'s
  * `stepArrived`). This one somebody did.
  *
- * **Where the automation waits for a task to take, the run is null and the launch is gone to** — its
+ * **Where the start finds no task to take, the run is null and the launch is gone to** — its
  * pane, with the roles and no seat in front. A press that opened nothing on the screen would read as a
  * press that did nothing.
  */

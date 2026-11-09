@@ -1646,10 +1646,11 @@ fn only_a_failed_run_is_acknowledged() {
     assert!(!shown.contains("acknowledged:"), "a cancel is not waiting on anyone: {shown}");
 }
 
-/// **A start with nothing to take makes no run** where the round starts at a take_task set to wait for a task: the
-/// automation waits instead, `show` says since when and what for, and `stop-waiting` ends the wait.
+/// **A start with nothing to take makes no run** where the round starts at a take_task set to wait for a
+/// task: nothing is marked on the automation, and `show` says nothing of a wait — the launch stands
+/// open, and the app starts a run in it once a task turns up.
 #[test]
-fn a_start_with_nothing_to_take_waits_and_stop_waiting_ends_it() {
+fn a_start_with_nothing_to_take_makes_no_run_and_marks_no_wait() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
     let (a, _, _, take) = a_picture(&cli, false);
@@ -1661,13 +1662,7 @@ fn a_start_with_nothing_to_take_waits_and_stop_waiting_ends_it() {
 
     let started = cli.json(&["automation", "start", &a, "--json"]);
     assert!(started["automation_run"].is_null(), "no run is made: {started}");
-    assert!(started["automation"]["waits_for_task_since"].is_string(), "{started}");
-    let (text, _) = cli.run(&["automation", "show", &a]);
-    assert!(text.contains("waiting for a task to take"), "{text}");
-    assert!(text.contains(&format!("automation stop-waiting {a}")), "{text}");
-
-    let stopped = cli.json(&["automation", "stop-waiting", &a, "--json"]);
-    assert!(stopped["automation"]["waits_for_task_since"].is_null(), "{stopped}");
+    assert!(started["automation"].get("waits_for_task_since").is_none(), "{started}");
     let (text, _) = cli.run(&["automation", "show", &a]);
     assert!(!text.contains("waiting for a task"), "{text}");
 }

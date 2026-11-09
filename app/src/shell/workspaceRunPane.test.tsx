@@ -1026,7 +1026,7 @@ describe("the pane a launch is drawn in", () => {
     });
     hoisted.launch = {
       launch: 3, project: 1, automation: 3, automationName: "サンプル制作チーム", status: "running",
-      maxHeadcount: 10, failed: [], roles: [idle(1, "エンジニア", 2), idle(2, "レビュアー", 1)],
+      maxHeadcount: 10, failed: [], attention: [], roles: [idle(1, "エンジニア", 2), idle(2, "レビュアー", 1)],
     };
     await mount();
     await act(async () => {
@@ -1082,6 +1082,7 @@ describe("the header of a launch's pane", () => {
       status: "running",
       maxHeadcount: 10,
       failed: [],
+      attention: [],
       roles: [
         role(1, "エンジニア", 3, [runCard({ run: 7, launch: 3 }), runCard({ run: 8, launch: 3, waiting: true })]),
         role(2, "レビュアー", 2, [runCard({ run: 9, launch: 3, status: "paused" })]),

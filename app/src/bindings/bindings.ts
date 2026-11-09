@@ -720,6 +720,59 @@ export type AutomationHeldByValueDto = { dimensionId: number, axis: string, valu
 export type AutomationLaunchAsksDto = { reads: "task" | "nothing", axes: Array<AutomationLaunchAxisDto>, };
 
 /**
+ * **One thing in a launch that needs a person's hand now**
+ * ([`amenbo_core::ops::automation_run::LaunchAttention`]): a task stopped until the task its round's
+ * failure was filed as closes, or a run standing on a step that waits for a person.
+ */
+export type AutomationLaunchAttentionDto = { 
+/**
+ * `stopped` for a stopped task, `awaits_person` for a run waiting for a person.
+ */
+kind: "stopped" | "awaits_person", 
+/**
+ * The task it is about, by its id. Absent only for a run waiting while on no task.
+ */
+task?: number, 
+/**
+ * The task's reference.
+ */
+taskRef?: string, 
+/**
+ * The task's title.
+ */
+title?: string, 
+/**
+ * The role whose seat it is in — the failed round's role, or the waiting run's — by its id. Absent
+ * where it had none, and where the role has since been taken out.
+ */
+role?: number, 
+/**
+ * The run whose round failed, or the run waiting, by its id.
+ */
+run: number, 
+/**
+ * The round, by its id (`automation_run_task`). Absent for a run waiting while on no round.
+ */
+runTask?: number, 
+/**
+ * The task the failure was filed as, by its id — what the stopped task waits on. Absent for a
+ * waiting run.
+ */
+incident?: number, 
+/**
+ * That task's reference.
+ */
+incidentRef?: string, 
+/**
+ * The step the run waits on. Absent for a stopped task.
+ */
+stepName?: string, 
+/**
+ * Since when, as RFC 3339: when the round failed and was filed, or when the step was opened.
+ */
+since?: string, };
+
+/**
  * **An axis a launch asks a value on**, with the values open on it in the axis's own order.
  * `required` is the project's: a launch that gives it none is refused.
  */
@@ -922,7 +975,12 @@ roles: Array<AutomationLaunchRoleStateDto>,
  * **The launch's failed rounds that were filed as a task**, newest first, up to the newest
  * [`amenbo_core::ops::automation_run::FAILED_NAMED`] — one line each under the pane.
  */
-failed: Array<AutomationLaunchFailedDto>, };
+failed: Array<AutomationLaunchFailedDto>, 
+/**
+ * **What needs a person's hand now** — the stopped tasks first, then the runs waiting for a
+ * person. Drawn under the launch's heading, and not at all where it is empty.
+ */
+attention: Array<AutomationLaunchAttentionDto>, };
 
 /**
  * **One automation an action is placed on**, with the project it is in — a global action stands on

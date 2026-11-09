@@ -1357,7 +1357,7 @@ pub fn automation_role_add(
     with_store_mut(|store| {
         store.automation_role_add(
             automation_id,
-            NewRole { name, headcount, take_order: None, icon, entry_placement_id, agent, model },
+            NewRole { name, headcount, take_order: None, starts_by: None, icon, entry_placement_id, agent, model },
         )?;
         Ok(())
     })?;
@@ -1390,6 +1390,7 @@ pub fn automation_role_edit(
         name,
         headcount,
         take_order: None,
+        starts_by: None,
         icon: write_or_clear(icon, clear_icon),
         entry_placement_id: write_or_clear(entry_placement_id, clear_entry),
         agent: write_or_clear(agent, clear_agent),

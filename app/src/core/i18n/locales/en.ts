@@ -2183,6 +2183,8 @@ const err: Partial<Record<ErrorCode, string>> = {
   not_ready_automation_action_draft: "the action “{action}” placed on it is still being created",
   not_ready_automation_action_empty: "the action “{action}” placed on it has no start step",
   not_ready_automation_role_start_takes_no_task: "the role “{role}” starts at “{step}”, not at “Take a task”",
+  not_ready_automation_role_start_takes_task: "the role “{role}” starts by a trigger, so it cannot start at “{step}”",
+  not_ready_automation_needs_task_not_taken: "the role “{role}” starts by a trigger and reaches “{step}” before it takes a task",
   not_ready_automation_take_task_off_start: "“{step}” can only stand where a role starts",
   not_ready_automation_open_exit: "{step}: nothing is set to happen after “{exit}”",
   not_ready_automation_unwired_input: "{step}: nothing reaches the required input “{port}”",

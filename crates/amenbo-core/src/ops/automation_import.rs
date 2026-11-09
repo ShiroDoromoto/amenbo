@@ -142,6 +142,7 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
             name: role.name.clone(),
             headcount: Some(role.headcount),
             take_order: Some(role.take_order),
+            starts_by: Some(role.starts_by),
             icon: role.icon.clone(),
             entry_placement_id,
             agent: role.agent.clone(),
@@ -396,14 +397,19 @@ mod tests {
             name: "レビュー".into(),
             headcount: Some(2),
             take_order: Some(crate::model::TakeOrder::Due),
+            starts_by: None,
             icon: Some("eye".into()),
             entry_placement_id: Some(second.id),
             agent: Some("codex".into()),
             model: Some("gpt-5".into()),
         };
         automation::role_add(tx, automation.id, reviewer).expect("a role");
-        automation::role_add(tx, automation.id, NewRole { name: "実装".into(), ..NewRole::default() })
-            .expect("a bare role");
+        let filing = NewRole {
+            name: "実装".into(),
+            starts_by: Some(crate::model::RoleStart::Trigger),
+            ..NewRole::default()
+        };
+        automation::role_add(tx, automation.id, filing).expect("a bare role a trigger starts");
         automation::version_add(tx, automation.id).expect("save the automation");
         export(tx.conn(), automation.id).expect("export")
     }
@@ -470,6 +476,17 @@ mod tests {
                 ],
                 "each role comes in with the order it takes its tasks in"
             );
+            let starts: Vec<(&str, crate::model::RoleStart)> =
+                roles.iter().map(|r| (r.name.as_str(), r.starts_by)).collect();
+            assert_eq!(
+                starts,
+                [
+                    ("1件やりきるの係", crate::model::RoleStart::Task),
+                    ("レビュー", crate::model::RoleStart::Task),
+                    ("実装", crate::model::RoleStart::Trigger),
+                ],
+                "each role comes in starting the way it did"
+            );
             assert_eq!((imported.project_id, imported.name.as_str()), (into, "1件やりきる"));
             assert!(read::automation_version_latest(tx.conn(), imported.id).expect("read").is_none(), "not saved");
             assert!(automation::unsaved(tx.conn(), imported.id).expect("unsaved"), "left being written");
@@ -520,6 +537,18 @@ mod tests {
             let mut misordered = serde_json::to_value(&file).expect("json");
             misordered["roles"][0]["take_order"] = serde_json::json!("title");
             assert!(parse(&misordered.to_string()).is_err(), "an order that is none of the four is refused");
+            let mut unstarted = serde_json::to_value(&file).expect("json");
+            for role in unstarted["roles"].as_array_mut().expect("roles") {
+                role.as_object_mut().expect("a role").remove("starts_by");
+            }
+            let unstarted = parse(&unstarted.to_string()).expect("a file from before roles had a way of starting");
+            assert!(
+                unstarted.roles.iter().all(|r| r.starts_by == crate::model::RoleStart::Task),
+                "an older file starts every role by a task"
+            );
+            let mut misstarted = serde_json::to_value(&file).expect("json");
+            misstarted["roles"][0]["starts_by"] = serde_json::json!("hand");
+            assert!(parse(&misstarted.to_string()).is_err(), "a way of starting that is neither is refused");
 
             for headcount in [0, crate::model::MAX_ROLE_HEADCOUNT + 1] {
                 let mut counted = file.clone();

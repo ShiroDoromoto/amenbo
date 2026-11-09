@@ -17,7 +17,7 @@
 
 use crate::error::{Error, Result};
 use crate::model::{ActorKind, TaskStatus, DONE_EXIT};
-use crate::ops::automation_builtin::{Builtin, BuiltinExit, Carried, Carry, Work};
+use crate::ops::automation_builtin::{Builtin, BuiltinExit, Carried, Carry, NeedsTask, Work};
 use crate::ops::automation_builtin_close::{already_on_the_task, last_report};
 use crate::ops::automation_builtin_hand_back::end_stretch;
 use crate::run_wording::builtin as say;
@@ -42,6 +42,7 @@ pub(crate) const DEFER_TASK: Builtin = Builtin {
     exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }],
     waits: None,
     chooses: None,
+    needs_task: NeedsTask::Always,
     work: Work::InStore(defer),
 };
 

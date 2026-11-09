@@ -50,7 +50,8 @@ use crate::model::{
     AutomationStep, AutomationVersion, AutomationWire, StepScript, ACTION_BOUNDARY,
     DEFAULT_MAX_TIMES, DEFAULT_ROLE_HEADCOUNT, DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
     ERROR_EXIT, FailuresTo, MAX_EXPECTED_MINUTES, MAX_ROLE_HEADCOUNT, MAX_SCRIPT_TIMEOUT_MINUTES,
-    AutomationFailureValue, AutomationTrigger, TakeOrder, TriggerCondition, TriggerTask, TriggerWhen, MIN_TRIGGER_EVERY_MINUTES,
+    AutomationFailureValue, AutomationTrigger, RoleStart, TakeOrder, TriggerCondition, TriggerTask, TriggerWhen,
+    MIN_TRIGGER_EVERY_MINUTES,
 };
 use crate::ops::{automation_builtin, automation_run, emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
@@ -1309,13 +1310,22 @@ pub(crate) fn add_with_no_role(tx: &WriteTx<'_>, project_id: i64, new: NewAutoma
 }
 
 /// A failed round of an automation is filed to a person or to one of **its own** roles — a role of
-/// another automation is not one this automation's runs know.
+/// another automation is not one this automation's runs know — and to a role whose round starts by a
+/// task: one a trigger starts takes no task, so the task filed would never be worked (`AMB-D-1142`).
 fn checked_failures_to(tx: &WriteTx<'_>, automation_id: i64, to: Option<FailuresTo>) -> Result<()> {
     let Some(FailuresTo::Role { role_id }) = to else { return Ok(()) };
-    if live_role(tx, role_id)?.automation_id != automation_id {
+    let role = live_role(tx, role_id)?;
+    if role.automation_id != automation_id {
         return Err(Error::invalid(format!(
             "role '{role_id}' belongs to another automation, so a failed round of this one cannot be filed \
              to it"
+        )));
+    }
+    if role.starts_by == RoleStart::Trigger {
+        return Err(Error::invalid(format!(
+            "role '{}' starts its round by a trigger and takes no task, so a failed round cannot be filed to \
+             it — choose a role that starts by a task, or a person",
+            role.name
         )));
     }
     Ok(())
@@ -1784,6 +1794,7 @@ pub fn unsaved(conn: &Connection, automation_id: i64) -> Result<bool> {
 fn only_named(role: &AutomationRole) -> bool {
     role.headcount == DEFAULT_ROLE_HEADCOUNT
         && role.take_order == TakeOrder::default()
+        && role.starts_by == RoleStart::default()
         && role.icon.is_none()
         && role.entry_placement_id.is_none()
         && role.agent.is_none()
@@ -2554,6 +2565,8 @@ pub struct NewRole {
     pub headcount: Option<u32>,
     /// The order it takes its tasks in. `None` is [`TakeOrder::Priority`].
     pub take_order: Option<TakeOrder>,
+    /// How its round starts. `None` is [`RoleStart::Task`].
+    pub starts_by: Option<RoleStart>,
     /// The icon it is drawn with, by the name the GUI knows it under.
     pub icon: Option<String>,
     /// The placement its round starts at — one of the same automation's.
@@ -2572,6 +2585,8 @@ pub struct RoleChange {
     pub headcount: Option<u32>,
     /// The order it takes its tasks in.
     pub take_order: Option<TakeOrder>,
+    /// How its round starts. Changing it takes away where its round starts (`AMB-D-1142`).
+    pub starts_by: Option<RoleStart>,
     pub icon: Option<Option<String>>,
     pub entry_placement_id: Option<Option<i64>>,
     /// Taking the agent away takes the model with it.
@@ -2643,6 +2658,7 @@ pub fn role_add(tx: &WriteTx<'_>, automation_id: i64, new: NewRole) -> Result<Au
         name,
         headcount,
         take_order: new.take_order.unwrap_or_default(),
+        starts_by: new.starts_by.unwrap_or_default(),
         icon: checked_opt("icon", new.icon.as_deref())?,
         entry_placement_id: new.entry_placement_id,
         agent: checked_opt("agent", new.agent.as_deref())?,
@@ -2656,9 +2672,14 @@ pub fn role_add(tx: &WriteTx<'_>, automation_id: i64, new: NewRole) -> Result<Au
     Ok(role)
 }
 
-/// Change a role's name, how many are in it, the order it takes its tasks in, icon, way of working (the
-/// placement its round starts at), or default agent and model. Only the fields `change` names are
-/// written.
+/// Change a role's name, how many are in it, the order it takes its tasks in, how its round starts, icon,
+/// way of working (the placement its round starts at), or default agent and model. Only the fields
+/// `change` names are written.
+///
+/// **Changing how its round starts takes away where it starts** (`AMB-D-1142`), unless the same change
+/// names a start: what a round may start at is not the same for the two ways (`AMB-D-1132`). What is
+/// placed stays on the picture, and the launch check names whatever no longer fits. A role failed rounds
+/// are filed to cannot be made to start by a trigger, which takes no task.
 pub fn role_update(tx: &WriteTx<'_>, id: i64, change: RoleChange) -> Result<AutomationRole> {
     let before = live_role(tx, id)?;
     rewritable(tx, Def::Automation(before.automation_id))?;
@@ -2671,6 +2692,20 @@ pub fn role_update(tx: &WriteTx<'_>, id: i64, change: RoleChange) -> Result<Auto
     }
     if let Some(take_order) = change.take_order {
         after.take_order = take_order;
+    }
+    if let Some(starts_by) = change.starts_by.filter(|&s| s != before.starts_by) {
+        if starts_by == RoleStart::Trigger {
+            let automation = live_automation(tx, before.automation_id)?;
+            if automation.failures_to == Some(FailuresTo::Role { role_id: id }) {
+                return Err(Error::invalid(format!(
+                    "failed rounds are filed to role '{}', so it cannot start by a trigger, which takes no \
+                     task — file them to another role or a person first",
+                    before.name
+                )));
+            }
+        }
+        after.starts_by = starts_by;
+        after.entry_placement_id = None;
     }
     if let Some(icon) = &change.icon {
         after.icon = checked_opt("icon", icon.as_deref())?;
@@ -4496,6 +4531,77 @@ mod tests {
         });
     }
 
+    /// **A role starts by a task at birth, and how it starts is set and kept** (`AMB-D-1127`). Changing it
+    /// takes away where the role starts, unless the same change names one, and leaves what is placed on
+    /// the picture (`AMB-D-1142`). The draft reads as changed once it moves away from the saved version's.
+    #[test]
+    fn a_role_starts_by_a_task_at_birth_and_keeps_how_it_is_set_to_start() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let born = read::automation_roles_of(tx.conn(), automation.id).expect("read").remove(0);
+            assert_eq!(born.starts_by, RoleStart::Task, "born starting by a task");
+            let take = automation_builtin::action(tx, "take_task").expect("the built-in's action");
+            let taking = placement_add(tx, automation.id, take.id).expect("place it");
+            let entry = Some(Some(taking.id));
+            role_update(tx, born.id, RoleChange { entry_placement_id: entry, ..RoleChange::default() })
+                .expect("start there");
+            version_add(tx, automation.id).expect("save");
+
+            let same = RoleChange { starts_by: Some(RoleStart::Task), ..RoleChange::default() };
+            let kept = role_update(tx, born.id, same).expect("the way it already starts");
+            assert_eq!(kept.entry_placement_id, Some(taking.id), "nothing changed, so the start is kept");
+
+            let switched = RoleChange { starts_by: Some(RoleStart::Trigger), ..RoleChange::default() };
+            let switched = role_update(tx, born.id, switched).expect("start by a trigger");
+            assert_eq!(switched.starts_by, RoleStart::Trigger);
+            assert_eq!(switched.entry_placement_id, None, "where it started is taken away");
+            assert!(
+                read::automation_placement(tx.conn(), taking.id).expect("read").is_some(),
+                "what was placed stays on the picture"
+            );
+            assert!(unsaved(tx.conn(), automation.id).expect("unsaved"), "how it starts is part of the version");
+
+            let both = RoleChange {
+                starts_by: Some(RoleStart::Task),
+                entry_placement_id: entry,
+                ..RoleChange::default()
+            };
+            let back = role_update(tx, born.id, both).expect("back, with a start named");
+            assert_eq!((back.starts_by, back.entry_placement_id), (RoleStart::Task, Some(taking.id)));
+
+            let filing = NewRole { name: "起票係".into(), starts_by: Some(RoleStart::Trigger), ..NewRole::default() };
+            let filing = role_add(tx, automation.id, filing).expect("a role a trigger starts");
+            assert_eq!(live_role(tx, filing.id).expect("read").starts_by, RoleStart::Trigger);
+            let renamed = role_update(tx, filing.id, RoleChange { name: Some("さくら".into()), ..RoleChange::default() })
+                .expect("rename");
+            assert_eq!(renamed.starts_by, RoleStart::Trigger, "left out, it is kept");
+        });
+    }
+
+    /// **A role a trigger starts is no place to file a failed round to** (`AMB-D-1142`): it takes no
+    /// task, so the task filed would never be worked. Neither choosing it nor turning the role it is filed
+    /// to into one is let through.
+    #[test]
+    fn a_failed_round_is_not_filed_to_a_role_a_trigger_starts() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let filing = NewRole { name: "起票係".into(), starts_by: Some(RoleStart::Trigger), ..NewRole::default() };
+            let filing = role_add(tx, automation.id, filing).expect("a role a trigger starts");
+            let to = Some(Some(FailuresTo::Role { role_id: filing.id }));
+            let refused = update(tx, automation.id, None, None, None, to, None).expect_err("takes no task");
+            assert!(matches!(refused, Error::Invalid(_)), "{refused}");
+            assert!(refused.to_string().contains("starts its round by a trigger"), "{refused}");
+
+            let born = read::automation_roles_of(tx.conn(), automation.id).expect("read").remove(0);
+            let to = Some(Some(FailuresTo::Role { role_id: born.id }));
+            update(tx, automation.id, None, None, None, to, None).expect("to the role born with it");
+            let switched = RoleChange { starts_by: Some(RoleStart::Trigger), ..RoleChange::default() };
+            let refused = role_update(tx, born.id, switched).expect_err("failed rounds are filed to it");
+            assert!(matches!(refused, Error::Invalid(_)), "{refused}");
+            assert_eq!(live_role(tx, born.id).expect("read").starts_by, RoleStart::Task, "left as it was");
+        });
+    }
+
     /// **A role takes its tasks by priority at birth, and the order it takes them in is set and kept.**
     /// Leaving it out keeps what is there; a saved version keeps it, and the draft reads as changed once
     /// it moves away from the version's. The one role an automation is born with and given another order
@@ -4927,6 +5033,7 @@ mod tests {
                 name: " 実装 ".into(),
                 headcount: None,
                 take_order: None,
+                starts_by: None,
                 icon: Some("hammer".into()),
                 entry_placement_id: Some(placement.id),
                 agent: Some("claude-code".into()),

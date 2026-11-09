@@ -97,6 +97,9 @@ pub struct Builtin {
     /// Which of two ways out it leaves by, for one whose setting chooses ([`Chooses`]).
     #[serde(skip)]
     pub chooses: Option<Chooses>,
+    /// Whether it needs the task a run works to be there before it ([`NeedsTask`]).
+    #[serde(skip)]
+    pub needs_task: NeedsTask,
     /// The work itself, and where it is done ([`Work`]).
     #[serde(skip)]
     pub work: Work,
@@ -326,6 +329,32 @@ pub struct Chooses {
     pub chosen: &'static str,
     /// The way out it leaves by otherwise — also where the setting is left unanswered.
     pub otherwise: &'static str,
+}
+
+/// **Whether a built-in needs the task a run works** — one that halts where the run works no task yet
+/// (`AMB-D-1127`). A role whose round starts by a trigger takes no task where it starts, so the launch
+/// check refuses its round reaching one of these before a task is taken
+/// ([`crate::ops::automation_run::Unmet::NeedsTaskNotTaken`]). Held here, beside the code that halts, so
+/// the check reads it rather than a list of keys of its own.
+pub enum NeedsTask {
+    /// It works with no task — or takes one itself.
+    No,
+    /// It always works on the run's task.
+    Always,
+    /// It works on the run's task only where `setting` is answered `answer` where it is placed.
+    When { setting: &'static str, answer: &'static str },
+}
+
+/// **Whether a placed built-in needs the task a run works**, as it is set there ([`NeedsTask`]). `answer`
+/// reads the placement's answer to one setting, as JSON. `false` for a key this build carries none of.
+pub fn needs_task<'a>(key: &str, answer: impl Fn(&str) -> Option<&'a str>) -> bool {
+    match find(key).map(|b| &b.needs_task) {
+        None | Some(NeedsTask::No) => false,
+        Some(NeedsTask::Always) => true,
+        Some(NeedsTask::When { setting, answer: needs }) => {
+            answer(setting).and_then(|value| serde_json::from_str::<String>(value).ok()).as_deref() == Some(*needs)
+        }
+    }
 }
 
 /// The answer written for one setting where the step was placed — JSON, as `automation_cfg.value`
@@ -949,6 +978,7 @@ mod tests {
         ],
         waits: None,
         chooses: None,
+        needs_task: NeedsTask::No,
         work: Work::InStore(|carry| {
             let stamp = carry.setting("stamp").unwrap_or("\"ok\"");
             let note = carry.input("note").unwrap_or("nothing");
@@ -971,6 +1001,7 @@ mod tests {
         exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }],
         waits: None,
         chooses: None,
+        needs_task: NeedsTask::No,
         work: Work::InStore(|_| Err(Error::invalid("the floor gave way"))),
     };
 

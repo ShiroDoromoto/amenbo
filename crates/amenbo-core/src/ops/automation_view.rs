@@ -109,6 +109,11 @@ pub struct AutomationView {
     /// has saved, is missing. A role keeps its id across a save and a discard (`AMB-D-961`), so the
     /// draft's roles are matched to the version's by it.
     pub saved_headcounts: BTreeMap<i64, u32>,
+    /// **The triggers aimed at each role**, by role id, each as its trigger ids in the order they were
+    /// written in ([`Automation::triggers_aimed_at`]) — what a role that starts by a trigger is started
+    /// by (`AMB-D-1127`). A role no trigger is aimed at is missing. Triggers are the automation's, not
+    /// part of a saved version, so the saved view reads them as they stand now.
+    pub role_triggers: BTreeMap<i64, Vec<i64>>,
 }
 
 /// **One placement**, with the action standing on it read in and the declarations it runs under
@@ -389,6 +394,7 @@ pub fn detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>> {
     };
     let saved = version.map(|v| SavedVersion { version: v.version, saved_at: v.created_at });
     let unsaved = super::automation::unsaved(conn, id)?;
+    let role_triggers = triggers_by_role(&automation, &roles);
     Ok(Some(AutomationView {
         automation,
         showing: Showing::Draft,
@@ -399,6 +405,7 @@ pub fn detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>> {
         wires,
         roles,
         saved_headcounts,
+        role_triggers,
     }))
 }
 
@@ -437,6 +444,7 @@ pub fn saved_detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>
         placements.push(view);
     }
     let roles: Vec<AutomationRole> = rows(saved_roles(&version))?;
+    let role_triggers = triggers_by_role(&automation, &roles);
     Ok(Some(AutomationView {
         automation,
         showing: Showing::Saved,
@@ -447,7 +455,18 @@ pub fn saved_detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>
         wires: rows(&version.wires)?,
         saved_headcounts: headcounts(&roles),
         roles,
+        role_triggers,
     }))
+}
+
+/// The triggers of `automation` aimed at each of `roles`, by the role's id — a role none is aimed at left
+/// out.
+fn triggers_by_role(automation: &Automation, roles: &[AutomationRole]) -> BTreeMap<i64, Vec<i64>> {
+    roles
+        .iter()
+        .map(|role| (role.id, automation.triggers_aimed_at(role.id).map(|t| t.id).collect::<Vec<_>>()))
+        .filter(|(_, triggers)| !triggers.is_empty())
+        .collect()
 }
 
 /// How many each of `roles` has, by its id.
@@ -778,6 +797,37 @@ mod tests {
             version_add(tx, automation.id).unwrap();
             assert_eq!(saved(tx), BTreeMap::from([(role.id, 3), (added.id, 1)]));
             assert_eq!(saved_detail(tx.conn(), automation.id).unwrap().unwrap().saved_headcounts, saved(tx));
+        });
+    }
+
+    /// **A show names the triggers aimed at each role** (`AMB-D-1127`), by the role's id — what a role
+    /// that starts by a trigger is started by. A role none is aimed at is left out.
+    #[test]
+    fn a_show_names_the_triggers_aimed_at_each_role() {
+        use crate::model::{RoleStart, TriggerWhen};
+        use crate::ops::automation::{role_add, trigger_set, NewRole, NewTrigger, NewTriggerTask};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation =
+                add(tx, project, NewAutomation { name: "在庫を見る".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
+            let filing = NewRole { name: "起票係".into(), starts_by: Some(RoleStart::Trigger), ..NewRole::default() };
+            let filing = role_add(tx, automation.id, filing).unwrap();
+            let shown = |tx: &crate::store_engine::WriteTx<'_>| detail(tx.conn(), automation.id).unwrap().unwrap().role_triggers;
+            assert!(shown(tx).is_empty(), "no trigger yet");
+
+            let daily = NewTrigger {
+                name: "毎朝の在庫確認".into(),
+                role_id: Some(filing.id),
+                when: TriggerWhen::Every { minutes: 24 * 60 },
+                condition: None,
+                script: None,
+                task: NewTriggerTask::Fixed { title: "在庫を見る".into(), notes: String::new() },
+            };
+            trigger_set(tx, automation.id, Some(daily)).unwrap();
+            let read = crate::store_engine::read::automation(tx.conn(), automation.id).unwrap().unwrap();
+            let trigger = read.triggers[0].id;
+            assert_eq!(shown(tx), BTreeMap::from([(filing.id, vec![trigger])]), "only the role it is aimed at");
+            assert_eq!(read.triggers_aimed_at(filing.id).map(|t| t.id).collect::<Vec<_>>(), vec![trigger]);
         });
     }
 

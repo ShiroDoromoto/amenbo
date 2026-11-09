@@ -1894,6 +1894,8 @@ export const nl: Translation = {
     not_ready_automation_action_draft: "de geplaatste actie ‘{action}’ wordt nog aangemaakt",
     not_ready_automation_action_empty: "de geplaatste actie ‘{action}’ heeft geen startstap",
     not_ready_automation_role_start_takes_no_task: "de rol „{role}” start bij „{step}”, niet bij „Taak oppakken”",
+    not_ready_automation_role_start_takes_task: "de rol „{role}” start door een trigger en kan dus niet bij „{step}” starten",
+    not_ready_automation_needs_task_not_taken: "de rol „{role}” start door een trigger en komt bij „{step}” voordat hij een taak oppakt",
     not_ready_automation_take_task_off_start: "„{step}” kan alleen staan waar een rol start",
     not_ready_automation_open_exit: "{step}: na ‘{exit}’ staat niets vast",
     not_ready_automation_unwired_input: "{step}: niets bereikt de verplichte invoer ‘{port}’",

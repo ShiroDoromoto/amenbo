@@ -1894,6 +1894,8 @@ export const hi: Translation = {
     not_ready_automation_action_draft: "रखी गई क्रिया “{action}” अभी बन रही है।",
     not_ready_automation_action_empty: "रखी गई क्रिया “{action}” में शुरुआत का कोई चरण नहीं है।",
     not_ready_automation_role_start_takes_no_task: "भूमिका “{role}” “{step}” से शुरू होती है, “कार्य लें” से नहीं",
+    not_ready_automation_role_start_takes_task: "भूमिका “{role}” ट्रिगर से शुरू होती है, इसलिए यह “{step}” से शुरू नहीं हो सकती",
+    not_ready_automation_needs_task_not_taken: "भूमिका “{role}” ट्रिगर से शुरू होती है और कार्य लेने से पहले “{step}” तक पहुँचती है",
     not_ready_automation_take_task_off_start: "“{step}” केवल किसी भूमिका की शुरुआत में रखा जा सकता है",
     not_ready_automation_open_exit: "{step}: “{exit}” के बाद क्या होगा, तय नहीं है।",
     not_ready_automation_unwired_input: "{step}: ज़रूरी इनपुट “{port}” तक कुछ भी नहीं पहुँचता।",

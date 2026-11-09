@@ -25,7 +25,7 @@
 
 use crate::error::{Error, Result};
 use crate::model::{AutomationCfgKind, DONE_EXIT};
-use crate::ops::automation_builtin::{answer, Builtin, BuiltinExit, BuiltinSetting, Outside, Work, Worked};
+use crate::ops::automation_builtin::{answer, Builtin, BuiltinExit, BuiltinSetting, NeedsTask, Outside, Work, Worked};
 use crate::ops::automation_builtin_cut::{refused, repository};
 use crate::run_wording::builtin as say;
 use crate::store_engine::read;
@@ -70,6 +70,7 @@ pub(super) const FOLD_WORKTREE: Builtin = Builtin {
     exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }, BuiltinExit { name: UNMERGED, outs: &[] }],
     waits: None,
     chooses: None,
+    needs_task: NeedsTask::Always,
     work: Work::Outside(fold),
 };
 

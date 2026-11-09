@@ -7512,6 +7512,8 @@ fn launch_reason(reason: &str) -> Result<&'static str, String> {
         "action_empty" => "that an action placed on it has no step to start at",
         "action_draft" => "that an action placed on it is still being created",
         "role_start_takes_no_task" => "that one of its roles starts its round at something that takes no task",
+        "role_start_takes_task" => "that one of its roles starts by a trigger, yet its round starts by taking a task",
+        "needs_task_not_taken" => "that a role started by a trigger reaches a box that works on the run's task before taking one",
         "take_task_off_start" => "that the built-in that takes a task stands where no role starts",
         "open_exit" => "that nothing is set to happen after one of a box's ways out",
         "unwired_input" => "that nothing reaches one of a box's required inputs",

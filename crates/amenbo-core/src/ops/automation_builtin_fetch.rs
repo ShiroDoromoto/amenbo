@@ -36,7 +36,7 @@ use std::time::{Duration, Instant};
 use crate::error::{Error, Result};
 use crate::model::{AutomationCfgKind, AutomationPortKind};
 use crate::ops::automation_builtin::{
-    answer, Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Outside, Work, Worked,
+    answer, Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, NeedsTask, Outside, Work, Worked,
 };
 use crate::run_wording::builtin as say;
 
@@ -98,6 +98,7 @@ pub(super) const FETCH: Builtin = Builtin {
     ],
     waits: None,
     chooses: None,
+    needs_task: NeedsTask::No,
     work: Work::Outside(fetch),
 };
 
@@ -385,6 +386,31 @@ mod tests {
                     )),
                     "{straight_to_an_agent}: {unmet:?}",
                 );
+            });
+        }
+    }
+
+    /// **A role started by a trigger may start at the fetch** (`AMB-D-1127`): what it brings back is
+    /// filed and taken before the task is closed, so the round passes the check. Straight on to an agent's
+    /// step, it passes as well — nothing on that line works on the run's task.
+    #[test]
+    fn a_role_started_by_a_trigger_starts_at_the_fetch() {
+        for straight_to_an_agent in [false, true] {
+            with_tx(|tx| {
+                let project = mk_project(tx, "amenbo");
+                let automation = starting_at_the_fetch(tx, project, straight_to_an_agent);
+                let role = read::automation_roles_of(tx.conn(), automation.id).expect("roles").remove(0);
+                let change = automation::RoleChange {
+                    starts_by: Some(crate::model::RoleStart::Trigger),
+                    entry_placement_id: Some(role.entry_placement_id),
+                    ..automation::RoleChange::default()
+                };
+                automation::role_update(tx, role.id, change).expect("start by a trigger, at the fetch");
+                let claude = ["claude".to_string()];
+                let unmet =
+                    crate::ops::automation_run::check(tx.conn(), automation.id, Some(&claude), nothing_asked(), None)
+                        .expect("check");
+                assert_eq!(unmet, vec![], "{straight_to_an_agent}");
             });
         }
     }

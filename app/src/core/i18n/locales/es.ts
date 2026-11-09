@@ -1912,6 +1912,8 @@ export const es: Translation = {
     not_ready_automation_action_draft: "la acción «{action}» colocada sigue en creación",
     not_ready_automation_action_empty: "la acción «{action}» colocada no tiene paso de inicio",
     not_ready_automation_role_start_takes_no_task: "el rol «{role}» empieza en «{step}», no en «Tomar una tarea»",
+    not_ready_automation_role_start_takes_task: "el rol «{role}» empieza por un disparador, así que no puede empezar en «{step}»",
+    not_ready_automation_needs_task_not_taken: "el rol «{role}» empieza por un disparador y llega a «{step}» antes de tomar una tarea",
     not_ready_automation_take_task_off_start: "«{step}» solo puede estar donde empieza un rol",
     not_ready_automation_open_exit: "{step}: no hay nada previsto después de «{exit}»",
     not_ready_automation_unwired_input: "{step}: nada llega a la entrada obligatoria «{port}»",

@@ -25,7 +25,7 @@
 
 use crate::error::{Error, Result};
 use crate::model::{ActorKind, TaskStatus, DONE_EXIT};
-use crate::ops::automation_builtin::{Builtin, BuiltinExit, Carried, Carry, Work};
+use crate::ops::automation_builtin::{Builtin, BuiltinExit, Carried, Carry, NeedsTask, Work};
 use crate::ops::automation_builtin_close::{already_on_the_task, last_report};
 use crate::run_wording::builtin as say;
 use crate::store_engine::{read, record};
@@ -50,6 +50,7 @@ pub(crate) const HAND_BACK_TASK: Builtin = Builtin {
     exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }],
     waits: None,
     chooses: None,
+    needs_task: NeedsTask::Always,
     work: Work::InStore(hand_back),
 };
 

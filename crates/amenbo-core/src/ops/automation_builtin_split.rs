@@ -30,7 +30,7 @@ use rusqlite::Connection;
 use crate::error::{Error, Result};
 use crate::model::{DimensionAppliesTo, DimensionCardinality, ERROR_EXIT};
 use crate::ops::automation;
-use crate::ops::automation_builtin::{write_action, Builtin, BuiltinExit, Carry, Named, Work};
+use crate::ops::automation_builtin::{write_action, Builtin, BuiltinExit, Carry, Named, NeedsTask, Work};
 use crate::run_wording::builtin as say;
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
@@ -57,6 +57,7 @@ pub(crate) const SPLIT_BY_DIM: Builtin = Builtin {
     exits: &[BuiltinExit { name: UNSORTED, outs: &[] }],
     waits: None,
     chooses: None,
+    needs_task: NeedsTask::Always,
     work: Work::Named(split),
 };
 

@@ -1912,6 +1912,8 @@ export const fr: Translation = {
     not_ready_automation_action_draft: "l'action « {action} » placée est encore en cours de création",
     not_ready_automation_action_empty: "l'action « {action} » placée n'a pas d'étape de départ",
     not_ready_automation_role_start_takes_no_task: "le rôle « {role} » part de « {step} », et non de « Prendre une tâche »",
+    not_ready_automation_role_start_takes_task: "le rôle « {role} » part d’un déclencheur et ne peut donc pas partir de « {step} »",
+    not_ready_automation_needs_task_not_taken: "le rôle « {role} » part d’un déclencheur et atteint « {step} » avant de prendre une tâche",
     not_ready_automation_take_task_off_start: "« {step} » ne peut se trouver qu’au départ d’un rôle",
     not_ready_automation_open_exit: "{step} : rien n’est prévu après « {exit} »",
     not_ready_automation_unwired_input: "{step} : rien n’atteint l’entrée obligatoire « {port} »",

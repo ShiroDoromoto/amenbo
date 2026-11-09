@@ -997,7 +997,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
         }
         AutomationCmd::RoleAdd { automation, name, headcount, icon, entry, agent, model } => {
-            let new = NewRole { name, headcount, take_order: None, icon, entry_placement_id: entry, agent, model };
+            let new = NewRole { name, headcount, take_order: None, starts_by: None, icon, entry_placement_id: entry, agent, model };
             let r = store.automation_role_add(automation, new).map_err(CliError::from)?;
             let line = format!("✓ Defined role {} in automation {automation} ({})", r.name, r.id);
             write_draft(flags, "automation.role-add", "automation_role", serde_json::to_value(&r).unwrap(), None, line, Some(Draft::Automation(r.automation_id)));
@@ -1037,6 +1037,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 name,
                 headcount,
                 take_order: None,
+                starts_by: None,
                 icon: if clear_icon { Some(None) } else { icon.map(Some) },
                 entry_placement_id: if clear_entry { Some(None) } else { entry.map(Some) },
                 agent: if clear_agent { Some(None) } else { agent.map(Some) },

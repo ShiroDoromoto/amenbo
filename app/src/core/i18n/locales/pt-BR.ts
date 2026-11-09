@@ -1912,6 +1912,8 @@ export const ptBR: Translation = {
     not_ready_automation_action_draft: "a ação “{action}” posicionada ainda está em criação",
     not_ready_automation_action_empty: "a ação “{action}” posicionada não tem etapa de início",
     not_ready_automation_role_start_takes_no_task: "o papel “{role}” começa em “{step}”, e não em “Pegar uma tarefa”",
+    not_ready_automation_role_start_takes_task: "o papel “{role}” começa por um gatilho, então não pode começar em “{step}”",
+    not_ready_automation_needs_task_not_taken: "o papel “{role}” começa por um gatilho e chega a “{step}” antes de pegar uma tarefa",
     not_ready_automation_take_task_off_start: "“{step}” só pode ficar onde um papel começa",
     not_ready_automation_open_exit: "{step}: nada está previsto depois de “{exit}”",
     not_ready_automation_unwired_input: "{step}: nada chega à entrada obrigatória “{port}”",

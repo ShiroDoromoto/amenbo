@@ -1894,6 +1894,8 @@ export const th: Translation = {
     not_ready_automation_action_draft: "แอ็กชัน “{action}” ที่วางไว้ยังกำลังสร้างอยู่",
     not_ready_automation_action_empty: "แอ็กชัน “{action}” ที่วางไว้ไม่มีขั้นตอนที่เป็นจุดเริ่ม",
     not_ready_automation_role_start_takes_no_task: "บทบาท “{role}” เริ่มที่ “{step}” ไม่ใช่ “รับงาน”",
+    not_ready_automation_role_start_takes_task: "บทบาท “{role}” เริ่มด้วยทริกเกอร์ จึงเริ่มที่ “{step}” ไม่ได้",
+    not_ready_automation_needs_task_not_taken: "บทบาท “{role}” เริ่มด้วยทริกเกอร์ และไปถึง “{step}” ก่อนรับงาน",
     not_ready_automation_take_task_off_start: "“{step}” วางได้เฉพาะที่จุดเริ่มต้นของบทบาท",
     not_ready_automation_open_exit: "{step}: ยังไม่ได้กำหนดว่าหลัง “{exit}” จะทำอะไร",
     not_ready_automation_unwired_input: "{step}: ไม่มีอะไรไปถึงอินพุตที่จำเป็น “{port}”",

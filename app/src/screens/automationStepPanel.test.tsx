@@ -600,6 +600,29 @@ describe("the panel of one spot", () => {
     expect(nextFor("完了").className).not.toContain("autostep__unset");
   });
 
+  /// A way out of "split by a classification" left without a line is how a value is not taken, which
+  /// stops neither a save nor a launch (`AMB-D-1140`) — so it is not picked out as one to fill in.
+  it("never marks a way out of split by a classification nothing is said after", async () => {
+    const split = (builtin?: string) => detail({
+      placements: [
+        spot({
+          builtin,
+          exits: [
+            { id: 10, name: "Engineer", outputs: [] },
+            { id: 11, name: "Designer", outputs: [] },
+            { id: 12, name: "*", outputs: [] },
+          ],
+        }),
+      ],
+      edges: [{ id: 5, fromId: 1, exitName: "Engineer", ends: "done" }],
+    });
+    await render({ automation: split(), placementId: 1 });
+    expect(nextFor("Designer").className).toContain("autostep__unset");
+    await render({ automation: split("split_by_dim"), placementId: 1 });
+    expect(nextFor("Designer").className).not.toContain("autostep__unset");
+    expect(nextFor("Engineer").className).not.toContain("autostep__unset");
+  });
+
   it("offers the next action under a way out nothing is said after, and never under the error one (AMB-D-1003)", async () => {
     const placeNext = vi.fn();
     const offers = () =>

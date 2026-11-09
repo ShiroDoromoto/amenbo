@@ -27,7 +27,7 @@ import { inTauri } from "../core/snapshot";
 import { t, tf } from "../core/i18n";
 import { useSingleFlight } from "../core/singleFlight";
 import { builtinWord } from "../core/builtinWords";
-import { ERROR_EXIT, pictureOrder, type PicGraph } from "./automationLayout";
+import { ERROR_EXIT, pictureOrder, SPLIT_BY_DIM, type PicGraph } from "./automationLayout";
 import type {
   AgentModelListDto,
   AutomationEdgeDto,
@@ -346,7 +346,14 @@ export function NextRow({
     if (now !== (edge.maxTimes ?? null)) void run(editAutomationEdge(edge.id, { maxTimes: now }));
   };
 
-  const unset = head !== undefined && edge === undefined && exitName !== ERROR_EXIT;
+  // A way out of "split by a classification" with nothing after it is not a gap to fill: tasks of
+  // that value are simply not taken here, and one that comes stops the run (`AMB-D-1140`). Only the
+  // mark goes — the place to draw a line from stays (`AMB-D-1003`).
+  const unset =
+    head !== undefined &&
+    edge === undefined &&
+    exitName !== ERROR_EXIT &&
+    self?.builtin !== SPLIT_BY_DIM;
   const offersNext = onPlaceNext !== undefined && edge === undefined && exitName !== ERROR_EXIT;
 
   return (

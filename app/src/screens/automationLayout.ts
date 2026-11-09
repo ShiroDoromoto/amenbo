@@ -380,6 +380,9 @@ export const ACTION_BOUNDARY = 0;
 /** The name core gives the error way out — the one every box of either picture is born with. */
 export const ERROR_EXIT = "*";
 
+/** The built-in that splits by an axis (`amenbo_core::ops::automation_builtin_split::SPLIT_BY_DIM`). */
+export const SPLIT_BY_DIM = "split_by_dim";
+
 /** The name core gives the way out every step and action is born with — core's `DONE_EXIT`. */
 export const DONE_EXIT = "完了";
 

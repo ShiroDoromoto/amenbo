@@ -3361,7 +3361,9 @@ pane?: string,
 run?: number, 
 /**
  * The launch `run` is a seat of, where it is one (`AMB-D-1123`). `pane` is then the launch's, and
- * the face puts `run` in front in it — or stands it for the launch with `run` in front.
+ * the face puts `run` in front in it — or stands it for the launch with `run` in front. With no
+ * `run`, it is a launch that has none yet — one waiting for a task to take — and its pane is
+ * stood with no seat in front.
  */
 launch?: number, };
 

@@ -717,15 +717,24 @@ export function paneIdOf(run: number, launch: number | null | undefined): string
  * **A pane already standing keeps the seat it has in front.** A step arriving on another seat is that
  * seat's news, and a pane that swapped its terminal for every one of them would change under the
  * reader at every report; the reader swaps it (`seatedIn`).
+ *
+ * **A launch with no run yet stands its pane all the same**, with no seat in front (`run` null): a
+ * launch that waits for a task to take opens no run (`AMB-D-1123`), and a press on Start that stood
+ * nothing would look as if it had done nothing. The first seat to arrive on that pane is put in
+ * front — there is no seat there for it to take the place of.
  */
 export function stoodForLaunch(
   layout: Layout,
   project: number,
   launch: number,
-  run: number,
+  run: number | null,
 ): { layout: Layout; frame: Frame } {
   const already = paneOfLaunch(layout, launch);
-  if (already) return { layout, frame: already };
+  if (already) {
+    if (already.run !== null || run === null) return { layout, frame: already };
+    const seated: Frame = { ...already, run };
+    return { layout: withFrame(layout, already.id, () => seated), frame: seated };
+  }
   const panes = panesOf(layout, project);
   const frame: Frame = {
     id: launchFrameId(launch),
@@ -1182,12 +1191,16 @@ export function launchesKept(saved: SavedLayout): number[] {
  * **What the store kept, with each launch's pane given the seat to draw in front** — and without the
  * launch's pane where `seats` gives it none (`launchesKept`).
  *
- * The store keeps places, so a launch's pane comes out of it naming no seat. A launch's pane drawing
- * no seat would be a run's pane drawing no run, so the pane goes where there is none to give: a
- * launch that is over and needs nobody — ended, and every run of it over and needing nobody
- * (`needsNobody`, `AMB-D-955`) — the way a run's pane goes with its run (`withoutRuns`), and a launch
- * that could not be read. The next step of a launch still going stands its pane again
- * (`stoodForLaunch`).
+ * The store keeps places, so a launch's pane comes out of it naming no seat, and the pane goes where
+ * there is none to give: a launch that is over and needs nobody — ended, and every run of it over and
+ * needing nobody (`needsNobody`, `AMB-D-955`) — the way a run's pane goes with its run
+ * (`withoutRuns`), and a launch that could not be read. The next step of a launch still going stands
+ * its pane again (`stoodForLaunch`).
+ *
+ * **A launch still waiting for its first task goes too**, though Start stands its pane with no seat in
+ * front. The seats are read off the runs, and a run is all that tells a launch that is still going
+ * from one that ended while the app was down; a pane kept on no run could be one for a launch nobody
+ * will ever work again. Its first run stands it again.
  */
 export function seatedOn(saved: SavedLayout, seats: ReadonlyMap<number, number>): SavedLayout {
   return {

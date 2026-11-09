@@ -1,7 +1,9 @@
 # The built-in that takes a task can be set to wait for one rather than leave by the way out that
 # says there was none. A run or a session closing a task can make another ready, and so can a new one
-# being filed, so a run set that way does not end on an empty filter: it stays running, and Amenbo
-# looks again until a task turns up — then reserves it and goes on, as it would have at the start.
+# being filed, so a launch set that way does not end on an empty filter. Started with no task to take,
+# it opens no run: the launch stands, and its pane with it — the launch's header and its roles, with
+# no run's row under them. Amenbo looks again until a task turns up, then opens the run, which
+# reserves it and goes on in that same pane.
 #
 # Nothing follows the way out for no task here, on purpose. Set to wait, the built-in never leaves by
 # it, so the launch asks no line of it; a build that still did would refuse to start this one.
@@ -9,14 +11,15 @@
 # The road is the screen's alone. A run started at a terminal opens no step (`automation start`), so
 # a built-in is only ever carried out on a run the window started.
 id: wait-for-a-task-with-the-built-in-that-takes-one
-title: The built-in that takes a task, set to wait, keeps its run going until a task turns up and then takes it
+title: The built-in that takes a task, set to wait, stands its launch's pane until a task turns up and then takes it
 description: >
   Place the built-in that takes a task (`take_task`) where an automation's role starts, answer its setting
   "着手できるタスクが無いとき" with "着手できるタスクが出るまで待つ", and draw nothing after the way
   out that found none. Start it while
-  no task is handed to the AI, and read the run still running. Hand a task to the AI, wait up to 30
-  seconds for the run's next look, and read the task gone to in_progress and the agent's step in the
-  run's pane working it.
+  no task is handed to the AI: no run starts, and read the launch's pane standing all the same, its
+  header and its roles on the bar with no run's row. Hand a task to the AI, wait up to 30 seconds for
+  Amenbo's next look, and read the task gone to in_progress and the agent's step working it in that
+  same pane.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
 
@@ -84,26 +87,20 @@ steps_gui:
       setting: 着手できるタスクが無いとき
       value: 着手できるタスクが出るまで待つ
 
+  # No task to take: the launch opens and no run does, and the screen goes to the launch's pane.
   - type: action
     domain: automation
     op: start
     with:
       target: auto
-    as: run
+      waits: true
 
-  # Still going, and not over: it waits rather than leave by the way out that found none.
-  - type: action
-    domain: automation
-    op: screen
-    with:
-      tab: running
-
+  # Waiting rather than gone: the launch's pane stands, its header and its roles, with no run in it.
   - type: assert
     domain: automation
-    op: run-row
+    op: launch-pane
     with:
-      target: run
-      state: running
+      target: auto
 
   - type: assert
     domain: task
@@ -127,8 +124,8 @@ steps_gui:
     with:
       target: seed
 
-  # Reserved by the run that was waiting, with nobody starting it again. Not at once: a run waiting
-  # for a task looks again every 30 seconds, so the hand-over is taken on the next look.
+  # Reserved by the run the waiting launch opens, with nobody starting it again. Not at once: Amenbo
+  # looks again every 30 seconds, so the hand-over is taken on the next look.
   - type: action
     domain: task
     op: wait-field
@@ -146,11 +143,11 @@ steps_gui:
       field: status
       equals: in_progress
 
+  # In the launch's pane that was standing, with that run's row now under its header.
   - type: assert
     domain: automation
     op: run-pane
     with:
-      target: run
       step: build
       action: work
       task: seed

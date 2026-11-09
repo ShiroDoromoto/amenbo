@@ -792,7 +792,10 @@ moves, the pause at the end of the action under way, the pause after the task it
 (`press: pause-before-next-task`) and the cancel among them, are on its row on the running tab. The
 row under the header is the seat in front (`run-pane`). The pane opens on the desks of the roles
 (`run-roles`); a seat pressed turns it to that seat's terminal, and the bar over the terminal is the
-one way back (`press-run` with `press: terminal` / `roles`).
+one way back (`press-run` with `press: terminal` / `roles`). A start with no task to take, on an
+automation that waits for one (`start` with `waits: true`), opens the launch and no run, so it binds
+nothing; the pane stands all the same, its header and its roles with no seat's row, and is read by
+the automation (`launch-pane`). The run Amenbo opens once a task turns up comes to that same pane.
 **A role of a launch is changed for that launch alone**, from the menu its desk's "⋯" opens and at
 the terminal alike, the role named by its name (`role`) and the launch by a run of it (`target`): its
 headcount (`launch-headcount-set`, 1 to 10, and `launch-headcount-reset` back to the definition) and

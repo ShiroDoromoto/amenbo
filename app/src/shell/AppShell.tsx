@@ -4,7 +4,7 @@ import type { LedgerPlaceDto, RefTargetDto } from "../bindings/bindings";
 import { TopBar } from "./TopBar";
 import { WorkspaceFace } from "./WorkspaceFace";
 import { useNavHistory, NO_SELECTION } from "./navHistory";
-import { paneIdOf } from "../talk/layout";
+import { launchFrameId, paneIdOf } from "../talk/layout";
 import { isBlankSpaceClose } from "./outsideClose";
 import { endingConfirm } from "./openPanes";
 import { Sidebar } from "./Sidebar";
@@ -376,10 +376,16 @@ export function AppShell() {
    * **A run of a launch goes to its launch's pane** (`AMB-D-1123`): one launch is one pane, and the run
    * is the seat put in front in it (`../talk/layout`'s `Frame.launch`). A run kept from before launches
    * goes to a pane of its own.
+   *
+   * **A launch with no run yet goes to its pane all the same** (`run` null): Start on an automation
+   * waiting for a task to take opens the launch and no run (`../components/StartAutomation`), and the
+   * pane is stood with no seat in front.
    */
   const goToRun = useCallback(
-    (project: number, run: number, launch?: number | null) =>
-      goToPlace(project, paneIdOf(run, launch), run, launch ?? undefined),
+    (project: number, run: number | null, launch?: number | null) => {
+      if (run !== null) goToPlace(project, paneIdOf(run, launch), run, launch ?? undefined);
+      else if (launch != null) goToPlace(project, launchFrameId(launch), undefined, launch);
+    },
     [goToPlace],
   );
 

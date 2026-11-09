@@ -198,7 +198,13 @@ function Pane({
    *  A refusal is said on the toast — the run may have ended a moment before the press. */
   const [pressing, setPressing] = useState(false);
   // Which face a run's pane is turned to. An ordinary pane has the terminal and nothing else.
-  const [face, setFace] = useState<Face>(() => (run === null ? "terminal" : faceOf(run.run) ?? "roles"));
+  //
+  // **A launch's pane with no seat in front yet has its roles and nothing else** — the launch waits for
+  // a task to take and has no run (`../talk/layout`'s `stoodForLaunch`). There is no terminal to turn
+  // to, and the first seat that arrives is a pane drawn afresh (`./WorkspaceFace` keys it by the seat).
+  const seatless = run === null && launch !== null;
+  const [face, setFace] = useState<Face>(() =>
+    run === null ? (seatless ? "roles" : "terminal") : faceOf(run.run) ?? "roles");
   const runId = run?.run ?? null;
   // **A step that may wait for a person turns the pane to its terminal** (`AMB-T-5776`), so a question
   // it asks is not left behind the roles nobody reads it in. Whether the agent is waiting is not
@@ -234,7 +240,7 @@ function Pane({
       setByStep(false);
     });
   }, [runId]);
-  const onRoles = run !== null && face === "roles";
+  const onRoles = (run !== null || seatless) && face === "roles";
   const press = async (act: () => Promise<unknown>) => {
     setPressing(true);
     try {
@@ -290,8 +296,9 @@ function Pane({
     dropping.current = true;
     try {
       // A run's pane is not asked about: there is no way back into a step's conversation to lose —
-      // every step opens one of its own — and the run it drew is over.
-      if (run === null && !await confirmDialog(t("face.dropConfirm"))) return;
+      // every step opens one of its own — and the run it drew is over. Nor is a launch's with no seat
+      // yet: it has had no conversation, and the launch's first run stands it again.
+      if (run === null && !seatless && !await confirmDialog(t("face.dropConfirm"))) return;
       if (live !== null) await endTerminal(live).catch(() => {});
       on.current.onDrop(frame);
     } finally {
@@ -786,7 +793,7 @@ function Pane({
   return (
     <div
       className={`slot${focused ? " slot--focused" : ""}${landed ? " slot--landed" : ""}${
-        held ? " slot--held" : ""}${run === null ? "" : " slot--run"}${launch === null ? "" : " slot--launch"}`}
+        held ? " slot--held" : ""}${run === null && !seatless ? "" : " slot--run"}${launch === null ? "" : " slot--launch"}`}
       style={at}
       data-hand={frame}
       onMouseDown={pressedOn}
@@ -1002,7 +1009,7 @@ function Pane({
                 frame rather than to the session in it (`AMB-D-838`). */}
             {/* Not on a run's pane: its row is headed with the automation's name and never the place's
                 (`../talk/plate`), so a name given here would be kept and never drawn. */}
-            {run === null && (
+            {run === null && !seatless && (
               <MenuItem
                 apart
                 onClick={() => {
@@ -1059,7 +1066,7 @@ function Pane({
             onBack={() => turn("roles")}
           />
         )}
-        {run !== null && face === "roles" && (
+        {onRoles && (
           <RunRoles
             run={run}
             project={project}
@@ -1067,7 +1074,7 @@ function Pane({
             // A seat pressed: the one in front turns this pane to its terminal, and another is put in
             // front in this same place, on its terminal (`onGoToRun`).
             onOpen={(other) => {
-              if (other === run.run) {
+              if (other === run?.run) {
                 turn("terminal");
                 return;
               }
@@ -1111,8 +1118,9 @@ function Pane({
             </>
           )
           // Not on a run's pane (`AMB-T-5667`): a terminal opened there would be an ordinary session
-          // that has nothing to do with the run, under a row that goes on naming the run's step.
-          : run === null ? (
+          // that has nothing to do with the run, under a row that goes on naming the run's step. Nor on
+          // a launch's with no seat yet, for the same reason: its roles are drawn over this place.
+          : run === null ? !seatless && (
             <button className="slot__open" onClick={() => setRunning(true)}>
               {t("face.open")}
             </button>

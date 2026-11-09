@@ -126,8 +126,9 @@ export function AutomationsScreen({
   onBack: () => void;
   /** Whether the workspace is standing — the build screen's to hand to the press (`./AutomationBuildScreen`). */
   workspaceOpen: boolean;
-  /** Go to the pane a run is drawn in, for a press on a row of the "running" tab. */
-  onGoToRun?: (project: number, run: number, launch?: number | null) => void;
+  /** Go to the pane a run is drawn in, for a press on a row of the "running" tab — or a launch's, run
+   *  or none, for a press on Start (`../components/StartAutomation`). */
+  onGoToRun?: (project: number, run: number | null, launch?: number | null) => void;
 }) {
   // The project the pulldown is on, or `null` for every project.
   const projectId = place.pick ?? null;
@@ -301,7 +302,7 @@ function ProjectAutomationList({
   projectId: number;
   workspaceOpen: boolean;
   onOpen: (opened: Opened) => void;
-  onGoToRun?: (project: number, run: number, launch?: number | null) => void;
+  onGoToRun?: (project: number, run: number | null, launch?: number | null) => void;
 }) {
   const automations = useAutomations(projectId);
   return (
@@ -329,7 +330,7 @@ function EveryAutomationList({
 }: {
   workspaceOpen: boolean;
   onOpen: (opened: Opened) => void;
-  onGoToRun?: (project: number, run: number, launch?: number | null) => void;
+  onGoToRun?: (project: number, run: number | null, launch?: number | null) => void;
 }) {
   const automations = useEveryAutomation();
   return (
@@ -367,7 +368,7 @@ function AutomationRows({
   workspaceOpen: boolean;
   /** Open the row's automation. */
   onOpen: (row: Row) => void;
-  onGoToRun?: (project: number, run: number, launch?: number | null) => void;
+  onGoToRun?: (project: number, run: number | null, launch?: number | null) => void;
 }) {
   const [unfolded, setUnfolded] = useState(false);
   if (cards.length === 0) return null;
@@ -421,7 +422,7 @@ function AutomationLine({
   row: Row;
   workspaceOpen: boolean;
   onOpen: () => void;
-  onGoToRun?: (project: number, run: number, launch?: number | null) => void;
+  onGoToRun?: (project: number, run: number | null, launch?: number | null) => void;
 }) {
   const { card, projectId, projectName } = row;
   const folders = useBoundFolders(projectId).live.map((one) => one.path);

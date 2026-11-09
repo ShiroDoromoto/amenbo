@@ -1153,6 +1153,14 @@ export function WorkspaceFace({
         // **A launch's place is gone to with the seat asked for in front** (`../talk/layout`'s
         // `Frame.launch`): the launch has one pane, and the run pressed for is a seat of it. Where
         // nothing stands for the launch yet, it is stood with that seat in front.
+        //
+        // **A launch asked for with no run is stood with no seat in front** — Start, on an
+        // automation waiting for a task to take (`../components/StartAutomation`). Its roles are
+        // what the pane shows until the first seat arrives and is put in front (`stoodForLaunch`).
+        if (launch !== undefined && run === undefined) {
+          const stood = stoodForLaunch(was, project, launch, null);
+          return focusOn(stood.layout, stood.frame.id);
+        }
         if (launch !== undefined && run !== undefined) {
           const there = paneOfLaunch(was, launch);
           if (there) return focusOn(seatFront(was, there.id, run), there.id);

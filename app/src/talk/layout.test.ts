@@ -1061,6 +1061,22 @@ describe("the pane a launch stands in", () => {
     expect(paneOfLaunch(again.layout, 3)?.id).toBe(launchFrameId(3));
   });
 
+  it("stands for a launch with no run yet, and puts the first seat to arrive in front", () => {
+    // Start on an automation waiting for a task to take: a launch, and no run.
+    const waiting = stoodForLaunch({ ...EMPTY_LAYOUT, project: 1 }, 1, 3, null);
+    expect(waiting.frame).toMatchObject({ id: launchFrameId(3), launch: 3, run: null });
+    expect(terminalOf(waiting.frame)).toBe(launchFrameId(3));
+    // Asked for again with no run, it is the same pane.
+    expect(stoodForLaunch(waiting.layout, 1, 3, null).layout).toBe(waiting.layout);
+    // The first seat takes the empty front, in the same place.
+    const seated = stoodForLaunch(waiting.layout, 1, 3, 7);
+    expect(seated.layout.frames).toHaveLength(1);
+    expect(seated.frame).toMatchObject({ id: launchFrameId(3), run: 7 });
+    expect(paneOfLaunch(seated.layout, 3)?.run).toBe(7);
+    // The next one leaves it there.
+    expect(stoodForLaunch(seated.layout, 1, 3, 8).frame.run).toBe(7);
+  });
+
   it("goes at the end of its project's panes and moves neither the page nor the focus", () => {
     const one = withPanes(1);
     const { layout } = stoodForLaunch(one, 1, 3, 7);

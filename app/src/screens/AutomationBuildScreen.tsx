@@ -241,8 +241,9 @@ export function AutomationBuildScreen({
   onBack: () => void;
   /** Go to one library action's own build screen, full screen — the press over the one opened here. */
   onOpenAction: (actionId: number) => void;
-  /** Go to the pane a run going on this automation is drawn in. */
-  onGoToRun?: (project: number, run: number, launch?: number | null) => void;
+  /** Go to the pane a run going on this automation is drawn in — or a launch's with no run yet, for a
+   *  press on Start (`../components/StartAutomation`). */
+  onGoToRun?: (project: number, run: number | null, launch?: number | null) => void;
 }) {
   const automation = useAutomation(id);
   // Nothing until something is pressed — a definition opens on the picture, and a box picked for the

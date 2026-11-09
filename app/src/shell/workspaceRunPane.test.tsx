@@ -1017,6 +1017,50 @@ describe("the pane a launch is drawn in", () => {
     expect(panes()).toHaveLength(1);
     expect(hoisted.opened[hoisted.opened.length - 1]!.session).toBe("step-9");
   });
+
+  it("stands the launch's pane with its roles where Start found no task and opened no run", async () => {
+    // Every role waits with nobody at work and no task to take.
+    const idle = (id: number, name: string, headcount: number) => ({
+      role: id, name, defined: headcount, headcount, underWay: 0, toLetGo: 0, held: false,
+      runs: [], waiting: 0, firstWaiting: [],
+    });
+    hoisted.launch = {
+      launch: 3, project: 1, automation: 3, automationName: "サンプル制作チーム", status: "running",
+      maxHeadcount: 10, failed: [], roles: [idle(1, "エンジニア", 2), idle(2, "レビュアー", 1)],
+    };
+    await mount();
+    await act(async () => {
+      root.render(createElement(WorkspaceFace, {
+        onWindow: () => {},
+        note: null,
+        projectId: 1,
+        openIn: { project: 1, pane: "launch-3", launch: 3, nth: 1 },
+      }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(panes()).toHaveLength(1);
+    expect(panes()[0]!.getAttribute("data-hand")).toBe("launch-3");
+    expect(worked()).toBe("launch-3");
+    // The launch's header, and its roles on the bar by name and headcount.
+    expect(container.querySelector(".launchhead")).not.toBeNull();
+    const roles = [...container.querySelectorAll(".runroles__idleone")].map((one) => one.textContent);
+    expect(roles).toEqual([
+      `エンジニア${tf("auto.run.roles.headcount", { n: 2 })}`,
+      `レビュアー${tf("auto.run.roles.headcount", { n: 1 })}`,
+    ]);
+    // No terminal to open by hand, and none is started.
+    expect(container.querySelector(".slot__open")).toBeNull();
+    expect(container.querySelector(".runterm")).toBeNull();
+    expect(hoisted.opened).toHaveLength(0);
+
+    // The first seat to arrive is put in front of that same pane.
+    await seat(7, "step-7");
+    expect(panes()).toHaveLength(1);
+    const start = hoisted.opened[hoisted.opened.length - 1]!;
+    expect(start.frame).toBe("run-7");
+    expect(start.session).toBe("step-7");
+  });
 });
 
 // **The header of a launch's pane** (`./LaunchHead`): the launch and the moves made on the whole of it.

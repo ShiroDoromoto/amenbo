@@ -619,6 +619,15 @@ describe("desksOf", () => {
     ]), FRONT);
     expect(got.desks[0]!.seats[0]!.to).toEqual(["B"]);
   });
+
+  it("draws the launch with no seat in front, every role on the bar while none has a task", () => {
+    const got = desksOf(launchOf([launchRole(1, "A", [], 2), launchRole(2, "B", [], 1)]), null);
+    expect(got.desks).toEqual([]);
+    expect(got.idle.map((one) => [one.name, one.headcount])).toEqual([["A", 2], ["B", 1]]);
+    // A seat arriving there is drawn off its own row alone, with no run in front to read it by.
+    const seated = desksOf(launchOf([launchRole(1, "A", [liveRun(5)], 2)]), null);
+    expect(seated.desks[0]!.seats[0]!.state).toBe("running");
+  });
 });
 
 describe("runDesks", () => {

@@ -2174,7 +2174,7 @@ pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result
 #[derive(Clone, Debug)]
 pub enum Started {
     /// A run was launched.
-    Run(AutomationRun),
+    Run(Box<AutomationRun>),
     /// **Every role with a seat open would start its round waiting for a task with none to take**, so
     /// no run was made (`AMB-D-1126`). The launch stands open, and a run is started into it once a task
     /// of a role with a free seat turns up ([`top_up`]). Nothing is marked on the automation. So too
@@ -2186,7 +2186,7 @@ impl Started {
     /// The run, for a launch that was never let wait.
     fn run(self) -> Result<AutomationRun> {
         match self {
-            Started::Run(run) => Ok(run),
+            Started::Run(run) => Ok(*run),
             Started::Waits(automation) => Err(Error::invalid(format!(
                 "automation '{}' was launched with no task to take, and only a start makes no run then",
                 automation.name
@@ -2530,17 +2530,22 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 ///    rewritten since they were asked files nothing. A trigger not enabled files none, nor does one of an
 ///    archived automation, a stopped one or one kept for export only, nor one taken away since it was
 ///    found due.
-/// 2. **What it says** ([`crate::model::TriggerTask`]): the title and notes written on the trigger, the
-///    ones read from its file now ([`task_from_file`]), or the ones its program wrote in `said`. A file
-///    that says nothing it can file is an error, as a launch refused is.
-/// 3. **The task, then the run.** For a role started by a trigger, no task: what it says is read only
-///    so that a file or a program that says nothing starts nothing, and the run is handed none of it.
-///    Otherwise the task is filed before the run, waiting under the trigger's role
+///    One whose files were read for another trigger than the one that stands now — `files` naming
+///    other paths than it does — starts nothing either.
+/// 2. **What it hands on** ([`crate::model::TriggerTask`]): the title, notes, data and files written on
+///    the trigger — the files as [`read_trigger_files`] read them outside this write, into `files` — the
+///    title and notes read from its file now ([`task_from_file`]), or the ones its program wrote in
+///    `said`. A file that says nothing it can file is an error, as a launch refused is.
+/// 3. **The task, then the run.** For a role started by a trigger, no task. Otherwise the task is filed
+///    before the run, waiting under the trigger's role
 ///    to be taken — the automation's first role where the trigger names none — and given to the AI, with
 ///    a line in its timeline naming the trigger ([`crate::activity_log::event::task_filed_by_trigger`]).
 ///    The run is a launch like any other ([`launch_handing`]), joining the launch standing, of the newest
 ///    saved version, sitting in the seat of the task's role ([`file_handed`]) — or of the trigger's role
 ///    where it is started by a trigger. What `by` says is passed on as it stands.
+/// 4. **What it handed on, kept on the run** (`AMB-D-1133`, [`keep_what_was_handed`]): the trigger's
+///    name, the title, notes and data in the run's own columns, and the files attached to the run —
+///    whichever way the run was started.
 ///
 /// **A time it decides no leaves nothing**: no task, no run, and `next_at` where it was, so the next
 /// look asks again. A launch refused by its checks is an error, and the transaction it is written in
@@ -2554,6 +2559,7 @@ pub fn fire(
     by: &Launcher<'_>,
     now: Timestamp,
     said: Option<&ScriptsSaid>,
+    files: &[TriggerFileRead],
 ) -> Result<Option<AutomationRun>> {
     let Some(trigger) = read::automation_trigger(tx.conn(), trigger_id)? else { return Ok(None) };
     let automation_id = trigger.automation_id;
@@ -2568,14 +2574,18 @@ pub fn fire(
     let condition = condition_count(tx.conn(), automation.project_id, &trigger)?;
     if held(&automation, &trigger, room, paused, condition.as_ref(), now).is_some()
         || TriggerScripts::of(&trigger).is_some_and(|scripts| said.map(|said| &said.scripts) != Some(&scripts))
+        || !files.iter().map(|f| &f.path).eq(trigger_files(&trigger.task))
     {
         return Ok(None);
     }
-    let (title, notes) = match &trigger.task {
-        crate::model::TriggerTask::Fixed { title, notes } => (title.clone(), notes.clone()),
-        crate::model::TriggerTask::File { path } => task_from_file(path).map_err(Error::invalid)?,
+    let (title, notes, data) = match &trigger.task {
+        crate::model::TriggerTask::Fixed { title, notes, data, .. } => (title.clone(), notes.clone(), data.clone()),
+        crate::model::TriggerTask::File { path } => {
+            let (title, notes) = task_from_file(path).map_err(Error::invalid)?;
+            (title, notes, None)
+        }
         crate::model::TriggerTask::Script { .. } => match said.and_then(|said| said.wrote.clone()) {
-            Some(wrote) => wrote,
+            Some((title, notes)) => (title, notes, None),
             None => return Ok(None),
         },
     };
@@ -2593,8 +2603,8 @@ pub fn fire(
         .run()?,
         None => {
             let handed = HandedAtLaunch {
-                title: Some(title),
-                notes: Some(notes),
+                title: Some(title.clone()),
+                notes: Some(notes.clone()),
                 role_id: trigger.role_id,
                 trigger: Some(trigger.name.clone()),
                 ..Default::default()
@@ -2602,6 +2612,8 @@ pub fn fire(
             launch_handing(tx, automation_id, by, &handed, ReadsFrom::Saved)?
         }
     };
+    let handed = Handed { trigger: &trigger.name, title: &title, notes: &notes, data: data.as_deref(), files };
+    let run = keep_what_was_handed(tx, run.id, &handed, by.by.unwrap_or(ActorKind::Ai))?;
     let after = crate::model::AutomationTrigger {
         next_at: trigger.when.after(now),
         last_filed_at: Some(now),
@@ -2610,6 +2622,51 @@ pub fn fire(
     };
     crate::ops::emit_update(tx, record::automation_trigger(&trigger), record::automation_trigger(&after))?;
     Ok(Some(run))
+}
+
+/// **What a trigger handed on to the run it started** ([`fire`]) — its name, and the title, notes, data
+/// and files it handed.
+struct Handed<'a> {
+    trigger: &'a str,
+    title: &'a str,
+    notes: &'a str,
+    data: Option<&'a str>,
+    files: &'a [TriggerFileRead],
+}
+
+/// **Keep on run `run_id` what the trigger that started it handed on** (`AMB-D-1133`) — the trigger's
+/// name in [`AutomationRun::start_trigger`], the title, notes and data in the run's own columns (blank
+/// kept as none), and each file attached to the run ([`crate::model::AttachmentTarget::AutomationRun`])
+/// in the order the trigger names them, as `created_by` attached it. Answers the run as it then stands.
+fn keep_what_was_handed(
+    tx: &WriteTx<'_>,
+    run_id: i64,
+    handed: &Handed<'_>,
+    created_by: ActorKind,
+) -> Result<AutomationRun> {
+    let before = read::automation_run(tx.conn(), run_id)?.ok_or_else(|| not_found("automation run", run_id))?;
+    let kept = |text: &str| (!text.trim().is_empty()).then(|| text.to_string());
+    let after = AutomationRun {
+        start_trigger: Some(handed.trigger.to_string()),
+        start_title: kept(handed.title.trim()),
+        start_notes: kept(handed.notes),
+        start_data: handed.data.and_then(kept),
+        ..before.clone()
+    };
+    crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after))?;
+    for file in handed.files {
+        crate::ops::attachment::add_blob(
+            tx,
+            crate::model::AttachmentTarget::AutomationRun,
+            run_id,
+            &file.blob.hash,
+            &file.filename,
+            file.mime.as_deref(),
+            i64::try_from(file.blob.size_bytes).unwrap_or(i64::MAX),
+            created_by,
+        )?;
+    }
+    Ok(after)
 }
 
 /// **Where a run in the seats of `role_id` starts its rounds on `pic`** (`AMB-D-1123`) — the placement
@@ -3379,16 +3436,17 @@ pub enum TriggerTried {
     Condition,
     /// The program it asks first said not to file one.
     ProgramSaidNo,
-    /// It could say nothing that can be filed — a program said neither, or the file could not be read
-    /// — `why` in a sentence.
+    /// It could say nothing that can be filed — a program said neither, the file could not be read, or a
+    /// file it hands on is not there — `why` in a sentence.
     SaidNothing { why: String },
     /// It would file a task saying this.
     Files { title: String, notes: String },
 }
 
 /// **Try a trigger, filing nothing** — its condition as `check` counted it ([`trigger_check`]), then
-/// the program it asks first, then what the task would say: the title and notes written on it, the file
-/// read now ([`task_from_file`]), or what its program writes ([`ask_trigger`]). It answers whether the
+/// the program it asks first, then what the task would say: the title and notes written on it — none
+/// where a file it hands on is not there (`AMB-D-1135`) — the file read now ([`task_from_file`]), or what
+/// its program writes ([`ask_trigger`]). It answers whether the
 /// trigger's own parts would file a task now, and with what, leaving out what holds it back from
 /// outside them (`check.held`, which the caller reads beside it), so a trigger written a moment ago
 /// can be tried before it is first due. Its programs run as a look runs them, stopped at their timeout
@@ -3453,7 +3511,12 @@ fn tried(
         },
     };
     let (title, notes) = match &trigger.task {
-        crate::model::TriggerTask::Fixed { title, notes } => (title.clone(), notes.clone()),
+        crate::model::TriggerTask::Fixed { title, notes, files, .. } => {
+            if let Some(why) = files.iter().find_map(|path| trigger_file_there(path).err()) {
+                return TriggerTried::SaidNothing { why: why.to_string() };
+            }
+            (title.clone(), notes.clone())
+        }
         crate::model::TriggerTask::File { path } => match task_from_file(path) {
             Ok(said) => said,
             Err(why) => return TriggerTried::SaidNothing { why },
@@ -3589,6 +3652,70 @@ fn script_output<'a>(
         Ended::NotJson(why) => Err(format!("output.json is not JSON: {why}")),
         Ended::Wrote { output, .. } => Ok(output),
     }
+}
+
+/// **A file a trigger hands on, read from its path before the write that starts the run**
+/// ([`read_trigger_files`]) — its bytes already in the blob store, so [`fire`] attaches it to the run it
+/// starts ([`crate::model::AttachmentTarget::AutomationRun`]) without reading anything itself.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TriggerFileRead {
+    /// The full path it was read from, as the trigger names it.
+    pub path: String,
+    /// The name it is attached by: the last part of its path.
+    pub filename: String,
+    /// Its type, from its name, where its name says one.
+    pub mime: Option<String>,
+    /// Its bytes, as put in the blob store.
+    pub blob: crate::blob::BlobRef,
+}
+
+/// **The files a trigger hands on** — the paths of a [`crate::model::TriggerTask::Fixed`], none for any
+/// other.
+pub fn trigger_files(task: &crate::model::TriggerTask) -> &[String] {
+    match task {
+        crate::model::TriggerTask::Fixed { files, .. } => files,
+        crate::model::TriggerTask::File { .. } | crate::model::TriggerTask::Script { .. } => &[],
+    }
+}
+
+/// **Read the files a trigger hands on, as they stand now** (`AMB-D-1134`), each held to the per-file
+/// limit of an attachment (`limits`) and put in `blobs` — run outside any write, as the trigger's
+/// programs are, and handed to [`fire`]. `Err` is why one could not be read, in a sentence that names
+/// it: one not there (`AMB-D-1135`), not a regular file, over its limit, or not readable. The trigger
+/// starts nothing then. Bytes put in the store for a time that starts nothing are left unreferenced, and
+/// the sweep collects them.
+pub fn read_trigger_files(
+    paths: &[String],
+    limits: &crate::blob::CapacityPolicy,
+    blobs: &crate::blob::BlobStore,
+) -> Result<Vec<TriggerFileRead>> {
+    paths
+        .iter()
+        .map(|path| {
+            let at = std::path::Path::new(path);
+            let meta = trigger_file_there(path)?;
+            let filename = at.file_name().and_then(|n| n.to_str()).unwrap_or("attachment").to_string();
+            let mime = crate::blob::mime_from_filename(&filename);
+            limits.check_per_file(mime, meta.len())?;
+            let blob = blobs
+                .ingest_path(at)
+                .map_err(|e| Error::invalid(format!("the file '{path}' could not be read: {e}")))?;
+            Ok(TriggerFileRead { path: path.clone(), filename, mime: mime.map(str::to_string), blob })
+        })
+        .collect()
+}
+
+/// **Whether a file a trigger hands on is there to be read** — its metadata where it is a regular file
+/// at `path`, and otherwise why not, in a sentence that names it ([`read_trigger_files`], [`tried`]).
+fn trigger_file_there(path: &str) -> Result<std::fs::Metadata> {
+    let meta = std::fs::metadata(path).map_err(|e| match e.kind() {
+        std::io::ErrorKind::NotFound => Error::invalid(format!("the file '{path}' is not there")),
+        _ => Error::invalid(format!("the file '{path}' could not be read: {e}")),
+    })?;
+    if !meta.is_file() {
+        return Err(Error::invalid(format!("'{path}' is not a regular file")));
+    }
+    Ok(meta)
 }
 
 /// **Read what a [`crate::model::TriggerTask::File`] says** — the file at `path`, as it stands now: its
@@ -3831,12 +3958,17 @@ fn launch_asking(
         acknowledged_by_kind: None,
         stopped_detail: None,
         role_id,
+        // What a trigger handed on is kept after the run is made, where it fires (`keep_what_was_handed`).
+        start_trigger: None,
+        start_title: None,
+        start_notes: None,
+        start_data: None,
         created_at: now,
         updated_at: now,
     };
     emit_create(tx, record::automation_run(&run))?;
     copy_down(tx, run.id, &pic, version, role_id, by.default_agent, now)?;
-    Ok(Started::Run(run))
+    Ok(Started::Run(Box::new(run)))
 }
 
 /// **File what was handed over at launch as a task, before the run** ([`HandedAtLaunch`],
@@ -4022,7 +4154,7 @@ pub enum TakenUp {
     Copied(Box<AutomationRunDef>),
     /// The newer version did not pass, so the run failed with
     /// [`AutomationStoppedReason::FailedCheck`]; this is the run as it ended.
-    Failed(AutomationRun),
+    Failed(Box<AutomationRun>),
 }
 
 /// **Copy a run standing where its round starts down afresh, where the automation has been saved since
@@ -4077,7 +4209,7 @@ pub fn take_up_newer(
         detailed,
         crate::ops::automation_stop::Ending::Failed(AutomationStoppedReason::FailedCheck),
     )?;
-    Ok(TakenUp::Failed(ended.run))
+    Ok(TakenUp::Failed(Box::new(ended.run)))
 }
 
 /// Build the body of the `not_ready` refusal: one refusal over a list of reasons whose length is only
@@ -7693,7 +7825,7 @@ mod tests {
             when: crate::model::TriggerWhen::Every { minutes: 24 * 60 },
             condition: None,
             script: None,
-            task: automation::NewTriggerTask::Fixed { title: "在庫を見る".into(), notes: String::new() },
+            task: automation::NewTriggerTask::Fixed { title: "在庫を見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
         };
         automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers.remove(0)
     }
@@ -7714,7 +7846,7 @@ mod tests {
             let by = here(&startable);
 
             assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![trigger.id]);
-            let run = fire(tx, trigger.id, &by, due, None).expect("fire").expect("a run");
+            let run = fire(tx, trigger.id, &by, due, None, &[]).expect("fire").expect("a run");
             assert_eq!(run.role_id, Some(role.id), "in a seat of the role it is aimed at");
             assert!(tasks(tx).is_empty(), "no task filed");
             assert!(
@@ -7732,15 +7864,84 @@ mod tests {
                 Some(TriggerHeld::NoRoom { under_way: 1, max: 1 }),
                 "its one seat is taken",
             );
-            assert!(fire(tx, trigger.id, &by, then, None).expect("fire").is_none());
+            assert!(fire(tx, trigger.id, &by, then, None, &[]).expect("fire").is_none());
 
             let launch = run.launch_id.expect("a launch");
             crate::ops::automation_stop::hold_launch_role(tx, launch, role.id).expect("stop the role");
             assert_eq!(trigger_check(tx.conn(), trigger.id, then).expect("check").held, Some(TriggerHeld::RoleHeld));
             assert!(triggers_due(tx.conn(), then).expect("ask").due.is_empty(), "not due while it is stopped");
-            assert!(fire(tx, trigger.id, &by, then, None).expect("fire").is_none(), "nor started");
+            assert!(fire(tx, trigger.id, &by, then, None, &[]).expect("fire").is_none(), "nor started");
             assert_eq!(read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read"), vec![run.id]);
             assert!(tasks(tx).is_empty());
+        });
+    }
+
+    /// **What a trigger hands on is kept on the run it starts** (`AMB-D-1133`) — aimed at a role started
+    /// by a trigger, which files no task: the trigger's name, the title, notes and data in the run's own
+    /// columns, and its file, read from its path before the write, attached to the run. Files read for
+    /// other paths than the trigger names start nothing, and a file not there is refused before anything
+    /// is started, in a sentence that names it (`AMB-D-1135`) — which trying the trigger says too.
+    #[test]
+    fn a_trigger_keeps_what_it_hands_on_with_the_run_it_starts() {
+        use crate::model::AttachmentTarget;
+        with_tx(|tx| {
+            let (automation, role, _) = with_a_role_started_by_a_trigger(tx);
+            let dir = std::env::temp_dir().join(format!("amenbo-trigger-hands-on-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).expect("dir");
+            let brief = dir.join("brief.md");
+            std::fs::write(&brief, "# 方針\n").expect("written");
+            let brief = brief.to_string_lossy().into_owned();
+            let new = automation::NewTrigger {
+                name: "issue の監視".into(),
+                role_id: Some(role.id),
+                when: crate::model::TriggerWhen::Every { minutes: 24 * 60 },
+                condition: None,
+                script: None,
+                task: automation::NewTriggerTask::Fixed {
+                    title: "issue #123".into(),
+                    notes: "見てほしい".into(),
+                    data: r#"{"issue": 123}"#.into(),
+                    files: vec![brief.clone()],
+                },
+            };
+            let trigger = automation::trigger_set(tx, automation.id, Some(new)).expect("trigger").triggers.remove(0);
+            let blobs = crate::blob::BlobStore::at(dir.join("blobs"));
+            let limits = crate::blob::CapacityPolicy::default();
+            let files = read_trigger_files(trigger_files(&trigger.task), &limits, &blobs).expect("read");
+            let startable = claude();
+            let by = here(&startable);
+
+            assert!(
+                fire(tx, trigger.id, &by, trigger.next_at, None, &[]).expect("fire").is_none(),
+                "files read for other paths start nothing",
+            );
+            let run = fire(tx, trigger.id, &by, trigger.next_at, None, &files).expect("fire").expect("a run");
+            let kept = read::automation_run(tx.conn(), run.id).expect("read").expect("there");
+            assert_eq!(
+                (kept.start_trigger.as_deref(), kept.start_title.as_deref(), kept.start_notes.as_deref()),
+                (Some("issue の監視"), Some("issue #123"), Some("見てほしい")),
+            );
+            assert_eq!(kept.start_data.as_deref(), Some(r#"{"issue": 123}"#));
+            assert_eq!(
+                (run.start_trigger, run.start_title, run.start_data),
+                (kept.start_trigger, kept.start_title, kept.start_data),
+                "answered as it is kept",
+            );
+            let attached = read::attachments_for_target(tx.conn(), AttachmentTarget::AutomationRun, run.id).expect("read");
+            assert_eq!(attached.len(), 1, "{attached:?}");
+            assert_eq!(attached[0].filename.as_deref(), Some("brief.md"));
+            assert_eq!(attached[0].mime.as_deref(), Some("text/markdown"));
+            assert_eq!(attached[0].blob_hash.as_deref(), Some(files[0].blob.hash.as_str()));
+            assert_eq!(attached[0].size_bytes, Some("# 方針\n".len() as i64));
+
+            std::fs::remove_file(&brief).expect("gone");
+            let missing = read_trigger_files(trigger_files(&trigger.task), &limits, &blobs).expect_err("not there");
+            assert!(missing.to_string().contains(&format!("the file '{brief}' is not there")), "{missing}");
+            let TriggerTried::SaidNothing { why } = tried(&trigger, None, || false) else {
+                panic!("trying it says nothing either");
+            };
+            assert!(why.contains(&format!("the file '{brief}' is not there")), "{why}");
+            std::fs::remove_dir_all(&dir).ok();
         });
     }
 
@@ -7803,7 +8004,7 @@ mod tests {
         with_tx(|tx| {
             let (automation, role, deciding) = with_a_role_started_by_a_trigger(tx);
             let trigger = aimed_at(tx, &automation, role.id);
-            let run = fire(tx, trigger.id, &here(&claude()), trigger.next_at, None).expect("fire").expect("a run");
+            let run = fire(tx, trigger.id, &here(&claude()), trigger.next_at, None, &[]).expect("fire").expect("a run");
             assert!(pauses_before_next_task(&run), "asking it would do something");
             let Paused::Asked(asked) = pause_run_before_next_task(tx, run.id).expect("asked, not refused") else {
                 panic!("it is asked, not paused at once");

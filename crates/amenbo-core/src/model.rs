@@ -1318,8 +1318,8 @@ pub enum AttachmentTarget {
     /// step produced, filed where it was produced. The run side has no model shape yet; this variant is
     /// what lets the column's fifth value be read back.
     AutomationRunStep,
-    /// Attached to a run as a whole (`automation_run`) — a file a person handed over when launching it,
-    /// held by the run until the built-in that files a task moves it on to the task it files.
+    /// Attached to a run as a whole (`automation_run`) — a file the trigger that started it handed on
+    /// ([`TriggerTask`]), read from its path when the run started.
     AutomationRun,
 }
 
@@ -2041,9 +2041,11 @@ pub const MIN_TRIGGER_EVERY_MINUTES: u32 = 1;
 
 /// **One of an automation's triggers** ([`Automation::triggers`]) — what starts a run with nobody pressing
 /// start, in three parts: [`TriggerWhen`], with its [`TriggerCondition`] and its script if it has them,
-/// answers whether to file a task now, [`TriggerTask`] writes what the task says, and the run is the
-/// automation's own, started on the task filed. No agent works on the first two; the third is a run
-/// like any other.
+/// answers whether to start one now, [`TriggerTask`] says what it hands on, and the run is the
+/// automation's own — started on a task filed with what it hands on where it is aimed at a role started
+/// by a task, and started directly, with nothing filed, where it is aimed at a role started by a trigger
+/// (`AMB-D-1127`). Either way the run keeps what it was handed. No agent works on the first two; the
+/// third is a run like any other.
 ///
 /// A time it answers no leaves nothing behind — no task, no run, no record — so the only things it
 /// keeps are `next_at` and `last_filed_at`, which move on only when a task is filed. A time it files one
@@ -2056,7 +2058,8 @@ pub struct AutomationTrigger {
     pub automation_id: i64,
     /// Is it asked? One that is not files nothing, and its `next_at` stays where it was.
     pub enabled: bool,
-    /// What it is called, as the timeline of a task it filed names it. May be blank.
+    /// What it is called, as the timeline of a task it filed names it, and as a run it started keeps it
+    /// ([`AutomationRun::start_trigger`]). May be blank.
     #[serde(default)]
     pub name: String,
     /// The role the task it files is worked under — one of the same automation's own
@@ -2148,14 +2151,30 @@ pub struct TriggerCondition {
     pub below: u32,
 }
 
-/// **What the task a trigger files says** — the second part of [`AutomationTrigger`]. A time it cannot
-/// say anything — the file not read, the program not answering — files nothing, as a time it decides no
-/// does ([`crate::ops::automation_run::fire`]).
+/// The most bytes the data a trigger hands on may take (the `data` of a [`TriggerTask::Fixed`]): 64 KiB.
+pub const MAX_TRIGGER_DATA_BYTES: usize = 64 * 1024;
+
+/// **What a trigger hands on** — the second part of [`AutomationTrigger`]: a title, notes, data as JSON
+/// and files, handed to the run it starts and kept on that run ([`AutomationRun::start_title`] and the
+/// files attached to it as [`AttachmentTarget::AutomationRun`]). Where it is aimed at a role started by a
+/// task, the title and notes are also those of the task it files. A time it cannot say anything — the
+/// file not read, the program not answering — starts nothing, as a time it decides no does
+/// ([`crate::ops::automation_run::fire`]).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum TriggerTask {
-    /// The same title and notes every time, as written on the trigger.
-    Fixed { title: String, notes: String },
+    /// The same every time, as written on the trigger. The title may be blank only where the trigger is
+    /// aimed at a role started by a trigger, which files no task. `data` is JSON of at most
+    /// [`MAX_TRIGGER_DATA_BYTES`], `None` for none. `files` are named by their full paths and read
+    /// afresh each time it starts a run, never when it is written; one not there then starts nothing.
+    Fixed {
+        title: String,
+        notes: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        data: Option<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        files: Vec<String>,
+    },
     /// What the file at `path`, by its full path, says when the task is filed: its first line that is
     /// not blank is the title, and what follows it the notes
     /// ([`crate::ops::automation_run::task_from_file`]).
@@ -2177,7 +2196,7 @@ impl TriggerTask {
         }
     }
 
-    /// The program that writes what the task says, where it is a [`TriggerTask::Script`].
+    /// The program that writes what it hands on, where it is a [`TriggerTask::Script`].
     pub fn script(&self) -> Option<&StepScript> {
         match self {
             TriggerTask::Script { script } => Some(script),
@@ -2845,6 +2864,23 @@ pub struct AutomationRun {
     /// where the role has since been taken out (`SET NULL`).
     #[serde(default)]
     pub role_id: Option<i64>,
+    /// **The name of the trigger that started the run** ([`AutomationTrigger::name`]), as it was then —
+    /// blank where the trigger had none. `None` for a run a trigger did not start. Kept as the name
+    /// rather than the trigger's id, so it still says which one once the trigger is rewritten or taken
+    /// away.
+    #[serde(default)]
+    pub start_trigger: Option<String>,
+    /// **What the trigger that started the run handed on** ([`TriggerTask`]): its title, notes and data
+    /// (JSON), each `None` where it handed none. Its files are attached to the run
+    /// ([`AttachmentTarget::AutomationRun`]). All `None` on a run a trigger did not start.
+    #[serde(default)]
+    pub start_title: Option<String>,
+    /// The notes the trigger handed on, as [`Self::start_title`] is kept.
+    #[serde(default)]
+    pub start_notes: Option<String>,
+    /// The data (JSON) the trigger handed on, as [`Self::start_title`] is kept.
+    #[serde(default)]
+    pub start_data: Option<String>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

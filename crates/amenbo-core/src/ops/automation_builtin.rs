@@ -797,7 +797,7 @@ pub(crate) enum Held {
     Holding,
     /// What it was set to could not be waited on, so it left by the error way out, and this is what
     /// that way out leads to.
-    FellOver(Next),
+    FellOver(Box<Next>),
 }
 
 /// How long this copy of a step is held open, or `None` for one that is not ([`Work::Holds`]).
@@ -822,7 +822,7 @@ pub(crate) fn hold(
         Some(Ok(_)) => Ok(Some(Held::Holding)),
         Some(Err(e)) => {
             let why = crate::run_wording::error(tx.language(), &e);
-            Ok(Some(Held::FellOver(fell_over(tx, run_step, exits, &why)?)))
+            Ok(Some(Held::FellOver(Box::new(fell_over(tx, run_step, exits, &why)?))))
         }
     }
 }

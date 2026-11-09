@@ -1847,6 +1847,11 @@ impl Store {
     /// trigger's scripts said to file one, run before this write
     /// ([`crate::ops::automation_run::ask_trigger`]); `None` for a trigger with no script. A trigger
     /// taken away since it was found due files nothing.
+    ///
+    /// The files the trigger hands on are read from their paths first, outside the transaction, held to
+    /// the per-file limit of an attachment and put in the blob store, as an attachment's bytes always are
+    /// ([`crate::ops::automation_run::read_trigger_files`]). One not there, or not read, is an error, and
+    /// nothing is started (`AMB-D-1135`).
     pub fn automation_trigger_fire(
         &mut self,
         trigger_id: i64,
@@ -1856,12 +1861,17 @@ impl Store {
         let Some(trigger) = crate::store_engine::read::automation_trigger(self.engine.conn(), trigger_id)? else {
             return Ok(None);
         };
+        let files = crate::ops::automation_run::read_trigger_files(
+            crate::ops::automation_run::trigger_files(&trigger.task),
+            &self.config.attachment_limits,
+            &self.blobs(),
+        )?;
         let automation_id = trigger.automation_id;
         let agent = self.automation_default_agent(automation_id)?;
         let by = crate::ops::automation_run::Launcher { default_agent: agent.as_deref(), ..*by };
         self.write_one(
             &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
-            |tx| crate::ops::automation_run::fire(tx, trigger_id, &by, crate::time::Timestamp::now(), said),
+            |tx| crate::ops::automation_run::fire(tx, trigger_id, &by, crate::time::Timestamp::now(), said, &files),
         )
     }
 

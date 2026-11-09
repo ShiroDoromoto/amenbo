@@ -4172,7 +4172,7 @@ mod tests {
             when: TriggerWhen::Every { minutes: 60 },
             condition: None,
             script: None,
-            task: TriggerTask::Fixed { title: "見る".into(), notes: "メモ".into() },
+            task: TriggerTask::Fixed { title: "見る".into(), notes: "メモ".into(), data: None, files: Vec::new() },
             next_at,
             last_filed_at: None,
             order_key: "a0".into(),
@@ -4213,8 +4213,25 @@ mod tests {
         assert_eq!(json(AutomationTrigger { when: TriggerWhen::Idle, ..base.clone() })["when"], serde_json::json!({ "kind": "idle" }));
         assert_eq!(json(AutomationTrigger { when: TriggerWhen::Script, ..base.clone() })["when"], serde_json::json!({ "kind": "script" }));
         assert_eq!(
-            json(AutomationTrigger { task: TriggerTask::File { path: "/tmp/next.md".into() }, ..base })["task"],
+            json(AutomationTrigger { task: TriggerTask::File { path: "/tmp/next.md".into() }, ..base.clone() })["task"],
             serde_json::json!({ "kind": "file", "path": "/tmp/next.md" }),
+        );
+        let handing = TriggerTask::Fixed {
+            title: String::new(),
+            notes: String::new(),
+            data: Some(r#"{"issue": 123}"#.into()),
+            files: vec!["/tmp/brief.md".into()],
+        };
+        assert_eq!(
+            json(AutomationTrigger { task: handing, ..base })["task"],
+            serde_json::json!({
+                "kind": "fixed",
+                "title": "",
+                "notes": "",
+                "data": r#"{"issue": 123}"#,
+                "files": ["/tmp/brief.md"],
+            }),
+            "a fixed one's data and files go out where it has them",
         );
     }
 
@@ -4299,7 +4316,7 @@ mod tests {
 
     /// **A trigger as a screen writes it reads into core's** ([`amenbo_core::ops::automation::NewTrigger`]):
     /// every kind of `when` and `task`, and what the screen leaves out — the name, the role, the
-    /// condition, the script and a script's timeout — read as none.
+    /// condition, the script, a script's timeout and a fixed one's data and files — read as none.
     #[test]
     fn a_trigger_written_by_a_screen_reads_into_cores() {
         use amenbo_core::model::{TriggerCondition, TriggerWhen};
@@ -4317,7 +4334,7 @@ mod tests {
                 when: TriggerWhen::Every { minutes: 30 },
                 condition: None,
                 script: None,
-                task: NewTriggerTask::Fixed { title: "見る".into(), notes: String::new() },
+                task: NewTriggerTask::Fixed { title: "見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
             },
         );
         let full = read(serde_json::json!({
@@ -4341,6 +4358,20 @@ mod tests {
         let when = |v: serde_json::Value| read(serde_json::json!({ "when": v, "task": { "kind": "file", "path": "/x" } }));
         assert_eq!(when(serde_json::json!({ "kind": "idle" })).when, TriggerWhen::Idle);
         assert_eq!(when(serde_json::json!({ "kind": "tasks" })).task, NewTriggerTask::File { path: "/x".into() });
+        assert_eq!(
+            read(serde_json::json!({
+                "when": { "kind": "idle" },
+                "task": { "kind": "fixed", "title": "", "notes": "", "data": "{\"issue\": 123}", "files": ["/tmp/brief.md"] },
+            }))
+            .task,
+            NewTriggerTask::Fixed {
+                title: String::new(),
+                notes: String::new(),
+                data: r#"{"issue": 123}"#.into(),
+                files: vec!["/tmp/brief.md".into()],
+            },
+            "a fixed one's data and files are read where the screen writes them",
+        );
         assert!(
             serde_json::from_value::<AutomationTriggerInputDto>(serde_json::json!({
                 "when": { "kind": "hourly" },

@@ -578,6 +578,11 @@ pub(super) fn automation_trigger_row(r: &Row) -> rusqlite::Result<AutomationTrig
         "fixed" => TriggerTask::Fixed {
             title: get(r, C.task_title)?.unwrap_or_default(),
             notes: get(r, C.task_notes)?.unwrap_or_default(),
+            data: get(r, C.task_data)?,
+            files: match get(r, C.task_files)? {
+                None => Vec::new(),
+                Some(files) => serde_json::from_str(&files).map_err(|e| bad(format!("bad task_files {files:?}: {e}")))?,
+            },
         },
         "file" => TriggerTask::File {
             path: get(r, C.task_path)?.ok_or_else(|| bad("a file trigger task with no path".to_string()))?,
@@ -829,6 +834,10 @@ pub(super) fn automation_run_row(r: &Row) -> rusqlite::Result<AutomationRun> {
         stopped_detail: get(r, C.stopped_detail)?,
         launch_id: get(r, C.launch_id)?,
         role_id: get(r, C.role_id)?,
+        start_trigger: get(r, C.start_trigger)?,
+        start_title: get(r, C.start_title)?,
+        start_notes: get(r, C.start_notes)?,
+        start_data: get(r, C.start_data)?,
         created_at,
         updated_at,
     })

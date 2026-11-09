@@ -6,19 +6,20 @@
 // should not have to learn a second arrangement.
 //
 // **Two places, each named on the screen**: "how it works", the picked role's round drawn from its
-// waiting tasks, with no entry common to the automation (`./AutomationPicture`, `AMB-D-1123`), which
+// waiting tasks — or, for a role started by a trigger, from the triggers aimed at it (`AMB-D-1127`) —
+// with no entry common to the automation (`./AutomationPicture`, `AMB-D-1123`), which
 // stands between the role's head and its agent and model; and
 // "placement", what the pressed spot holds (`./AutomationStepPanel`), which is the panel's reading of
 // a press on a box. The press that starts a run is not a place of its
 // own: it stands at the far end of the head (`AMB-T-5523`).
 //
 // **Everything else the screen asks is the panel too.** A `+` on a line, the press at the end of a way
-// out nothing has been decided for (`AMB-D-1003`), or the press on an empty picture, opens the
-// library in it (`./AutomationLibraryPanel`); "Edit" on the head opens the definition's own name,
-// notes and archiving, with the press that deletes it (`./AutomationAboutPanel`). They are one panel
-// rather than four places stacked under the picture: a picture that runs long would push whatever is
-// under it off the bottom of the window, and the panel stands where the reader is looking however far
-// they scrolled. Only the picture scrolls.
+// out nothing has been decided for (`AMB-D-1003`), or the press that gives a role started by a trigger
+// its start, opens the library in it (`./AutomationLibraryPanel`); "Edit" on the head opens the
+// definition's own name, notes and archiving, with the press that deletes it
+// (`./AutomationAboutPanel`). They are one panel rather than four places stacked under the picture: a
+// picture that runs long would push whatever is under it off the bottom of the window, and the panel
+// stands where the reader is looking however far they scrolled. Only the picture scrolls.
 //
 // **The head leads with the automation's ID**, as the list's rows do: it is what the terminal names
 // the definition by, and it does not change when the name does.
@@ -141,8 +142,10 @@ import { builtinWord } from "../core/builtinWords";
 import { Icon } from "../components/Icon";
 import type { AutomationDetailDto, AutomationLaunchBlockDto } from "../bindings/bindings";
 
-/** Where the library's pick will go: after which way out of which box. */
+/** Where the library's pick will go: after which way out of which box — or, as a role's start, before
+ *  any box, so the "here" stands alone. */
 function whereTo(automation: AutomationDetailDto | null, target: PlaceTarget): WhereTo {
+  if ("roleStart" in target) return null;
   if ("fromId" in target) {
     const from = automation?.placements.find((one) => one.id === target.fromId);
     const box = from === undefined ? "" : builtinWord(from.builtin, from.name);
@@ -316,8 +319,9 @@ export function AutomationBuildScreen({
       ? automation?.placements.find((one) => one.id === showing.id) ?? null
       : null;
   const close = () => setShowing(null);
-  // A role that starts nowhere is given its start with one press (`AMB-D-1123`): each role takes from
-  // its own waiting tasks, so the built-in that takes a task is the only start there is to pick. What
+  // A role started by a task that starts nowhere is given its start with one press (`AMB-D-1123`): it
+  // takes from its own waiting tasks, so the built-in that takes a task is the only start there is to
+  // pick. One started by a trigger has its start picked off the library instead (`AMB-D-1127`). What
   // core refused is kept with the role it was pressed for, and goes once another role is picked.
   const [startRefused, setStartRefused] = useState<{ role: number; text: string } | null>(null);
   const startRole = (roleId: number) => {
@@ -557,7 +561,13 @@ export function AutomationBuildScreen({
             ) : (
               <>
                 {automation !== null && role !== undefined && (
-                  <AutomationRoleHead key={role.id} automation={automation} role={role} onRemoved={() => setRoleId(null)} />
+                  <AutomationRoleHead
+                    key={role.id}
+                    automation={automation}
+                    role={role}
+                    onRemoved={() => setRoleId(null)}
+                    onOpenTrigger={(trigger) => setTriggerOpen({ id: trigger.id })}
+                  />
                 )}
                 <div className="actbuild__canvashead">
                   <span className="actbuild__sec">{t("auto.build.picture")}</span>
@@ -571,9 +581,18 @@ export function AutomationBuildScreen({
                     onInsert={(edgeId) => setShowing({ kind: "library", target: { edgeId } })}
                     onOpenExit={({ boxId, exitName }) => setShowing({ kind: "library", target: { fromId: boxId, exitName } })}
                   />
-                  {role !== undefined && role.entryPlacementId === undefined && (
+                  {role !== undefined && role.entryPlacementId === undefined && role.startsBy === "task" && (
                     <button type="button" className="btn btn--primary" onClick={() => startRole(role.id)}>
                       {tf("auto.pic.roleStart", { name: t("auto.bi.takeTask.name") })}
+                    </button>
+                  )}
+                  {role !== undefined && role.entryPlacementId === undefined && role.startsBy === "trigger" && (
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      onClick={() => setShowing({ kind: "library", target: { roleStart: role.id } })}
+                    >
+                      {t("auto.pic.roleStartPlace")}
                     </button>
                   )}
                   {role !== undefined && startRefused?.role === role.id && (

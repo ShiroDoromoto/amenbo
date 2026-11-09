@@ -1728,6 +1728,46 @@ impl Store {
         })
     }
 
+    /// Put an action on a role's automation and make the role, one started by a trigger, start there
+    /// (one operation = one transaction) — [`crate::ops::automation::role_start_at`].
+    pub fn automation_role_start_at(
+        &mut self,
+        id: i64,
+        action_id: i64,
+    ) -> Result<crate::ops::automation::RoleStarted> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Role, id)], |tx| {
+            crate::ops::automation::role_start_at(tx, id, action_id)
+        })
+    }
+
+    /// [`Self::automation_role_start_at`] for a built-in, named by its key — and, for the one that
+    /// splits by an axis, the axis (one operation = one transaction). The built-in's library action is
+    /// written on the way where none was yet, as [`Self::automation_builtin_insert`] does.
+    pub fn automation_role_start_at_builtin(
+        &mut self,
+        id: i64,
+        key: &str,
+        axis: Option<i64>,
+    ) -> Result<crate::ops::automation::RoleStarted> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Role, id)], |tx| {
+            let action = crate::ops::automation_builtin::action_on(tx, key, axis)?;
+            crate::ops::automation::role_start_at(tx, id, action.id)
+        })
+    }
+
+    /// Make an empty action and make a role started by a trigger start at it (one operation = one
+    /// transaction) — [`crate::ops::automation::role_start_new`].
+    pub fn automation_role_start_new(
+        &mut self,
+        id: i64,
+        shelf: crate::ops::automation::ActionShelf,
+        name: &str,
+    ) -> Result<crate::ops::automation::RoleStarted> {
+        let mut targets = vec![WriteTarget::AutomationPart(AutomationPart::Role, id)];
+        targets.extend(device_shelf(shelf));
+        self.write_one(&targets, |tx| crate::ops::automation::role_start_new(tx, id, shelf, name))
+    }
+
     /// Reorder a role among its automation's roles (one operation = one transaction).
     pub fn automation_role_move(
         &mut self,

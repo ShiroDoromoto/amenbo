@@ -2729,12 +2729,12 @@ pub fn role_update(tx: &WriteTx<'_>, id: i64, change: RoleChange) -> Result<Auto
     Ok(after)
 }
 
-/// What [`role_start_take_task`] answers with: the role as it now stands, and the placement its round
-/// starts at.
+/// What [`role_start_take_task`] and [`role_start_at`] answer with: the role as it now stands, and the
+/// placement its round starts at.
 #[derive(Clone, Debug)]
 pub struct RoleStarted {
     pub role: AutomationRole,
-    /// The built-in that takes a task, put on for the role to start at.
+    /// What was put on for the role to start at.
     pub placement: AutomationPlacement,
 }
 
@@ -2743,8 +2743,20 @@ pub struct RoleStarted {
 /// put on at the bottom of the automation's placements and the role's round is made to start there.
 ///
 /// A role that already starts somewhere is refused, and nothing is put on: its start is changed on the
-/// role ([`role_update`]), not by putting another built-in on beside it.
+/// role ([`role_update`]), not by putting another built-in on beside it. So is a role started by a
+/// trigger, which takes no task (`AMB-D-1132`): its start is put on by [`role_start_at`].
 pub fn role_start_take_task(tx: &WriteTx<'_>, role_id: i64) -> Result<RoleStarted> {
+    let role = unstarted_role(tx, role_id, RoleStart::Task)?;
+    let action = automation_builtin::action(tx, super::automation_builtin_take::TAKE_TASK.key)?;
+    let placement = placement_add(tx, role.automation_id, action.id)?;
+    let change = RoleChange { entry_placement_id: Some(Some(placement.id)), ..RoleChange::default() };
+    let role = role_update(tx, role_id, change)?;
+    Ok(RoleStarted { role, placement })
+}
+
+/// The role `role_id`, where it may be given a start by a press made for a role that starts `by`: its
+/// automation can still be written, it starts that way, and it starts nowhere yet.
+fn unstarted_role(tx: &WriteTx<'_>, role_id: i64, by: RoleStart) -> Result<AutomationRole> {
     let role = live_role(tx, role_id)?;
     rewritable(tx, Def::Automation(role.automation_id))?;
     if let Some(placement_id) = role.entry_placement_id {
@@ -2753,11 +2765,56 @@ pub fn role_start_take_task(tx: &WriteTx<'_>, role_id: i64) -> Result<RoleStarte
             role.name
         )));
     }
-    let action = automation_builtin::action(tx, super::automation_builtin_take::TAKE_TASK.key)?;
-    let placement = placement_add(tx, role.automation_id, action.id)?;
+    if role.starts_by != by {
+        return Err(Error::invalid(match role.starts_by {
+            RoleStart::Task => format!(
+                "role '{}' starts by a task, so its round starts at the built-in that takes one — make it \
+                 start by a trigger first",
+                role.name
+            ),
+            RoleStart::Trigger => takes_no_task(&role),
+        }));
+    }
+    Ok(role)
+}
+
+/// Why a role started by a trigger does not start at the built-in that takes a task.
+fn takes_no_task(role: &AutomationRole) -> String {
+    format!(
+        "role '{}' starts by a trigger and takes no task, so it does not start at the built-in that takes \
+         one — put another action on as its start",
+        role.name
+    )
+}
+
+/// **Give a role started by a trigger its start: the action picked for it** (`AMB-D-1127`). It is put
+/// on at the bottom of the automation's placements and the role's round is made to start there, in one
+/// write — [`role_start_take_task`]'s twin for a role that takes no task.
+///
+/// Anything within the automation's reach goes, built-ins among them, but the built-in that takes a
+/// task: that one stands nowhere but where a role started by a task starts (`AMB-D-1132`). A role
+/// started by a task is refused — its start is that built-in — and so is one that already starts
+/// somewhere. Nothing is put on when it is refused.
+pub fn role_start_at(tx: &WriteTx<'_>, role_id: i64, action_id: i64) -> Result<RoleStarted> {
+    let role = unstarted_role(tx, role_id, RoleStart::Trigger)?;
+    let builtin = read::automation_action(tx.conn(), action_id)?.and_then(|a| a.builtin);
+    if builtin.as_deref().and_then(automation_builtin::find).is_some_and(|b| b.starts_a_role_only()) {
+        return Err(Error::invalid(takes_no_task(&role)));
+    }
+    let placement = placement_add(tx, role.automation_id, action_id)?;
     let change = RoleChange { entry_placement_id: Some(Some(placement.id)), ..RoleChange::default() };
     let role = role_update(tx, role_id, change)?;
     Ok(RoleStarted { role, placement })
+}
+
+/// **Make an empty action and give a role started by a trigger its start there** — [`role_start_at`]
+/// for an action made on the spot, the way [`placement_insert_new`] is [`placement_insert`]'s. The
+/// action is born still being written (`AMB-D-1005`), in the library `shelf` names.
+pub fn role_start_new(tx: &WriteTx<'_>, role_id: i64, shelf: ActionShelf, name: &str) -> Result<RoleStarted> {
+    let role = unstarted_role(tx, role_id, RoleStart::Trigger)?;
+    let project_id = live_automation(tx, role.automation_id)?.project_id;
+    let action = write_action(tx, shelf.under(project_id), name, "", true)?;
+    role_start_at(tx, role_id, action.id)
 }
 
 /// Reorder a role among the roles of its automation — the order they are defined in.
@@ -7021,6 +7078,94 @@ mod tests {
             assert!(matches!(refused, Err(Error::Invalid(_))), "{refused:?}");
             assert_eq!(read::automation_placement_ids(tx.conn(), automation.id).expect("read"), before);
             assert_eq!(live_role(tx, role.id).expect("read").entry_placement_id, Some(entry.id));
+        });
+    }
+
+    /// A role of `automation` that starts by a trigger, starting nowhere yet.
+    fn trigger_role(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRole {
+        let new = NewRole { name: "さくら".into(), starts_by: Some(RoleStart::Trigger), ..NewRole::default() };
+        role_add(tx, automation.id, new).expect("a role started by a trigger")
+    }
+
+    /// **A role started by a trigger starts at the action picked for it** (`AMB-D-1127`): a written
+    /// action or a built-in is put on, and the role starts there.
+    #[test]
+    fn a_role_started_by_a_trigger_starts_at_the_action_picked() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let role = trigger_role(tx, &automation);
+            let fetch = automation_builtin::action(tx, "fetch").expect("built-in");
+
+            let started = role_start_at(tx, role.id, fetch.id).expect("start the role");
+            assert_eq!(started.placement.action_id, fetch.id);
+            assert_eq!(started.placement.automation_id, automation.id);
+            assert_eq!(started.role.entry_placement_id, Some(started.placement.id));
+            assert_eq!(started.role.starts_by, RoleStart::Trigger);
+            assert_eq!(live_role(tx, role.id).expect("read").entry_placement_id, Some(started.placement.id));
+        });
+    }
+
+    /// **The built-in that takes a task is not a start for a role started by a trigger**
+    /// (`AMB-D-1132`), and a role started by a task is not given another start: each is refused, and
+    /// nothing is put on.
+    #[test]
+    fn a_start_that_does_not_fit_how_the_role_starts_is_refused() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let by_trigger = trigger_role(tx, &automation);
+            let by_task = role_add(tx, automation.id, NewRole { name: "山田".into(), ..NewRole::default() })
+                .expect("a role started by a task");
+            let take = automation_builtin::action(tx, "take_task").expect("built-in");
+            let written = action_add(tx, Some(automation.project_id), "調べる", "").expect("add action");
+            let before = read::automation_placement_ids(tx.conn(), automation.id).expect("read");
+
+            for refused in [
+                role_start_at(tx, by_trigger.id, take.id),
+                role_start_take_task(tx, by_trigger.id),
+                role_start_at(tx, by_task.id, written.id),
+                role_start_new(tx, by_task.id, ActionShelf::Project, "決める"),
+            ] {
+                assert!(matches!(refused, Err(Error::Invalid(_))), "{refused:?}");
+            }
+            assert_eq!(read::automation_placement_ids(tx.conn(), automation.id).expect("read"), before);
+            assert_eq!(live_role(tx, by_trigger.id).expect("read").entry_placement_id, None);
+            assert_eq!(live_role(tx, by_task.id).expect("read").entry_placement_id, None);
+        });
+    }
+
+    /// **A role started by a trigger that already starts somewhere is refused**, and nothing is put on.
+    #[test]
+    fn a_role_started_by_a_trigger_is_not_started_again() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let role = trigger_role(tx, &automation);
+            let written = action_add(tx, Some(automation.project_id), "調べる", "").expect("add action");
+            let first = role_start_at(tx, role.id, written.id).expect("start the role");
+            let before = read::automation_placement_ids(tx.conn(), automation.id).expect("read");
+
+            let refused = role_start_at(tx, role.id, written.id);
+            assert!(matches!(refused, Err(Error::Invalid(_))), "{refused:?}");
+            assert_eq!(read::automation_placement_ids(tx.conn(), automation.id).expect("read"), before);
+            assert_eq!(live_role(tx, role.id).expect("read").entry_placement_id, Some(first.placement.id));
+        });
+    }
+
+    /// **An action made on the spot is a role's start in the same write**: it is born still being
+    /// written, in the library picked, and the role starts at its placement.
+    #[test]
+    fn a_role_started_by_a_trigger_starts_at_an_action_made_for_it() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let role = trigger_role(tx, &automation);
+
+            let started = role_start_new(tx, role.id, ActionShelf::Project, "次の仕事を決める").expect("start");
+            let action = read::automation_action(tx.conn(), started.placement.action_id)
+                .expect("read")
+                .expect("the action made");
+            assert_eq!(action.name, "次の仕事を決める");
+            assert_eq!(action.project_id, Some(automation.project_id));
+            assert!(action.draft, "born still being written");
+            assert_eq!(started.role.entry_placement_id, Some(started.placement.id));
         });
     }
 

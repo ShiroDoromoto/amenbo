@@ -894,9 +894,53 @@ describe("one role's round, as the build screen draws it", () => {
     expect(container.querySelector(".autopic__legend")).toBeNull();
   });
 
-  it("draws nothing for a role where nothing is on the automation", async () => {
+  it("draws where a role's round starts from, with no words, where nothing is on the automation", async () => {
     await render({ graph: automationGraph(rounds({ placements: [], edges: [], wires: [] }), 40) });
-    expect(container.textContent).toBe("");
+    expect(row()).toEqual(["autopic__sources", "autopic__flowarrow", "autopic__desk"]);
+    expect(sources()).toEqual([tf("auto.pic.byPeople", { role: "Upkeep" })]);
+    expect(container.querySelector(".autopic__roundempty")).toBeNull();
+  });
+
+  /** Upkeep, made to start by a trigger, with the triggers named aimed at it. */
+  function byTrigger(triggers: AutomationTriggerDto[], over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
+    const base = rounds(over);
+    return {
+      ...base,
+      triggers,
+      roles: base.roles.map((one) => (one.id === 40 ? { ...one, startsBy: "trigger" as const } : one)),
+    };
+  }
+
+  const daily: AutomationTriggerDto = {
+    id: 2,
+    enabled: true,
+    name: "毎朝の在庫確認",
+    roleId: 40,
+    when: { kind: "every", minutes: 1440 },
+    task: { kind: "fixed", title: "", notes: "" },
+    nextAt: "2026-11-07T00:00:00Z",
+  };
+
+  it("draws a role started by a trigger from its triggers, into a dashed box that files no task", async () => {
+    const automation = byTrigger([daily], { placements: [], edges: [], wires: [] });
+    await render({ graph: automationGraph(automation, 40) });
+    expect(row()).toEqual(["autopic__sources", "autopic__flowarrow", "autopic__desk autopic__desk--trigger"]);
+    expect(sources()).toEqual([t("auto.pic.byTrigger") + whenLine(daily, automation.roles)]);
+    const desk = container.querySelector(".autopic__desk")!;
+    expect(desk.textContent).toBe(t("auto.build.roleStartsTrigger") + t("auto.pic.filesNoTask"));
+    expect(desk.textContent).not.toContain(t("auto.pic.waiting"));
+  });
+
+  it("says no person files for a role started by a trigger, and draws its box alone where no trigger is aimed at it", async () => {
+    await render({ graph: automationGraph(byTrigger([]), 40) });
+    expect(container.querySelector(".autopic__sources")).toBeNull();
+    expect(row()).toEqual(["autopic__desk autopic__desk--trigger", "autopic__roundempty"]);
+  });
+
+  it("draws a role started by a task as it was: its waiting tasks", async () => {
+    await render({ graph: automationGraph(byTrigger([daily]), 20) });
+    expect(container.querySelector(".autopic__desk")!.className).toBe("autopic__desk");
+    expect(container.querySelector(".autopic__desk")!.textContent).toBe(t("auto.pic.waiting"));
   });
 
   it("tells the screen how wide its row has to be, and that a picture with no row needs nothing", async () => {
@@ -904,7 +948,7 @@ describe("one role's round, as the build screen draws it", () => {
     await render({ graph: automationGraph(rounds(), 20), onRowNeeds });
     expect(onRowNeeds).toHaveBeenCalledTimes(1);
     expect(onRowNeeds).toHaveBeenLastCalledWith(expect.any(Number));
-    await render({ graph: automationGraph(rounds({ placements: [], edges: [], wires: [] }), 40), onRowNeeds });
+    await render({ graph: null, onRowNeeds });
     expect(onRowNeeds).toHaveBeenLastCalledWith(0);
   });
 

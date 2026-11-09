@@ -638,6 +638,23 @@ describe("the press that gives a role its start", () => {
     });
     expect(container.querySelector(".actbuild__canvas [role='alert']")?.textContent).toContain("already starts");
   });
+  // A role started by a trigger takes no task (`AMB-D-1127`): its start is picked off the library, which
+  // leaves out the built-in that takes a task (`AMB-D-1132`).
+  it("opens the library for a role started by a trigger, in place of the press that puts on the built-in", async () => {
+    await open([{ ...bob, startsBy: "trigger" }]);
+    expect(offered()).toBe(false);
+    await act(async () => { button(t("auto.pic.roleStartPlace")).click(); });
+    expect(hoisted.startRole).not.toHaveBeenCalled();
+    expect(container.querySelector(".actpanel")).not.toBeNull();
+    expect(container.querySelector(".wheremark__here")?.textContent).toBe(t("auto.lib.here"));
+    expect(container.querySelector(".wheremark__box")).toBeNull();
+  });
+
+  it("offers neither press for a role started by a trigger that starts somewhere", async () => {
+    await open([{ ...alice, startsBy: "trigger" }]);
+    expect(offered()).toBe(false);
+    expect(buttons().some((b) => b.textContent === t("auto.pic.roleStartPlace"))).toBe(false);
+  });
 });
 
 // Whether it can be started is the start press on the head; what is in the way is listed under the

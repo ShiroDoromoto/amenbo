@@ -1552,6 +1552,13 @@ button.feed__target:hover { color: var(--c-accent); }
   border: 1.5px solid var(--c-accent); border-radius: var(--r-md);
   font-size: var(--fs-md); font-weight: var(--fw-medium);
 }
+/* A role started by a trigger has no waiting tasks (`AMB-D-1127`): in their place, dashed in the AI's
+   colour as the triggers before it are, the words that it starts by a trigger and files no task. */
+.autopic__desk--trigger {
+  display: flex; flex-direction: column;
+  background: var(--c-ai-weak); color: var(--c-ai); border: 1.5px dashed var(--c-ai);
+}
+.autopic__desksub { font-size: var(--fs-xs); font-weight: var(--fw-normal); color: var(--c-text-muted); }
 /* The far end of a role's round: whom it hands on to. Dashed, as the mock draws it: it stands for
    something outside the round, not a box on it. */
 .autopic__end {
@@ -2372,6 +2379,28 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .autorole { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-3) 0; }
 .autorole__head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
+/* How the role's round starts, under its head (`AMB-D-1127`): the two ways side by side, and for one
+   started by a trigger, the triggers aimed at it on a second line. */
+.autorole__start { display: flex; flex-direction: column; gap: var(--s-1); }
+.autorole__startline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-3); font-size: var(--fs-md); }
+.autorole__startlabel { font-size: var(--fs-xs); color: var(--c-text-muted); }
+.autorole__seg {
+  display: inline-flex; flex-wrap: wrap; max-width: 100%; overflow: hidden;
+  border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
+}
+.autorole__seg > button {
+  font: inherit; font-size: var(--fs-xs); padding: 3px 10px; cursor: pointer;
+  border: 0; background: var(--c-surface-pic) var(--c-surface); color: var(--c-text);
+}
+.autorole__seg > button + button { border-inline-start: var(--border-w) var(--border-style) var(--c-edge); }
+.autorole__seg > button[aria-pressed="true"] { background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-medium); }
+.autorole__seg > button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.autorole__triggers { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); }
+.autorole__trigger {
+  font: inherit; font-size: var(--fs-xs); padding: 0; border: 0; background: none; cursor: pointer;
+  color: var(--c-accent-text); text-align: start; text-decoration: underline; text-underline-offset: 2px;
+}
+.autorole__trigger:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 .autorole__name {
   flex: 1 1 10rem; min-width: 0; max-width: none; padding: 0; border: 0; border-radius: 0;
   border-block-end: var(--border-w) dashed var(--c-edge); background: none;

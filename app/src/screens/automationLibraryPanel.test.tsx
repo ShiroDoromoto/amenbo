@@ -16,6 +16,10 @@
 // its key** through the built-in's own doors, on a line or after a way out; **the one that splits by
 // an axis asks which first**, offering only an axis a task holds one value of, opens with that axis's
 // values as its ways out, and is not placed until one is picked.
+//
+// And a role started by a trigger (`AMB-D-1127`): **what is picked for its start is put on as its start**
+// through the role's own doors, an action of one's own and a built-in alike, and **the built-in that
+// takes a task is not offered there either** (`AMB-D-1132`).
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,6 +33,8 @@ const hoisted = vi.hoisted(() => ({
   insertBuiltin: vi.fn((..._args: unknown[]) => Promise.resolve()),
   insertAtExit: vi.fn((..._args: unknown[]) => Promise.resolve([] as number[])),
   insertBuiltinAtExit: vi.fn((..._args: unknown[]) => Promise.resolve()),
+  startAt: vi.fn((..._args: unknown[]) => Promise.resolve()),
+  startAtBuiltin: vi.fn((..._args: unknown[]) => Promise.resolve()),
   dimensions: [] as DimensionDto[],
 }));
 
@@ -41,6 +47,8 @@ vi.mock("../core/automations", () => ({
   insertAutomationBuiltin: hoisted.insertBuiltin,
   insertAutomationActionAtExit: hoisted.insertAtExit,
   insertAutomationBuiltinAtExit: hoisted.insertBuiltinAtExit,
+  startAutomationRoleAt: hoisted.startAt,
+  startAutomationRoleAtBuiltin: hoisted.startAtBuiltin,
 }));
 // The project's axes are what the built-in that splits by one offers; nothing else here reads the snapshot.
 vi.mock("../core/snapshot", () => ({
@@ -276,10 +284,10 @@ describe("the built-ins in the panel", () => {
     expect(heads).not.toContain(t("auto.actions.reachBuiltin"));
   });
 
-  it("leave out the one kept to where a role starts, on a line and after a way out alike", async () => {
+  it("leave out the one kept to where a role starts, on a line, after a way out and as a role's start alike", async () => {
     const kept: AutomationBuiltinDto = { ...take, key: "take_task", name: "Start a role", startsARoleOnly: true };
     hoisted.builtins = [kept, take];
-    for (const target of [{ edgeId: 9 }, { fromId: 3, exitName: "taken" }]) {
+    for (const target of [{ edgeId: 9 }, { fromId: 3, exitName: "taken" }, { roleStart: 2 }]) {
       await render(target);
       expect(rows().some((row) => row.includes("Take a task"))).toBe(true);
       expect(rows().some((row) => row.includes("Start a role"))).toBe(false);
@@ -322,6 +330,55 @@ describe("the built-ins in the panel", () => {
     await act(async () => { button(t("auto.pic.placeDo")).click(); });
     expect(hoisted.insertBuiltinAtExit).toHaveBeenCalledWith({ boxId: 3, exitName: "taken" }, "task_take", null);
     expect(hoisted.insertBuiltin).not.toHaveBeenCalled();
+  });
+
+  it("put one on as the start of a role started by a trigger, by its key, and mark nothing as put on for the reader", async () => {
+    hoisted.startAtBuiltin.mockClear();
+    placed.mockClear();
+    await render({ roleStart: 2 });
+    await act(async () => { button("Take a task").click(); });
+    await act(async () => { button(t("auto.pic.placeDo")).click(); });
+    expect(hoisted.startAtBuiltin).toHaveBeenCalledWith(2, "task_take", null);
+    expect(hoisted.insertBuiltin).not.toHaveBeenCalled();
+    expect(placed).toHaveBeenCalledWith([]);
+  });
+});
+
+describe("a role started by a trigger's start", () => {
+  it("is where the pick goes, with nothing before it", async () => {
+    await act(async () => {
+      root.render(
+        createElement(AutomationLibraryPanel, {
+          target: { roleStart: 2 },
+          projectId: 1,
+          where: null,
+          onPlaced: placed,
+          onMake: make,
+        }),
+      );
+    });
+    const where = container.querySelector(".wheremark")!;
+    expect(where.querySelectorAll(".wheremark__box")).toHaveLength(0);
+    expect(where.querySelector(".wheremark__here")?.textContent).toBe(t("auto.lib.here"));
+  });
+
+  it("puts the picked action on as the role's start", async () => {
+    hoisted.startAt.mockClear();
+    await render({ roleStart: 2 });
+    await act(async () => { button("Review").click(); });
+    await act(async () => { button(t("auto.pic.placeDo")).click(); });
+    expect(hoisted.startAt).toHaveBeenCalledWith(2, 4);
+    expect(hoisted.insert).not.toHaveBeenCalled();
+    expect(placed).toHaveBeenCalledWith([]);
+  });
+
+  it("draws core's refusal and stays open", async () => {
+    hoisted.startAt.mockRejectedValueOnce({ code: "invalid", message_en: "role 'Bob' starts by a task" });
+    await render({ roleStart: 2 });
+    await act(async () => { button("Review").click(); });
+    await act(async () => { button(t("auto.pic.placeDo")).click(); });
+    expect(container.textContent).toContain("role 'Bob' starts by a task");
+    expect(placed).not.toHaveBeenCalled();
   });
 });
 

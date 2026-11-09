@@ -20,7 +20,7 @@ use crate::error::{Error, Result};
 use crate::model::{
     ActorKind, AutomationPortKind, AutomationRunStep, AutomationRunStepStatus, TaskStatus, DONE_EXIT,
 };
-use crate::ops::automation_builtin::{Builtin, BuiltinExit, BuiltinPort, Carried, Carry, Work};
+use crate::ops::automation_builtin::{Builtin, BuiltinExit, BuiltinPort, Carried, Carry, NeedsTask, Work};
 use crate::run_wording::builtin as say;
 use crate::store_engine::{read, WriteTx};
 
@@ -48,6 +48,7 @@ pub(crate) const CLOSE_TASK: Builtin = Builtin {
     exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }],
     waits: None,
     chooses: None,
+    needs_task: NeedsTask::Always,
     work: Work::InStore(close),
 };
 

@@ -670,6 +670,7 @@ pub fn automation_role(r: &AutomationRole) -> Record {
                 ("order_key", tv(&r.order_key)),
                 ("headcount", iv(r.headcount.into())),
                 ("take_order", tv(r.take_order.as_str())),
+                ("starts_by", tv(r.starts_by.as_str())),
             ],
             &r.created_at,
             &r.updated_at,

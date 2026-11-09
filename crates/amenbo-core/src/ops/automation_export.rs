@@ -67,6 +67,11 @@ pub struct RoleFile {
     /// is read.
     #[serde(default)]
     pub take_order: crate::model::TakeOrder,
+    /// How its round starts. A file written before roles had a way of starting reads as
+    /// [`crate::model::RoleStart::Task`], the only way a role started then; a word that is neither is
+    /// refused as the file is read.
+    #[serde(default)]
+    pub starts_by: crate::model::RoleStart,
     pub icon: Option<String>,
     /// The placement its round starts at, by its place in `placements`.
     pub entry: Option<usize>,
@@ -327,6 +332,7 @@ pub fn export(conn: &Connection, automation_id: i64) -> Result<AutomationFile> {
                 name: r.name.clone(),
                 headcount: r.headcount,
                 take_order: r.take_order,
+                starts_by: r.starts_by,
                 icon: r.icon.clone(),
                 entry: r.entry_placement_id.and_then(at),
                 agent: r.agent.clone(),

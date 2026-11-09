@@ -21,7 +21,7 @@ use chrono::Duration;
 
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{AutomationCfgKind, RunDefCfg, DONE_EXIT};
-use crate::ops::automation_builtin::{answer, Builtin, BuiltinExit, BuiltinSetting, Work};
+use crate::ops::automation_builtin::{answer, Builtin, BuiltinExit, BuiltinSetting, NeedsTask, Work};
 
 /// The settings that add up to how long it waits. Each left unanswered counts as none.
 pub const HOURS: &str = "時間";
@@ -49,6 +49,7 @@ pub(super) const WAIT: Builtin = Builtin {
     exits: &[BuiltinExit { name: DONE_EXIT, outs: &[] }],
     waits: None,
     chooses: None,
+    needs_task: NeedsTask::No,
     work: Work::Holds(how_long),
 };
 

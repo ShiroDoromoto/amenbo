@@ -42,7 +42,7 @@ use crate::model::{
     AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunPass, AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
     AutomationStep, AutomationStoppedReason, AutomationTrigger, AutomationVersion, AutomationWire, Database,
-    TakeOrder, TriggerCondition, TriggerTask, TriggerWhen,
+    RoleStart, TakeOrder, TriggerCondition, TriggerTask, TriggerWhen,
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
     DecisionMadeIn, DecisionStatus, DecisionTaskLink,
     Dimension, DimensionAppliesTo, DimensionCardinality,
@@ -674,6 +674,7 @@ pub(super) fn automation_role_row(r: &Row) -> rusqlite::Result<AutomationRole> {
             u32::try_from(n).map_err(|_| bad(format!("bad headcount {n}")))?
         },
         take_order: enum_req(r, C.take_order, TakeOrder::parse)?,
+        starts_by: enum_req(r, C.starts_by, RoleStart::parse)?,
         created_at,
         updated_at,
     })

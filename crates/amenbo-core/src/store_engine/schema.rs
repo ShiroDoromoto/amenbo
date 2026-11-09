@@ -167,6 +167,9 @@ const HEADCOUNT: &str = "BIGINT NOT NULL DEFAULT 1";
 /// written — one of `model::TakeOrder`'s words. Which words are taken is held by that type, which the
 /// ops write and `hydrate` reads back, not by a `CHECK`, as the headcount's range is.
 const TAKE_ORDER: &str = "TEXT NOT NULL DEFAULT 'priority'";
+/// How an automation's role starts its round (`automation_role.starts_by`), `task` until written — one
+/// of `model::RoleStart`'s words, held by that type as `TAKE_ORDER`'s are.
+const ROLE_START: &str = "TEXT NOT NULL DEFAULT 'task'";
 /// A polymorphic reference (`attachment.target_id`): a key like `fk!`'s, minus
 /// the `REFERENCES` — SQLite cannot branch a constraint on a sibling `target_type` column, so the ops
 /// sweep these rows by hand. An integer because every key is one; a TEXT affinity here would
@@ -379,6 +382,7 @@ macro_rules! column_type {
     ($name:ident : col(COUNT))          => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int> };
     ($name:ident : col(HEADCOUNT))      => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Int> };
     ($name:ident : col(TAKE_ORDER))     => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text> };
+    ($name:ident : col(ROLE_START))     => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text> };
     ($name:ident : ts)                  => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text> };
     ($name:ident : ts_opt)              => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text, $crate::store_engine::sql::Nullable> };
     ($name:ident : ts_opt_apart($day:ident)) => { $crate::store_engine::sql::Col<$crate::store_engine::sql::Text, $crate::store_engine::sql::Nullable> };
@@ -1255,6 +1259,11 @@ datasets! {
     // one priority), `due`, `created` or `order` (the task's own `order_key`) — `priority` until
     // somebody changes it. Which words are taken is held by `model::TakeOrder`, not by a `CHECK`. A
     // saved version keeps it with the role.
+    //
+    // `starts_by` is how the role's round starts — `task` (a task of the role turning up, at the
+    // built-in that takes a task) or `trigger` (a trigger aimed at the role, with no task filed) — `task`
+    // until somebody changes it. Which words are taken is held by `model::RoleStart`, not by a `CHECK`.
+    // A saved version keeps it with the role.
     automation_role {
         automation_id: fk("automation", "RESTRICT"),
         name: col(REQ),
@@ -1265,6 +1274,7 @@ datasets! {
         order_key: col(ORDER_KEY),
         headcount: col(HEADCOUNT),
         take_order: col(TAKE_ORDER),
+        starts_by: col(ROLE_START),
     }
 
     // **One trigger of an automation**: what files a task on its own and starts a run with it, in three

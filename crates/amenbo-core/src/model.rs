@@ -1817,6 +1817,42 @@ impl TakeOrder {
     }
 }
 
+/// **How a role's round starts** ([`AutomationRole::starts_by`], `AMB-D-1127`) — by a task of the role
+/// turning up, or by a trigger aimed at the role. Two ways, and only these: a word that is neither is
+/// refused where a row is read back ([`RoleStart::parse`]) and where an exported file is read, as
+/// [`TakeOrder`]'s are.
+///
+/// **What a round may start at follows from it** (`AMB-D-1132`): a role started by a task starts at the
+/// built-in that takes a task, and that built-in stands nowhere else; a role started by a trigger starts
+/// at anything but it, and files the tasks it works rather than taking one, so it reaches no built-in that
+/// needs a task before it has one. The launch check is what holds a picture to this.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RoleStart {
+    /// A task of the role turning up starts a round, at the built-in that takes a task. The default,
+    /// and what every role written before roles had a way of starting is read as.
+    #[default]
+    Task,
+    /// A trigger aimed at the role starts a round, with no task filed for it.
+    Trigger,
+}
+
+impl RoleStart {
+    /// Both ways, in the order they are offered in.
+    pub const ALL: [RoleStart; 2] = [RoleStart::Task, RoleStart::Trigger];
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            RoleStart::Task => "task",
+            RoleStart::Trigger => "trigger",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<RoleStart> {
+        RoleStart::ALL.into_iter().find(|start| start.as_str() == s)
+    }
+}
+
 /// **The action itself, standing on its own picture** — what an [`AutomationWire`] names at the end
 /// that crosses the action's edge. A wire out of it hands an input the action declares to a step
 /// inside; a wire into it fills an output declared on the way out the run is leaving by.
@@ -1938,6 +1974,16 @@ pub struct Automation {
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
+}
+
+impl Automation {
+    /// **The triggers aimed at one role** (`AMB-D-1127`) — those naming it as theirs
+    /// ([`AutomationTrigger::role_id`]), in the order they were written in. Of a role that starts by a
+    /// trigger, these are what start its rounds; of one that starts by a task, what files the tasks it
+    /// takes.
+    pub fn triggers_aimed_at(&self, role_id: i64) -> impl Iterator<Item = &AutomationTrigger> {
+        self.triggers.iter().filter(move |trigger| trigger.role_id == Some(role_id))
+    }
 }
 
 /// **Who a failed round of an automation is filed to** ([`Automation::failures_to`]): a person, or a
@@ -2262,6 +2308,11 @@ pub struct AutomationRole {
     /// keeps it; one saved without it reads as the default.
     #[serde(default)]
     pub take_order: TakeOrder,
+    /// **How its round starts** — by a task of it, or by a trigger aimed at it (`AMB-D-1127`).
+    /// [`RoleStart::Task`] until somebody changes it. It is part of the role, so a saved version keeps
+    /// it; one saved without it reads as the default.
+    #[serde(default)]
+    pub starts_by: RoleStart,
     /// The icon it is drawn with, by the name the GUI knows it under, or `None` for none chosen.
     #[serde(default)]
     pub icon: Option<String>,
@@ -2288,6 +2339,7 @@ impl Default for AutomationRole {
             name: String::new(),
             headcount: DEFAULT_ROLE_HEADCOUNT,
             take_order: TakeOrder::Priority,
+            starts_by: RoleStart::Task,
             icon: None,
             entry_placement_id: None,
             agent: None,

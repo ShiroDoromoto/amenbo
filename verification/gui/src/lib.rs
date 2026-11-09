@@ -7160,14 +7160,7 @@ const BUILTIN_WORDS: &[BuiltinWords] = &[
         called: "the built-in that takes a task (it reserves the next task its filter matches)",
         words: &[
             ("絞り込み", "the setting saying which tasks it takes (its filter)"),
-            ("着手できるタスクが無いとき", "the setting saying what it does when there is no task to take"),
-            ("着手できるタスクが出るまで待つ", "the choice that waits until there is a task to take"),
-            (
-                "待たずに出口「着手できるタスクが無い」へ進む",
-                "the choice that does not wait, and leaves by the way out for there being no task to take",
-            ),
             ("着手した", "the way out for having taken a task"),
-            ("着手できるタスクが無い", "the way out for there being no task to take"),
             ("タスク", "the task it took"),
         ],
     },
@@ -10034,14 +10027,14 @@ id: x
 title: y
 steps_gui:
   - { type: action, domain: automation, op: builtin-open, with: { builtin: take_task } }
-  - { type: assert, domain: automation, op: builtin-read, with: { builtin: take_task, settings: [絞り込み], exits: [着手した, 着手できるタスクが無い], used_by: 0 } }
+  - { type: assert, domain: automation, op: builtin-read, with: { builtin: take_task, settings: [絞り込み], exits: [着手した], used_by: 0 } }
   - { type: action, domain: automation, op: insert-box, with: { after: draft, exit: drafted, builtin: wait } }
   - { type: action, domain: automation, op: open-placed }
   - { type: assert, domain: automation, op: builtin-read, with: { builtin: wait, used_by: 1 } }
   - { type: action, domain: automation, op: pick-box, with: { builtin: take_task } }
   - { type: assert, domain: automation, op: pictured, with: { builtin: take_task } }
   - { type: assert, domain: automation, op: line-pictured, with: { from: draft, exit: drafted, to_builtin: close_task } }
-  - { type: action, domain: automation, op: answer-choice, with: { builtin: take_task, setting: 着手できるタスクが無いとき, value: 着手できるタスクが出るまで待つ } }
+  - { type: action, domain: automation, op: answer-choice, with: { builtin: fold_worktree, setting: 既定ブランチに無い変更があるとき, value: 捨てずに残す } }
 "#);
         let mut ins = Instructor::new();
         let steps = s.steps(Driver::Gui);
@@ -10053,7 +10046,8 @@ steps_gui:
         assert!(lines[0].contains(take) && lines[0].contains("interface's language"), "{}", lines[0]);
         assert!(
             lines[1].contains("settings listing the setting saying which tasks it takes")
-                && lines[1].contains("the way out for having taken a task and the way out for there being no task to take")
+                && lines[1].contains("ways out listing the way out for having taken a task")
+                && !lines[1].contains("no task to take")
                 && lines[1].contains("no automation runs it"),
             "{}", lines[1]
         );
@@ -10069,8 +10063,8 @@ steps_gui:
         assert!(lines[6].contains(take), "{}", lines[6]);
         assert!(lines[7].contains("going on to the box of the built-in that closes the task"), "{}", lines[7]);
         assert!(
-            lines[8].contains("the setting saying what it does when there is no task to take")
-                && lines[8].contains("the choice that waits until there is a task to take"),
+            lines[8].contains("the setting saying what it does with changes the default branch does not have")
+                && lines[8].contains("the choice that keeps them"),
             "{}", lines[8]
         );
 

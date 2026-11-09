@@ -762,7 +762,6 @@ describe("the picture of an automation", () => {
     ];
     const lines: [number, string, number | "done" | "halt"][] = [
       [1, "着手した", 18],
-      [1, "着手できるタスクが無い", "done"],
       [2, "完了", 3],
       [2, "既にある", 13],
       [13, "完了", 2],
@@ -805,7 +804,6 @@ describe("the picture of an automation", () => {
           exits: [
             { id: nextId++, name: "着手した", outputs: [port("タスク", "task_take")] },
             { id: nextId++, name: "*", outputs: [] },
-            { id: nextId++, name: "着手できるタスクが無い", outputs: [] },
           ],
         }),
         ...names.map(([id, name, more]) => step({ id, name, exits: ways(...more) })),
@@ -1142,10 +1140,12 @@ describe("the picture of an automation", () => {
       detail({
         entryId: 1,
         placements: [
-          taker(1, "take", {
+          step({
+            id: 1,
+            name: "build",
             exits: [
-              { id: 91, name: "完了", outputs: [port("task", "task_take")] },
-              { id: 92, name: "着手できるタスクが無い", outputs: [] },
+              { id: 91, name: "完了", outputs: [] },
+              { id: 92, name: "画面の確認が要る", outputs: [] },
               { id: 93, name: "*", outputs: [] },
             ],
           }),
@@ -1154,14 +1154,14 @@ describe("the picture of an automation", () => {
         // Hung second along the box, so its words start well to the right of the box's left side.
         edges: [
           edge({ id: 1, fromId: 1, toId: 2 }),
-          edge({ id: 2, fromId: 1, exitName: "着手できるタスクが無い", ends: "done" }),
+          edge({ id: 2, fromId: 1, exitName: "画面の確認が要る", ends: "done" }),
         ],
       }),
     );
-    const line = picture.lines.find((one) => one.exitName === "着手できるタスクが無い")!;
+    const line = picture.lines.find((one) => one.exitName === "画面の確認が要る")!;
     // The way out and where the run goes after it, both: the ending is the half that got cut.
     const words = edgeWord(line);
-    expect(words.length).toBeGreaterThan("着手できるタスクが無い".length);
+    expect(words.length).toBeGreaterThan("画面の確認が要る".length);
     expect(line.at.x + wordW(words)).toBeLessThanOrEqual(picture.width);
   });
 
@@ -2065,7 +2065,7 @@ describe("a way out nothing has been decided for (AMB-D-1003)", () => {
             id: 2,
             name: "pick",
             exits: [
-              { id: 83, name: "着手できるタスクが無い", outputs: [] },
+              { id: 83, name: "作るものが無い", outputs: [] },
               { id: 84, name: "*", outputs: [] },
             ],
           }),

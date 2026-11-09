@@ -391,7 +391,6 @@ export function AutomationPicture({
   graph,
   insertLabel,
   selectedBoxId,
-  placedForYou,
   onPickBox,
   onInsert,
   onOpenExit,
@@ -408,9 +407,6 @@ export function AutomationPicture({
   insertLabel?: string;
   /** The box whose contents the panel beside this is showing (`AMB-T-5256`). */
   selectedBoxId?: number;
-  /** Boxes Amenbo put on for the reader rather than the reader themselves (`AMB-T-5797`) — marked,
-   *  with what they are there for on their second line. */
-  placedForYou?: ReadonlySet<number>;
   onPickBox?: (boxId: number) => void;
   /**
    * Put a box in on this edge. Absent while the dialog that asks what goes there is still being
@@ -814,7 +810,7 @@ export function AutomationPicture({
                   {tf("auto.pic.behindMark", { version: node.behind.version })}
                 </span>
               )}
-              {placedForYou?.has(node.boxId) === true && (
+              {node.forYou === true && (
                 <span className="autopic__formark">{t("auto.pic.placedForYou")}</span>
               )}
             </span>
@@ -846,7 +842,7 @@ export function AutomationPicture({
                   );
                 })}
               </span>
-            ) : node.global !== undefined && placedForYou?.has(node.boxId) === true ? (
+            ) : node.global !== undefined && node.forYou === true ? (
               <span className="autopic__nodesub" title={t("auto.pic.placedForYouWhy")}>
                 <span className="autopic__lib">{t("auto.pic.placedForYouWhy")}</span>
               </span>

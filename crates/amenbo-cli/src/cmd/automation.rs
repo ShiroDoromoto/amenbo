@@ -1750,6 +1750,7 @@ fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
         TriggerTask::Fixed { title, .. } => format!("\"{title}\""),
         TriggerTask::File { path } => format!("the task \"{path}\" says"),
         TriggerTask::Script { script } => format!("the task \"{}\" writes", script.program),
+        TriggerTask::Asked => "what its script writes".to_string(),
     };
     let called = match trigger.name.as_str() {
         "" => String::new(),

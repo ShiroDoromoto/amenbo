@@ -2160,7 +2160,7 @@ mod tests {
             let tried = trigger_try(&written, &now, || false);
             assert_eq!(
                 tried,
-                TriggerTried::Files { title: "調査を起票する".into(), notes: "3 件まで".into() },
+                TriggerTried::Files { title: "調査を起票する".into(), notes: "3 件まで".into(), data: None, key: None, files: Vec::new() },
                 "tried before it is first due",
             );
             assert!(read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read").is_empty(), "no run");
@@ -2216,7 +2216,7 @@ mod tests {
             assert_eq!(draft.condition, Some(ConditionCount { matched: 1, below: 2 }));
             assert_eq!(
                 draft.try_now(|| false),
-                TriggerTried::Files { title: "調査を起票する".into(), notes: "3 件まで".into() },
+                TriggerTried::Files { title: "調査を起票する".into(), notes: "3 件まで".into(), data: None, key: None, files: Vec::new() },
             );
             let kept = read::automation(tx.conn(), automation.id).expect("read").expect("there");
             assert!(kept.triggers.is_empty(), "no trigger written");
@@ -2230,7 +2230,7 @@ mod tests {
             let draft = trigger_draft(tx.conn(), automation.id, typed(from_file)).expect("ready");
             assert_eq!(
                 draft.try_now(|| false),
-                TriggerTried::Files { title: "報告を読む".into(), notes: "未整理のもの".into() },
+                TriggerTried::Files { title: "報告を読む".into(), notes: "未整理のもの".into(), data: None, key: None, files: Vec::new() },
                 "the file as it stands now",
             );
             std::fs::remove_file(&path).expect("gone");
@@ -2258,7 +2258,7 @@ mod tests {
     #[test]
     fn a_trigger_with_a_script_files_only_once_its_script_said_yes() {
         use crate::model::{StepScript, TriggerWhen};
-        use crate::ops::automation_run::{fire, triggers_due, ScriptsSaid, TriggerScripts};
+        use crate::ops::automation_run::{fire, triggers_due, ScriptWrote, ScriptsSaid, TriggerScripts};
         with_tx(|tx| {
             let (automation, _, _) = entry(tx);
             // Named by its full path, as a program is written; it is never run here.
@@ -2290,7 +2290,7 @@ mod tests {
             assert_eq!(found.ask, vec![(trigger_id, scripts.clone())]);
 
             let other = TriggerScripts { ask: Some(StepScript { timeout_minutes: 6, ..script }), write: None };
-            let said = |scripts: &TriggerScripts| ScriptsSaid { scripts: scripts.clone(), wrote: None };
+            let said = |scripts: &TriggerScripts| ScriptsSaid { scripts: scripts.clone(), asked: Some(ScriptWrote::default()), wrote: None };
             assert!(fire(tx, trigger_id, &by, due, None, &[]).expect("fire").is_none(), "no answer, no task");
             assert!(fire(tx, trigger_id, &by, due, Some(&said(&other)), &[]).expect("fire").is_none(), "another script's yes");
             assert_eq!(next_at(tx), due, "a time it decides no leaves nothing");
@@ -2348,7 +2348,7 @@ mod tests {
     #[test]
     fn a_trigger_files_the_task_its_program_wrote() {
         use crate::model::{StepScript, TriggerWhen};
-        use crate::ops::automation_run::{fire, triggers_due, ScriptsSaid, TriggerScripts};
+        use crate::ops::automation_run::{fire, triggers_due, ScriptWrote, ScriptsSaid, TriggerScripts};
         with_tx(|tx| {
             let (automation, take, _) = entry(tx);
             // Named by its full path, as a program is written; it is never run here.
@@ -2383,14 +2383,14 @@ mod tests {
             assert!(found.due.is_empty(), "not fired before its program has written the task");
             assert_eq!(found.ask, vec![(trigger_id, scripts.clone())]);
 
-            let wrote = Some(("書いてもらう".to_string(), "本文".to_string()));
+            let wrote = Some(ScriptWrote { title: "書いてもらう".into(), notes: "本文".into(), ..ScriptWrote::default() });
             let other = TriggerScripts { ask: None, write: Some(StepScript { timeout_minutes: 6, ..script }) };
             assert!(fire(tx, trigger_id, &by, due, None, &[]).expect("fire").is_none(), "nothing written, no task");
-            let rewritten = ScriptsSaid { scripts: other, wrote: wrote.clone() };
+            let rewritten = ScriptsSaid { scripts: other, asked: None, wrote: wrote.clone() };
             assert!(fire(tx, trigger_id, &by, due, Some(&rewritten), &[]).expect("fire").is_none(), "another program's");
             assert_eq!(next_at(tx), due, "a time it decides no leaves nothing");
 
-            let said = ScriptsSaid { scripts, wrote };
+            let said = ScriptsSaid { scripts, asked: None, wrote };
             let run = fire(tx, trigger_id, &by, due, Some(&said), &[]).expect("fire").expect("a run");
             let filed = taken_first(tx, &run, &take);
             assert_eq!(filed.title, "書いてもらう");

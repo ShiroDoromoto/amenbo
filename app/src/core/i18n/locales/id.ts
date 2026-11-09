@@ -1006,6 +1006,7 @@ export const id: Translation = {
     "auto.trigger.taskFixed": "Teks tetap",
     "auto.trigger.taskFile": "Berkas",
     "auto.trigger.taskScript": "Keluaran skrip",
+    "auto.trigger.taskAsked": "Keluaran skrip penentu",
     "auto.trigger.taskTitle": "Judul",
     "auto.trigger.taskNotes": "Catatan",
     "auto.trigger.taskPath": "Path berkas",

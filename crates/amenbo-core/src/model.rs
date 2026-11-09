@@ -2073,8 +2073,9 @@ pub struct AutomationTrigger {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub condition: Option<TriggerCondition>,
     /// The program it asks before filing one, on top of `when` and `condition` — `None` where it asks
-    /// none. It files one only where the program says so in its `output.json`
-    /// (`{"version":1,"file":true}`, [`crate::ops::automation_run::ask_script`]). A
+    /// none. It files one only where the program says so in its `output.json` —
+    /// `{"version":1,"file":true}`, or `{"version":2,"start":true,…}` with what it hands on written beside
+    /// it ([`crate::ops::automation_run::ask_script`], [`TriggerTask::Asked`]). A
     /// [`TriggerWhen::Script`] always has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub script: Option<StepScript>,
@@ -2151,7 +2152,8 @@ pub struct TriggerCondition {
     pub below: u32,
 }
 
-/// The most bytes the data a trigger hands on may take (the `data` of a [`TriggerTask::Fixed`]): 64 KiB.
+/// The most bytes the data a trigger hands on may take — the `data` of a [`TriggerTask::Fixed`], or what
+/// a program writes as its `data`: 64 KiB.
 pub const MAX_TRIGGER_DATA_BYTES: usize = 64 * 1024;
 
 /// **What a trigger hands on** — the second part of [`AutomationTrigger`]: a title, notes, data as JSON
@@ -2179,11 +2181,17 @@ pub enum TriggerTask {
     /// not blank is the title, and what follows it the notes
     /// ([`crate::ops::automation_run::task_from_file`]).
     File { path: String },
-    /// What the program writes in its `output.json` when the task is filed,
-    /// `{"version":1,"title":"…","notes":"…"}` with the notes left out where it has none
-    /// ([`crate::ops::automation_run::ask_trigger`]). Run, like the trigger's own script, outside any
-    /// write.
+    /// What the program writes in its `output.json` each time it starts a run —
+    /// `{"version":1,"title":"…","notes":"…"}` with the notes left out where it has none, or
+    /// `{"version":2,"title":"…","notes":"…","data":{…},"key":"…"}` with the files it leaves in `out/`
+    /// beside it ([`crate::ops::automation_run::write_script`]). Run, like the trigger's own script,
+    /// outside any write.
     Script { script: StepScript },
+    /// What the trigger's own script ([`AutomationTrigger::script`]) writes beside its say that a run is
+    /// to start — the title, notes, data and key of `{"version":2,"start":true,…}`, and the files it
+    /// leaves in `out/` ([`crate::ops::automation_run::ask_script`]), each of them optional. Only a
+    /// trigger that asks a script has it. A script that answers in version 1 hands on nothing.
+    Asked,
 }
 
 impl TriggerTask {
@@ -2193,6 +2201,7 @@ impl TriggerTask {
             TriggerTask::Fixed { .. } => "fixed",
             TriggerTask::File { .. } => "file",
             TriggerTask::Script { .. } => "script",
+            TriggerTask::Asked => "asked",
         }
     }
 
@@ -2200,7 +2209,7 @@ impl TriggerTask {
     pub fn script(&self) -> Option<&StepScript> {
         match self {
             TriggerTask::Script { script } => Some(script),
-            TriggerTask::Fixed { .. } | TriggerTask::File { .. } => None,
+            TriggerTask::Fixed { .. } | TriggerTask::File { .. } | TriggerTask::Asked => None,
         }
     }
 }

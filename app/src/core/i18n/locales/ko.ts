@@ -1002,6 +1002,7 @@ export const ko: Translation = {
     "auto.trigger.taskFixed": "정해진 문구",
     "auto.trigger.taskFile": "파일",
     "auto.trigger.taskScript": "스크립트 출력",
+    "auto.trigger.taskAsked": "판정 스크립트 출력",
     "auto.trigger.taskTitle": "제목",
     "auto.trigger.taskNotes": "본문",
     "auto.trigger.taskPath": "파일 경로",

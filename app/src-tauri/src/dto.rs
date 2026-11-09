@@ -4137,7 +4137,8 @@ impl From<AutomationTriggerConditionDto> for amenbo_core::model::TriggerConditio
 
 /// **What a trigger hands on** — the wire form of [`amenbo_core::model::TriggerTask`]: `fixed` with its
 /// title, notes, data (JSON text, absent for none) and the full paths of its files (absent for none),
-/// `file` read from its full path, `script` written by a program.
+/// `file` read from its full path, `script` written by a program, `asked` written by the trigger's own
+/// script beside its say to start.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(tag = "kind", rename_all = "lowercase")]
@@ -4154,6 +4155,7 @@ pub enum AutomationTriggerTaskDto {
     },
     File { path: String },
     Script { script: AutomationStepScriptDto },
+    Asked,
 }
 
 impl From<amenbo_core::model::TriggerTask> for AutomationTriggerTaskDto {
@@ -4165,6 +4167,7 @@ impl From<amenbo_core::model::TriggerTask> for AutomationTriggerTaskDto {
             }
             TriggerTask::File { path } => AutomationTriggerTaskDto::File { path },
             TriggerTask::Script { script } => AutomationTriggerTaskDto::Script { script: script.into() },
+            TriggerTask::Asked => AutomationTriggerTaskDto::Asked,
         }
     }
 }
@@ -4188,6 +4191,7 @@ pub enum AutomationTriggerTaskInputDto {
     },
     File { path: String },
     Script { script: AutomationScriptInputDto },
+    Asked,
 }
 
 impl From<AutomationTriggerTaskInputDto> for amenbo_core::ops::automation::NewTriggerTask {
@@ -4202,6 +4206,7 @@ impl From<AutomationTriggerTaskInputDto> for amenbo_core::ops::automation::NewTr
             },
             AutomationTriggerTaskInputDto::File { path } => NewTriggerTask::File { path },
             AutomationTriggerTaskInputDto::Script { script } => NewTriggerTask::Script(script.into()),
+            AutomationTriggerTaskInputDto::Asked => NewTriggerTask::Asked,
         }
     }
 }
@@ -4209,8 +4214,9 @@ impl From<AutomationTriggerTaskInputDto> for amenbo_core::ops::automation::NewTr
 /// **What a trigger's own parts said, tried as it is typed** — the wire form of
 /// [`amenbo_core::ops::automation_run::TriggerTried`]: `condition` where its condition does not hold,
 /// `program_said_no` where the program it asks first said not to file one, `said_nothing` where it
-/// could say nothing that can be filed (`why` in core's sentence), and `files` with the title and notes
-/// of the task it would file.
+/// could say nothing that can be filed (`why` in core's sentence), and `files` with what it would hand
+/// on: the title and notes, the data as JSON text and the key (each absent for none), and the names of
+/// the files it hands on (absent for none).
 #[derive(Debug, PartialEq, Eq, Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -4218,7 +4224,19 @@ pub enum AutomationTriggerTriedDto {
     Condition,
     ProgramSaidNo,
     SaidNothing { why: String },
-    Files { title: String, notes: String },
+    Files {
+        title: String,
+        notes: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        data: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        key: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        files: Option<Vec<String>>,
+    },
 }
 
 impl From<amenbo_core::ops::automation_run::TriggerTried> for AutomationTriggerTriedDto {
@@ -4228,7 +4246,13 @@ impl From<amenbo_core::ops::automation_run::TriggerTried> for AutomationTriggerT
             TriggerTried::Condition => AutomationTriggerTriedDto::Condition,
             TriggerTried::ProgramSaidNo => AutomationTriggerTriedDto::ProgramSaidNo,
             TriggerTried::SaidNothing { why } => AutomationTriggerTriedDto::SaidNothing { why },
-            TriggerTried::Files { title, notes } => AutomationTriggerTriedDto::Files { title, notes },
+            TriggerTried::Files { title, notes, data, key, files } => AutomationTriggerTriedDto::Files {
+                title,
+                notes,
+                data,
+                key,
+                files: (!files.is_empty()).then_some(files),
+            },
         }
     }
 }

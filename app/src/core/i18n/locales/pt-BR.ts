@@ -1018,6 +1018,7 @@ export const ptBR: Translation = {
     "auto.trigger.taskFixed": "Texto fixo",
     "auto.trigger.taskFile": "Arquivo",
     "auto.trigger.taskScript": "Saída de um script",
+    "auto.trigger.taskAsked": "Saída do script que decide",
     "auto.trigger.taskTitle": "Título",
     "auto.trigger.taskNotes": "Notas",
     "auto.trigger.taskPath": "Caminho do arquivo",

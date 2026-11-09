@@ -1011,6 +1011,7 @@ export const ja: Translation = {
     "auto.trigger.taskFixed": "決まった文面",
     "auto.trigger.taskFile": "ファイル",
     "auto.trigger.taskScript": "スクリプトの出力",
+    "auto.trigger.taskAsked": "判定のスクリプトの出力",
     "auto.trigger.taskTitle": "タイトル",
     "auto.trigger.taskNotes": "本文",
     "auto.trigger.taskPath": "ファイルのパス",

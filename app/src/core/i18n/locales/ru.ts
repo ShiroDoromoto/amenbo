@@ -1022,6 +1022,7 @@ export const ru: Translation = {
     "auto.trigger.taskFixed": "Постоянный текст",
     "auto.trigger.taskFile": "Файл",
     "auto.trigger.taskScript": "Вывод скрипта",
+    "auto.trigger.taskAsked": "Вывод проверяющего скрипта",
     "auto.trigger.taskTitle": "Заголовок",
     "auto.trigger.taskNotes": "Заметки",
     "auto.trigger.taskPath": "Путь к файлу",

@@ -1006,6 +1006,7 @@ export const vi: Translation = {
     "auto.trigger.taskFixed": "Văn bản cố định",
     "auto.trigger.taskFile": "Tệp",
     "auto.trigger.taskScript": "Đầu ra của script",
+    "auto.trigger.taskAsked": "Đầu ra của script quyết định",
     "auto.trigger.taskTitle": "Tiêu đề",
     "auto.trigger.taskNotes": "Ghi chú",
     "auto.trigger.taskPath": "Đường dẫn tệp",

@@ -1564,6 +1564,13 @@ pub const STEPS: &[Step] = &[
         // is touched.
         apply: Apply::Custom(add_what_a_trigger_hands_on),
     },
+    Step {
+        to: 140,
+        name: "admit asked in automation_trigger.task_kind, a trigger handing on what its own script writes",
+        // **Every trigger keeps the kind it had** — `asked` is only added to the kinds a trigger may
+        // have, so no row is written. No task is touched.
+        apply: Apply::Custom(admit_what_the_asking_script_writes),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -2129,6 +2136,47 @@ fn add_what_a_trigger_hands_on(ctx: &Ctx<'_>) -> Result<()> {
                 tx.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} TEXT;"))?;
             }
         }
+    }
+    Ok(())
+}
+
+/// v140: `automation_trigger.task_kind` admits `asked`, a trigger handing on what its own script writes
+/// beside its say that a run is to start.
+///
+/// **The `CHECK` is widened by v69's procedure, copied rather than called** — the reasons
+/// [`admit_rejected_task_status`] gives at length — so the column keeps its place, and no row is
+/// written. A declaration already wide is left as it is.
+fn admit_what_the_asking_script_writes(ctx: &Ctx<'_>) -> Result<()> {
+    /// The closed set as every store from v115 on declares it — frozen text, like every step's.
+    const NARROW: &str = "CHECK(task_kind IN ('', 'fixed', 'file', 'script'))";
+    /// The same set with the kind this step admits.
+    const WIDE: &str = "CHECK(task_kind IN ('', 'fixed', 'file', 'script', 'asked'))";
+
+    let declared: String = ctx.tx.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'automation_trigger'",
+        [],
+        |r| r.get(0),
+    )?;
+    if declared.contains(WIDE) {
+        return Ok(());
+    }
+    if !declared.contains(NARROW) {
+        return Err(super::StoreEngineError::UnrecognisedDdl { table: "automation_trigger", expected: NARROW });
+    }
+    let widened = declared.replace(NARROW, WIDE);
+
+    let before = column_names(ctx.tx, "automation_trigger")?;
+    ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
+    let wrote = ctx.tx.execute(
+        "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'automation_trigger'",
+        [&widened],
+    );
+    // `RESET` both shuts the door and drops the connection's parsed schema, so the very next
+    // statement sees the widened `CHECK` instead of the one this connection read at open.
+    ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+    wrote?;
+    if column_names(ctx.tx, "automation_trigger")? != before {
+        return Err(super::StoreEngineError::UnrecognisedDdl { table: "automation_trigger", expected: NARROW });
     }
     Ok(())
 }
@@ -14316,6 +14364,63 @@ mod tests {
             (None, None, None, None),
             "handed nothing by a trigger",
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v140: a trigger written at v139 keeps its kind, and a trigger may then hand on what its own
+    /// script writes — read back through the registry.
+    #[test]
+    fn a_trigger_may_hand_on_what_its_script_writes_at_v140() {
+        let dir = scratch("trigger-asked");
+        let engine = store_at(&dir, 139);
+        let at = "2026-11-10T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, created_at, updated_at) VALUES (1, 1, 'auto', '{at}', '{at}');
+                 INSERT INTO automation_trigger (id, automation_id, enabled, name, when_kind, every_minutes, task_kind,
+                                                 task_title, task_notes, next_at, order_key, created_at, updated_at)
+                 VALUES (1, 1, 1, '毎朝', 'every', 60, 'fixed', '在庫を見る', 'メモ', '{at}', 'm', '{at}', '{at}');"#
+            ))
+            .unwrap();
+        let asked = format!(
+            r#"INSERT INTO automation_trigger (id, automation_id, enabled, name, when_kind, script_program, script_args,
+                                               script_timeout_minutes, task_kind, next_at, order_key, created_at, updated_at)
+             VALUES (2, 1, 1, 'issue の監視', 'script', '/usr/local/bin/watch', '[]', 30, 'asked', '{at}', 'n', '{at}', '{at}');"#
+        );
+        assert!(engine.conn().execute_batch(&asked).is_err(), "v139 does not admit asked");
+
+        run(&engine, &dir, steps_through(140), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 140);
+        engine.conn().execute_batch(&asked).unwrap();
+        let read = |id| crate::store_engine::read::automation_trigger(engine.conn(), id).unwrap().expect("the trigger");
+        assert_eq!(
+            read(1).task,
+            crate::model::TriggerTask::Fixed {
+                title: "在庫を見る".into(),
+                notes: "メモ".into(),
+                data: None,
+                files: Vec::new(),
+            },
+        );
+        assert_eq!(read(2).task, crate::model::TriggerTask::Asked);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v140: a store with no automation is raised past it with nothing written.
+    #[test]
+    fn a_store_with_no_automation_is_raised_past_v140_with_nothing_written() {
+        let dir = scratch("trigger-asked-empty");
+        let engine = store_at(&dir, 139);
+
+        run(&engine, &dir, steps_through(140), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 140);
+        let count: i64 =
+            engine.conn().query_row("SELECT COUNT(*) FROM automation_trigger", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 0);
         std::fs::remove_dir_all(&dir).ok();
     }
 

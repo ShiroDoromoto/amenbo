@@ -83,8 +83,8 @@ import type {
 
 /** The four answers to 1 — whether to file a task now. */
 export type WhenKind = "every" | "idle" | "tasks" | "script";
-/** The three answers to 2 — what the task says. */
-export type TaskKind = "fixed" | "file" | "script";
+/** The answers to 2 — what the task says. `asked` is what the script of 1 writes beside its say. */
+export type TaskKind = "fixed" | "file" | "script" | "asked";
 
 const WHENS: { id: WhenKind; label: () => string }[] = [
   { id: "every", label: () => t("auto.trigger.whenEvery") },
@@ -203,7 +203,9 @@ export function inputOf(form: TriggerForm): AutomationTriggerInputDto {
       ? { kind: "fixed", title: form.title.trim(), notes: form.notes }
       : form.task === "file"
         ? { kind: "file", path: form.path.trim() }
-        : { kind: "script", script: scriptOf(form.writer) };
+        : form.task === "asked"
+          ? { kind: "asked" }
+          : { kind: "script", script: scriptOf(form.writer) };
   return {
     name: form.name.trim(),
     roleId: form.roleId ?? undefined,
@@ -423,6 +425,8 @@ export function taskLine(trigger: AutomationTriggerDto): string {
       return trigger.task.path;
     case "script":
       return t("auto.trigger.taskScript");
+    case "asked":
+      return t("auto.trigger.taskAsked");
   }
 }
 

@@ -1005,6 +1005,7 @@ export const nl: Translation = {
     "auto.trigger.taskFixed": "Vaste tekst",
     "auto.trigger.taskFile": "Bestand",
     "auto.trigger.taskScript": "Uitvoer van een script",
+    "auto.trigger.taskAsked": "Uitvoer van het beslissende script",
     "auto.trigger.taskTitle": "Titel",
     "auto.trigger.taskNotes": "Notities",
     "auto.trigger.taskPath": "Pad van het bestand",

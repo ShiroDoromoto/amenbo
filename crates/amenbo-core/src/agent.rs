@@ -2026,7 +2026,7 @@ fn all_commands() -> Value {
                    { "name": "--task-script-arg <arg>", "help": "one argument handed to the --task-from-script program as it is; repeat it for each" },
                    { "name": "--task-script-timeout-minutes <minutes>", "help": "how long the --task-from-script program may run, 1 to 360 (30 unless given)" },
                    { "name": "--name <str>", "help": "what the trigger is called, as the timeline of a task it files names it (blank unless given)" },
-                   { "name": "--role <role id>", "help": "the role the task it files is worked under, one of this automation's own (`automation role-list`); left out, none" },
+                   { "name": "--role <role id>", "help": "the role the task it files is worked under, one of this automation's own (`automation role-list`); left out, the automation's first role" },
                    { "name": "--rm", "help": "take the --trigger trigger away, the others left as they are (confirms unless -y)" },
                    { "name": "--on", "help": "have the --trigger trigger asked again" },
                    { "name": "--off", "help": "have the --trigger trigger asked no more, kept as it is: it files nothing and its next time stays where it was" },

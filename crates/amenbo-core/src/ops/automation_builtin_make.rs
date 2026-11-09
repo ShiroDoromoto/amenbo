@@ -43,7 +43,7 @@
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{ActorKind, AutomationCfgKind, AutomationPortKind, Priority};
 use crate::ops::automation_builtin::{
-    Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry, Chooses, Work,
+    Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry, Chooses, NeedsTask, Work,
 };
 use crate::ops::automation_report::{self, Produced};
 use crate::run_wording::builtin as say;
@@ -172,6 +172,7 @@ pub(super) const MAKE_TASK: Builtin = Builtin {
     ],
     waits: None,
     chooses: Some(Chooses { setting: WHAT_THEN, answer: TAKE_IT, chosen: MADE_AND_TAKEN, otherwise: MADE }),
+    needs_task: NeedsTask::When { setting: DEPENDS_ON, answer: THE_RUNS_TASK },
     work: Work::InStore(make),
 };
 
@@ -271,16 +272,21 @@ fn role(carry: &Carry<'_, '_>) -> Result<Option<i64>> {
     match role_named(&roles, name) {
         Some(id) => Ok(Some(id)),
         None => Err(Error::Invalid(
-            Msg::new(format!("'{ROLE}' names '{name}', which is not exactly one of this automation's roles"))
+            Msg::new(format!(
+                "'{ROLE}' names '{name}', which is not exactly one of this automation's roles that start by a task"
+            ))
                 .coded(ErrorCode::InvalidMakeTaskRoleUnknown)
                 .with("role", name),
         )),
     }
 }
 
-/// **The one role of `roles` called `name`**, or `None` where no role or more than one is ([`role`]).
+/// **The one role of `roles` called `name`** that starts by a task, or `None` where no such role or more
+/// than one is ([`role`]). A role a trigger starts takes no task, so a task is never filed under it
+/// (`AMB-D-1142`).
 pub(crate) fn role_named(roles: &[crate::model::AutomationRole], name: &str) -> Option<i64> {
-    match roles.iter().filter(|r| r.name == name).collect::<Vec<_>>().as_slice() {
+    let taking = |r: &&crate::model::AutomationRole| r.starts_by == crate::model::RoleStart::Task;
+    match roles.iter().filter(|r| r.name == name).filter(taking).collect::<Vec<_>>().as_slice() {
         [one] => Some(one.id),
         _ => None,
     }
@@ -1380,16 +1386,25 @@ mod tests {
     }
 
     /// **A role its automation does not have exactly one of is refused** — a name no role has, or one two
-    /// roles share — by the launch check first, and by the built-in where a run reaches it anyway, which
-    /// files nothing.
+    /// roles share, or a role a trigger starts, which takes no task (`AMB-D-1142`) — by the launch check
+    /// first, and by the built-in where a run reaches it anyway, which files nothing.
     #[test]
     fn a_role_named_by_no_role_or_by_two_is_refused() {
-        let new_role = |name: &str| automation::NewRole { name: name.into(), ..Default::default() };
-        for (roles, named) in [(vec!["Alice"], "Carol"), (vec!["Alice", "Alice"], "Alice")] {
+        use crate::model::RoleStart;
+        let new_role = |name: &str, starts_by: RoleStart| automation::NewRole {
+            name: name.into(),
+            starts_by: Some(starts_by),
+            ..Default::default()
+        };
+        for (roles, named, starts_by) in [
+            (vec!["Alice"], "Carol", RoleStart::Task),
+            (vec!["Alice", "Alice"], "Alice", RoleStart::Task),
+            (vec!["Alice"], "Alice", RoleStart::Trigger),
+        ] {
             with_tx(|tx| {
                 let p = picture(tx);
                 for name in &roles {
-                    automation::role_add(tx, p.automation.id, new_role(name)).expect("a role");
+                    automation::role_add(tx, p.automation.id, new_role(name, starts_by)).expect("a role");
                 }
                 answer(tx, &p, ROLE, named);
                 let startable = ["claude".to_string()];
@@ -2470,6 +2485,9 @@ mod tests {
             // An axis is required only once it offers a value.
             crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None, None)
                 .expect("required");
+            // The task a failed round is filed as answers it too, or the launch is refused for that instead.
+            crate::ops::automation::update(tx, automation.id, None, None, None, None, Some(&[build.id][..]))
+                .expect("the failed round's classification");
 
             let err = launch_with(tx, &automation, &titled("an issue")).expect_err("no value on it");
             assert!(err.to_string().contains("職能"), "{err}");

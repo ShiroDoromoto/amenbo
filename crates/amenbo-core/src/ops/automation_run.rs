@@ -70,7 +70,8 @@ use crate::model::{
     AutomationPortDirection,
     AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStepStatus, AutomationStep, AutomationStoppedReason, AutomationEdge,
-    RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, StepScript, ACTION_BOUNDARY,
+    RoleStart, RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, StepScript,
+    ACTION_BOUNDARY,
     DEFAULT_EXPECTED_MINUTES, ERROR_EXIT, TakeOrder,
 };
 use crate::ops::automation::{ActionDef, Picture};
@@ -92,9 +93,9 @@ use crate::time::Timestamp;
 /// action placed twice is two boxes with one name, and a screen that opens the box a reason is about has
 /// to know which of the two. So the same gap in an action placed twice is two reasons, one per placement.
 /// The reasons about the automation as a whole ([`Unmet::ExportOnly`], [`Unmet::NoSteps`],
-/// [`Unmet::NoFailuresTo`]) and about a role starting nowhere ([`Unmet::RoleStartsNowhere`]) name none,
-/// and nor do the ones the action's own check finds ([`check_action`]): it is asked with the action on
-/// no picture.
+/// [`Unmet::NoFailuresTo`], [`Unmet::FailureAxisEmpty`]) and about a role starting nowhere
+/// ([`Unmet::RoleStartsNowhere`]) name none, and nor do the ones the action's own check finds
+/// ([`check_action`]): it is asked with the action on no picture.
 ///
 /// **`builtin` is the key of the built-in a name came from** (`AMB-D-964`), and `to_builtin` the same
 /// for `to`. A built-in's step, ways out, inputs and settings are named in the store's Japanese, so a
@@ -114,6 +115,12 @@ pub enum Unmet {
     /// Nobody is chosen to file a failed round to — neither a person nor one of the automation's roles
     /// ([`crate::model::Automation::failures_to`]). A round that fails would have nobody to go to.
     NoFailuresTo,
+    /// An axis the automation's project requires that the classification a failed round's task is filed
+    /// with gives no value ([`crate::model::Automation::failure_values`], `AMB-D-1129`). The task would not
+    /// finish being created, and the failure would reach nobody. A time axis is not one while today falls
+    /// in one of its values' periods: the task is filed under that one, as any task nobody classifies on
+    /// it is. Raised once per axis.
+    FailureAxisEmpty { axis: String },
     /// An action standing on the picture has no step to open — none written yet, or none named as its
     /// entry. A run reaching that spot would have no terminal to put up. Asked of the action alone
     /// ([`check_action`]), it names no placement.
@@ -123,12 +130,26 @@ pub enum Unmet {
     /// meant, so a run is not sent through it. Raised wherever it stands, reached from a role's start or not:
     /// it is a decision left open, not a gap a run would fall into.
     ActionDraft { action: String, placement: i64 },
-    /// A role whose round starts at a placement that is not the built-in that takes a task
-    /// (`AMB-D-1123`). A role works the tasks filed under it, and its round starts by taking one; any
-    /// other start leaves every step after it about nothing. `step` is the action placed there.
+    /// A role started by a task whose round starts at a placement that is not the built-in that takes a
+    /// task (`AMB-D-1123`). Such a role works the tasks filed under it, and its round starts by taking one;
+    /// any other start leaves every step after it about nothing. `step` is the action placed there.
     RoleStartTakesNoTask { role: String, step: String, builtin: Option<String>, placement: i64 },
+    /// A role started by a trigger whose round starts at the built-in that takes a task (`AMB-D-1127`,
+    /// `AMB-D-1132`). A trigger starts its round with no task filed for it, so there is none of its own
+    /// to take there. `step` is the action placed there.
+    RoleStartTakesTask { role: String, step: String, builtin: Option<String>, placement: i64 },
+    /// A built-in that works on the task a run works ([`crate::ops::automation_builtin::NeedsTask`]),
+    /// reached by the round of a role started by a trigger before the round has taken a task
+    /// (`AMB-D-1127`). Such a round starts with none, so the built-in would halt the run there.
+    NeedsTaskNotTaken { role: String, step: String, builtin: Option<String>, placement: i64 },
+    /// The built-in that takes a task standing anywhere but where a role starts (`AMB-D-1132`). Only a
+    /// round's start takes a task; one placed partway through a role has no task of its own to wait for,
+    /// so it is refused for where it stands rather than for the task it would leave open. Raised wherever
+    /// it stands, reached from a role's start or not. `step` is the action placed there.
+    TakeTaskOffStart { step: String, builtin: Option<String>, placement: i64 },
     /// A way out with nothing set to happen after it. The run would reach it and stop. The error way
-    /// out is not one of these — it is carried from birth and halts unless somebody says otherwise.
+    /// out is not one of these — it is carried from birth and halts unless somebody says otherwise —
+    /// nor is a way out of the split by an axis, whose value a role's take keeps out (`AMB-D-1140`).
     ///
     /// `inside` is the step inside the placed action whose way out it is, or `None` for the action's
     /// own way out on the automation's picture. The two read alike, and are mended in different places:
@@ -244,6 +265,12 @@ impl Unmet {
                  `automation update --failures-to`"
                     .to_string()
             }
+            Unmet::FailureAxisEmpty { axis } => {
+                format!(
+                    "the task a failed round is filed as has no value on '{axis}', which this project requires \
+                     — choose one for it"
+                )
+            }
             Unmet::ActionEmpty { action, placement: Some(_) } => {
                 format!("the action '{action}' placed on it has no step to start at")
             }
@@ -260,6 +287,26 @@ impl Unmet {
                 format!(
                     "the role '{role}' starts its round at '{step}', which takes no task — start it at the \
                      built-in 'take_task' with `automation role-update --entry`"
+                )
+            }
+            Unmet::RoleStartTakesTask { role, step, .. } => {
+                format!(
+                    "the role '{role}' starts by a trigger, and its round starts at '{step}', which takes a \
+                     task — start it elsewhere with `automation role-update --entry`, or have it start by a \
+                     task"
+                )
+            }
+            Unmet::NeedsTaskNotTaken { role, step, .. } => {
+                format!(
+                    "the role '{role}' starts by a trigger, with no task, and its round reaches '{step}', which \
+                     works on the run's task, before taking one — file a task and take it on the way \
+                     (make_task), or take '{step}' off its round"
+                )
+            }
+            Unmet::TakeTaskOffStart { step, .. } => {
+                format!(
+                    "'{step}' can only stand where a role starts — start a role there with \
+                     `automation role-update --entry`, or take it off"
                 )
             }
             Unmet::OpenExit { step, exit, .. } => {
@@ -348,10 +395,14 @@ impl Unmet {
             Unmet::NoSteps => ErrorCode::NotReadyAutomationNoSteps,
             Unmet::RoleStartsNowhere { .. } => ErrorCode::NotReadyAutomationRoleStartsNowhere,
             Unmet::NoFailuresTo => ErrorCode::NotReadyAutomationNoFailuresTo,
+            Unmet::FailureAxisEmpty { .. } => ErrorCode::NotReadyAutomationFailureAxisEmpty,
             Unmet::ActionEmpty { placement: Some(_), .. } => ErrorCode::NotReadyAutomationActionEmpty,
             Unmet::ActionEmpty { placement: None, .. } => ErrorCode::NotReadyActionSaveEmpty,
             Unmet::ActionDraft { .. } => ErrorCode::NotReadyAutomationActionDraft,
             Unmet::RoleStartTakesNoTask { .. } => ErrorCode::NotReadyAutomationRoleStartTakesNoTask,
+            Unmet::RoleStartTakesTask { .. } => ErrorCode::NotReadyAutomationRoleStartTakesTask,
+            Unmet::NeedsTaskNotTaken { .. } => ErrorCode::NotReadyAutomationNeedsTaskNotTaken,
+            Unmet::TakeTaskOffStart { .. } => ErrorCode::NotReadyAutomationTakeTaskOffStart,
             Unmet::OpenExit { .. } => ErrorCode::NotReadyAutomationOpenExit,
             Unmet::UnwiredInput { .. } => ErrorCode::NotReadyAutomationUnwiredInput,
             Unmet::UnansweredCfg { .. } => ErrorCode::NotReadyAutomationUnansweredCfg,
@@ -394,8 +445,12 @@ impl Unmet {
         match self {
             Unmet::ExportOnly | Unmet::NoSteps | Unmet::NoFailuresTo => msg,
             Unmet::RoleStartsNowhere { role } => msg.with("role", role),
+            Unmet::FailureAxisEmpty { axis } => msg.with("axis", axis),
             Unmet::ActionEmpty { action, .. } | Unmet::ActionDraft { action, .. } => msg.with("action", action),
-            Unmet::RoleStartTakesNoTask { role, step, .. } => msg.with("role", role).with("step", step),
+            Unmet::RoleStartTakesNoTask { role, step, .. }
+            | Unmet::RoleStartTakesTask { role, step, .. }
+            | Unmet::NeedsTaskNotTaken { role, step, .. } => msg.with("role", role).with("step", step),
+            Unmet::TakeTaskOffStart { step, .. } => msg.with("step", step),
             Unmet::OpenExit { step, exit, .. } => msg.with("step", step).with("exit", exit),
             Unmet::UnwiredInput { step, port, .. } => msg.with("step", step).with("port", port),
             Unmet::UnansweredCfg { step, cfg, .. } | Unmet::MisansweredCfg { step, cfg, .. } => {
@@ -433,12 +488,19 @@ impl Unmet {
     /// the action's own check.
     pub fn placement(&self) -> Option<i64> {
         match self {
-            Unmet::ExportOnly | Unmet::NoSteps | Unmet::NoFailuresTo | Unmet::RoleStartsNowhere { .. } => None,
+            Unmet::ExportOnly
+            | Unmet::NoSteps
+            | Unmet::NoFailuresTo
+            | Unmet::FailureAxisEmpty { .. }
+            | Unmet::RoleStartsNowhere { .. } => None,
             Unmet::ActionEmpty { placement, .. }
             | Unmet::OpenExit { placement, .. }
             | Unmet::UnwiredInput { placement, .. } => *placement,
             Unmet::ActionDraft { placement, .. }
             | Unmet::RoleStartTakesNoTask { placement, .. }
+            | Unmet::RoleStartTakesTask { placement, .. }
+            | Unmet::TakeTaskOffStart { placement, .. }
+            | Unmet::NeedsTaskNotTaken { placement, .. }
             | Unmet::UnansweredCfg { placement, .. }
             | Unmet::MisansweredCfg { placement, .. }
             | Unmet::CfgNotFound { placement, .. }
@@ -470,6 +532,9 @@ impl Unmet {
     fn builtin(&self) -> Option<&str> {
         match self {
             Unmet::RoleStartTakesNoTask { builtin, .. }
+            | Unmet::RoleStartTakesTask { builtin, .. }
+            | Unmet::TakeTaskOffStart { builtin, .. }
+            | Unmet::NeedsTaskNotTaken { builtin, .. }
             | Unmet::OpenExit { builtin, .. }
             | Unmet::UnwiredInput { builtin, .. }
             | Unmet::UnansweredCfg { builtin, .. }
@@ -602,17 +667,25 @@ fn not_found(what: &str, id: i64) -> Error {
 ///
 /// The list is walked in display order, so a person reading it walks their own picture. An automation
 /// kept only to be written out ([`Unmet::ExportOnly`]) has that one reason and no other: its picture is
-/// not mended in place, so nothing found in it is worth saying. Otherwise the list opens with the one
-/// reason that is about the automation's own settings rather than its picture: nobody chosen to
-/// file a failed round to ([`Unmet::NoFailuresTo`]). Two of the rest answer alone, beside that one: an
+/// not mended in place, so nothing found in it is worth saying. Otherwise the list opens with the
+/// reasons that are about the automation's own settings rather than its picture: nobody chosen to
+/// file a failed round to ([`Unmet::NoFailuresTo`]), and each axis the project requires that the task
+/// a failed round is filed as gives no value ([`Unmet::FailureAxisEmpty`]). Both are said together, so
+/// mending one does not bring the other to light afterwards. Two of the rest answer alone, beside those: an
 /// automation with nothing placed on it has nothing else to say about it, and one where a run has
 /// nowhere to start has nothing reachable to say it about — every other check is asked of the
 /// placements a run would actually walk, and with nowhere to start that is none of them.
 ///
 /// **A run starts where the round of its seat's role starts** (`AMB-D-1123`, [`start_of`]), so each
 /// role is asked where that is: one naming no placement on the picture is
-/// [`Unmet::RoleStartsNowhere`], and one naming a placement that is not the built-in that takes a task
-/// is [`Unmet::RoleStartTakesNoTask`].
+/// [`Unmet::RoleStartsNowhere`]. **What it may start at follows from how it starts** (`AMB-D-1127`,
+/// `AMB-D-1132`): a role started by a task starting anywhere but the built-in that takes a task is
+/// [`Unmet::RoleStartTakesNoTask`], and a role started by a trigger starting there is
+/// [`Unmet::RoleStartTakesTask`]. A round started by a trigger holds no task, so one reaching a built-in
+/// that works on the run's task before taking one is [`Unmet::NeedsTaskNotTaken`]
+/// ([`needs_a_task_untaken`]). The other way round, the built-in that takes a task standing where no role
+/// starts is [`Unmet::TakeTaskOffStart`] — once any role says where it starts; a picture whose roles all
+/// start nowhere has that said of each of them instead.
 ///
 /// **What is asked of a placement is asked of the action standing on it**, and then of every step the
 /// action could open ([`steps_opened_by`]): a way out inside with nothing after it and a required input
@@ -1022,6 +1095,23 @@ pub fn carriers(
     Ok(found)
 }
 
+/// **The axes the automation's project requires that the classification a failed round's task is filed
+/// with gives no value**, by name, in the project's order of axes ([`Unmet::FailureAxisEmpty`]). The time
+/// axis's value for today is counted as given where the classification gives none on it, since the
+/// failure is filed under it then ([`crate::ops::automation_stop`]).
+fn failure_axes_empty(conn: &Connection, automation: &Automation) -> Result<Vec<String>> {
+    let mut given: Vec<i64> = automation.failure_values.iter().map(|v| v.dimension_id).collect();
+    let today = crate::time::today();
+    if let Some((axis, _)) = crate::ops::task::time_axis_default(conn, automation.project_id, today, &given)? {
+        given.push(axis);
+    }
+    Ok(read::required_dimensions(conn, automation.project_id, crate::model::ClassifiedSide::Task)?
+        .into_iter()
+        .filter(|(axis, _)| !given.contains(axis))
+        .map(|(_, name)| name)
+        .collect())
+}
+
 /// [`check`], asked of `pic` — the draft or a saved version of `automation` ([`ReadsFrom`]).
 fn check_picture(
     conn: &Connection,
@@ -1040,6 +1130,9 @@ fn check_picture(
     if automation.failures_to.is_none() {
         unmet.push(Unmet::NoFailuresTo);
     }
+    for axis in failure_axes_empty(conn, automation)? {
+        unmet.push(Unmet::FailureAxisEmpty { axis });
+    }
     let placements = &pic.placements;
     if placements.is_empty() {
         unmet.push(Unmet::NoSteps);
@@ -1047,21 +1140,37 @@ fn check_picture(
     }
     let by_id: BTreeMap<i64, &AutomationPlacement> = placements.iter().map(|p| (p.id, p)).collect();
     let routed = role_entries(pic, &by_id);
+    let defs = defs_of(conn, placements)?;
     for role in pic.roles() {
         let Some(start) = role.entry_placement_id.and_then(|id| by_id.get(&id).copied()) else {
             unmet.push(Unmet::RoleStartsNowhere { role: role.name.clone() });
             continue;
         };
-        if !takes_a_task_first(conn, start)? {
-            unmet.push(Unmet::RoleStartTakesNoTask {
-                role: role.name.clone(),
-                step: action_name(conn, start.action_id)?,
-                builtin: action_builtin(conn, start.action_id)?,
-                placement: start.id,
+        // A role started by a task starts at the built-in that takes one, and a role started by a
+        // trigger anywhere but there (`AMB-D-1132`).
+        let takes = takes_a_task_first(conn, start)?;
+        if takes == (role.starts_by == RoleStart::Task) {
+            continue;
+        }
+        let (step, builtin) = (action_name(conn, start.action_id)?, action_builtin(conn, start.action_id)?);
+        let (name, placement) = (role.name.clone(), start.id);
+        unmet.push(match role.starts_by {
+            RoleStart::Task => Unmet::RoleStartTakesNoTask { role: name, step, builtin, placement },
+            RoleStart::Trigger => Unmet::RoleStartTakesTask { role: name, step, builtin, placement },
+        });
+    }
+    for role in pic.roles().iter().filter(|role| role.starts_by == RoleStart::Trigger) {
+        unmet.extend(needs_a_task_untaken(conn, pic, role, &routed, &by_id, &defs)?);
+    }
+    for placement in placements {
+        if takes_a_task_off_start(conn, &routed, placement)? {
+            unmet.push(Unmet::TakeTaskOffStart {
+                step: action_name(conn, placement.action_id)?,
+                builtin: Some(TAKE_TASK.key.to_string()),
+                placement: placement.id,
             });
         }
     }
-    let defs = defs_of(conn, placements)?;
     let live = reachable(&routed, pic, &by_id, &defs);
     let roles = roles_by_placement(pic, &by_id, &defs);
 
@@ -1094,6 +1203,13 @@ fn check_picture(
             // whose roles say where that is (`by_role`) — no line drawn from it is walked, unless the
             // built-in itself stands where a role starts.
             if goes_by_role(&routed, placement.id, def, exit.id) {
+                continue;
+            }
+            // A way out of the split by an axis is one of the axis's values, and a value added to the
+            // axis adds one without anybody touching the automation (`AMB-D-1140`). Leaving it without a
+            // line is how somebody says a task of that value is not this automation's to take — the
+            // role's take is narrowed to keep it out — and a run that gets one anyway stops there (`onward`).
+            if builtin.as_deref() == Some(SPLIT_BY_DIM.key) {
                 continue;
             }
             if !decided(pic, placement.id, exit.id, &by_id) {
@@ -1290,6 +1406,10 @@ fn unrunnable(program: &str, step: &str, placement: i64) -> Option<Unmet> {
 /// takes a task (`AMB-D-1123`). A placement already walked is not walked again, so a line back within
 /// the task — a review sending the work back — is followed once and asked nothing.
 ///
+/// **The built-in that takes a task standing where no role starts is left out**, both as a line's end
+/// and as where a walk begins: it is refused for where it stands ([`Unmet::TakeTaskOffStart`],
+/// `AMB-D-1132`), and the same placement is not refused twice.
+///
 /// **The picture inside an action is opened too.** A line in there can end the run on its own, and
 /// that is the same task left open. What takes a task and what closes one are asked of the action as a
 /// whole: taking is declared on the action's ways out, and the built-in that closes stands on a
@@ -1305,6 +1425,9 @@ fn leaves_task_open(
     let mut unmet = Vec::new();
     for &start in live {
         let Some(placement) = by_id.get(&start) else { continue };
+        if takes_a_task_off_start(conn, &routed, placement)? {
+            continue;
+        }
         let def = &defs[&placement.id];
         let mut lines = Vec::new();
         for exit in def.action_exits() {
@@ -1351,7 +1474,7 @@ fn leaves_task_open(
                 }
             };
             for to in tos {
-                if lets_go_of_the_task(conn, to.action_id)? {
+                if lets_go_of_the_task(conn, to.action_id)? || takes_a_task_off_start(conn, &routed, to)? {
                     continue;
                 }
                 if takes_a_task(conn, pic, to, &defs[&to.id])? {
@@ -1718,10 +1841,72 @@ fn takes_a_task(
     Ok(false)
 }
 
+/// **The built-ins a role started by a trigger reaches before its round takes a task** — each one that
+/// works on the run's task ([`crate::ops::automation_builtin::needs_task`], [`Unmet::NeedsTaskNotTaken`]),
+/// as it is set where it is placed (`AMB-D-1127`).
+///
+/// The round is walked from where the role starts, along the lines drawn, and stops where it takes a task:
+/// a way out that hands on a task taken is not followed, nor is one the built-in is set never to leave by.
+/// Nor does it go into another role's round, which [`round_of`] stops at as well. A placement reached
+/// twice is asked once, and one that is refused is not walked past: what comes after it is not reached
+/// either.
+fn needs_a_task_untaken(
+    conn: &Connection,
+    pic: &Picture,
+    role: &AutomationRole,
+    starts: &[i64],
+    by_id: &BTreeMap<i64, &AutomationPlacement>,
+    defs: &Defs,
+) -> Result<Vec<Unmet>> {
+    let Some(entry) = role.entry_placement_id.filter(|id| by_id.contains_key(id)) else {
+        return Ok(Vec::new());
+    };
+    let mut found = Vec::new();
+    let mut seen = BTreeSet::new();
+    let mut todo = vec![entry];
+    while let Some(id) = todo.pop() {
+        if (id != entry && starts.contains(&id)) || !seen.insert(id) {
+            continue;
+        }
+        let Some(placement) = by_id.get(&id).copied() else { continue };
+        let def = &defs[&id];
+        if let Some(key) = action_builtin(conn, placement.action_id)? {
+            let settings = answers(pic, placement, def);
+            let answer = |name: &str| settings.iter().find(|c| c.name == name).and_then(|c| c.value.as_deref());
+            if crate::ops::automation_builtin::needs_task(&key, answer) {
+                found.push(Unmet::NeedsTaskNotTaken {
+                    role: role.name.clone(),
+                    step: action_name(conn, placement.action_id)?,
+                    builtin: Some(key),
+                    placement: id,
+                });
+                continue;
+            }
+        }
+        let never = never_taken(conn, pic, placement, def)?;
+        for exit in def.action_exits() {
+            if Some(exit.name.as_str()) == never || hands_on_taken(def, exit.id) {
+                continue;
+            }
+            if let Some(next) = pic.edge_for_exit(id, exit.id).and_then(|e| e.to_id) {
+                todo.push(next);
+            }
+        }
+    }
+    Ok(found)
+}
+
 /// **Whether a round started at `placement` takes a task before anything else** — the action standing
-/// there is the built-in that takes one, which is what every role's round starts at (`AMB-D-1123`).
+/// there is the built-in that takes one, which is what every round of a role started by a task starts at
+/// (`AMB-D-1123`), and what stands nowhere else (`AMB-D-1132`).
 fn takes_a_task_first(conn: &Connection, placement: &AutomationPlacement) -> Result<bool> {
     Ok(action_builtin(conn, placement.action_id)?.as_deref() == Some(TAKE_TASK.key))
+}
+
+/// **Whether `placement` is the built-in that takes a task, standing where no role starts** — in an
+/// automation whose roles say where they start (`routed`, [`role_entries`]). [`Unmet::TakeTaskOffStart`].
+fn takes_a_task_off_start(conn: &Connection, routed: &[i64], placement: &AutomationPlacement) -> Result<bool> {
+    Ok(!routed.is_empty() && !routed.contains(&placement.id) && takes_a_task_first(conn, placement)?)
 }
 
 /// Whether anything actually reaches one input — the action's input port `port_id`, on this placement.
@@ -3262,6 +3447,9 @@ fn past_the_task_checks(unmet: &Unmet) -> bool {
         unmet,
         Unmet::RoleStartsNowhere { .. }
             | Unmet::RoleStartTakesNoTask { .. }
+            | Unmet::RoleStartTakesTask { .. }
+            | Unmet::TakeTaskOffStart { .. }
+            | Unmet::NeedsTaskNotTaken { .. }
             | Unmet::LeavesTaskOpen { .. }
             | Unmet::HandsOnTaskTaken { .. }
     )
@@ -4008,9 +4196,15 @@ pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64
         // **An error way out nobody drew a line from halts the run**, and the round is filed as a failure
         // — which is why the launch check never asks for one. That holds for the step's own error way
         // out left without a line inside the action, and for one returned to an action's way out the
-        // automation draws nothing after: the launch check lets that through only for the action's
-        // error way out, and a run holds its pictures still, so no other can be left bare here.
-        if taken.name == ERROR_EXIT || taken.returns_to.is_some() {
+        // automation draws nothing after: the launch check lets that through for the action's error way
+        // out, and a run holds its pictures still.
+        if taken.name == ERROR_EXIT {
+            return Ok(Onward::Halt);
+        }
+        // **A value's way out of the split left without a line** is the other one the launch check
+        // lets through (`AMB-D-1140`): nothing says what follows it, so the run stops there and the
+        // round is filed as a failure like any other with nowhere to go.
+        if taken.returns_to.is_some() && def.builtin.as_deref() != Some(SPLIT_BY_DIM.key) {
             return Ok(Onward::Halt);
         }
         return Ok(Onward::Nowhere);
@@ -4674,7 +4868,7 @@ mod tests {
             );
 
             let (automation, _, _) = launchable(tx);
-            automation::update(tx, automation.id, None, None, None, Some(None)).expect("leave it unsaid");
+            automation::update(tx, automation.id, None, None, None, Some(None), None).expect("leave it unsaid");
             assert_eq!(
                 check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
                 vec![Unmet::NoFailuresTo],
@@ -4695,9 +4889,103 @@ mod tests {
             )
             .expect("a role");
             let to_role = Some(Some(FailuresTo::Role { role_id: role.id }));
-            automation::update(tx, automation.id, None, None, None, to_role).expect("to the role");
+            automation::update(tx, automation.id, None, None, None, to_role, None).expect("to the role");
             assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), vec![]);
             launch(tx, automation.id, &here(&claude())).expect("launch");
+        });
+    }
+
+    /// **An axis the project requires that the failed round's classification gives no value is refused**
+    /// — by the check, by a launch and by a save, once per axis and beside nobody being chosen to file to
+    /// — while writing the classification itself is not. Naming a value on each is what lets it go. A
+    /// value of another project's, two values of one axis and a closed value are refused where they are
+    /// written. Removing a value the classification names takes it off, or moves it where the value's
+    /// tasks move.
+    #[test]
+    fn a_required_axis_the_failed_rounds_classification_leaves_empty_is_refused() {
+        use crate::ops::dimension::{self, NewDimension};
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let project = automation.project_id;
+            let named = |name: &str| NewDimension { name: name.into(), ..Default::default() };
+            // An axis is required only once it offers a value.
+            let require = |tx: &WriteTx<'_>, axis: i64| {
+                dimension::update(tx, axis, None, None, None, None, None, None, Some(true), None, None, None)
+                    .expect("required");
+            };
+            let theme = dimension::add(tx, project, named("テーマ")).expect("an axis");
+            let first = dimension::value_add(tx, theme.id, "画面", None).expect("a value");
+            let second = dimension::value_add(tx, theme.id, "記録", None).expect("a value");
+            require(tx, theme.id);
+            let closable = NewDimension { role: crate::model::DimensionRole::Closable, ..named("作業種別") };
+            let kind = dimension::add(tx, project, closable).expect("an axis");
+            let build = dimension::value_add(tx, kind.id, "実装", None).expect("a value");
+            let closed = dimension::value_add(tx, kind.id, "調査", None).expect("a value");
+            dimension::value_set_closed(tx, closed.id, true).expect("close it");
+            require(tx, kind.id);
+            let empty = |axis: &str| Unmet::FailureAxisEmpty { axis: axis.into() };
+
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
+                vec![empty("テーマ"), empty("作業種別")],
+            );
+            let refused = launch(tx, automation.id, &here(&claude())).expect_err("no value on a required axis");
+            assert_eq!(refused.error_code(), ErrorCode::NotReadyAutomation, "{refused}");
+            assert!(refused.to_string().contains("テーマ"), "{refused}");
+            let refused = automation::save(tx, automation.id, None).expect_err("a save asks the same");
+            assert!(matches!(refused, Error::NotReady(_)), "{refused}");
+            assert_eq!(empty("テーマ").placement(), None);
+            assert_eq!(empty("テーマ").code(), ErrorCode::NotReadyAutomationFailureAxisEmpty);
+
+            let written = automation::update(tx, automation.id, None, None, None, Some(None), Some(&[first.id][..]))
+                .expect("one axis at a time is written");
+            assert_eq!(written.failure_values.len(), 1);
+            assert_eq!(
+                check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"),
+                vec![Unmet::NoFailuresTo, empty("作業種別")],
+                "both said together",
+            );
+
+            let other = mk_project(tx, "other");
+            let elsewhere = dimension::add(tx, other, named("テーマ")).expect("an axis");
+            let theirs = dimension::value_add(tx, elsewhere.id, "画面", None).expect("a value");
+            let both = [first.id, theirs.id];
+            automation::update(tx, automation.id, None, None, None, None, Some(&both[..]))
+                .expect_err("another project's value");
+            let both = [first.id, second.id];
+            automation::update(tx, automation.id, None, None, None, None, Some(&both[..]))
+                .expect_err("two values of one axis");
+            let both = [first.id, closed.id];
+            automation::update(tx, automation.id, None, None, None, None, Some(&both[..]))
+                .expect_err("a closed value");
+            let kept: Vec<i64> = read::automation(tx.conn(), automation.id)
+                .expect("read")
+                .expect("there")
+                .failure_values
+                .iter()
+                .map(|v| v.value_id)
+                .collect();
+            assert_eq!(kept, vec![first.id], "a refusal writes nothing");
+
+            let both = [first.id, build.id];
+            let to = Some(Some(crate::model::FailuresTo::Human));
+            automation::update(tx, automation.id, None, None, None, to, Some(&both[..])).expect("both axes");
+            assert_eq!(check(tx.conn(), automation.id, Some(&claude()), nothing_asked(), None).expect("check"), vec![]);
+            launch(tx, automation.id, &here(&claude())).expect("launch");
+
+            dimension::value_delete(tx, first.id, Some(second.id)).expect("move what is on it");
+            let values_on = |tx: &WriteTx<'_>| -> Vec<i64> {
+                read::automation(tx.conn(), automation.id)
+                    .expect("read")
+                    .expect("there")
+                    .failure_values
+                    .iter()
+                    .map(|v| v.value_id)
+                    .collect()
+            };
+            assert_eq!(values_on(tx), vec![second.id, build.id], "moved where the tasks move");
+            dimension::delete(tx, kind.id).expect("the axis goes");
+            assert_eq!(values_on(tx), vec![second.id], "and its value with it");
         });
     }
 
@@ -4801,13 +5089,119 @@ mod tests {
                 builtin: None,
                 placement: placement.id,
             };
-            assert_eq!(checked(tx, &automation), vec![refused.clone()]);
+            // The take the role started at before stands where no role starts now — a reason of its own.
+            let unmet = checked(tx, &automation);
+            assert!(
+                matches!(unmet.as_slice(), [first, Unmet::TakeTaskOffStart { .. }] if *first == refused),
+                "{unmet:?}",
+            );
             assert_eq!(refused.placement(), Some(placement.id));
             assert_eq!(refused.code(), ErrorCode::NotReadyAutomationRoleStartTakesNoTask);
             let id = placement.id.to_string();
             let msg = refused.msg();
             let named: Vec<(&str, &str)> = msg.fields().iter().collect();
             assert_eq!(named, vec![("placement", id.as_str()), ("role", role.name.as_str()), ("step", "直す")]);
+        });
+    }
+
+    /// Have the role `automation` was born with start by a trigger, at `placement`.
+    fn started_by_a_trigger(tx: &WriteTx<'_>, automation: &Automation, placement: i64) -> crate::model::AutomationRole {
+        let change = automation::RoleChange {
+            starts_by: Some(RoleStart::Trigger),
+            entry_placement_id: Some(Some(placement)),
+            ..automation::RoleChange::default()
+        };
+        automation::role_update(tx, born(tx, automation).id, change).expect("start by a trigger, there")
+    }
+
+    /// **A role started by a trigger starting its round at the built-in that takes a task is refused**
+    /// (`AMB-D-1127`, `AMB-D-1132`): a trigger files no task for it to take there.
+    #[test]
+    fn a_role_started_by_a_trigger_that_starts_at_what_takes_a_task_is_refused() {
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let taking = born(tx, &automation).entry_placement_id.expect("where it starts");
+            let role = started_by_a_trigger(tx, &automation, taking);
+            let take = read::automation_action(tx.conn(), born_action(tx, taking)).expect("read").expect("action");
+            let refused = Unmet::RoleStartTakesTask {
+                role: role.name.clone(),
+                step: take.name.clone(),
+                builtin: Some(TAKE_TASK.key.into()),
+                placement: taking,
+            };
+            assert_eq!(checked(tx, &automation), vec![refused.clone()]);
+            assert_eq!(refused.placement(), Some(taking));
+            assert_eq!(refused.code(), ErrorCode::NotReadyAutomationRoleStartTakesTask);
+            let id = taking.to_string();
+            let msg = refused.msg();
+            let named: Vec<(&str, &str)> = msg.fields().iter().collect();
+            assert_eq!(
+                named,
+                vec![
+                    ("builtin", TAKE_TASK.key),
+                    ("placement", id.as_str()),
+                    ("role", role.name.as_str()),
+                    ("step", take.name.as_str())
+                ]
+            );
+        });
+    }
+
+    /// The action standing on a placement.
+    fn born_action(tx: &WriteTx<'_>, placement: i64) -> i64 {
+        read::automation_placement(tx.conn(), placement).expect("read").expect("placement").action_id
+    }
+
+    /// **A role started by a trigger starts anywhere but the built-in that takes a task**, and its round
+    /// is refused where it reaches a built-in that works on the run's task before taking one
+    /// (`AMB-D-1127`). Filing a task and taking it on the way is what lets the round go on to close it.
+    #[test]
+    fn a_round_started_by_a_trigger_may_not_reach_what_needs_a_task_before_taking_one() {
+        use crate::ops::automation_builtin_make::{MADE_AND_TAKEN, TAKE_IT, TITLE, WHAT_THEN};
+        with_tx(|tx| {
+            let automation = mk_automation(tx, "次の仕事を決める");
+            let (look, looking) = mk_placed(tx, &automation, "決める", "decide the next work", "claude");
+            let role = started_by_a_trigger(tx, &automation, looking.id);
+            assert_eq!(checked(tx, &automation), vec![Unmet::OpenExit {
+                step: "決める".into(),
+                exit: crate::model::DONE_EXIT.into(),
+                builtin: None,
+                placement: Some(looking.id),
+                inside: None,
+            }], "it starts where it is set to, at what takes no task");
+
+            let close = crate::ops::test_support::mk_closed_after(tx, &automation, looking.id, None);
+            let closing = read::automation_action(tx.conn(), close.action_id).expect("read").expect("action");
+            let refused = Unmet::NeedsTaskNotTaken {
+                role: role.name.clone(),
+                step: closing.name.clone(),
+                builtin: Some(crate::ops::automation_builtin_close::CLOSE_TASK.key.into()),
+                placement: close.id,
+            };
+            assert_eq!(checked(tx, &automation), vec![refused.clone()]);
+            assert_eq!(refused.placement(), Some(close.id));
+            assert_eq!(refused.code(), ErrorCode::NotReadyAutomationNeedsTaskNotTaken);
+
+            let on = AutomationPictureOwner::Automation;
+            let line = read::automation_edge_for_exit(
+                tx.conn(),
+                on,
+                looking.id,
+                exit_id(tx, crate::model::AutomationOwner::Action, look.id, None),
+            )
+            .expect("read")
+            .expect("the line to the close");
+            automation::edge_delete(tx, line.id).expect("unhook the close");
+            let make = crate::ops::automation_builtin::action(tx, "make_task").expect("the built-in's action");
+            let making = automation::placement_add(tx, automation.id, make.id).expect("place it");
+            automation::cfg_set(tx, making.id, WHAT_THEN, Some(&serde_json::to_string(TAKE_IT).expect("json")))
+                .expect("take it");
+            mk_out(tx, &look, None, TITLE, AutomationPortKind::Value, true);
+            automation::wire_add(tx, on, looking.id, None, TITLE, making.id, TITLE).expect("the title");
+            automation::edge_add(tx, on, looking.id, None, EdgeTarget::Go(making.id), None).expect("decide → file");
+            automation::edge_add(tx, on, making.id, Some(MADE_AND_TAKEN), EdgeTarget::Go(close.id), None)
+                .expect("file and take → close");
+            assert_eq!(checked(tx, &automation), vec![], "the close comes after a task is taken");
         });
     }
 
@@ -4826,6 +5220,59 @@ mod tests {
                     [Unmet::LeavesTaskOpen { to: Some(_), to_builtin: Some(key), placement, .. }]
                         if key == TAKE_TASK.key && *placement == working.id
                 ),
+                "{unmet:?}",
+            );
+        });
+    }
+
+    /// **The built-in that takes a task, placed partway through a role, is refused for where it stands**
+    /// (`AMB-D-1132`) — and only for that: the line going on to it is not also refused as one that
+    /// leaves the task open.
+    #[test]
+    fn a_take_placed_partway_through_a_role_is_refused_for_where_it_stands() {
+        with_tx(|tx| {
+            let (automation, _, _, working) = taken_then_worked(tx);
+            let again = takes_first(tx, &automation);
+            let on = AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, working.id, None, EdgeTarget::Go(again.id), None).expect("work → take");
+            let take = read::automation_action(tx.conn(), again.action_id).expect("read").expect("the built-in's action");
+            let refused = Unmet::TakeTaskOffStart {
+                step: take.name.clone(),
+                builtin: Some(TAKE_TASK.key.into()),
+                placement: again.id,
+            };
+            assert_eq!(checked(tx, &automation), vec![refused.clone()]);
+            assert_eq!(refused.placement(), Some(again.id));
+            assert_eq!(refused.code(), ErrorCode::NotReadyAutomationTakeTaskOffStart);
+            let id = again.id.to_string();
+            let msg = refused.msg();
+            let named: Vec<(&str, &str)> = msg.fields().iter().collect();
+            assert_eq!(
+                named,
+                vec![("builtin", TAKE_TASK.key), ("placement", id.as_str()), ("step", take.name.as_str())],
+            );
+            let refused = launch(tx, automation.id, &here(&claude())).expect_err("refused");
+            assert!(refused.to_string().contains("can only stand where a role starts"), "{refused}");
+        });
+    }
+
+    /// **One that no line reaches is refused all the same** (`AMB-D-1132`): it is refused for standing
+    /// there, not for what a run would meet.
+    #[test]
+    fn a_take_standing_where_no_role_starts_is_refused_though_nothing_reaches_it() {
+        with_tx(|tx| {
+            let (automation, _, _, working) = taken_then_worked(tx);
+            let close = crate::ops::automation_builtin::action(tx, "close_task").expect("close");
+            let closing = automation::placement_add(tx, automation.id, close.id).expect("place close");
+            let on = AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, working.id, None, EdgeTarget::Go(closing.id), None).expect("work → close");
+            automation::edge_add(tx, on, closing.id, None, EdgeTarget::Done, None).expect("close → end");
+            assert_eq!(checked(tx, &automation), vec![], "the take stands where the role starts");
+
+            let aside = takes_first(tx, &automation);
+            let unmet = checked(tx, &automation);
+            assert!(
+                matches!(unmet.as_slice(), [Unmet::TakeTaskOffStart { placement, .. }] if *placement == aside.id),
                 "{unmet:?}",
             );
         });
@@ -5742,7 +6189,7 @@ mod tests {
             let startable = claude();
             let closed = Launcher { workspace_open: Some(false), ..here(&startable) };
             assert!(launch(tx, automation.id, &closed).is_err());
-            automation::update(tx, automation.id, None, None, Some(true), None).expect("archive");
+            automation::update(tx, automation.id, None, None, Some(true), None, None).expect("archive");
             assert!(launch(tx, automation.id, &here(&claude())).is_err());
         });
     }
@@ -5812,7 +6259,7 @@ mod tests {
             let again = automation::save(tx, automation.id, None).expect("save with nothing written");
             assert_eq!(again.id, first.id, "nothing written since, so no new version");
 
-            automation::update(tx, automation.id, Some("2件やりきる"), None, None, None).expect("rename");
+            automation::update(tx, automation.id, Some("2件やりきる"), None, None, None, None).expect("rename");
             assert!(
                 !automation::unsaved(tx.conn(), automation.id).expect("unsaved"),
                 "the name is not part of a version",
@@ -5831,7 +6278,7 @@ mod tests {
         with_tx(|tx| {
             let startable = claude();
             let (automation, _, _) = launchable(tx);
-            automation::update(tx, automation.id, None, None, Some(true), None).expect("archive");
+            automation::update(tx, automation.id, None, None, Some(true), None, None).expect("archive");
             let err = launch(tx, automation.id, &here(&startable)).expect_err("archived");
             let Error::Invalid(msg) = err else { panic!("an archived automation is invalid") };
             assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationArchived));
@@ -5840,7 +6287,7 @@ mod tests {
                 vec!["automation"],
             );
 
-            automation::update(tx, automation.id, None, None, Some(false), None).expect("bring back");
+            automation::update(tx, automation.id, None, None, Some(false), None, None).expect("bring back");
             let closed = Launcher { workspace_open: Some(false), ..here(&startable) };
             let err = launch(tx, automation.id, &closed).expect_err("closed");
             let Error::Invalid(msg) = err else { panic!("a closed workspace is invalid") };
@@ -6092,7 +6539,7 @@ mod tests {
             let Error::Invalid(msg) = err else { panic!("an automation with runs is invalid to delete") };
             assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationHasRuns));
             assert_eq!(msg.fields().iter().collect::<Vec<_>>(), vec![("count", "1")]);
-            automation::update(tx, automation.id, None, None, Some(true), None).expect("archiving is the way instead");
+            automation::update(tx, automation.id, None, None, Some(true), None, None).expect("archiving is the way instead");
         });
     }
 

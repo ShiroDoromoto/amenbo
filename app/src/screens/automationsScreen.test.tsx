@@ -661,6 +661,7 @@ describe("the start press on the build screen's head", () => {
     const given = [
       reason("not_ready_automation_role_starts_nowhere", { role: "Reviewer" }),
       reason("not_ready_automation_role_start_takes_no_task", { role: "Builder", step: "Read" }),
+      reason("not_ready_automation_take_task_off_start", { step: "Take" }),
       reason("not_ready_automation_open_exit", { step: "Read", exit: "again" }),
       reason("not_ready_automation_unwired_input", { step: "Write", port: "folder" }),
       reason("not_ready_automation_unanswered_cfg", { step: "Write", cfg: "filter" }),

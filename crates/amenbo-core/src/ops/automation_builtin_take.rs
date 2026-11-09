@@ -41,7 +41,7 @@ use crate::error::Result;
 use crate::model::{AutomationCfgKind, AutomationPortKind, AutomationRun, RunDefCfg, TakeOrder};
 use crate::ops::automation_builtin::{
     answer, Builtin, BuiltinExit, BuiltinPort, BuiltinSetting, Carried, Carry, HeldBack, HeldByRecord,
-    HeldByValue, Waits, Work,
+    HeldByValue, NeedsTask, Waits, Work,
 };
 use crate::ops::automation_report;
 use crate::ops::automation_run::{roles_started, take_order};
@@ -117,6 +117,7 @@ pub(crate) const TAKE_TASK: Builtin = Builtin {
         held_back,
     }),
     chooses: None,
+    needs_task: NeedsTask::No,
     work: Work::InStore(take),
 };
 
@@ -2014,7 +2015,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             let (automation, [(builder, _), (reviewer, _)]) = by_role(tx, project);
             let to = Some(Some(FailuresTo::Role { role_id: reviewer }));
-            automation::update(tx, automation.id, None, None, None, to).expect("to the reviewer");
+            automation::update(tx, automation.id, None, None, None, to, None).expect("to the reviewer");
             let built = for_ai(tx, "to build", project, None);
             give_to(tx, built, builder);
 

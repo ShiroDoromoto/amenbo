@@ -1522,6 +1522,31 @@ pub const STEPS: &[Step] = &[
         // filled from now on. No task is touched.
         apply: Apply::Custom(take_the_wait_off_the_automation),
     },
+    Step {
+        to: 136,
+        name: "add automation_failure_value, the classification a failed round's task is filed with",
+        // **Not seeded: no row for any automation.** Which value of an axis a failed round's task should
+        // carry is the person's to say, not Amenbo's to guess. An automation in a project with a required
+        // axis is refused at its next save and launch until a person says. No task is touched.
+        apply: Apply::Sql(
+            "CREATE TABLE IF NOT EXISTS automation_failure_value (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    dimension_id BIGINT NOT NULL DEFAULT 0 REFERENCES dimension(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    value_id BIGINT NOT NULL DEFAULT 0 REFERENCES dimension_value(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    UNIQUE (automation_id, dimension_id)
+);",
+        ),
+    },
+    Step {
+        to: 137,
+        name: "add automation_role.starts_by, how a role starts its round",
+        // **Every role starts by a task**, and so does every role a saved version holds, so a draft is
+        // not taken for one changed since. That is how every role started until now. No task is touched.
+        apply: Apply::Custom(let_each_role_start_by_a_task),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -1900,6 +1925,49 @@ fn take_the_wait_off_the_automation(ctx: &Ctx<'_>) -> Result<()> {
     let tx = ctx.tx;
     if column_names(tx, "automation")?.iter().any(|c| c == "waits_for_task_since") {
         tx.execute_batch("ALTER TABLE automation DROP COLUMN waits_for_task_since;")?;
+    }
+    Ok(())
+}
+
+/// v137: `automation_role.starts_by`, how a role starts its round, `task` on every row already there —
+/// the only way a role started until now (`AMB-D-1127`).
+///
+/// **The roles a saved version holds are given the same `task`**, for v129's reason: a role read back
+/// with a way of starting next to one saved without would make every automation look changed. A version
+/// that holds no role (`[]`) is not touched.
+///
+/// **Only the automation tables are read and written.** Added only where it is not there yet, v68's
+/// guard and for v53's reason.
+fn let_each_role_start_by_a_task(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_role")?.iter().any(|c| c == "starts_by") {
+        tx.execute_batch("ALTER TABLE automation_role ADD COLUMN starts_by TEXT NOT NULL DEFAULT 'task';")?;
+    }
+
+    let mut versions: Vec<(i64, String)> = Vec::new();
+    {
+        let mut stmt = tx.prepare("SELECT id, roles FROM automation_version WHERE roles NOT IN ('', '[]')")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        for row in rows {
+            versions.push(row?);
+        }
+    }
+    for (version_id, roles) in versions {
+        let Ok(mut roles) = serde_json::from_str::<Vec<serde_json::Value>>(&roles) else { continue };
+        let mut changed = false;
+        for role in roles.iter_mut() {
+            let Some(map) = role.as_object_mut() else { continue };
+            if !map.contains_key("starts_by") {
+                map.insert("starts_by".to_string(), serde_json::Value::from("task"));
+                changed = true;
+            }
+        }
+        if changed {
+            tx.execute(
+                "UPDATE automation_version SET roles = ?1 WHERE id = ?2",
+                rusqlite::params![serde_json::Value::Array(roles).to_string(), version_id],
+            )?;
+        }
     }
     Ok(())
 }
@@ -13278,10 +13346,6 @@ mod tests {
         assert_eq!((planned[0].1.as_str(), planned[0].2, planned[0].3), ("計画から起票（amenbo）の係", 1, None));
         assert_eq!(saved(1)[0]["id"], serde_json::json!(planned[0].0), "the version holds the same role");
         assert_eq!(saved(1)[0]["name"], serde_json::json!("計画から起票（amenbo）の係"));
-        assert!(
-            !crate::ops::automation::unsaved(engine.conn(), 1).unwrap(),
-            "the draft still reads as its newest version"
-        );
 
         let developing = roles(2);
         assert_eq!(developing.len(), 1);
@@ -13298,6 +13362,12 @@ mod tests {
             .unwrap();
         let later: i64 = engine.conn().query_row("SELECT MAX(id) FROM automation_role", [], |r| r.get(0)).unwrap();
         assert!(later > reserved, "a role written later is not given it");
+        // The ops read a role the way the newest version writes it, so the draft is compared there.
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        assert!(
+            !crate::ops::automation::unsaved(engine.conn(), 1).unwrap(),
+            "the draft still reads as its newest version"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -13501,6 +13571,43 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// v136: an automation written before the step arrives with no classification for its failed round's
+    /// task — which value that is was nobody's to say — and one value per axis can be written after.
+    #[test]
+    fn an_automation_written_before_v136_names_no_failure_classification() {
+        let dir = scratch("automation-failure-value");
+        let engine = store_at(&dir, 135);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO dimension (id, project_id, name) VALUES (1, 1, 'テーマ');
+                 INSERT INTO dimension_value (id, dimension_id, name) VALUES (1, 1, '画面'), (2, 1, '記録');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let rows: i64 =
+            engine.conn().query_row("SELECT COUNT(*) FROM automation_failure_value", [], |r| r.get(0)).unwrap();
+        assert_eq!(rows, 0, "nothing is guessed");
+        engine
+            .conn()
+            .execute(
+                "INSERT INTO automation_failure_value (automation_id, dimension_id, value_id) VALUES (1, 1, 1)",
+                [],
+            )
+            .unwrap();
+        let second = engine.conn().execute(
+            "INSERT INTO automation_failure_value (automation_id, dimension_id, value_id) VALUES (1, 1, 2)",
+            [],
+        );
+        assert!(second.is_err(), "one value per axis");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// v133: a round written before the step names no seat — the order runs left their seats in was not
     /// kept — and a seat can be written on it after.
     #[test]
@@ -13525,6 +13632,56 @@ mod tests {
             engine.conn().query_row("SELECT seat FROM automation_run_task WHERE id = 1", [], |r| r.get(0)).unwrap();
         assert_eq!(seat, None, "no seat was kept before");
         engine.conn().execute("UPDATE automation_run_task SET seat = 2 WHERE id = 1", []).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v137: every role written before the step starts by a task, and so does every role a saved version
+    /// holds, so the draft still reads as its newest version.
+    #[test]
+    fn every_role_written_before_v137_starts_by_a_task() {
+        let dir = scratch("automation-role-starts-by");
+        let engine = store_at(&dir, 136);
+        let role = r#"{"id":1,"automation_id":1,"name":"reviewer","headcount":2,"take_order":"due","icon":null,"entry_placement_id":null,"agent":null,"model":null,"order_key":"m","created_at":"2026-11-10T00:00:00Z","updated_at":"2026-11-10T00:00:00Z"}"#;
+        engine
+            .conn()
+            .execute_batch(&format!(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 1, 'work', 'm', '{at}', '{at}'), (2, 1, 'none', 'n', '{at}', '{at}');
+                 INSERT INTO automation_role (id, automation_id, name, headcount, take_order, order_key, created_at, updated_at)
+                 VALUES (1, 1, 'reviewer', 2, 'due', 'm', '{at}', '{at}');
+                 INSERT INTO automation_version (id, automation_id, version, placements, cfgs, placement_steps, edges, wires, roles, created_at, updated_at)
+                 VALUES (1, 1, 1, '[]', '[]', '[]', '[]', '[]', '[{role}]', '{at}', '{at}'),
+                        (2, 2, 1, '[]', '[]', '[]', '[]', '[]', '[]', '{at}', '{at}');",
+                at = "2026-11-10T00:00:00Z"
+            ))
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let start: String =
+            engine.conn().query_row("SELECT starts_by FROM automation_role WHERE id = 1", [], |r| r.get(0)).unwrap();
+        assert_eq!(start, "task");
+        let saved = |id: i64| -> serde_json::Value {
+            let roles: String = engine
+                .conn()
+                .query_row("SELECT roles FROM automation_version WHERE id = ?1", [id], |r| r.get(0))
+                .unwrap();
+            serde_json::from_str(&roles).unwrap()
+        };
+        assert_eq!(saved(1)[0]["starts_by"], serde_json::json!("task"), "the role the version holds too");
+        assert_eq!(saved(1)[0]["take_order"], serde_json::json!("due"), "the rest of it is kept");
+        assert_eq!(saved(2), serde_json::json!([]), "a version with no role is left as it was");
+        assert!(
+            !crate::ops::automation::unsaved(engine.conn(), 1).unwrap(),
+            "the draft still reads as its newest version"
+        );
+        // Which words are taken is the ops' to check, not the store's: no `CHECK` turns one away.
+        engine
+            .conn()
+            .execute("INSERT INTO automation_role (automation_id, name, starts_by) VALUES (1, 'さくら', 'trigger')", [])
+            .unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

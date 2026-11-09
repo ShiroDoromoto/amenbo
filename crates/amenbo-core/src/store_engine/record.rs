@@ -24,7 +24,7 @@ use crate::model::{
     AutomationEdge, AutomationExit, AutomationPlacement, AutomationPlacementStep, AutomationPort,
     AutomationLaunch, AutomationLaunchRole, AutomationRole, AutomationRun, AutomationRunDef,
     AutomationRunPass, AutomationRunStep, AutomationRunTask, AutomationRunValue,
-    AutomationStep, AutomationTrigger, AutomationVersion, TriggerTask, TriggerWhen,
+    AutomationFailureValue, AutomationStep, AutomationTrigger, AutomationVersion, TriggerTask, TriggerWhen,
     AutomationWire, Database, Decision, DecisionComment, DecisionDimensionValue,
     DecisionEdge, DecisionMadeIn, DecisionTaskLink,
     Dimension, DimensionValue, NotifyTarget,
@@ -571,6 +571,22 @@ pub fn automation(a: &Automation) -> Record {
     )
 }
 
+pub fn automation_failure_value(v: &AutomationFailureValue) -> Record {
+    Record::new(
+        "automation_failure_value",
+        v.id,
+        with_audit(
+            vec![
+                ("automation_id", kv(v.automation_id)),
+                ("dimension_id", kv(v.dimension_id)),
+                ("value_id", kv(v.value_id)),
+            ],
+            &v.created_at,
+            &v.updated_at,
+        ),
+    )
+}
+
 pub fn automation_trigger(t: &AutomationTrigger) -> Record {
     let [script_program, script_args, script_timeout_minutes] = script_values(&t.script);
     let [task_script_program, task_script_args, task_script_timeout_minutes] =
@@ -669,6 +685,7 @@ pub fn automation_role(r: &AutomationRole) -> Record {
                 ("order_key", tv(&r.order_key)),
                 ("headcount", iv(r.headcount.into())),
                 ("take_order", tv(r.take_order.as_str())),
+                ("starts_by", tv(r.starts_by.as_str())),
             ],
             &r.created_at,
             &r.updated_at,

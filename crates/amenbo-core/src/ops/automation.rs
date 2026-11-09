@@ -50,7 +50,8 @@ use crate::model::{
     AutomationStep, AutomationVersion, AutomationWire, StepScript, ACTION_BOUNDARY,
     DEFAULT_MAX_TIMES, DEFAULT_ROLE_HEADCOUNT, DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
     ERROR_EXIT, FailuresTo, MAX_EXPECTED_MINUTES, MAX_ROLE_HEADCOUNT, MAX_SCRIPT_TIMEOUT_MINUTES,
-    AutomationTrigger, TakeOrder, TriggerCondition, TriggerTask, TriggerWhen, MIN_TRIGGER_EVERY_MINUTES,
+    AutomationFailureValue, AutomationTrigger, RoleStart, TakeOrder, TriggerCondition, TriggerTask, TriggerWhen,
+    MIN_TRIGGER_EVERY_MINUTES,
 };
 use crate::ops::{automation_builtin, automation_run, emit_create, emit_update, place, Position};
 use crate::store_engine::{read, record, WriteTx};
@@ -1296,6 +1297,7 @@ pub(crate) fn add_with_no_role(tx: &WriteTx<'_>, project_id: i64, new: NewAutoma
         notes: new.notes,
         archived: false,
         failures_to: new.failures_to,
+        failure_values: Vec::new(),
         export_only: false,
         triggers: Vec::new(),
         stopped: false,
@@ -1308,13 +1310,22 @@ pub(crate) fn add_with_no_role(tx: &WriteTx<'_>, project_id: i64, new: NewAutoma
 }
 
 /// A failed round of an automation is filed to a person or to one of **its own** roles — a role of
-/// another automation is not one this automation's runs know.
+/// another automation is not one this automation's runs know — and to a role whose round starts by a
+/// task: one a trigger starts takes no task, so the task filed would never be worked (`AMB-D-1142`).
 fn checked_failures_to(tx: &WriteTx<'_>, automation_id: i64, to: Option<FailuresTo>) -> Result<()> {
     let Some(FailuresTo::Role { role_id }) = to else { return Ok(()) };
-    if live_role(tx, role_id)?.automation_id != automation_id {
+    let role = live_role(tx, role_id)?;
+    if role.automation_id != automation_id {
         return Err(Error::invalid(format!(
             "role '{role_id}' belongs to another automation, so a failed round of this one cannot be filed \
              to it"
+        )));
+    }
+    if role.starts_by == RoleStart::Trigger {
+        return Err(Error::invalid(format!(
+            "role '{}' starts its round by a trigger and takes no task, so a failed round cannot be filed to \
+             it — choose a role that starts by a task, or a person",
+            role.name
         )));
     }
     Ok(())
@@ -1333,12 +1344,18 @@ fn checked_trigger_role(conn: &Connection, automation_id: i64, role_id: Option<i
     Ok(())
 }
 
-/// Change an automation's name, notes, whether it is archived, or where a failed round is filed. Only
-/// the `Some` fields are written. Archiving takes nothing away: it is what keeps an automation nobody
-/// launches any more out of the lists. A run of the automation going on does not stop it. How many of
-/// its tasks go at once is not written here: it is its roles' headcount ([`role_update`]). `failures_to` is
-/// `Some(Some(to))` to file failed rounds to a person or to one of the automation's own roles, and
-/// `Some(None)` to leave it unsaid again, which the launch check refuses.
+/// Change an automation's name, notes, whether it is archived, where a failed round is filed, or the
+/// classification a failed round's task is filed with. Only the `Some` fields are written. Archiving
+/// takes nothing away: it is what keeps an automation nobody launches any more out of the lists. A run of
+/// the automation going on does not stop it. How many of its tasks go at once is not written here: it is
+/// its roles' headcount ([`role_update`]). `failures_to` is `Some(Some(to))` to file failed rounds to a
+/// person or to one of the automation's own roles, and `Some(None)` to leave it unsaid again, which the
+/// launch check refuses.
+///
+/// `failure_values` is `Some(values)` to have the classification be exactly those values — `Some(&[])`
+/// for none ([`failure_values_set`]). An axis the project requires left with no value is written as it
+/// is: the save and the launch are what refuse it ([`automation_run::check`]), so a person can fill the
+/// axes one at a time.
 pub fn update(
     tx: &WriteTx<'_>,
     id: i64,
@@ -1346,6 +1363,7 @@ pub fn update(
     notes: Option<&str>,
     archived: Option<bool>,
     failures_to: Option<Option<FailuresTo>>,
+    failure_values: Option<&[i64]>,
 ) -> Result<Automation> {
     let before = live_automation(tx, id)?;
     let mut after = before.clone();
@@ -1362,9 +1380,79 @@ pub fn update(
         checked_failures_to(tx, id, to)?;
         after.failures_to = to;
     }
+    if let Some(values) = failure_values {
+        after.failure_values = failure_values_set(tx, &before, values)?;
+    }
     after.updated_at = Timestamp::now();
     emit_update(tx, record::automation(&before), record::automation(&after))?;
     Ok(after)
+}
+
+/// **Have the classification a failed round's task is filed with be exactly `values`** — value ids, at
+/// most one per axis. A value the automation already holds keeps its row; one it no longer names is taken
+/// off, and one newly named is written. Answers the rows as they now stand, in the order they were
+/// written.
+///
+/// Refused, with nothing written: a value that is not there, one of another project's axes, one of an
+/// axis that classifies decisions only (a task cannot carry it), two values of one axis, and a closed
+/// value the automation does not hold already (`AMB-D-829`) — closing retires a value from what is newly
+/// filed under it, and one the automation held before it closed is what it already said.
+fn failure_values_set(
+    tx: &WriteTx<'_>,
+    automation: &Automation,
+    values: &[i64],
+) -> Result<Vec<AutomationFailureValue>> {
+    let conn = tx.conn();
+    let mut wanted: Vec<(i64, i64)> = Vec::new();
+    for &value_id in values {
+        let value = read::dimension_value(conn, value_id)?
+            .ok_or_else(|| crate::ops::dimension::VALUE_NOUN.not_found(value_id.to_string()))?;
+        let axis = read::dimension(conn, value.dimension_id)?
+            .ok_or_else(|| crate::ops::dimension::NOUN.not_found(value.dimension_id.to_string()))?;
+        crate::ops::guard_same_project(
+            Some(automation.project_id),
+            Some(axis.project_id),
+            "the classification a failed round's task is filed with",
+        )?;
+        if !axis.applies_to.on_task() {
+            return Err(Error::invalid(format!(
+                "'{}' classifies decisions only, so a failed round's task cannot be filed under '{}'",
+                axis.name, value.name
+            )));
+        }
+        if wanted.iter().any(|&(on, _)| on == axis.id) {
+            return Err(Error::invalid(format!(
+                "two values of '{}' are named, and a failed round's task is filed under one value of an axis",
+                axis.name
+            )));
+        }
+        let held = automation.failure_values.iter().any(|v| v.value_id == value_id);
+        if value.closed && !held {
+            return Err(crate::ops::dimension::value_is_closed(&axis.name, &value.name));
+        }
+        wanted.push((axis.id, value_id));
+    }
+    for old in &automation.failure_values {
+        if !wanted.iter().any(|&(_, value_id)| value_id == old.value_id) {
+            tx.delete_record("automation_failure_value", old.id)?;
+        }
+    }
+    let now = Timestamp::now();
+    for &(dimension_id, value_id) in &wanted {
+        if automation.failure_values.iter().any(|v| v.value_id == value_id) {
+            continue;
+        }
+        let row = AutomationFailureValue {
+            id: read::next_id(conn, "automation_failure_value")?,
+            automation_id: automation.id,
+            dimension_id,
+            value_id,
+            created_at: now,
+            updated_at: now,
+        };
+        emit_create(tx, record::automation_failure_value(&row))?;
+    }
+    Ok(read::automation_failure_values_of(conn, automation.id)?)
 }
 
 /// **What a trigger is written as** ([`trigger_set`]): what it is called and the role the task it
@@ -1706,6 +1794,7 @@ pub fn unsaved(conn: &Connection, automation_id: i64) -> Result<bool> {
 fn only_named(role: &AutomationRole) -> bool {
     role.headcount == DEFAULT_ROLE_HEADCOUNT
         && role.take_order == TakeOrder::default()
+        && role.starts_by == RoleStart::default()
         && role.icon.is_none()
         && role.entry_placement_id.is_none()
         && role.agent.is_none()
@@ -1948,6 +2037,9 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     // The triggers point at the automation and at its roles, so they go before either.
     for trigger in &automation.triggers {
         tx.delete_record("automation_trigger", trigger.id)?;
+    }
+    for value in &automation.failure_values {
+        tx.delete_record("automation_failure_value", value.id)?;
     }
     // The roles are references into the placements that are about to go, so they are dropped before
     // them.
@@ -2473,6 +2565,8 @@ pub struct NewRole {
     pub headcount: Option<u32>,
     /// The order it takes its tasks in. `None` is [`TakeOrder::Priority`].
     pub take_order: Option<TakeOrder>,
+    /// How its round starts. `None` is [`RoleStart::Task`].
+    pub starts_by: Option<RoleStart>,
     /// The icon it is drawn with, by the name the GUI knows it under.
     pub icon: Option<String>,
     /// The placement its round starts at — one of the same automation's.
@@ -2491,6 +2585,8 @@ pub struct RoleChange {
     pub headcount: Option<u32>,
     /// The order it takes its tasks in.
     pub take_order: Option<TakeOrder>,
+    /// How its round starts. Changing it takes away where its round starts (`AMB-D-1142`).
+    pub starts_by: Option<RoleStart>,
     pub icon: Option<Option<String>>,
     pub entry_placement_id: Option<Option<i64>>,
     /// Taking the agent away takes the model with it.
@@ -2562,6 +2658,7 @@ pub fn role_add(tx: &WriteTx<'_>, automation_id: i64, new: NewRole) -> Result<Au
         name,
         headcount,
         take_order: new.take_order.unwrap_or_default(),
+        starts_by: new.starts_by.unwrap_or_default(),
         icon: checked_opt("icon", new.icon.as_deref())?,
         entry_placement_id: new.entry_placement_id,
         agent: checked_opt("agent", new.agent.as_deref())?,
@@ -2575,9 +2672,14 @@ pub fn role_add(tx: &WriteTx<'_>, automation_id: i64, new: NewRole) -> Result<Au
     Ok(role)
 }
 
-/// Change a role's name, how many are in it, the order it takes its tasks in, icon, way of working (the
-/// placement its round starts at), or default agent and model. Only the fields `change` names are
-/// written.
+/// Change a role's name, how many are in it, the order it takes its tasks in, how its round starts, icon,
+/// way of working (the placement its round starts at), or default agent and model. Only the fields
+/// `change` names are written.
+///
+/// **Changing how its round starts takes away where it starts** (`AMB-D-1142`), unless the same change
+/// names a start: what a round may start at is not the same for the two ways (`AMB-D-1132`). What is
+/// placed stays on the picture, and the launch check names whatever no longer fits. A role failed rounds
+/// are filed to cannot be made to start by a trigger, which takes no task.
 pub fn role_update(tx: &WriteTx<'_>, id: i64, change: RoleChange) -> Result<AutomationRole> {
     let before = live_role(tx, id)?;
     rewritable(tx, Def::Automation(before.automation_id))?;
@@ -2590,6 +2692,20 @@ pub fn role_update(tx: &WriteTx<'_>, id: i64, change: RoleChange) -> Result<Auto
     }
     if let Some(take_order) = change.take_order {
         after.take_order = take_order;
+    }
+    if let Some(starts_by) = change.starts_by.filter(|&s| s != before.starts_by) {
+        if starts_by == RoleStart::Trigger {
+            let automation = live_automation(tx, before.automation_id)?;
+            if automation.failures_to == Some(FailuresTo::Role { role_id: id }) {
+                return Err(Error::invalid(format!(
+                    "failed rounds are filed to role '{}', so it cannot start by a trigger, which takes no \
+                     task — file them to another role or a person first",
+                    before.name
+                )));
+            }
+        }
+        after.starts_by = starts_by;
+        after.entry_placement_id = None;
     }
     if let Some(icon) = &change.icon {
         after.icon = checked_opt("icon", icon.as_deref())?;
@@ -4323,7 +4439,7 @@ mod tests {
             kept(version_add(tx, automation.id).map(|_| ()));
             assert_eq!(read::automation_placement_ids(tx.conn(), automation.id).expect("read").len(), 2);
 
-            let renamed = update(tx, automation.id, Some("古い版"), None, Some(true), None).expect("rename, archive");
+            let renamed = update(tx, automation.id, Some("古い版"), None, Some(true), None, None).expect("rename, archive");
             assert!(renamed.archived && renamed.export_only);
             delete(tx, automation.id).expect("deleted");
             assert!(read::automation(tx.conn(), automation.id).expect("read").is_none());
@@ -4412,6 +4528,77 @@ mod tests {
 
             role_update(tx, role.id, RoleChange { headcount: Some(3), ..RoleChange::default() }).expect("change it");
             assert!(unsaved(tx.conn(), automation.id).expect("unsaved"), "the headcount is part of the version");
+        });
+    }
+
+    /// **A role starts by a task at birth, and how it starts is set and kept** (`AMB-D-1127`). Changing it
+    /// takes away where the role starts, unless the same change names one, and leaves what is placed on
+    /// the picture (`AMB-D-1142`). The draft reads as changed once it moves away from the saved version's.
+    #[test]
+    fn a_role_starts_by_a_task_at_birth_and_keeps_how_it_is_set_to_start() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let born = read::automation_roles_of(tx.conn(), automation.id).expect("read").remove(0);
+            assert_eq!(born.starts_by, RoleStart::Task, "born starting by a task");
+            let take = automation_builtin::action(tx, "take_task").expect("the built-in's action");
+            let taking = placement_add(tx, automation.id, take.id).expect("place it");
+            let entry = Some(Some(taking.id));
+            role_update(tx, born.id, RoleChange { entry_placement_id: entry, ..RoleChange::default() })
+                .expect("start there");
+            version_add(tx, automation.id).expect("save");
+
+            let same = RoleChange { starts_by: Some(RoleStart::Task), ..RoleChange::default() };
+            let kept = role_update(tx, born.id, same).expect("the way it already starts");
+            assert_eq!(kept.entry_placement_id, Some(taking.id), "nothing changed, so the start is kept");
+
+            let switched = RoleChange { starts_by: Some(RoleStart::Trigger), ..RoleChange::default() };
+            let switched = role_update(tx, born.id, switched).expect("start by a trigger");
+            assert_eq!(switched.starts_by, RoleStart::Trigger);
+            assert_eq!(switched.entry_placement_id, None, "where it started is taken away");
+            assert!(
+                read::automation_placement(tx.conn(), taking.id).expect("read").is_some(),
+                "what was placed stays on the picture"
+            );
+            assert!(unsaved(tx.conn(), automation.id).expect("unsaved"), "how it starts is part of the version");
+
+            let both = RoleChange {
+                starts_by: Some(RoleStart::Task),
+                entry_placement_id: entry,
+                ..RoleChange::default()
+            };
+            let back = role_update(tx, born.id, both).expect("back, with a start named");
+            assert_eq!((back.starts_by, back.entry_placement_id), (RoleStart::Task, Some(taking.id)));
+
+            let filing = NewRole { name: "起票係".into(), starts_by: Some(RoleStart::Trigger), ..NewRole::default() };
+            let filing = role_add(tx, automation.id, filing).expect("a role a trigger starts");
+            assert_eq!(live_role(tx, filing.id).expect("read").starts_by, RoleStart::Trigger);
+            let renamed = role_update(tx, filing.id, RoleChange { name: Some("さくら".into()), ..RoleChange::default() })
+                .expect("rename");
+            assert_eq!(renamed.starts_by, RoleStart::Trigger, "left out, it is kept");
+        });
+    }
+
+    /// **A role a trigger starts is no place to file a failed round to** (`AMB-D-1142`): it takes no
+    /// task, so the task filed would never be worked. Neither choosing it nor turning the role it is filed
+    /// to into one is let through.
+    #[test]
+    fn a_failed_round_is_not_filed_to_a_role_a_trigger_starts() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let filing = NewRole { name: "起票係".into(), starts_by: Some(RoleStart::Trigger), ..NewRole::default() };
+            let filing = role_add(tx, automation.id, filing).expect("a role a trigger starts");
+            let to = Some(Some(FailuresTo::Role { role_id: filing.id }));
+            let refused = update(tx, automation.id, None, None, None, to, None).expect_err("takes no task");
+            assert!(matches!(refused, Error::Invalid(_)), "{refused}");
+            assert!(refused.to_string().contains("starts its round by a trigger"), "{refused}");
+
+            let born = read::automation_roles_of(tx.conn(), automation.id).expect("read").remove(0);
+            let to = Some(Some(FailuresTo::Role { role_id: born.id }));
+            update(tx, automation.id, None, None, None, to, None).expect("to the role born with it");
+            let switched = RoleChange { starts_by: Some(RoleStart::Trigger), ..RoleChange::default() };
+            let refused = role_update(tx, born.id, switched).expect_err("failed rounds are filed to it");
+            assert!(matches!(refused, Error::Invalid(_)), "{refused}");
+            assert_eq!(live_role(tx, born.id).expect("read").starts_by, RoleStart::Task, "left as it was");
         });
     }
 
@@ -4754,16 +4941,16 @@ mod tests {
 
             let role = role_add(tx, automation.id, NewRole { name: "見る".into(), ..NewRole::default() }).expect("a role");
             let to_role = FailuresTo::Role { role_id: role.id };
-            let set = update(tx, automation.id, None, None, None, Some(Some(to_role))).expect("to the role");
+            let set = update(tx, automation.id, None, None, None, Some(Some(to_role)), None).expect("to the role");
             assert_eq!(set.failures_to, Some(to_role));
             assert_eq!(live_automation(tx, automation.id).expect("read").failures_to, Some(to_role));
 
-            let renamed = update(tx, automation.id, Some("別名"), None, None, None).expect("rename");
+            let renamed = update(tx, automation.id, Some("別名"), None, None, None, None).expect("rename");
             assert_eq!(renamed.failures_to, Some(to_role), "left out, it is kept");
 
             let theirs = role_add(tx, born.id, NewRole { name: "よその".into(), ..NewRole::default() }).expect("a role");
             let refused =
-                update(tx, automation.id, None, None, None, Some(Some(FailuresTo::Role { role_id: theirs.id })));
+                update(tx, automation.id, None, None, None, Some(Some(FailuresTo::Role { role_id: theirs.id })), None);
             assert!(matches!(refused, Err(Error::Invalid(_))), "another automation's role");
             let refused = update(
                 tx,
@@ -4772,6 +4959,7 @@ mod tests {
                 None,
                 None,
                 Some(Some(FailuresTo::Role { role_id: theirs.id + 1000 })),
+                None,
             );
             assert!(matches!(refused, Err(Error::NotFound(_))), "no such role");
             let refused = add(
@@ -4786,7 +4974,7 @@ mod tests {
             assert!(matches!(refused, Err(Error::Invalid(_))), "a role of another automation is not one of a new one's");
             assert_eq!(live_automation(tx, automation.id).expect("read").failures_to, Some(to_role));
 
-            let cleared = update(tx, automation.id, None, None, None, Some(None)).expect("leave it unsaid");
+            let cleared = update(tx, automation.id, None, None, None, Some(None), None).expect("leave it unsaid");
             assert_eq!(cleared.failures_to, None);
             assert_eq!(live_automation(tx, automation.id).expect("read").failures_to, None);
         });
@@ -4802,7 +4990,7 @@ mod tests {
             let automation = mk_automation(tx);
             let to = |tx: &WriteTx<'_>, role: i64| {
                 let to = Some(Some(FailuresTo::Role { role_id: role }));
-                update(tx, automation.id, None, None, None, to).expect("to the role");
+                update(tx, automation.id, None, None, None, to, None).expect("to the role");
             };
             let failures_to = |tx: &WriteTx<'_>| live_automation(tx, automation.id).expect("read").failures_to;
 
@@ -4814,7 +5002,7 @@ mod tests {
             role_delete(tx, role.id).expect("take the role out");
             assert_eq!(failures_to(tx), None);
 
-            update(tx, automation.id, None, None, None, Some(Some(FailuresTo::Human))).expect("a person");
+            update(tx, automation.id, None, None, None, Some(Some(FailuresTo::Human)), None).expect("a person");
             let kept = role_add(tx, automation.id, NewRole { name: "残す".into(), ..NewRole::default() }).expect("a role");
             role_delete(tx, kept.id).expect("take a role out");
             assert_eq!(failures_to(tx), Some(FailuresTo::Human), "a person is left alone");
@@ -4845,6 +5033,7 @@ mod tests {
                 name: " 実装 ".into(),
                 headcount: None,
                 take_order: None,
+                starts_by: None,
                 icon: Some("hammer".into()),
                 entry_placement_id: Some(placement.id),
                 agent: Some("claude-code".into()),
@@ -7861,8 +8050,8 @@ mod rewritten_under_a_run {
                 .expect("the answer");
 
         // The automation's picture.
-        not_held("rename", update(tx, p.automation.id, Some("別名"), None, None, None));
-        not_held("archive", update(tx, p.automation.id, None, None, Some(true), None));
+        not_held("rename", update(tx, p.automation.id, Some("別名"), None, None, None, None));
+        not_held("archive", update(tx, p.automation.id, None, None, Some(true), None, None));
         not_held("delete", delete(tx, p.automation.id));
         not_held("place", placement_add(tx, p.automation.id, p.second_action.id));
         not_held("place on a line", placement_insert(tx, p.onward.id, p.second_action.id));
@@ -7987,9 +8176,9 @@ mod rewritten_under_a_run {
                 let run = if pause { paused(tx, &run) } else { run };
                 let before = copied(tx, &run);
 
-                let renamed = update(tx, p.automation.id, Some("別名"), None, None, None).expect("rename");
+                let renamed = update(tx, p.automation.id, Some("別名"), None, None, None, None).expect("rename");
                 assert_eq!(renamed.name, "別名");
-                let archived = update(tx, p.automation.id, None, None, Some(true), None).expect("archive");
+                let archived = update(tx, p.automation.id, None, None, Some(true), None, None).expect("archive");
                 assert!(archived.archived);
                 let moved = action_set_scope(tx, p.first_action.id, None).expect("to the device");
                 assert_eq!(moved.project_id, None);

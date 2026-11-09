@@ -32,7 +32,7 @@ use rusqlite::Connection;
 
 use crate::error::{Error, Result};
 use crate::model::{AutomationPortKind, DONE_EXIT};
-use crate::ops::automation_builtin::{Builtin, BuiltinExit, BuiltinPort, Outside, Work, Worked};
+use crate::ops::automation_builtin::{Builtin, BuiltinExit, BuiltinPort, NeedsTask, Outside, Work, Worked};
 use crate::run_wording::builtin as say;
 use crate::store_engine::read;
 use crate::worktree_cut::{self, Refusal};
@@ -88,6 +88,7 @@ pub(super) const CUT_WORKTREE: Builtin = Builtin {
     ],
     waits: None,
     chooses: None,
+    needs_task: NeedsTask::Always,
     work: Work::Outside(cut),
 };
 

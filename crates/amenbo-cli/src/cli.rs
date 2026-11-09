@@ -2424,9 +2424,9 @@ pub enum AutomationCmd {
         #[arg(long)]
         clear: bool,
     },
-    /// Define a role in an automation — a name, how many are in it, an icon, the way it works (the
-    /// placement its round starts at), and the agent and model its steps fall back to. Not the task's
-    /// assignee
+    /// Define a role in an automation — a name, how many are in it, how its round starts, an icon, the
+    /// way it works (the placement its round starts at), and the agent and model its steps fall back to.
+    /// Not the task's assignee
     RoleAdd {
         /// automation id
         automation: i64,
@@ -2436,6 +2436,10 @@ pub enum AutomationCmd {
         /// how many are in it — how many of its tasks may be under way at once, 1 to 10 (1 unless given)
         #[arg(long)]
         headcount: Option<u32>,
+        /// how its round starts — `task`: a task of the role turning up starts it; `trigger`: a trigger
+        /// aimed at the role starts it, with no task filed (task unless given)
+        #[arg(long, value_parser = ["task", "trigger"])]
+        starts_by: Option<String>,
         /// the icon it is drawn with, by its name
         #[arg(long)]
         icon: Option<String>,
@@ -2463,6 +2467,11 @@ pub enum AutomationCmd {
         /// how many are in it — how many of its tasks may be under way at once, 1 to 10
         #[arg(long)]
         headcount: Option<u32>,
+        /// how its round starts — `task` or `trigger`. Switching it leaves the role with no placement
+        /// to start at, unless --entry is given with it. A role failed rounds are filed to cannot start
+        /// by a trigger
+        #[arg(long, value_parser = ["task", "trigger"])]
+        starts_by: Option<String>,
         /// the icon it is drawn with, by its name
         #[arg(long, conflicts_with = "clear_icon")]
         icon: Option<String>,

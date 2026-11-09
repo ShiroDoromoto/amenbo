@@ -2,34 +2,44 @@
 # runs that are over. The pane carries the two ways across — a failed run's band opens
 # the build screen with the box it stopped at picked out, and a run that is over opens the history tab.
 #
-# Two runs of one automation walk both, and the second walks from the workspace's own window, which is
-# where the press has to cross to the other one. The first finds no task handed to the AI and closes
-# the run, which is over without failing — a failed run is kept on the running tab until somebody
-# acknowledges it, so it is one that ends well that the history shows at once. The second is handed a
-# task, takes it, and stops for a person there, which fails it at the built-in's box.
+# Two runs walk both, each of an automation of its own, and the second walks from the workspace's own
+# window, which is where the press has to cross to the other one. The first takes the task handed to
+# it, closes it and, finding no other, ends without failing — a failed run is kept on the running tab
+# until somebody acknowledges it, so it is one that ends well that the history shows at once. A start
+# with nothing to take makes no run, so the first is handed a task too. The second is handed a task,
+# takes it, and stops for a person there, which fails it at the built-in's box.
 id: go-from-a-run-pane-to-its-picture-or-its-history
 title: A run's pane goes to the history once the run is over, and to the box it stopped at when it failed
 description: >
-  Start an automation whose built-in that takes a task closes the run when there is none and stops for
-  a person when it took one. With nothing handed to the AI the run is over; stop its launch from the
-  pane's header, and the pane's "see the history" opens the history tab with the run on it. Split the
-  workspace into its own window, hand a task to the AI and start the automation again: the run fails
-  at the built-in, and its band's "see the picture" brings the ledger forward on the build screen with
-  that box picked out.
+  Start an automation that takes the task handed to it and closes it: once the task is closed and no
+  other is there, the run is over; stop its launch from the pane's header, and the pane's "see the
+  history" opens the history tab with the run on it. Split the workspace into its own window, hand a
+  task to the AI and start a second automation, whose built-in that takes a task stops for a person
+  when it took one: the run fails at the built-in, and its band's "see the picture" brings the ledger
+  forward on the build screen with that box picked out.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
 
-  # Left unhanded, so the first run finds nothing to take.
+  # The first: take → close, with a task of its role handed to the AI.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the first run closes }, as: closed }
+  - { type: action, domain: task, op: assign, with: { target: closed, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: closed } }
+  - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that closes the task it took" }, as: closes }
+  - { type: action, domain: automation, op: place-add, with: { target: closes, builtin: take_task, starts: true }, as: closes_take }
+  - { type: action, domain: task, op: update, with: { target: closed, role_of: closes } }
+  - { type: action, domain: automation, op: place-add, with: { target: closes, builtin: close_task }, as: closes_close }
+  - { type: action, domain: automation, op: edge-add, with: { target: closes_take, exit: 着手した, to: closes_close } }
+  - { type: action, domain: automation, op: edge-add, with: { target: closes_close } }
+
+  # Left unhanded until the second start.
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the second run takes }, as: seed }
 
-  # The built-in alone, where the role starts: having taken a task it stops for a person, and finding none it
-  # closes the run.
+  # The second: the built-in alone, where the role starts. Having taken a task it stops for a person.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that stops where it took a task" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_take }
   # The task is the born role's, whose round starts there: a run takes only its role's tasks.
   - { type: action, domain: task, op: update, with: { target: seed, role_of: auto } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, halt: true } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }
 
 steps_gui:
   - type: action
@@ -54,32 +64,31 @@ steps_gui:
     domain: automation
     op: open
     with:
-      target: auto
+      target: closes
 
   - type: action
     domain: automation
     op: start
     with:
-      target: auto
-    as: empty_handed
+      target: closes
+    as: finished
 
   # Over, and the pane says where it is read from now.
   - type: assert
     domain: automation
     op: run-pane
     with:
-      target: empty_handed
+      target: finished
       state: completed
       present: true
 
   # The run is over, and its launch is not: a launch outlasts its runs and waits for the next task to
-  # take until somebody stops it. Left standing, it would take the task handed on below by itself,
-  # and the second start would join it. So it is stopped from its pane's header first.
+  # take until somebody stops it. So it is stopped from its pane's header first.
   - type: action
     domain: automation
     op: press-run
     with:
-      target: empty_handed
+      target: finished
       press: stop
       on: pane
 
@@ -87,20 +96,20 @@ steps_gui:
     domain: automation
     op: launch-head
     with:
-      target: empty_handed
+      target: finished
       state: ended
 
   - type: action
     domain: automation
     op: see-history
     with:
-      target: empty_handed
+      target: finished
 
   - type: assert
     domain: automation
     op: history-row
     with:
-      target: empty_handed
+      target: finished
       state: completed
 
   # Into a window of its own. From here every step names the window it is in, there being two.

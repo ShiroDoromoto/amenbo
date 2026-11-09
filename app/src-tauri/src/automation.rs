@@ -2576,7 +2576,7 @@ fn open_one(
         // (`AMB-D-1009`), or where a pause asked for met a built-in that would wait. The paused run has
         // no pane to stand on until it is picked up again.
         Opened::Waiting { run } => (run, None, None, Vec::new()),
-        // A built-in set to wait found nothing to act on (`AMB-D-969`): the run ended there with
+        // The built-in that takes a task found none to take (`AMB-D-969`): the run ended there with
         // nothing written, and its seat is filled once a task turns up (`AMB-D-1126`). Its pane is
         // taken down.
         Opened::LeftToWait { run } => {

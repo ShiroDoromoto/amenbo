@@ -36,7 +36,6 @@ given:
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: fix, agent: claude-code } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手した, to: at_work } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: 着手できるタスクが無い } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_work, to: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_close, to: at_take } }
 
@@ -73,7 +72,6 @@ steps_cli:
         - [タスクに着手する, 着手した]
         - [fix, 完了]
         - [タスクを閉じる, 完了]
-        - [タスクに着手する, 着手できるタスクが無い]
       status: completed
 
   # Moved onto version 2 on the draft, and nothing saved.
@@ -92,7 +90,6 @@ steps_cli:
         - [check, 完了]
         - [fix, 完了]
         - [タスクを閉じる, 完了]
-        - [タスクに着手する, 着手できるタスクが無い]
       status: completed
       runs: 0
 

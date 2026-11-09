@@ -36,7 +36,6 @@ given:
   - { type: action, domain: automation, op: wire-add, with: { target: at_take, exit: got one, from_port: note, to: at_work, to_port: note } }
 
   - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, exit: got one, to: at_work } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_work, to: at_review } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_review } }

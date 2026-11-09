@@ -1654,7 +1654,7 @@ fn a_builtin_put_in_on_a_line_leaves_its_own_ways_out_saying_nothing() {
     s.dimension_value_add(axis.id, "実装", None, None).unwrap();
     let action = s.automation_action_from_prompt(Some(p.id), NewStep::new("実装する", "do it"), &[], &[]).unwrap();
 
-    for (key, on) in [("take_task", None), ("make_task", None), ("fetch", None), ("split_by_dim", Some(axis.id))] {
+    for (key, on) in [("make_task", None), ("fetch", None), ("split_by_dim", Some(axis.id))] {
         let automation =
             s.automation_add(p.id, NewAutomation { name: format!("回す {key}"), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
         let first = s.automation_builtin_place(automation.id, "take_task", None).unwrap();

@@ -181,10 +181,6 @@ steps_cli:
   - type: action
     domain: automation
     op: edge-add
-    with: { target: at_start, exit: 着手できるタスクが無い }
-  - type: action
-    domain: automation
-    op: edge-add
     with: { target: at_take, exit: got one, to: at_review }
   - type: action
     domain: automation

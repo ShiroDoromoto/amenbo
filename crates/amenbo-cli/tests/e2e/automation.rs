@@ -1383,7 +1383,6 @@ fn a_picture(cli: &Cli, with_task: bool) -> (String, String, String, String) {
         "automation_placement",
     );
     cli.json(&["automation", "edge-add", "--from", &format!("{take}:着手した"), "--to", &placement, "--json"]);
-    cli.json(&["automation", "edge-add", "--from", &format!("{take}:着手できるタスクが無い"), "--done", "--json"]);
     cli.json(&["automation", "edge-add", "--from", &format!("{placement}:"), "--to", &close, "--json"]);
     cli.json(&["automation", "edge-add", "--from", &format!("{close}:"), "--done", "--json"]);
     (a, placement, step, take)
@@ -1646,20 +1645,16 @@ fn only_a_failed_run_is_acknowledged() {
     assert!(!shown.contains("acknowledged:"), "a cancel is not waiting on anyone: {shown}");
 }
 
-/// **A start with nothing to take makes no run** where the round starts at a take_task set to wait for a
-/// task: nothing is marked on the automation, and `show` says nothing of a wait — the launch stands
-/// open, and the app starts a run in it once a task turns up. What each role waits for is read on the
-/// launch (`launch-show`), and a task still being created is named as waiting on a person. There is no
-/// `stop-waiting`, since the automation as a whole waits for nothing.
+/// **A start with nothing to take makes no run** where the round starts at a take_task, which always
+/// waits for a task: nothing is marked on the automation, and `show` says nothing of a wait — the
+/// launch stands open, and the app starts a run in it once a task turns up. What each role waits for
+/// is read on the launch (`launch-show`), and a task still being created is named as waiting on a
+/// person. There is no `stop-waiting`, since the automation as a whole waits for nothing.
 #[test]
 fn a_start_with_nothing_to_take_makes_no_run_and_shows_the_wait_on_the_launch() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
-    let (a, _, _, take) = a_picture(&cli, false);
-    cli.json(&[
-        "automation", "cfg-set", &take, "--name", "着手できるタスクが無いとき",
-        "--choice", "着手できるタスクが出るまで待つ", "--json",
-    ]);
+    let (a, _, _, _) = a_picture(&cli, false);
     saved(&cli, &a);
 
     let started = cli.json(&["automation", "start", &a, "--json"]);
@@ -1759,10 +1754,6 @@ fn run_show_names_the_versions_a_run_was_copied_from() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
     let (a, _, _, take) = a_picture(&cli, false);
-    cli.json(&[
-        "automation", "cfg-set", &take, "--name", "着手できるタスクが無いとき",
-        "--choice", "着手できるタスクが出るまで待つ", "--json",
-    ]);
     saved(&cli, &a);
     // A start with nothing to take makes no run, so there is one to take as it starts. Taken by
     // somebody else straight after, it leaves the run standing before a take that would wait.

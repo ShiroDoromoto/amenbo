@@ -62,7 +62,6 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { target: at_after, to: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
 
 # A run started from the terminal opens no step — the host that opens them is the app's — so no seat
 # added here takes a task by itself. What fills it is a second start, which is turned away while the

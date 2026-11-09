@@ -1,4 +1,4 @@
-# A start placed on its own leaves every one of its ways out saying nothing, and a way out saying
+# A start placed on its own leaves its way out saying nothing, and a way out saying
 # nothing has no line for a `+` to hang on. So it is drawn dashed, ending in a press of its own, and
 # that press is how a reader goes on from there. What they reach for first is a new action: they look
 # for it in the library, find nothing, and make it there.
@@ -19,10 +19,10 @@ description: >
   made, with nothing behind it that can be pressed. Write a step inside it that ends the action, finish
   creating it, and read the new box on the picture — the start's way out now going on to it, and its
   own way out drawn dashed. Then make another
-  off the start's other way out, give it up, and read it gone from the picture and the library, and
+  off the new box's way out, give it up, and read it gone from the picture and the library, and
   that way out dashed again.
 given:
-  # The start alone, and nothing said about either of its ways out.
+  # The start alone, and nothing said about its way out.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — a start and nothing after it" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true } }
 
@@ -116,13 +116,12 @@ steps_gui:
       from: work
       present: false
 
-  # Another, off the start's other way out, and given up this time.
+  # Another, off the new box's own way out, and given up this time.
   - type: action
     domain: automation
     op: insert-box
     with:
-      after_builtin: take_task
-      exit: 着手できるタスクが無い
+      after: work
       undecided: true
       name: spare
     as: spare
@@ -151,8 +150,7 @@ steps_gui:
     domain: automation
     op: line-pictured
     with:
-      from_builtin: take_task
-      exit: 着手できるタスクが無い
+      from: work
       present: false
 
   - type: assert

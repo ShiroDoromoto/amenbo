@@ -39,7 +39,6 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, to: at_back } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_back, to: at_start } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
 
 steps_gui:
   - type: action

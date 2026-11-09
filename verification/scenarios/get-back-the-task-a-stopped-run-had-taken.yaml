@@ -41,7 +41,6 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { target: at_take, to: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_take } }
-  - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手できるタスクが無い } }
 
 steps_gui:
   # The line the run leaves on the task is written in the language the settings name, and a fresh

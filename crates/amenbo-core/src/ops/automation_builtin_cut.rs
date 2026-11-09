@@ -86,7 +86,6 @@ pub(super) const CUT_WORKTREE: Builtin = Builtin {
             ],
         },
     ],
-    waits: None,
     chooses: None,
     needs_task: NeedsTask::Always,
     work: Work::Outside(cut),
@@ -219,7 +218,7 @@ mod tests {
     use crate::model::{ActorKind, Automation, AutomationPictureOwner, AutomationRun};
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_builtin::action;
-    use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
+    use crate::ops::automation_builtin_take::TAKEN;
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{launch_past_the_task_checks as launch, nothing_asked, Launcher};
     use crate::ops::automation_step::Opened;
@@ -240,7 +239,6 @@ mod tests {
             .expect("place cut");
         let (_, work) = mk_placed(tx, &automation, "work", "work on it", "claude");
         automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(cut.id), None).expect("take → cut");
-        automation::edge_add(tx, on, take.id, Some(NONE_TO_TAKE), EdgeTarget::Done, None).expect("none");
         automation::edge_add(tx, on, cut.id, None, EdgeTarget::Go(work.id), None).expect("cut → work");
         automation::edge_add(tx, on, cut.id, Some(ALREADY_THERE), EdgeTarget::Done, None).expect("already there");
         automation::edge_add(tx, on, work.id, None, EdgeTarget::Done, None).expect("work → done");

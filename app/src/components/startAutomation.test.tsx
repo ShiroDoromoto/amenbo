@@ -7,7 +7,7 @@
 // value or file; **no dialog opens on the press**, which starts the run at once; **what the press
 // comes back with is said where the press was made**, core's refusal in core's words; and **a launch
 // that starts is gone to** (`AMB-T-5530`) — with the run it started in front, or with none where the
-// automation waits for a task — while a refused press moves nothing.
+// start finds no task to take — while a refused press moves nothing.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -107,7 +107,7 @@ describe("the press", () => {
     expect(goToRun).toHaveBeenCalledWith(1, 31, 5);
   });
 
-  it("goes to the launch's pane, with no run in front, when the automation waits for a task to take", async () => {
+  it("goes to the launch's pane, with no run in front, when the start finds no task to take", async () => {
     hoisted.launch.mockResolvedValue({ run: null, launch: 5 });
     await render();
     await press();

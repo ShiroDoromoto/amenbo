@@ -2483,7 +2483,7 @@ fn open_one(
     // it is told again below, in the same place.
     //
     // **Not where it would wait for a task** (`AMB-D-969`): nothing is carried out — the run ends there
-    // and its automation waits instead.
+    // and its seat is left for the launch to fill once a task turns up (`AMB-D-1126`).
     //
     // **Nor while it waits for room** in an action that takes one run at a time: nothing is carried
     // out until the action is free, and the watch opens it again on every look.
@@ -2576,9 +2576,10 @@ fn open_one(
         // no pane to stand on until it is picked up again.
         Opened::Waiting { run } => (run, None, None, Vec::new()),
         // A built-in set to wait found nothing to act on (`AMB-D-969`): the run ended there with
-        // nothing written, and its automation waits for a task in its place. Its pane is taken down.
+        // nothing written, and its seat is filled once a task turns up (`AMB-D-1126`). Its pane is
+        // taken down.
         Opened::LeftToWait { run } => {
-            log::info!("run {run_id} found no task to take, and its automation waits for one");
+            log::info!("run {run_id} found no task to take, and its seat is left for the next one");
             (run, None, None, Vec::new())
         }
         // The run's seat was one still to go — the headcount of its role lowered on the launch, or the

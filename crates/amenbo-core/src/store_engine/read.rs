@@ -7458,17 +7458,6 @@ pub fn automations_triggered(conn: &Connection) -> Result<Vec<crate::model::Auto
     Ok(found)
 }
 
-/// **The automations Amenbo is waiting on a task for** ([`crate::model::Automation::waits_for_task_since`])
-/// — every one that is not archived and not kept for export only, across projects, oldest first. Asked
-/// by the app's look, which is this machine's, not one project's.
-pub fn automations_waiting_for_task(conn: &Connection) -> Result<Vec<i64>> {
-    const A: col::automation::Cols = col::automation::ALL;
-    let pred = Pred::is_not_null(A.waits_for_task_since)
-        .and(Pred::eq(A.archived, false))
-        .and(Pred::eq(A.export_only, false));
-    select_ids(conn, A.id, Some(&pred))
-}
-
 /// The automations of one project, for the project delete's walk.
 pub fn automation_ids_in_project(conn: &Connection, project_id: i64) -> Result<Vec<i64>> {
     const A: col::automation::Cols = col::automation::ALL;

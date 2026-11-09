@@ -83,8 +83,8 @@ pub enum Opened {
     /// never opened never reports, so this is where the pause takes hold.
     Waiting { run: AutomationRun },
     /// **The step is a built-in set to wait, and nothing has turned up for it** (`AMB-D-969`). The run
-    /// ended here, completed with the step never opened, and its automation waits for a task in its
-    /// place ([`super::automation_run::wait_for_a_task`]).
+    /// ended here, completed with the step never opened, and its seat is left for the launch to fill
+    /// once a task turns up ([`super::automation_run::end_with_no_task`]).
     LeftToWait { run: AutomationRun },
     /// **The step takes a task, and the run's seat is one still to go** — the headcount of its role was
     /// lowered on the launch below the runs under way in it
@@ -295,15 +295,15 @@ fn open_as(
         return Ok(Opened::Stopped { run: stopped.run, missing });
     }
     // Asked before anything is written, so a built-in that would wait leaves no execution behind it
-    // (`super::automation_builtin::Waits`). The run ends here and its automation waits for a task in
-    // its place — unless a pause was asked for, which takes hold here instead, since a step that is
-    // never opened never reports.
+    // (`super::automation_builtin::Waits`). The run ends here, its seat left for the launch to fill once
+    // a task turns up — unless a pause was asked for, which takes hold here instead, since a step that
+    // is never opened never reports.
     if !rehearsing && super::automation_builtin::waiting(conn, &run, &def)? {
         return Ok(match run.pause_requested {
             true => Opened::Waiting {
                 run: super::automation_stop::settle(tx, run, AutomationPauseKind::EndOfAction)?.run,
             },
-            false => Opened::LeftToWait { run: super::automation_run::wait_for_a_task(tx, run)? },
+            false => Opened::LeftToWait { run: super::automation_run::end_with_no_task(tx, run)? },
         });
     }
     // **An action that takes one run at a time is gone into in arrival order, one run at a time.**

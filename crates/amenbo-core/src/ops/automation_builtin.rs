@@ -238,11 +238,11 @@ pub struct BuiltinExit {
 /// nothing to do.
 ///
 /// **Amenbo waits, not the run.** A run that comes to it with nothing for it to act on ends there, its
-/// step never opened, and its automation is marked as waiting
-/// ([`crate::ops::automation_run::wait_for_a_task`]); a launch that would come to it so makes no run at
-/// all. The app's watch asks again every so often and starts a run once something has turned up
-/// ([`crate::ops::automation_run::start_waiting`]). So the time spent waiting leaves no run, no step and
-/// no stretch behind it.
+/// step never opened, and its seat is free again ([`crate::ops::automation_run::end_with_no_task`]); a
+/// launch that would come to it so makes no run at all. The app's look asks again every so often and
+/// starts a run in the launch's free seat once something has turned up
+/// ([`crate::ops::automation_run::top_up`], `AMB-D-1126`). So the time spent waiting leaves no run, no
+/// step and no stretch behind it.
 ///
 /// **What is asked is only whether one has turned up** ([`Waits::turned_up`]): it is asked on every
 /// look, and a count or a list of every candidate would be asked of every task there is.

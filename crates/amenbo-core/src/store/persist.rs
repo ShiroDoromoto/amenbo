@@ -1778,7 +1778,8 @@ impl Store {
 
     /// **Launch an automation** — check it, copy its steps into a run, and start it (one operation =
     /// one transaction). Where its role's start would wait for a task with none to take, no run is made and
-    /// the automation waits for one instead ([`crate::ops::automation_run::start`]).
+    /// the launch stands open for a run to be started in once one turns up
+    /// ([`crate::ops::automation_run::start`]).
     ///
     /// The reach is the automation's, the run being made under it.
     ///
@@ -1796,32 +1797,6 @@ impl Store {
         self.write_one(
             &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
             |tx| crate::ops::automation_run::start(tx, automation_id, &by),
-        )
-    }
-
-    /// **Start a run of an automation waiting for a task, now that one has turned up**, or end its wait
-    /// where its role's start no longer waits for one (one operation = one transaction) —
-    /// [`crate::ops::automation_run::start_waiting`]. A launch its checks refuse takes the whole
-    /// transaction with it, and the automation goes on waiting.
-    pub fn automation_wait_start(
-        &mut self,
-        automation_id: i64,
-        by: &crate::ops::automation_run::Launcher<'_>,
-    ) -> Result<Option<crate::model::AutomationRun>> {
-        let agent = self.automation_default_agent(automation_id)?;
-        let by = crate::ops::automation_run::Launcher { default_agent: agent.as_deref(), ..*by };
-        self.write_one(
-            &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
-            |tx| crate::ops::automation_run::start_waiting(tx, automation_id, &by),
-        )
-    }
-
-    /// **Stop an automation waiting for a task** — a person saying not to start a run once one turns up
-    /// ([`crate::ops::automation_run::stop_waiting`]).
-    pub fn automation_wait_stop(&mut self, automation_id: i64) -> Result<crate::model::Automation> {
-        self.write_one(
-            &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
-            |tx| crate::ops::automation_run::stop_waiting(tx, automation_id),
         )
     }
 

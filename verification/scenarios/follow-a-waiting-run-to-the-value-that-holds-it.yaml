@@ -1,4 +1,4 @@
-# A launch set to wait for a task can wait on something a person has to do. On a category whose tasks
+# A launch waiting for a task can wait on something a person has to do. On a category whose tasks
 # wait along its order, the task its role would take is held until the value before its own is closed,
 # and nothing on the launch moves until somebody closes it. Started with no task it can take, it opens
 # no run: its pane stands with its roles on the bar. So the role whose tasks are held says there how
@@ -16,9 +16,10 @@ id: follow-a-waiting-run-to-the-value-that-holds-it
 title: A launch waiting for a task says, on its role, the value that keeps the role's task from being taken, and pressing it leads to where that value is closed
 description: >
   On a category whose tasks wait along its order, file one task on its first value and hand one on
-  its second to the AI. Start an automation whose built-in that takes a task waits for one: no run
-  opens, and the launch's pane stands. Read its role on the bar say one task cannot be taken yet,
-  held by the first value; press that value and land on the category panel with the category marked.
+  its second to the AI. Start an automation whose role starts at the built-in that takes a task,
+  which waits for one: no run opens, and the launch's pane stands. Read its role on the bar say one
+  task cannot be taken yet, held by the first value; press that value and land on the category panel
+  with the category marked.
   Finish the first task, close the first value, and read the launch take the second task within 30
   seconds, in the pane that was standing.
 given:
@@ -48,8 +49,8 @@ given:
   - { type: action, domain: automation, op: action-entry, with: { target: work, step: build } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: build, exit_to: "" } }
 
-  # The built-in, set to wait on the screen before the run starts. Its filter is left unanswered, so
-  # it looks for the tasks handed to the AI.
+  # The built-in, which waits for a task where the role starts. Its filter is left unanswered, so it
+  # looks for the tasks handed to the AI.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one that waits on a stage" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_take }
   # The task is the born role's, whose round starts there: a run takes only its role's tasks.
@@ -92,20 +93,6 @@ steps_gui:
     op: open
     with:
       target: auto
-
-  - type: action
-    domain: automation
-    op: pick-box
-    with:
-      builtin: take_task
-
-  - type: action
-    domain: automation
-    op: answer-choice
-    with:
-      builtin: take_task
-      setting: 着手できるタスクが無いとき
-      value: 着手できるタスクが出るまで待つ
 
   # No task it can take: the launch opens and no run does, and the screen goes to the launch's pane.
   - type: action

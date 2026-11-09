@@ -9,7 +9,7 @@
 // (`./WorkspaceFace`). What was done is kept on the run and read on the "running" and "history" tabs,
 // not here.
 //
-// **A built-in set to wait says so, and what it waits for** (`AMB-D-969`): the line, the chips the
+// **A built-in waiting says so, and what it waits for** (`AMB-D-969`): the line, the chips the
 // placement's panel answered it with, and what the reader can do about it (`AMB-T-5753`) — it goes on
 // by itself, and the row's pause and stop are the way to have it stop waiting. What would match is not
 // listed here; how many are held back, and by what, is (`AMB-D-999`) — counted as the wait begins and

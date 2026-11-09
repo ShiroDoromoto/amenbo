@@ -57,6 +57,7 @@ function detail({ entryId = 1, ...over }: Partial<AutomationDetailDto> & { entry
     edges: [],
     wires: [],
     maxHeadcount: 10,
+    failureValues: [],
     heldBy: [],
     unsaved: false,
     saveBlocks: [],
@@ -621,10 +622,10 @@ describe("one role's round, as the build screen draws it", () => {
       archived: false,
       triggers: [],
       roles: [
-        { id: 10, name: "Research", headcount: 1, entryPlacementId: 1, passes: [] },
-        { id: 20, name: "Design", headcount: 1, entryPlacementId: 2, passes: [] },
-        { id: 30, name: "Build", headcount: 1, entryPlacementId: 4, passes: [] },
-        { id: 40, name: "Upkeep", headcount: 1, passes: [] },
+        { id: 10, name: "Research", headcount: 1, startsBy: "task", entryPlacementId: 1, passes: [] },
+        { id: 20, name: "Design", headcount: 1, startsBy: "task", entryPlacementId: 2, passes: [] },
+        { id: 30, name: "Build", headcount: 1, startsBy: "task", entryPlacementId: 4, passes: [] },
+        { id: 40, name: "Upkeep", headcount: 1, startsBy: "task", passes: [] },
       ],
       placements: [
         step({
@@ -675,6 +676,7 @@ describe("one role's round, as the build screen draws it", () => {
       ],
       wires: [{ id: 1, fromId: 1, fromExitName: "完了", fromPortName: "notes", toId: 2, toPortName: "notes" }],
       maxHeadcount: 10,
+      failureValues: [],
       heldBy: [],
       unsaved: false,
       saveBlocks: [],

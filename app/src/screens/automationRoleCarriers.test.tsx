@@ -63,8 +63,8 @@ function detail(): AutomationDetailDto {
     archived: false,
     triggers: [],
     roles: [
-      { id: 1, name: "Alice", headcount: 1, agent: "claude-code", model: "opus", entryPlacementId: 2, passes: [] },
-      { id: 2, name: "Bob", headcount: 1, agent: "codex", passes: [] },
+      { id: 1, name: "Alice", headcount: 1, startsBy: "task", agent: "claude-code", model: "opus", entryPlacementId: 2, passes: [] },
+      { id: 2, name: "Bob", headcount: 1, startsBy: "task", agent: "codex", passes: [] },
     ],
     placements: [
       placement(1, 1, [
@@ -141,6 +141,7 @@ function detail(): AutomationDetailDto {
     edges: [{ id: 5, fromId: 2, exitName: "完了", toId: 1, ends: "go" }],
     wires: [],
     maxHeadcount: 10,
+    failureValues: [],
     heldBy: [],
     unsaved: false,
     saveBlocks: [],

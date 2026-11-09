@@ -103,6 +103,7 @@ function detail({ entryId, ...over }: Partial<AutomationDetailDto> & { entryId?:
     edges: [],
     wires: [],
     maxHeadcount: 10,
+    failureValues: [],
     heldBy: [],
     unsaved: false,
     saveBlocks: [],
@@ -2301,11 +2302,11 @@ describe("one role's round, as the build screen draws it", () => {
   };
   // Research hands Design its task; Design writes, checks, goes back to writing on "again", and hands
   // Build the rest. What Design writes takes the notes Research wrote, by a wire from its box.
-  const roles = [
-    { id: 10, name: "Research", headcount: 1, entryPlacementId: 1, passes: [] },
-    { id: 20, name: "Design", headcount: 1, entryPlacementId: 2, passes: [] },
-    { id: 30, name: "Build", headcount: 1, entryPlacementId: 5, passes: [] },
-    { id: 40, name: "Upkeep", headcount: 1, passes: [] },
+  const roles: AutomationDetailDto["roles"] = [
+    { id: 10, name: "Research", headcount: 1, startsBy: "task", entryPlacementId: 1, passes: [] },
+    { id: 20, name: "Design", headcount: 1, startsBy: "task", entryPlacementId: 2, passes: [] },
+    { id: 30, name: "Build", headcount: 1, startsBy: "task", entryPlacementId: 5, passes: [] },
+    { id: 40, name: "Upkeep", headcount: 1, startsBy: "task", passes: [] },
   ];
   const automation: AutomationDetailDto = {
     id: 7,
@@ -2357,6 +2358,7 @@ describe("one role's round, as the build screen draws it", () => {
     ],
     wires: [wire({ id: 1, fromId: 1, fromExitName: "完了", fromPortName: "notes", toId: 3, toPortName: "notes" })],
     maxHeadcount: 10,
+    failureValues: [],
     heldBy: [],
     unsaved: false,
     saveBlocks: [],
@@ -2519,7 +2521,7 @@ describe("one role's round, as the build screen draws it", () => {
     const widthOf = (over: Partial<AutomationPlacementDto>, forYou?: ReadonlySet<number>) => {
       const alone: AutomationDetailDto = {
         ...automation,
-        roles: [{ id: 20, name: "Design", headcount: 1, entryPlacementId: 1, passes: [] }],
+        roles: [{ id: 20, name: "Design", headcount: 1, startsBy: "task", entryPlacementId: 1, passes: [] }],
         placements: [
           step({
             id: 1,

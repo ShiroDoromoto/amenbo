@@ -115,6 +115,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     edges: [],
     wires: [],
     maxHeadcount: 10,
+    failureValues: [],
     heldBy: [],
     unsaved: false,
     saveBlocks: [],
@@ -556,7 +557,7 @@ describe("the panel of one spot", () => {
     // The walk starts where the role's round starts, as core's launch check does.
     const looped = (fromId: number) =>
       detail({
-        roles: [{ id: 10, name: "Research", headcount: 1, entryPlacementId: 1, passes: [] }],
+        roles: [{ id: 10, name: "Research", headcount: 1, startsBy: "task", entryPlacementId: 1, passes: [] }],
         placements: [
           spot({ id: 1, exits: [{ id: 10, name: "完了", outputs: [{ name: "note", kind: "value", required: true }] }] }),
           spot({

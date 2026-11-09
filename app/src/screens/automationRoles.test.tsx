@@ -64,8 +64,8 @@ function placement(id: number, roleId: number | undefined, steps: number): Autom
   };
 }
 
-const alice: AutomationRoleDto = { id: 1, name: "Alice", headcount: 1, agent: "claude-code", model: "opus", passes: [] };
-const bob: AutomationRoleDto = { id: 2, name: "Bob", headcount: 1, passes: [] };
+const alice: AutomationRoleDto = { id: 1, name: "Alice", headcount: 1, startsBy: "task", agent: "claude-code", model: "opus", passes: [] };
+const bob: AutomationRoleDto = { id: 2, name: "Bob", headcount: 1, startsBy: "task", passes: [] };
 
 function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
   return {
@@ -80,6 +80,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     edges: [],
     wires: [],
     maxHeadcount: 10,
+    failureValues: [],
     heldBy: [],
     unsaved: false,
     saveBlocks: [],

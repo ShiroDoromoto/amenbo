@@ -2190,10 +2190,12 @@ button.feed__target:hover { color: var(--c-accent); }
 .autoroles__name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-weight: var(--fw-medium); }
 .autoroles__count { font-size: var(--fs-xs); color: var(--c-text-muted); }
 .autoroles__add { align-self: flex-start; }
-/* What the automation holds as a whole, down the right (`../screens/AutomationSettings`). Narrow, it
-   goes under the middle the way the roles go over it. */
+/* What the automation holds as a whole, down the right (`../screens/AutomationSettings`). Wide enough
+   for a failure task's classification to keep each axis's values on its name's line and for the example
+   of its body to keep each value on a line or two, as the mock has it. Narrow, it goes under the middle
+   the way the roles go over it. */
 .autoside {
-  flex: 0 0 240px; display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-3);
+  flex: 0 0 340px; display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-3);
   background: var(--c-sunken-pic) var(--c-sunken); border-inline-start: var(--border-w) var(--border-style) var(--c-rule);
 }
 /* Each thing the column holds is a box of its own, so where one ends and the next begins can be seen.
@@ -2204,6 +2206,26 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .autoside__group > select { min-width: 0; }
 .autoside__add { align-self: flex-start; }
+/* The classification a failed round's task is filed with, in a frame of its own under who it goes to;
+   a required axis left empty is said under its rows. */
+.autoside__class {
+  display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2);
+  border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
+}
+.autoside__classname { font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-text-muted); }
+/* An axis's name takes no more than it needs here, so its values stand on its line in the column. */
+.autoside__class .autostep__rowname { min-width: 4.5em; }
+.autoside__why { font-size: var(--fs-xs); color: var(--c-stop); background: var(--c-stop-weak); border-radius: var(--r-sm); padding: 6px 8px; }
+/* An example of the body such a task is filed with, behind a press. */
+.autoside__example > summary { cursor: pointer; font-size: var(--fs-xs); color: var(--c-accent-text); }
+.autoside__body {
+  display: flex; flex-direction: column; gap: var(--s-1); margin-top: 6px; padding: var(--s-2) 10px; font-size: var(--fs-xs);
+  background: var(--c-sunken-pic) var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-rule); border-radius: var(--r-sm);
+}
+.autoside__body > dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 10px; margin: 0; }
+.autoside__bodyrow { display: contents; }
+.autoside__body dt { color: var(--c-text-muted); }
+.autoside__body dd { margin: 0; overflow-wrap: anywhere; }
 /* The triggers, one box each down the box that holds them. */
 .autoside__triggers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .autoside__trigger {

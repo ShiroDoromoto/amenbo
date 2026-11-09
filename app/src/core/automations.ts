@@ -129,7 +129,7 @@ export async function importAutomation(projectId: number, src: string): Promise<
 
 /**
  * **Rename an automation, rewrite its notes, put it out of the way, or choose who a failed round is
- * filed to.** Only what is passed is written.
+ * filed to and what it is classified under.** Only what is passed is written.
  *
  * Archiving takes nothing away and stops nothing already running. It keeps a definition nobody
  * launches any more out of a reader's way, and the row stays in the list with the mark on it —
@@ -137,6 +137,10 @@ export async function importAutomation(projectId: number, src: string): Promise<
  *
  * `failuresTo` is the person or a role of this automation. There is no choosing nobody: a launch is
  * refused without one, so it only ever moves from one to another.
+ *
+ * `failureValues` is the whole classification a failed round's task is filed with, by value ids, at
+ * most one an axis — `[]` for none. A required axis left empty is written all the same; the save and
+ * the launch check refuse it.
  */
 export async function editAutomation(
   id: number,
@@ -145,6 +149,7 @@ export async function editAutomation(
     notes?: string;
     archived?: boolean;
     failuresTo?: AutomationFailuresToDto;
+    failureValues?: number[];
   },
 ): Promise<void> {
   if (!inTauri()) return;
@@ -154,6 +159,7 @@ export async function editAutomation(
     notes: patch.notes ?? null,
     archived: patch.archived ?? null,
     failuresTo: patch.failuresTo ?? null,
+    failureValues: patch.failureValues ?? null,
   });
 }
 

@@ -128,6 +128,7 @@ function detail(over: Partial<AutomationDetailDto> = {}): AutomationDetailDto {
     edges: [],
     wires: [],
     maxHeadcount: 10,
+    failureValues: [],
     heldBy: [],
     unsaved: false,
     saveBlocks: [],
@@ -310,7 +311,7 @@ describe("the automations screen", () => {
   // (the picture), then its agent and model.
   it("puts the picture of how the role works between the role's head and its agent and model", async () => {
     hoisted.automations = [card()];
-    hoisted.detail = detail({ roles: [{ id: 1, name: "Alice", headcount: 1, passes: [] }] });
+    hoisted.detail = detail({ roles: [{ id: 1, name: "Alice", headcount: 1, startsBy: "task", passes: [] }] });
     hoisted.check = { ready: true, blocks: [] };
     await render();
     await act(async () => { button("Morning round").click(); });
@@ -592,8 +593,8 @@ describe("the panel beside the picture", () => {
 // A role takes from its own waiting tasks, so the built-in that takes a task is the one start it has,
 // put on with one press wherever the picked role starts nowhere (`AMB-D-1123`).
 describe("the press that gives a role its start", () => {
-  const alice = { id: 1, name: "Alice", headcount: 1, passes: [], entryPlacementId: 40 };
-  const bob = { id: 2, name: "Bob", headcount: 1, passes: [] };
+  const alice: AutomationDetailDto["roles"][number] = { id: 1, name: "Alice", headcount: 1, startsBy: "task", passes: [], entryPlacementId: 40 };
+  const bob: AutomationDetailDto["roles"][number] = { id: 2, name: "Bob", headcount: 1, startsBy: "task", passes: [] };
   async function open(roles: AutomationDetailDto["roles"]) {
     hoisted.automations = [card()];
     hoisted.detail = detail({ roles });
@@ -1038,7 +1039,7 @@ describe("an automation a run is going on (AMB-D-1015)", () => {
   });
 
   it("offers a role that starts nowhere its start, and opens its own fields to be written", async () => {
-    await openHeld([run], { roles: [{ id: 1, name: "Alice", headcount: 1, passes: [] }] });
+    await openHeld([run], { roles: [{ id: 1, name: "Alice", headcount: 1, startsBy: "task", passes: [] }] });
     expect(buttons().some((b) => b.textContent === roleStart())).toBe(true);
     await act(async () => { button(t("auto.build.edit")).click(); });
     expect(container.querySelector(".actpanel__body")).not.toBeNull();
@@ -1052,7 +1053,7 @@ describe("an automation a run is going on (AMB-D-1015)", () => {
   });
 
   it("says nothing of runs while none is going", async () => {
-    await openHeld([], { roles: [{ id: 1, name: "Alice", headcount: 1, passes: [] }] });
+    await openHeld([], { roles: [{ id: 1, name: "Alice", headcount: 1, startsBy: "task", passes: [] }] });
     expect(container.querySelector(".autoheld")).toBeNull();
     expect(buttons().some((b) => b.textContent === roleStart())).toBe(true);
   });

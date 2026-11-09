@@ -8,14 +8,16 @@
 // writes the role's headcount; the sum is the most tasks at once; a row whose draft differs from the
 // saved version says what the version holds; and the foot saves or discards the draft with the head's
 // presses, or says it is the saved version**; **who failures are filed to is required, offers the automation's roles
-// and the person, and writes the one picked**; **every trigger is listed in order — when, what it
+// a task starts and the person, and writes the one picked**; **the failure task's classification has a row
+// per task axis, writes the whole classification one value an axis, and says each required axis core
+// finds empty; an example of the body opens under the hint**; **every trigger is listed in order — when, what it
 // files and under which role, the wait in the largest unit it divides into and the condition by what
 // it counts — and a press asks the build screen to open that one's card**; **"+ Add a trigger" is
 // always there, and asks for a new one's card**; and **a refusal is drawn in core's words**.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AutomationDetailDto, AutomationTriggerDto } from "../bindings/bindings";
+import type { AutomationDetailDto, AutomationTriggerDto, DimensionDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   /** Each patch the column wrote, in order. */
@@ -24,6 +26,8 @@ const hoisted = vi.hoisted(() => ({
   refuse: null as string | null,
   /** Each trigger the column asked to open, `undefined` for a new one. */
   opened: [] as unknown[],
+  /** The project's axes, as the snapshot holds them. */
+  dimensions: [] as DimensionDto[],
 }));
 
 vi.mock("../core/automations", () => ({
@@ -40,6 +44,10 @@ vi.mock("../core/automations", () => ({
   removeAutomationTrigger: () => Promise.resolve(),
 }));
 vi.mock("../core/dialog", () => ({ confirmDialog: () => Promise.resolve(false) }));
+vi.mock("../core/snapshot", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../core/snapshot")>()),
+  getSnapshot: () => ({ projects: [{ id: 1, dimensions: hoisted.dimensions }] }),
+}));
 
 import { statusLabel, t, tf } from "../core/i18n";
 import { AutomationSettings } from "./AutomationSettings";
@@ -57,13 +65,14 @@ const automation: AutomationDetailDto = {
   archived: false,
   triggers: [],
   roles: [
-    { id: 1, name: "Alice", headcount: 1, passes: [] },
-    { id: 2, name: "Bob", headcount: 1, passes: [] },
+    { id: 1, name: "Alice", headcount: 1, startsBy: "task", passes: [] },
+    { id: 2, name: "Bob", headcount: 1, startsBy: "task", passes: [] },
   ],
   placements: [],
   edges: [],
   wires: [],
   maxHeadcount: 10,
+  failureValues: [],
   heldBy: [],
   unsaved: false,
   saveBlocks: [],
@@ -84,6 +93,7 @@ beforeEach(() => {
   hoisted.refuse = null;
   Object.assign(draft, { saved: 0, discarded: 0, canSave: true, canDiscard: true });
   hoisted.opened = [];
+  hoisted.dimensions = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -154,8 +164,8 @@ describe("the headcounts", () => {
     await render({
       ...automation,
       roles: [
-        { id: 1, name: "Alice", headcount: 3, passes: [] },
-        { id: 2, name: "Bob", headcount: 1, passes: [] },
+        { id: 1, name: "Alice", headcount: 3, startsBy: "task", passes: [] },
+        { id: 2, name: "Bob", headcount: 1, startsBy: "task", passes: [] },
       ],
       placements: [placed(11, "Read the context", 1), placed(12, "Implement", 1), placed(13, "Review", 2)],
     });
@@ -173,8 +183,8 @@ describe("the headcounts", () => {
     await render({
       ...automation,
       roles: [
-        { id: 1, name: "Alice", headcount: 1, passes: [] },
-        { id: 2, name: "Bob", headcount: 10, passes: [] },
+        { id: 1, name: "Alice", headcount: 1, startsBy: "task", passes: [] },
+        { id: 2, name: "Bob", headcount: 10, startsBy: "task", passes: [] },
       ],
     });
     const less = t("auto.side.headcountLess");
@@ -195,9 +205,9 @@ describe("the headcounts", () => {
       ...automation,
       unsaved: true,
       roles: [
-        { id: 1, name: "Alice", headcount: 3, savedHeadcount: 2, passes: [] },
-        { id: 2, name: "Bob", headcount: 1, savedHeadcount: 1, passes: [] },
-        { id: 3, name: "Carol", headcount: 2, passes: [] },
+        { id: 1, name: "Alice", headcount: 3, startsBy: "task", savedHeadcount: 2, passes: [] },
+        { id: 2, name: "Bob", headcount: 1, startsBy: "task", savedHeadcount: 1, passes: [] },
+        { id: 3, name: "Carol", headcount: 2, startsBy: "task", passes: [] },
       ],
     });
     expect(rows()[0]!.textContent).toContain(tf("auto.side.headcountSaved", { n: 2 }));
@@ -261,6 +271,112 @@ describe("who failures are filed to", () => {
     await render({ ...automation, failuresTo: { kind: "role", roleId: 1 } });
     expect(select().value).toBe("role:1");
     expect(Array.from(select().options).some((o) => o.value === "")).toBe(false);
+  });
+
+  it("offers no role a trigger starts, unless it is the one already chosen", async () => {
+    const bobByTrigger = automation.roles.map((role) => (role.id === 2 ? { ...role, startsBy: "trigger" as const } : role));
+    await render({ ...automation, roles: bobByTrigger });
+    expect(Array.from(select().options).map((o) => o.value)).toEqual(["", "role:1", "human"]);
+    await render({ ...automation, roles: bobByTrigger, failuresTo: { kind: "role", roleId: 2 } });
+    expect(select().value).toBe("role:2");
+  });
+
+  it("says what the failure task is filed as, with an example of its body behind a press", async () => {
+    await render();
+    expect(container.textContent).toContain(t("auto.side.failuresHint"));
+    const example = container.querySelector("details")!;
+    expect(example.querySelector("summary")!.textContent).toBe(t("auto.side.failureExample"));
+    expect(example.textContent).toContain(
+      tf("auto.side.failureExampleTitle", { task: t("auto.side.failureExampleTaskValue") }),
+    );
+    expect(Array.from(example.querySelectorAll("dt")).map((one) => one.textContent)).toEqual([
+      t("auto.side.failureExampleWhy"),
+      t("auto.side.failureExampleStep"),
+      t("auto.side.failureExampleReport"),
+      t("auto.side.failureExampleRun"),
+      t("auto.side.failureExampleTask"),
+      t("auto.side.failureExampleCount"),
+    ]);
+  });
+});
+
+const axis = (over: Partial<DimensionDto> & Pick<DimensionDto, "id" | "name" | "values">): DimensionDto => ({
+  notes: "",
+  cardinality: "single",
+  role: "none",
+  ordered: false,
+  showOnCard: false,
+  required: false,
+  appliesTo: "both",
+  sequential: false,
+  ...over,
+});
+const value = (id: number, name: string, closed = false) => ({ id, name, closed });
+
+describe("the failure task's classification", () => {
+  beforeEach(() => {
+    hoisted.dimensions = [
+      axis({ id: 3, name: "Product", required: true, values: [value(11, "Game"), value(12, "Site")] }),
+      axis({ id: 4, name: "Theme", required: true, values: [value(21, "Sound"), value(22, "Art"), value(23, "Old", true)] }),
+      axis({ id: 5, name: "Label", cardinality: "multi", values: [value(31, "Urgent")] }),
+      axis({ id: 6, name: "Kind of decision", appliesTo: "decision", values: [value(41, "Policy")] }),
+      axis({ id: 7, name: "Empty", values: [] }),
+    ];
+  });
+
+  const frame = () => container.querySelector<HTMLElement>(".autoside__class")!;
+  const rowNames = () => Array.from(frame().querySelectorAll(".autostep__rowname")).map((one) => one.textContent);
+  const chip = (label: string) =>
+    Array.from(frame().querySelectorAll<HTMLButtonElement>(".autostep__chip")).find((one) => one.textContent === label);
+
+  it("has a row per axis a task is classified on, the required ones marked, closed values left out", async () => {
+    await render();
+    expect(frame().textContent).toContain(t("auto.side.failureClass"));
+    const required = t("auto.side.required");
+    expect(rowNames()).toEqual([`Product${required}`, `Theme${required}`, "Label"]);
+    expect(chip("Old")).toBeUndefined();
+    expect(chip("Game")!.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("presses the values chosen, and keeps a closed one chosen on its row", async () => {
+    await render({ ...automation, failureValues: [11, 23] });
+    expect(chip("Game")!.getAttribute("aria-pressed")).toBe("true");
+    expect(chip("Site")!.getAttribute("aria-pressed")).toBe("false");
+    expect(chip("Old")!.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("writes the whole classification on each press, one value an axis", async () => {
+    await render({ ...automation, failureValues: [11, 31] });
+    await press(chip("Site"));
+    await press(chip("Sound"));
+    await press(chip("Game"));
+    expect(hoisted.edits).toEqual([
+      { failureValues: [31, 12] },
+      { failureValues: [11, 31, 21] },
+      { failureValues: [31] },
+    ]);
+  });
+
+  it("says each required axis core finds empty, and nothing while none is", async () => {
+    await render();
+    expect(frame().querySelector('[role="status"]')).toBeNull();
+    const empty = (name: string) => ({
+      code: "not_ready_automation_failure_axis_empty",
+      message_en: `the required axis '${name}' has no value`,
+      fields: { axis: name },
+    });
+    await render({ ...automation, saveBlocks: [empty("Product"), empty("Theme")] });
+    expect(Array.from(frame().querySelectorAll('[role="status"]')).map((one) => one.textContent)).toEqual([
+      tf("auto.side.failureAxisEmpty", { axis: "Product" }),
+      tf("auto.side.failureAxisEmpty", { axis: "Theme" }),
+    ]);
+  });
+
+  it("says there is no axis where the project has none a task is classified on", async () => {
+    hoisted.dimensions = [axis({ id: 6, name: "Kind of decision", appliesTo: "decision", values: [value(41, "Policy")] })];
+    await render();
+    expect(frame().textContent).toContain(t("auto.step.noAxes"));
+    expect(frame().querySelector(".autostep__chip")).toBeNull();
   });
 });
 

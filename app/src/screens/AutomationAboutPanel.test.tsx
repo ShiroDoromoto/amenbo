@@ -42,6 +42,7 @@ const automation: AutomationDetailDto = {
   edges: [],
   wires: [],
   maxHeadcount: 10,
+  failureValues: [],
   heldBy: [],
   unsaved: false,
   saveBlocks: [],

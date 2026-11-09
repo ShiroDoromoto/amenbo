@@ -256,6 +256,7 @@ CREATE TABLE IF NOT EXISTS automation (
     failures_to_role_id BIGINT REFERENCES automation_role(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     export_only BOOLEAN NOT NULL DEFAULT 0 CHECK(export_only IN (0, 1)),
     stopped BOOLEAN NOT NULL DEFAULT 0 CHECK(stopped IN (0, 1)),
+    waits_for_task_since TEXT CHECK(waits_for_task_since GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     order_key TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')

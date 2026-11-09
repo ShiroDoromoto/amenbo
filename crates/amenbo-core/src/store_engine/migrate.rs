@@ -1508,6 +1508,14 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 134,
+        name: "take back each role v127 started past the built-in that takes a task, onto that built-in",
+        // **Only a role whose start is where the built-in's line for a task taken goes is moved**, in the
+        // draft and in the newest saved version alike, back onto the built-in the line leaves. A role
+        // that starts there already, or anywhere no such line goes, is left as it is. No task is touched.
+        apply: Apply::Custom(take_back_where_a_role_starts),
+    },
+    Step {
+        to: 135,
         name: "drop automation.waits_for_task_since, the wait for a task the whole automation was in",
         // **Each role's free seat is filled once a task of its own turns up, and nothing waits for the
         // whole automation** (`AMB-D-1126`). An automation that was waiting has its launch standing
@@ -1736,7 +1744,153 @@ fn let_a_round_name_its_seat(ctx: &Ctx<'_>) -> Result<()> {
     Ok(())
 }
 
-/// v134: `automation.waits_for_task_since` is dropped — the wait for a task the whole automation was in
+/// v134: **a role v127 started one placement too far on is started on the built-in that takes a task
+/// again** (`AMB-D-1123`, `AMB-D-1132`). v127 started the role it gave an automation where the line out
+/// of its entry's [`V127_TAKEN`] went, not on the entry; v132 then found a start already named and let
+/// the entry go. A store raised to v133 is left with roles that start past the built-in, and a launch
+/// refuses them.
+///
+/// **The start is moved back only where the picture says where it came from**: the role starts on a
+/// placement that is not the built-in that takes a task ([`V134_TAKE_TASK`]), and a line by
+/// [`V134_TAKEN`] goes there from a placement of the same automation that is. The role is started on
+/// that placement — the first such line in the order v127 read them, where there is more than one. A
+/// line by any other way out (the one for no task to take among them) is not read, so this reads the
+/// same before or after that way out goes. A role that starts on the built-in already, or where no such
+/// line goes, is left as it is.
+///
+/// The draft's roles are read off the draft's lines and the newest saved version's off its own, as v127
+/// and v132 read them, and no `updated_at` is moved, so a draft that read as its newest version still
+/// does (`ops::automation::unsaved`). An older version is not touched.
+///
+/// **Only the automation tables are read and written.** A store with no automation writes nothing.
+fn take_back_where_a_role_starts(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let mut drafts: Vec<(i64, i64)> = Vec::new();
+    {
+        let mut stmt = tx.prepare(
+            "SELECT r.id, \
+               (SELECT e.from_id FROM automation_edge e \
+                JOIN automation_exit x ON x.id = e.exit_id \
+                JOIN automation_placement p ON p.id = e.from_id \
+                JOIN automation_action a ON a.id = p.action_id \
+                WHERE e.owner_kind = 'automation' AND e.owner_id = r.automation_id \
+                  AND e.to_id = r.entry_placement_id AND e.ends = 'go' AND x.name = ?2 \
+                  AND p.automation_id = r.automation_id AND a.builtin = ?1 \
+                ORDER BY e.order_key, e.id LIMIT 1) \
+             FROM automation_role r \
+             JOIN automation_placement s ON s.id = r.entry_placement_id \
+             JOIN automation_action sa ON sa.id = s.action_id \
+             WHERE sa.builtin IS NOT ?1 \
+             ORDER BY r.id",
+        )?;
+        let rows = stmt.query_map([V134_TAKE_TASK, V134_TAKEN], |r| Ok((r.get(0)?, r.get::<_, Option<i64>>(1)?)))?;
+        for row in rows {
+            let (role_id, taken_from) = row?;
+            if let Some(taken_from) = taken_from {
+                drafts.push((role_id, taken_from));
+            }
+        }
+    }
+    for (role_id, taken_from) in drafts {
+        tx.execute(
+            "UPDATE automation_role SET entry_placement_id = ?1 WHERE id = ?2",
+            rusqlite::params![taken_from, role_id],
+        )?;
+    }
+
+    let mut versions: Vec<(i64, String, String, String)> = Vec::new();
+    {
+        let mut stmt = tx.prepare(
+            "SELECT v.id, v.placements, v.edges, v.roles FROM automation_version v \
+             WHERE v.roles NOT IN ('', '[]') \
+               AND v.version = (SELECT MAX(w.version) FROM automation_version w \
+                                WHERE w.automation_id = v.automation_id)",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
+        for row in rows {
+            versions.push(row?);
+        }
+    }
+    for (version_id, placements, edges, roles) in versions {
+        let Ok(placements) = serde_json::from_str::<Vec<serde_json::Value>>(&placements) else { continue };
+        let Ok(edges) = serde_json::from_str::<Vec<serde_json::Value>>(&edges) else { continue };
+        let Ok(mut roles) = serde_json::from_str::<Vec<serde_json::Value>>(&roles) else { continue };
+        let mut moved = false;
+        for role in &mut roles {
+            let Some(start) = role.get("entry_placement_id").and_then(serde_json::Value::as_i64) else { continue };
+            if version_placement_takes_a_task(tx, &placements, start)? != Some(false) {
+                continue;
+            }
+            let Some(taken_from) = taken_comes_from_in_version(tx, &placements, &edges, start)? else { continue };
+            let Some(role) = role.as_object_mut() else { continue };
+            role.insert("entry_placement_id".to_string(), serde_json::Value::from(taken_from));
+            moved = true;
+        }
+        if moved {
+            tx.execute(
+                "UPDATE automation_version SET roles = ?1 WHERE id = ?2",
+                rusqlite::params![serde_json::Value::Array(roles).to_string(), version_id],
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// The key of the built-in that takes a task, as it stood at v134.
+const V134_TAKE_TASK: &str = "take_task";
+
+/// The name of the way out of the built-in that takes a task which it leaves by once it has taken one,
+/// as it stood at v134.
+const V134_TAKEN: &str = "着手した";
+
+/// Whether the placement `id` a saved version holds is the built-in that takes a task, read off its
+/// action's row — `None` where the version holds no such placement, or its action is gone.
+fn version_placement_takes_a_task(
+    tx: &Transaction<'_>,
+    placements: &[serde_json::Value],
+    id: i64,
+) -> Result<Option<bool>> {
+    let Some(action_id) = placements
+        .iter()
+        .find(|p| p.get("id").and_then(serde_json::Value::as_i64) == Some(id))
+        .and_then(|p| p.get("action_id").and_then(serde_json::Value::as_i64))
+    else {
+        return Ok(None);
+    };
+    let builtin: Option<Option<String>> = tx
+        .query_row("SELECT builtin FROM automation_action WHERE id = ?1", [action_id], |r| r.get(0))
+        .optional()?;
+    Ok(builtin.map(|builtin| builtin.as_deref() == Some(V134_TAKE_TASK)))
+}
+
+/// The placement of a saved version that takes a task and whose line by [`V134_TAKEN`] goes to `to` —
+/// the first such line the version holds, or `None` where none does.
+fn taken_comes_from_in_version(
+    tx: &Transaction<'_>,
+    placements: &[serde_json::Value],
+    edges: &[serde_json::Value],
+    to: i64,
+) -> Result<Option<i64>> {
+    for edge in edges {
+        let field = |key: &str| edge.get(key).and_then(serde_json::Value::as_i64);
+        if field("to_id") != Some(to) || edge.get("ends").and_then(serde_json::Value::as_str) != Some("go") {
+            continue;
+        }
+        let (Some(exit_id), Some(from_id)) = (field("exit_id"), field("from_id")) else { continue };
+        let exit: Option<String> = tx
+            .query_row("SELECT name FROM automation_exit WHERE id = ?1", [exit_id], |r| r.get(0))
+            .optional()?;
+        if exit.as_deref() != Some(V134_TAKEN) {
+            continue;
+        }
+        if version_placement_takes_a_task(tx, placements, from_id)? == Some(true) {
+            return Ok(Some(from_id));
+        }
+    }
+    Ok(None)
+}
+
+/// v135: `automation.waits_for_task_since` is dropped — the wait for a task the whole automation was in
 /// (`AMB-D-1126`). A launch standing for an automation that was waiting stays open, and its free seats
 /// are filled once a task turns up.
 ///
@@ -12863,12 +13017,12 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v134: the wait for a task is dropped from the automation, one that was waiting arrives with the
+    /// v135: the wait for a task is dropped from the automation, one that was waiting arrives with the
     /// rest of its row as it was, and its launch standing stays open.
     #[test]
     fn an_automation_that_was_waiting_for_a_task_loses_the_wait() {
         let dir = scratch("automation-wait-dropped");
-        let engine = store_at(&dir, 133);
+        let engine = store_at(&dir, 134);
         engine
             .conn()
             .execute_batch(
@@ -13547,6 +13701,202 @@ mod tests {
         assert_eq!(roles, "[1]", "the copy keeps the roles that start at it");
         let broken: i64 = conn.query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |r| r.get(0)).unwrap();
         assert_eq!(broken, 0, "what referenced the automation still does");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v134: a role v133 left starting where the built-in's line for a task taken goes is started on
+    /// the built-in again — in the draft and in the newest saved version, with no `updated_at` moved. A
+    /// role on the built-in already, one where no such line goes, and one where only the line for no
+    /// task to take goes are left as they are, and so is an older version.
+    #[test]
+    fn a_role_started_past_the_built_in_that_takes_a_task_is_taken_back_at_v134() {
+        let dir = scratch("automation-role-start-back");
+        let engine = store_at(&dir, 133);
+        let at = "2026-11-09T00:00:00Z";
+        let role = |id: i64, automation: i64, start: i64| {
+            format!(
+                r#"{{"id":{id},"automation_id":{automation},"name":"さくら","headcount":1,"take_order":"priority","icon":null,"entry_placement_id":{start},"agent":null,"model":null,"order_key":"m","created_at":"{at}","updated_at":"{at}"}}"#
+            )
+        };
+        let placements = |automation: i64, ids: &[(i64, i64)]| {
+            let each: Vec<String> = ids
+                .iter()
+                .map(|(id, action)| format!(r#"{{"id":{id},"automation_id":{automation},"action_id":{action}}}"#))
+                .collect();
+            format!("[{}]", each.join(","))
+        };
+        let edge = |from: i64, exit: i64, to: i64| {
+            format!(r#"[{{"from_id":{from},"exit_id":{exit},"to_id":{to},"ends":"go"}}]"#)
+        };
+        engine
+            .conn()
+            .execute_batch(&format!(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO task (id, title, status, project_id, created_at, updated_at)
+                 VALUES (1, 'work', 'todo', 1, '{at}', '{at}');
+                 INSERT INTO automation_action (id, project_id, name, builtin, builtin_version, order_key)
+                 VALUES (1, NULL, 'タスクに着手する', 'take_task', 1, 'm'), (2, 1, '実装', NULL, NULL, 'n'),
+                        (3, 1, 'レビュー', NULL, NULL, 'o');
+                 INSERT INTO automation_exit (id, owner_kind, owner_id, name, order_key)
+                 VALUES (1, 'action', 1, '着手できるタスクが無い', 'm'), (2, 'action', 1, '着手した', 'n');
+                 INSERT INTO automation (id, project_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 1, '開発', 'm', '{at}', '{at}'), (2, 1, '着手済み', 'n', '{at}', '{at}'),
+                        (3, 1, '線なし', 'o', '{at}', '{at}'), (4, 1, '空振り', 'p', '{at}', '{at}');
+                 INSERT INTO automation_placement (id, automation_id, action_id, order_key, created_at, updated_at)
+                 VALUES (1, 1, 1, 'm', '{at}', '{at}'), (2, 1, 2, 'n', '{at}', '{at}'),
+                        (3, 2, 1, 'm', '{at}', '{at}'), (4, 2, 2, 'n', '{at}', '{at}'),
+                        (5, 3, 1, 'm', '{at}', '{at}'), (6, 3, 2, 'n', '{at}', '{at}'), (7, 3, 3, 'o', '{at}', '{at}'),
+                        (8, 4, 1, 'm', '{at}', '{at}'), (9, 4, 2, 'n', '{at}', '{at}');
+                 INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_id, to_id, ends, order_key, created_at, updated_at)
+                 VALUES (1, 'automation', 1, 1, 2, 2, 'go', 'm', '{at}', '{at}'),
+                        (2, 'automation', 2, 3, 2, 4, 'go', 'm', '{at}', '{at}'),
+                        (3, 'automation', 3, 5, 2, 6, 'go', 'm', '{at}', '{at}'),
+                        (4, 'automation', 4, 8, 1, 9, 'go', 'm', '{at}', '{at}');
+                 INSERT INTO automation_role (id, automation_id, name, entry_placement_id, order_key, created_at, updated_at)
+                 VALUES (1, 1, 'さくら', 2, 'm', '{at}', '{at}'), (2, 2, '山田', 3, 'm', '{at}', '{at}'),
+                        (3, 3, '佐藤', 7, 'm', '{at}', '{at}'), (4, 4, 'Alice', 9, 'm', '{at}', '{at}');
+                 INSERT INTO automation_version (id, automation_id, version, placements, cfgs, placement_steps, edges, wires, roles, created_at, updated_at)
+                 VALUES (1, 1, 1, '{p1}', '[]', '[]', '{e1}', '[]', '[{r1}]', '{at}', '{at}'),
+                        (2, 1, 2, '{p1}', '[]', '[]', '{e1}', '[]', '[{r1}]', '{at}', '{at}'),
+                        (3, 2, 1, '{p2}', '[]', '[]', '{e2}', '[]', '[{r2}]', '{at}', '{at}'),
+                        (4, 3, 1, '{p3}', '[]', '[]', '{e3}', '[]', '[{r3}]', '{at}', '{at}'),
+                        (5, 4, 1, '{p4}', '[]', '[]', '{e4}', '[]', '[{r4}]', '{at}', '{at}');",
+                p1 = placements(1, &[(1, 1), (2, 2)]),
+                p2 = placements(2, &[(3, 1), (4, 2)]),
+                p3 = placements(3, &[(5, 1), (6, 2), (7, 3)]),
+                p4 = placements(4, &[(8, 1), (9, 2)]),
+                e1 = edge(1, 2, 2),
+                e2 = edge(3, 2, 4),
+                e3 = edge(5, 2, 6),
+                e4 = edge(8, 1, 9),
+                r1 = role(1, 1, 2),
+                r2 = role(2, 2, 3),
+                r3 = role(3, 3, 7),
+                r4 = role(4, 4, 9),
+            ))
+            .unwrap();
+        let task_before: (String, String) = engine
+            .conn()
+            .query_row("SELECT status, updated_at FROM task WHERE id = 1", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let conn = engine.conn();
+        let starts: Vec<(i64, Option<i64>, String)> = {
+            let mut stmt =
+                conn.prepare("SELECT id, entry_placement_id, updated_at FROM automation_role ORDER BY id").unwrap();
+            stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap().map(|r| r.unwrap()).collect()
+        };
+        assert_eq!(
+            starts,
+            vec![
+                (1, Some(1), at.to_string()),
+                (2, Some(3), at.to_string()),
+                (3, Some(7), at.to_string()),
+                (4, Some(9), at.to_string()),
+            ],
+            "the role started past the built-in is started on it; one on it already, one no line for a task \
+             taken goes to, and one only the line for no task to take goes to keep their start",
+        );
+        let saved = |id: i64| -> (serde_json::Value, String) {
+            let (roles, updated_at): (String, String) = conn
+                .query_row("SELECT roles, updated_at FROM automation_version WHERE id = ?1", [id], |r| {
+                    Ok((r.get(0)?, r.get(1)?))
+                })
+                .unwrap();
+            let roles: Vec<serde_json::Value> = serde_json::from_str(&roles).unwrap();
+            (roles[0]["entry_placement_id"].clone(), updated_at)
+        };
+        assert_eq!(saved(2), (serde_json::json!(1), at.to_string()), "and so is the newest version's");
+        assert_eq!(saved(1), (serde_json::json!(2), at.to_string()), "an older version is not touched");
+        assert_eq!(saved(3).0, serde_json::json!(3));
+        assert_eq!(saved(4).0, serde_json::json!(7));
+        assert_eq!(saved(5).0, serde_json::json!(9));
+        let automations_moved: i64 = conn
+            .query_row("SELECT COUNT(*) FROM automation WHERE updated_at <> ?1", [at], |r| r.get(0))
+            .unwrap();
+        assert_eq!(automations_moved, 0, "no automation's updated_at is moved");
+        let task_after: (String, String) = conn
+            .query_row("SELECT status, updated_at FROM task WHERE id = 1", [], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!(task_after, task_before, "no task is touched");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v134: a store with no automation is raised past it with nothing written.
+    #[test]
+    fn a_store_with_no_automation_is_raised_past_v134_with_nothing_written() {
+        let dir = scratch("automation-role-start-back-empty");
+        let engine = store_at(&dir, 133);
+
+        run(&engine, &dir, steps_through(134), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 134);
+        let count = |table: &str| -> i64 {
+            engine.conn().query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0)).unwrap()
+        };
+        assert_eq!(count("automation_role"), 0);
+        assert_eq!(count("automation_version"), 0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// 40 → 41 → v134: an automation written at v117, whose entry takes a task and whose line for a task
+    /// taken goes on to a placement, ends with its one role starting on the entry — in the draft and in
+    /// the newest saved version — where v127 and v132 alone left it starting one placement on.
+    #[test]
+    fn an_automation_raised_from_v117_ends_with_its_role_starting_on_the_built_in_that_takes_a_task() {
+        let dir = scratch("automation-role-start-through");
+        let engine = store_at(&dir, 117);
+        let at = "2026-11-07T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation_action (id, project_id, name, builtin, builtin_version, order_key)
+                 VALUES (1, NULL, 'タスクに着手する', 'take_task', 1, 'm'), (2, 1, '実装', NULL, NULL, 'n');
+                 INSERT INTO automation_exit (id, owner_kind, owner_id, name, order_key)
+                 VALUES (1, 'action', 1, '着手できるタスクが無い', 'm'), (2, 'action', 1, '着手した', 'n');
+                 INSERT INTO automation (id, project_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 1, '開発', 'm', '{at}', '{at}');
+                 INSERT INTO automation_placement (id, automation_id, action_id, order_key, created_at, updated_at)
+                 VALUES (1, 1, 1, 'm', '{at}', '{at}'), (2, 1, 2, 'n', '{at}', '{at}');
+                 UPDATE automation SET entry_placement_id = 1 WHERE id = 1;
+                 INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_id, to_id, ends, order_key, created_at, updated_at)
+                 VALUES (1, 'automation', 1, 1, 1, NULL, 'done', 'm', '{at}', '{at}'),
+                        (2, 'automation', 1, 1, 2, 2, 'go', 'n', '{at}', '{at}');
+                 INSERT INTO automation_version (id, automation_id, version, entry_placement_id, placements, cfgs, placement_steps, edges, wires, roles, created_at, updated_at)
+                 VALUES (1, 1, 1, 1,
+                         '[{{\"id\":1,\"automation_id\":1,\"action_id\":1}},{{\"id\":2,\"automation_id\":1,\"action_id\":2}}]',
+                         '[]', '[]',
+                         '[{{\"from_id\":1,\"exit_id\":1,\"to_id\":null,\"ends\":\"done\"}},{{\"from_id\":1,\"exit_id\":2,\"to_id\":2,\"ends\":\"go\"}}]',
+                         '[]', '[]', '{at}', '{at}');"
+            ))
+            .unwrap();
+
+        run(&engine, &dir, steps_through(133), &mut crate::progress::ignore).unwrap();
+        let draft_start = |engine: &StoreEngine| -> Option<i64> {
+            engine
+                .conn()
+                .query_row("SELECT entry_placement_id FROM automation_role WHERE automation_id = 1", [], |r| r.get(0))
+                .unwrap()
+        };
+        let saved_start = |engine: &StoreEngine| -> serde_json::Value {
+            let roles: String = engine
+                .conn()
+                .query_row("SELECT roles FROM automation_version WHERE id = 1", [], |r| r.get(0))
+                .unwrap();
+            serde_json::from_str::<Vec<serde_json::Value>>(&roles).unwrap()[0]["entry_placement_id"].clone()
+        };
+        assert_eq!(draft_start(&engine), Some(2), "41 left the role starting one placement on");
+        assert_eq!(saved_start(&engine), serde_json::json!(2));
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(draft_start(&engine), Some(1), "the role starts on the built-in that takes a task");
+        assert_eq!(saved_start(&engine), serde_json::json!(1), "and so does the newest version's");
         std::fs::remove_dir_all(&dir).ok();
     }
 

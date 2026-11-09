@@ -21,6 +21,12 @@
 //! the lines an automation hangs on it stay. A value added after a run was launched has no way out on
 //! that run's copy, so a task carrying it leaves by [`UNSORTED`], as a task carrying no value does.
 //!
+//! **A way out left without a line is not refused** (`AMB-D-1140`). A value added to the axis adds a
+//! way out to every split by it, and refusing the save and the launch until a line is drawn from it
+//! would stop an automation for a change made to the classification alone. Which values a role works
+//! is said by narrowing its take; a run that is handed a task of a value with no line anyway stops
+//! there, and the round is filed as a failure.
+//!
 //! **Only an axis a task holds one value of** can be split by, since a task holding two would have two
 //! ways out to leave by. An axis split by is not widened to hold several afterwards
 //! ([`refuse_to_widen`]).
@@ -221,7 +227,7 @@ mod tests {
     use super::*;
     use crate::model::{
         ActorKind, Automation, AutomationOwner, AutomationPictureOwner, AutomationPlacement,
-        AutomationRun, DimensionRole,
+        AutomationRun, AutomationRunStatus, AutomationStoppedReason, DimensionRole,
     };
     use crate::ops::automation::{EdgeTarget, NewAutomation, NewRole};
     use crate::ops::automation_builtin_take::{NONE_TO_TAKE, TAKEN};
@@ -494,17 +500,37 @@ mod tests {
         }
     }
 
-    /// **A value added gives a way out with no line yet**, and the launch check asks for one.
+    /// **A value added gives a way out with no line, and neither the save nor the launch asks for one**
+    /// (`AMB-D-1140`). A task of that value that reaches the split stops the run there, and the round
+    /// is filed as a failure.
     #[test]
-    fn a_value_added_asks_for_a_line_before_the_next_launch() {
+    fn a_value_added_with_no_line_is_launched_and_a_task_of_it_stops_the_run() {
         with_tx(|tx| {
             let p = picture(tx);
-            dimension::value_add(tx, p.role, "企画", None).expect("add");
+            let planning = dimension::value_add(tx, p.role, "企画", None).expect("add");
             let unmet = check(tx.conn(), p.automation.id, None, nothing_asked(), None).expect("check");
-            assert!(
-                unmet.iter().any(|u| matches!(u, Unmet::OpenExit { exit, placement, .. } if exit == "企画" && *placement == Some(p.split.id))),
-                "the new way out has nowhere to go: {unmet:?}",
-            );
+            assert!(unmet.is_empty(), "a way out of the split with no line is not refused: {unmet:?}");
+            automation::save(tx, p.automation.id, None).expect("saved with the new way out left bare");
+
+            let task = for_ai(tx, &p);
+            dimension::set(tx, task, planning.id).expect("classify");
+            let run = launched(tx, &p.automation);
+            let entry = read::automation_run_defs_of(tx.conn(), run.id)
+                .expect("defs")
+                .into_iter()
+                .find(|d| !d.role_ids().is_empty())
+                .expect("the entry");
+            let Opened::Carried { next: Next::Step(split), .. } = open(tx, run.id, entry.id, None).expect("take") else {
+                panic!("the take goes on to the split");
+            };
+            let Opened::Carried { next: Next::Halted(_), .. } = open(tx, run.id, split.id, None).expect("split") else {
+                panic!("the split has nowhere to send a task of the value with no line");
+            };
+            let run = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
+            assert_eq!(run.status, AutomationRunStatus::Failed);
+            assert_eq!(run.stopped_reason, Some(AutomationStoppedReason::NoWayOn));
+            let round = read::automation_run_task_last(tx.conn(), run.id).expect("read").expect("a round");
+            assert!(round.incident_task_id.is_some(), "the round is filed as a failure");
         });
     }
 

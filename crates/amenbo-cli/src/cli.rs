@@ -1985,7 +1985,7 @@ pub enum AutomationCmd {
         #[arg(long)]
         name: Option<String>,
         /// the role the task it files is worked under — the id `automation role-list` shows, of one of
-        /// this automation's own roles. Left out, it files the task under no role
+        /// this automation's own roles. Left out, it files the task under the automation's first role
         #[arg(long, value_name = "ROLE_ID")]
         role: Option<i64>,
         /// take the --trigger trigger away; the automation's other triggers stay — confirms unless -y

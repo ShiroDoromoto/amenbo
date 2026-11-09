@@ -823,10 +823,11 @@ fn one_trigger_is_rewritten_switched_and_taken_away_by_its_id() {
 }
 
 /// **A trigger is named and files its task under one of its automation's roles**: `--name` and
-/// `--role` are read back by `show`, both left out leave it blank and under no role, another
-/// automation's role is refused, and neither goes beside `--rm`, `--on` or `--off`. Its condition
-/// counts the tasks of one of those roles with `--if-tasks-role`, which is refused for another
-/// automation's role, with no `--if-tasks`, and beside `--off`.
+/// `--role` are read back by `show`, both left out leave it blank and with no role of its own (so
+/// it files under the automation's first role), another automation's role is refused, and neither
+/// goes beside `--rm`, `--on` or `--off`. Its condition counts the tasks of one of those roles with
+/// `--if-tasks-role`, which is refused for another automation's role, with no `--if-tasks`, and
+/// beside `--off`.
 #[test]
 fn a_trigger_is_named_and_files_under_a_role_of_its_own() {
     let cli = Cli::new();
@@ -849,7 +850,7 @@ fn a_trigger_is_named_and_files_under_a_role_of_its_own() {
     let plain = cli.json(&["automation", "trigger", "--trigger", &named, "--every", "60", "--title", "Look over the inbox", "--json"]);
     let trigger = &plain["automation_trigger"];
     assert_eq!(trigger["name"].as_str(), Some(""), "written again, it is blank: {plain}");
-    assert!(trigger.get("role_id").is_none(), "and under no role: {plain}");
+    assert!(trigger.get("role_id").is_none(), "and with no role of its own: {plain}");
 
     let other = id_of(&cli.json(&["automation", "add", "--project", &p, "--name", "B", "--failures-to", "human", "--json"]), "automation");
     let theirs = id_of(&cli.json(&["automation", "role-add", &other, "--name", "Theirs", "--json"]), "automation_role");

@@ -563,7 +563,6 @@ pub fn automation(a: &Automation) -> Record {
                 ("failures_to_role_id", kv_opt(&a.failures_to.and_then(|f| f.role_id()))),
                 ("export_only", bv(a.export_only)),
                 ("stopped", bv(a.stopped)),
-                ("waits_for_task_since", tsov(&a.waits_for_task_since)),
                 ("order_key", tv(&a.order_key)),
             ],
             &a.created_at,

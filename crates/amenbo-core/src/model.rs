@@ -1963,14 +1963,6 @@ pub struct Automation {
     /// automation's, not part of a saved version.
     #[serde(default)]
     pub stopped: bool,
-    /// **Since when Amenbo has been waiting for a task to start a run of this automation on**
-    /// (`AMB-D-969`), or `None` where it is not. Set where the built-in that takes a task set to wait,
-    /// where a role's round starts, found none to take; cleared once a run is started on one or a person
-    /// stops the wait
-    /// ([`crate::ops::automation_run::start_waiting`]). While it waits, no run stands. Like
-    /// `archived`, it is the automation's, not part of a saved version.
-    #[serde(default)]
-    pub waits_for_task_since: Option<Timestamp>,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,

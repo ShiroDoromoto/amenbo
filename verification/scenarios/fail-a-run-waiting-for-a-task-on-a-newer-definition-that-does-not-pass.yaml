@@ -18,8 +18,9 @@
 # asks it with them. So the version the second run is turned away from is one the save lets through:
 # its step's agent is gone from the machine by the time it is saved. The build screen is opened twice
 # after that, since the first opening sets the look off and the second draws what it found — the
-# answer the run's take-up reads as well. The step stands where no line reaches it, so the run never
-# opens it: only the check reads its agent.
+# answer the run's take-up reads as well. The step stands where finding no task leads, so the first
+# round, which takes a task, never opens it; the check still reads its agent, as it reads every step a
+# line reaches.
 #
 # The failed run stays on the running tab until it is acknowledged, and its line says nothing of why:
 # the screen has no word for this reason yet, so the road reads only that it failed.
@@ -33,8 +34,8 @@ description: >
   save: once the task is done the run takes the new version up and, finding no task, completes. Start
   a run of a second automation the same way. While it waits, take Codex CLI, the agent of a step on
   its picture, off the machine, and open the build screen twice so it says the automation could not be
-  started. Change it and save: the save goes through, and once the task is done the run is turned away
-  by the check of the version it would take up and fails.
+  started. Change how long it waits and save: the save goes through, and once the task is done the run
+  is turned away by the check of the version it would take up and fails.
 given:
   # Two agents, Claude Code and Codex CLI. The step is carried by Codex CLI, the one taken away.
   - { type: action, domain: workspace, op: can-start, with: { count: 2 } }
@@ -65,8 +66,8 @@ given:
   - { type: action, domain: automation, op: action-entry, with: { target: review, step: read } }
   - { type: action, domain: automation, op: edge-add, with: { in_action: true, target: read, exit_to: "" } }
 
-  # The second: take → wait → close, and out once there is nothing to take. The review stands on the
-  # picture with no line into it, so only the check reads its agent.
+  # The second: take → wait → close, and the review once there is nothing to take. The first round
+  # takes a task, so it never opens the review; the check reads its agent all the same.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one saved to fail while its run works" }, as: fails }
   - { type: action, domain: automation, op: place-add, with: { target: fails, builtin: take_task, starts: true }, as: fails_take }
   - { type: action, domain: task, op: update, with: { target: seed_fails, role_of: fails } }
@@ -75,7 +76,7 @@ given:
   - { type: action, domain: automation, op: place-add, with: { target: fails, builtin: close_task }, as: fails_close }
   - { type: action, domain: automation, op: agent-set, with: { target: fails_review, step: read, agent: codex-cli } }
   - { type: action, domain: automation, op: edge-add, with: { target: fails_take, exit: 着手した, to: fails_wait } }
-  - { type: action, domain: automation, op: edge-add, with: { target: fails_take, exit: 着手できるタスクが無い } }
+  - { type: action, domain: automation, op: edge-add, with: { target: fails_take, exit: 着手できるタスクが無い, to: fails_review } }
   - { type: action, domain: automation, op: edge-add, with: { target: fails_wait, exit: 完了, to: fails_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: fails_review, to: fails_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: fails_close } }
@@ -124,10 +125,10 @@ steps_gui:
   - { type: action, domain: automation, op: open, with: { target: fails } }
   - { type: assert, domain: automation, op: launch, with: { ready: false, reason: agent_missing } }
 
-  # Changed and saved. The save does not ask for the agent, so it goes through; the run asks for it
-  # as it takes the version up at its next entry, is turned away, and fails.
-  - { type: action, domain: automation, op: pick-box, with: { builtin: take_task } }
-  - { type: action, domain: automation, op: set-next, with: { builtin: take_task, exit: 着手できるタスクが無い, ends: halt } }
+  # The wait changed and saved. The save does not ask for the agent, so it goes through; the run asks
+  # for it as it takes the version up at its next entry, is turned away, and fails.
+  - { type: action, domain: automation, op: pick-box, with: { builtin: wait } }
+  - { type: action, domain: automation, op: answer-text, with: { builtin: wait, setting: 秒, value: "120" } }
   - { type: action, domain: automation, op: save, with: { target: fails } }
   - { type: action, domain: task, op: wait-field, with: { target: seed_fails, field: status, equals: done, seconds: 360 } }
   - { type: action, domain: automation, op: screen, with: { tab: running } }

@@ -2067,7 +2067,7 @@ fn a_role_is_defined_listed_changed_and_taken_out() {
     let (shown, code) = cli.run(&["automation", "show", &a]);
     assert_eq!(code, 0, "{shown}");
     assert!(
-        shown.contains(&format!("role {role}  レビュー  1 in it  icon eye  starts at placement {placement}  agent codex (gpt-5)")),
+        shown.contains(&format!("role {role}  レビュー  1 in it  starts by a task  icon eye  starts at placement {placement}  agent codex (gpt-5)")),
         "{shown}"
     );
 
@@ -2087,6 +2087,41 @@ fn a_role_is_defined_listed_changed_and_taken_out() {
     assert_ne!(code, 0, "the last role is not taken out: {err}");
     let listed = cli.json(&["automation", "role-list", &a, "--json"]);
     assert_eq!(listed["count"].as_u64(), Some(1), "{listed}");
+}
+
+/// **How a role's round starts is written with `--starts-by`** (`task` or `trigger`): left out, it is
+/// a task; switching it takes away where the round starts unless `--entry` comes with it; and a role
+/// failed rounds are filed to cannot start by a trigger.
+#[test]
+fn a_role_is_given_how_its_round_starts() {
+    let cli = Cli::new();
+    let (_, a, _, placement) = an_automation(&cli);
+
+    let by_task = cli.json(&["automation", "role-add", &a, "--name", "Alice", "--entry", &placement, "--json"]);
+    assert_eq!(by_task["automation_role"]["starts_by"].as_str(), Some("task"), "a task unless given: {by_task}");
+    let by_trigger = cli.json(&["automation", "role-add", &a, "--name", "Bob", "--starts-by", "trigger", "--json"]);
+    assert_eq!(by_trigger["automation_role"]["starts_by"].as_str(), Some("trigger"), "{by_trigger}");
+    let bob = id_of(&by_trigger, "automation_role");
+    let (listed, code) = cli.run(&["automation", "role-list", &a]);
+    assert_eq!(code, 0, "{listed}");
+    assert!(listed.contains("Alice  1 in it  starts by a task"), "{listed}");
+    assert!(listed.contains(&format!("{bob}  Bob  1 in it  starts by a trigger")), "{listed}");
+
+    let alice = id_of(&by_task, "automation_role");
+    let switched = cli.json(&["automation", "role-update", &alice, "--starts-by", "trigger", "--json"]);
+    assert_eq!(switched["automation_role"]["starts_by"].as_str(), Some("trigger"), "{switched}");
+    assert!(switched["automation_role"]["entry_placement_id"].is_null(), "switching takes the start away: {switched}");
+    let back = cli.json(&[
+        "automation", "role-update", &alice, "--starts-by", "task", "--entry", &placement, "--json",
+    ]);
+    assert_eq!(back["automation_role"]["starts_by"].as_str(), Some("task"), "{back}");
+    assert_eq!(back["automation_role"]["entry_placement_id"].to_string(), placement, "--entry given with it stays: {back}");
+
+    cli.json(&["automation", "update", &a, "--failures-to", &alice, "--json"]);
+    let (err, code) = cli.run_err(&["automation", "role-update", &alice, "--starts-by", "trigger", "--json"]);
+    assert_ne!(code, 0, "the role failed rounds are filed to takes a task: {err}");
+    let (err, code) = cli.run_err(&["automation", "role-add", &a, "--name", "Carol", "--starts-by", "schedule"]);
+    assert_eq!(code, 2, "clap knows only task and trigger: {err}");
 }
 
 /// **A task is worked under a role by the id `role-list` hands back**: set on add, read back by `task

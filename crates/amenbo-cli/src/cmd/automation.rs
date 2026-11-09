@@ -28,7 +28,7 @@ use amenbo_core::model::{
 use amenbo_core::model::AttachmentTarget;
 use amenbo_core::ops::automation_stop::Ending;
 use amenbo_core::model::AutomationPictureOwner;
-use amenbo_core::model::{AutomationFailureValue, AutomationRole, ClassifiedSide, FailuresTo};
+use amenbo_core::model::{AutomationFailureValue, AutomationRole, ClassifiedSide, FailuresTo, RoleStart};
 use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep, RoleChange};
 use amenbo_core::ops::automation_report::{Next, Produced};
 use amenbo_core::ops::automation_run::{
@@ -1013,8 +1013,9 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 }
             }
         }
-        AutomationCmd::RoleAdd { automation, name, headcount, icon, entry, agent, model } => {
-            let new = NewRole { name, headcount, take_order: None, starts_by: None, icon, entry_placement_id: entry, agent, model };
+        AutomationCmd::RoleAdd { automation, name, headcount, starts_by, icon, entry, agent, model } => {
+            let starts_by = starts_by.as_deref().and_then(RoleStart::parse);
+            let new = NewRole { name, headcount, take_order: None, starts_by, icon, entry_placement_id: entry, agent, model };
             let r = store.automation_role_add(automation, new).map_err(CliError::from)?;
             let line = format!("✓ Defined role {} in automation {automation} ({})", r.name, r.id);
             write_draft(flags, "automation.role-add", "automation_role", serde_json::to_value(&r).unwrap(), None, line, Some(Draft::Automation(r.automation_id)));
@@ -1040,6 +1041,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             id,
             name,
             headcount,
+            starts_by,
             icon,
             clear_icon,
             entry,
@@ -1054,7 +1056,8 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 name,
                 headcount,
                 take_order: None,
-                starts_by: None,
+                // clap lets through only the words `RoleStart` reads.
+                starts_by: starts_by.as_deref().and_then(RoleStart::parse),
                 icon: if clear_icon { Some(None) } else { icon.map(Some) },
                 entry_placement_id: if clear_entry { Some(None) } else { entry.map(Some) },
                 agent: if clear_agent { Some(None) } else { agent.map(Some) },
@@ -1831,10 +1834,14 @@ fn failures_to_arg(to: &str) -> Result<FailuresTo, CliError> {
     })
 }
 
-/// One role on one line: its id and name, how many are in it, its icon, where its round starts, and the
-/// agent and model its steps fall back to.
+/// One role on one line: its id and name, how many are in it, how its round starts, its icon, where its
+/// round starts, and the agent and model its steps fall back to.
 fn one_role(role: &AutomationRole) -> String {
     let mut line = format!("{}  {}  {} in it", role.id, role.name, role.headcount);
+    match role.starts_by {
+        RoleStart::Task => line.push_str("  starts by a task"),
+        RoleStart::Trigger => line.push_str("  starts by a trigger"),
+    }
     if let Some(icon) = &role.icon {
         line.push_str(&format!("  icon {icon}"));
     }

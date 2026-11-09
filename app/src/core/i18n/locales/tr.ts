@@ -1893,6 +1893,7 @@ export const tr: Translation = {
     not_ready_automation_action_draft: "yerleştirilen “{action}” eylemi hâlâ oluşturuluyor",
     not_ready_automation_action_empty: "yerleştirilen “{action}” eyleminin başlangıç adımı yok",
     not_ready_automation_role_start_takes_no_task: "“{role}” rolü “Görev al” yerine “{step}” ile başlıyor",
+    not_ready_automation_take_task_off_start: "“{step}” yalnızca bir rolün başladığı yerde durabilir",
     not_ready_automation_open_exit: "{step}: “{exit}” sonrasında ne olacağı belli değil",
     not_ready_automation_unwired_input: "{step}: zorunlu girdi “{port}” öğesine hiçbir şey ulaşmıyor",
     not_ready_automation_unanswered_cfg: "{step}: zorunlu ayar “{cfg}” yanıtsız",

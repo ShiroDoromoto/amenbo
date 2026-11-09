@@ -1889,6 +1889,7 @@ export const ko: Translation = {
     not_ready_automation_action_draft: "배치한 액션 「{action}」이 아직 작성 중이다",
     not_ready_automation_action_empty: "배치한 액션 「{action}」에 시작점인 스텝이 없다",
     not_ready_automation_role_start_takes_no_task: "역할 「{role}」이(가) 「작업 가져오기」가 아닌 「{step}」에서 시작한다",
+    not_ready_automation_take_task_off_start: "「{step}」은(는) 역할의 시작에만 둘 수 있다",
     not_ready_automation_open_exit: "{step}: “{exit}” 다음에 할 일이 정해지지 않았습니다",
     not_ready_automation_unwired_input: "{step}: 필수 입력 “{port}”에 아무것도 닿지 않습니다",
     not_ready_automation_unanswered_cfg: "{step}: 필수 설정 “{cfg}”에 답이 없습니다",

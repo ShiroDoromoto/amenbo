@@ -1894,6 +1894,7 @@ export const zhHans: Translation = {
     not_ready_automation_action_draft: "所放置的动作“{action}”仍在创建中",
     not_ready_automation_action_empty: "所放置的动作“{action}”没有起点步骤",
     not_ready_automation_role_start_takes_no_task: "角色“{role}”从“{step}”开始，而不是从“领取任务”开始",
+    not_ready_automation_take_task_off_start: "“{step}”只能放在角色的开始处",
     not_ready_automation_open_exit: "{step}：“{exit}”之后要做什么还没定",
     not_ready_automation_unwired_input: "{step}：没有东西到达必填输入“{port}”",
     not_ready_automation_unanswered_cfg: "{step}：必填设置“{cfg}”还没有填",

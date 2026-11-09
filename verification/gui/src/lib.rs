@@ -7512,6 +7512,7 @@ fn launch_reason(reason: &str) -> Result<&'static str, String> {
         "action_empty" => "that an action placed on it has no step to start at",
         "action_draft" => "that an action placed on it is still being created",
         "role_start_takes_no_task" => "that one of its roles starts its round at something that takes no task",
+        "take_task_off_start" => "that the built-in that takes a task stands where no role starts",
         "open_exit" => "that nothing is set to happen after one of a box's ways out",
         "unwired_input" => "that nothing reaches one of a box's required inputs",
         "unanswered_cfg" => "that one of a placement's required settings is unanswered",

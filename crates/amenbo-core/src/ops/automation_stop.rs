@@ -41,6 +41,8 @@
 //! task waits on it. Its own assignee and role are left as they were, so the run that takes it once that
 //! task is closed is the one that would have, and starts it from the first step. A run a person
 //! canceled gives the task to the human instead, with the report of the step it stopped on.
+//! **A run a trigger started is filed when it fails, task or not, and its trigger waits on the task
+//! filed** (`AMB-D-1128`): it starts no run until that task is closed.
 //!
 //! **A launch is paused, picked up and stopped as one** ([`pause_launch`] and the ops beside it). Each
 //! acts on every run of the launch still under way, one at a time, through the op for one run — so a
@@ -167,6 +169,10 @@ fn under_way(status: AutomationRunStatus) -> bool {
 /// nobody. It fails instead, with [`AutomationStoppedReason::LeftTaskOpen`], and the task is handed back
 /// as any failure's is.
 ///
+/// **A run a trigger started that failed is always filed** ([`file_for_the_trigger`], `AMB-D-1128`),
+/// with or without a task of its own, and names the task filed, which holds its trigger back until it is
+/// closed ([`crate::ops::automation_run::TriggerHeld::FailureOpen`]).
+///
 /// **The launch it was started in stays open**, even where it was the last of that launch under way:
 /// a launch ends only where a person stops it ([`stop_launch`], [`cancel_launch`]).
 pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<Ended> {
@@ -197,7 +203,36 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
         false => None,
     };
     close_stretch(tx, stretch.as_ref(), now, incident, incident.and(seat))?;
+    let after = file_for_the_trigger(tx, after, incident, ending)?;
     Ok(Ended { run: after })
+}
+
+/// **Name the failure of a run a trigger started** (`AMB-D-1128`) — on the run
+/// ([`AutomationRun::incident_task_id`]), so its trigger starts no run until that task is closed. The
+/// failure its task was filed as where it had one ([`hand_the_task_back`]); otherwise one filed here with
+/// no task to wait on it ([`file_the_failure`]) — a run with no task of its own, or one whose task was
+/// handed back or closed before it fell. A run that did not fail, or that no trigger started, is
+/// answered as it is.
+fn file_for_the_trigger(
+    tx: &WriteTx<'_>,
+    run: AutomationRun,
+    incident: Option<i64>,
+    ending: Ending,
+) -> Result<AutomationRun> {
+    if run.trigger_id.is_none() || !matches!(ending, Ending::Failed(_)) {
+        return Ok(run);
+    }
+    let filed = match incident {
+        Some(filed) => filed,
+        None => {
+            let line = said(tx, &run, ending)?;
+            file_the_failure(tx, &run, None, &line, ending)?
+        }
+    };
+    let mut named = run.clone();
+    named.incident_task_id = Some(filed);
+    crate::ops::emit_update(tx, record::automation_run(&run), record::automation_run(&named))?;
+    Ok(named)
 }
 
 /// **Whether a stretch's task is still in progress** — reserved by the run and not closed by anything
@@ -313,7 +348,7 @@ fn hand_the_task_back(
     let line = said(tx, run, ending)?;
     match ending {
         Ending::Failed(_) => {
-            let filed = file_the_failure(tx, run, task_id, &line, ending)?;
+            let filed = file_the_failure(tx, run, Some(task_id), &line, ending)?;
             crate::ops::comment::add_comment(tx, task_id, ActorKind::Ai, &line)?;
             Ok(Some(filed))
         }
@@ -335,7 +370,9 @@ fn hand_the_task_back(
 }
 
 /// **File a failed round** to whoever the automation sends one to ([`FailuresTo`]), and make the
-/// round's task wait on it. Answers the task filed.
+/// round's task wait on it. Answers the task filed. A run with no task (`task_id` `None`) — one a
+/// trigger started ([`file_for_the_trigger`]) — is filed in the run's project, with nothing to wait on
+/// it.
 ///
 /// - **What it says** is why the run failed and the step it got to — the line ([`said`]) as its title —
 ///   and, in its notes, everything a person or a role it reaches needs to judge what happened
@@ -344,8 +381,9 @@ fn hand_the_task_back(
 /// - **Who it goes to**: a person is the human assignee; a role is the task's role, worked by the AI.
 ///   An automation that names nobody — one launched before it had to — or a role that is not its own
 ///   any more files to the human, since a failure filed to nobody is one nobody reads.
-/// - **It is filed in the round's task's project**, so the edge stays inside one project. A role is
-///   named only there, since a task takes a role from its own project's automations.
+/// - **It is filed in the round's task's project**, so the edge stays inside one project — or, for a run
+///   with no task, in the run's own. A role is named only in the run's project, since a task takes a
+///   role from its own project's automations.
 /// - **It carries the classification the automation is set to file a failed round's task with**
 ///   ([`crate::model::Automation::failure_values`], `AMB-D-1129`), a value closed since included
 ///   ([`crate::ops::dimension::carry_over`]), and the time axis's default only where that classification
@@ -358,12 +396,15 @@ fn hand_the_task_back(
 fn file_the_failure(
     tx: &WriteTx<'_>,
     run: &AutomationRun,
-    task_id: i64,
+    task_id: Option<i64>,
     line: &str,
     ending: Ending,
 ) -> Result<i64> {
     let conn = tx.conn();
-    let project_id = read::task(conn, task_id)?.and_then(|t| t.project_id);
+    let project_id = match task_id {
+        Some(task_id) => read::task(conn, task_id)?.and_then(|t| t.project_id),
+        None => Some(run.project_id),
+    };
     let to = failures_to(tx, run)?;
     let role_id = to.role_id().filter(|_| project_id == Some(run.project_id));
     let notes = failure_notes(tx, run, task_id, ending)?;
@@ -404,7 +445,9 @@ fn file_the_failure(
         None => ActorKind::Human,
     };
     crate::ops::task::set_assignee(tx, filed.id, Some(assignee), ActorKind::Ai)?;
-    crate::ops::dependency::add(tx, task_id, filed.id, Some(ActorKind::Ai))?;
+    if let Some(task_id) = task_id {
+        crate::ops::dependency::add(tx, task_id, filed.id, Some(ActorKind::Ai))?;
+    }
     crate::ops::task::finish_creating(tx, filed.id, ActorKind::Ai)?;
     Ok(filed.id)
 }
@@ -428,9 +471,9 @@ fn failures_to(tx: &WriteTx<'_>, run: &AutomationRun) -> Result<FailuresTo> {
 
 /// **The notes of a failed round's filed task**, in the language the write was opened in
 /// ([`crate::run_wording::failure`]): why the run stopped, the step it stopped on and the report that
-/// step left whole — whether or not the step also carried it onto the task — the run, the task, and how
-/// many times in a row that task has stopped ([`stopped_in_a_row`]).
-fn failure_notes(tx: &WriteTx<'_>, run: &AutomationRun, task_id: i64, ending: Ending) -> Result<String> {
+/// step left whole — whether or not the step also carried it onto the task — the run, and, where the run
+/// had a task, the task and how many times in a row it has stopped ([`stopped_in_a_row`]).
+fn failure_notes(tx: &WriteTx<'_>, run: &AutomationRun, task_id: Option<i64>, ending: Ending) -> Result<String> {
     let conn = tx.conn();
     let walked = read::automation_run_steps_of(conn, run.id)?;
     let last = walked.last();
@@ -443,7 +486,13 @@ fn failure_notes(tx: &WriteTx<'_>, run: &AutomationRun, task_id: i64, ending: En
         (Some(_), None) => Reached::Gone,
         (None, _) => Reached::Nothing,
     };
-    let title = read::task(conn, task_id)?.map(|t| t.title).unwrap_or_default();
+    let task = match task_id {
+        Some(id) => {
+            let title = read::task(conn, id)?.map(|t| t.title).unwrap_or_default();
+            Some((id, title, stopped_in_a_row(conn, id)?))
+        }
+        None => None,
+    };
     let failure = Failure {
         why: why(ending),
         exit_code: last.and_then(|step| step.exit_code),
@@ -451,7 +500,7 @@ fn failure_notes(tx: &WriteTx<'_>, run: &AutomationRun, task_id: i64, ending: En
         step_no: walked.len(),
         report: last.map(|step| step.report.as_str()).filter(|report| !report.trim().is_empty()),
         run: run.id,
-        task: Some(FailedTask { id: task_id, title: &title, streak: stopped_in_a_row(conn, task_id)? }),
+        task: task.as_ref().map(|(id, title, streak)| FailedTask { id: *id, title, streak: *streak }),
     };
     Ok(crate::run_wording::failure(tx.language(), &failure))
 }

@@ -1564,6 +1564,13 @@ pub const STEPS: &[Step] = &[
         // is touched.
         apply: Apply::Custom(add_what_a_trigger_hands_on),
     },
+    Step {
+        to: 140,
+        name: "add automation_run.trigger_id and automation_run.incident_task_id, the trigger that started a run and the task filed where it failed",
+        // **Unseeded.** A run a trigger started before this was told from no other, and one that failed
+        // filed nothing, so there is nothing to point at: no trigger is held back by a run of the past.
+        apply: Apply::Custom(let_a_run_name_its_trigger_and_incident),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -2108,6 +2115,29 @@ fn take_the_way_out_for_nothing_to_take_off(ctx: &Ctx<'_>) -> Result<()> {
                 )?;
             }
         }
+    }
+    Ok(())
+}
+
+/// v140: `automation_run.trigger_id`, the trigger that started a run, and
+/// `automation_run.incident_task_id`, the task filed where such a run failed (`AMB-D-1128`).
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. The keys may be added by
+/// `ALTER TABLE` because neither column has a default but NULL.
+fn let_a_run_name_its_trigger_and_incident(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let columns = column_names(tx, "automation_run")?;
+    if !columns.iter().any(|c| c == "trigger_id") {
+        tx.execute_batch(
+            "ALTER TABLE automation_run ADD COLUMN trigger_id BIGINT REFERENCES automation_trigger(id) \
+                 ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED;",
+        )?;
+    }
+    if !columns.iter().any(|c| c == "incident_task_id") {
+        tx.execute_batch(
+            "ALTER TABLE automation_run ADD COLUMN incident_task_id BIGINT REFERENCES task(id) \
+                 ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED;",
+        )?;
     }
     Ok(())
 }
@@ -14310,12 +14340,55 @@ mod tests {
                 files: Vec::new(),
             },
         );
-        let run = crate::store_engine::read::automation_run(engine.conn(), 1).unwrap().expect("the run");
+        // The run is read by its columns rather than through the registry, which names v140's too.
+        type Started = (Option<String>, Option<String>, Option<String>, Option<String>);
+        let run: Started = engine
+            .conn()
+            .query_row(
+                "SELECT start_trigger, start_title, start_notes, start_data FROM automation_run WHERE id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .unwrap();
         assert_eq!(
-            (run.start_trigger, run.start_title, run.start_notes, run.start_data),
+            run,
             (None, None, None, None),
             "handed nothing by a trigger",
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v140: a run written before the step names no trigger and no failure, and the two columns point
+    /// at a trigger and a task.
+    #[test]
+    fn a_run_written_before_v140_names_no_trigger_and_no_incident() {
+        let dir = scratch("run-trigger-incident");
+        let engine = store_at(&dir, 139);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO task (id, title, status, project_id) VALUES (1, 'incident', 'todo', 1);
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO automation_trigger (id, automation_id, name) VALUES (1, 1, 'every');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'failed');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, steps_through(140), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 140);
+        let (trigger, incident): (Option<i64>, Option<i64>) = engine
+            .conn()
+            .query_row("SELECT trigger_id, incident_task_id FROM automation_run WHERE id = 1", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!((trigger, incident), (None, None), "no run was told by its trigger before");
+        engine
+            .conn()
+            .execute("UPDATE automation_run SET trigger_id = 1, incident_task_id = 1 WHERE id = 1", [])
+            .unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -1912,6 +1912,7 @@ export const it: Translation = {
     not_ready_automation_action_draft: "l'azione «{action}» posizionata è ancora in creazione",
     not_ready_automation_action_empty: "l'azione «{action}» posizionata non ha un passo d'inizio",
     not_ready_automation_role_start_takes_no_task: "il ruolo «{role}» inizia da «{step}», non da «Prendi un’attività»",
+    not_ready_automation_take_task_off_start: "«{step}» può stare solo dove inizia un ruolo",
     not_ready_automation_open_exit: "{step}: dopo «{exit}» non è previsto nulla",
     not_ready_automation_unwired_input: "{step}: nulla raggiunge l’ingresso obbligatorio «{port}»",
     not_ready_automation_unanswered_cfg: "{step}: l’impostazione obbligatoria «{cfg}» non ha risposta",

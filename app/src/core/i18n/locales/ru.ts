@@ -1920,6 +1920,7 @@ export const ru: Translation = {
     not_ready_automation_action_draft: "размещённое действие «{action}» ещё создаётся",
     not_ready_automation_action_empty: "у размещённого действия «{action}» нет стартового шага",
     not_ready_automation_role_start_takes_no_task: "роль «{role}» стартует с «{step}», а не с «Взять задачу»",
+    not_ready_automation_take_task_off_start: "«{step}» можно поставить только в начало роли",
     not_ready_automation_open_exit: "{step}: после «{exit}» ничего не задано",
     not_ready_automation_unwired_input: "{step}: до обязательного входа «{port}» ничего не доходит",
     not_ready_automation_unanswered_cfg: "{step}: обязательная настройка «{cfg}» осталась без ответа",

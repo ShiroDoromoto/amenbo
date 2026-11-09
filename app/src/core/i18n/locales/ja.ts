@@ -1909,6 +1909,7 @@ export const ja: Translation = {
     not_ready_automation_action_draft: "置いたアクション「{action}」が、まだ作成中",
     not_ready_automation_action_empty: "置いたアクション「{action}」に、起点のステップが無い",
     not_ready_automation_role_start_takes_no_task: "役割「{role}」の開始が「{step}」で、「タスクに着手する」ではない",
+    not_ready_automation_take_task_off_start: "「{step}」は役割の始まりにしか置けない",
     not_ready_automation_open_exit: "{step}：出口「{exit}」の次にすることが決まっていない",
     not_ready_automation_unwired_input: "{step}：必須の入力「{port}」に何も届かない",
     not_ready_automation_unanswered_cfg: "{step}：必須の設定「{cfg}」に答えが無い",

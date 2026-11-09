@@ -133,6 +133,11 @@ pub enum Unmet {
     /// (`AMB-D-1123`). A role works the tasks filed under it, and its round starts by taking one; any
     /// other start leaves every step after it about nothing. `step` is the action placed there.
     RoleStartTakesNoTask { role: String, step: String, builtin: Option<String>, placement: i64 },
+    /// The built-in that takes a task standing anywhere but where a role starts (`AMB-D-1132`). Only a
+    /// round's start takes a task; one placed partway through a role has no task of its own to wait for,
+    /// so it is refused for where it stands rather than for the task it would leave open. Raised wherever
+    /// it stands, reached from a role's start or not. `step` is the action placed there.
+    TakeTaskOffStart { step: String, builtin: Option<String>, placement: i64 },
     /// A way out with nothing set to happen after it. The run would reach it and stop. The error way
     /// out is not one of these — it is carried from birth and halts unless somebody says otherwise.
     ///
@@ -274,6 +279,12 @@ impl Unmet {
                      built-in 'take_task' with `automation role-update --entry`"
                 )
             }
+            Unmet::TakeTaskOffStart { step, .. } => {
+                format!(
+                    "'{step}' can only stand where a role starts — start a role there with \
+                     `automation role-update --entry`, or take it off"
+                )
+            }
             Unmet::OpenExit { step, exit, .. } => {
                 format!("nothing is set to happen after {} of '{step}'", named(exit))
             }
@@ -365,6 +376,7 @@ impl Unmet {
             Unmet::ActionEmpty { placement: None, .. } => ErrorCode::NotReadyActionSaveEmpty,
             Unmet::ActionDraft { .. } => ErrorCode::NotReadyAutomationActionDraft,
             Unmet::RoleStartTakesNoTask { .. } => ErrorCode::NotReadyAutomationRoleStartTakesNoTask,
+            Unmet::TakeTaskOffStart { .. } => ErrorCode::NotReadyAutomationTakeTaskOffStart,
             Unmet::OpenExit { .. } => ErrorCode::NotReadyAutomationOpenExit,
             Unmet::UnwiredInput { .. } => ErrorCode::NotReadyAutomationUnwiredInput,
             Unmet::UnansweredCfg { .. } => ErrorCode::NotReadyAutomationUnansweredCfg,
@@ -410,6 +422,7 @@ impl Unmet {
             Unmet::FailureAxisEmpty { axis } => msg.with("axis", axis),
             Unmet::ActionEmpty { action, .. } | Unmet::ActionDraft { action, .. } => msg.with("action", action),
             Unmet::RoleStartTakesNoTask { role, step, .. } => msg.with("role", role).with("step", step),
+            Unmet::TakeTaskOffStart { step, .. } => msg.with("step", step),
             Unmet::OpenExit { step, exit, .. } => msg.with("step", step).with("exit", exit),
             Unmet::UnwiredInput { step, port, .. } => msg.with("step", step).with("port", port),
             Unmet::UnansweredCfg { step, cfg, .. } | Unmet::MisansweredCfg { step, cfg, .. } => {
@@ -457,6 +470,7 @@ impl Unmet {
             | Unmet::UnwiredInput { placement, .. } => *placement,
             Unmet::ActionDraft { placement, .. }
             | Unmet::RoleStartTakesNoTask { placement, .. }
+            | Unmet::TakeTaskOffStart { placement, .. }
             | Unmet::UnansweredCfg { placement, .. }
             | Unmet::MisansweredCfg { placement, .. }
             | Unmet::CfgNotFound { placement, .. }
@@ -488,6 +502,7 @@ impl Unmet {
     fn builtin(&self) -> Option<&str> {
         match self {
             Unmet::RoleStartTakesNoTask { builtin, .. }
+            | Unmet::TakeTaskOffStart { builtin, .. }
             | Unmet::OpenExit { builtin, .. }
             | Unmet::UnwiredInput { builtin, .. }
             | Unmet::UnansweredCfg { builtin, .. }
@@ -632,7 +647,9 @@ fn not_found(what: &str, id: i64) -> Error {
 /// **A run starts where the round of its seat's role starts** (`AMB-D-1123`, [`start_of`]), so each
 /// role is asked where that is: one naming no placement on the picture is
 /// [`Unmet::RoleStartsNowhere`], and one naming a placement that is not the built-in that takes a task
-/// is [`Unmet::RoleStartTakesNoTask`].
+/// is [`Unmet::RoleStartTakesNoTask`]. The other way round, the built-in that takes a task standing
+/// where no role starts is [`Unmet::TakeTaskOffStart`] (`AMB-D-1132`) — once any role says where it
+/// starts; a picture whose roles all start nowhere has that said of each of them instead.
 ///
 /// **What is asked of a placement is asked of the action standing on it**, and then of every step the
 /// action could open ([`steps_opened_by`]): a way out inside with nothing after it and a required input
@@ -1101,6 +1118,15 @@ fn check_picture(
             });
         }
     }
+    for placement in placements {
+        if takes_a_task_off_start(conn, &routed, placement)? {
+            unmet.push(Unmet::TakeTaskOffStart {
+                step: action_name(conn, placement.action_id)?,
+                builtin: Some(TAKE_TASK.key.to_string()),
+                placement: placement.id,
+            });
+        }
+    }
     let defs = defs_of(conn, placements)?;
     let live = reachable(&routed, pic, &by_id, &defs);
     let roles = roles_by_placement(pic, &by_id, &defs);
@@ -1330,6 +1356,10 @@ fn unrunnable(program: &str, step: &str, placement: i64) -> Option<Unmet> {
 /// takes a task (`AMB-D-1123`). A placement already walked is not walked again, so a line back within
 /// the task — a review sending the work back — is followed once and asked nothing.
 ///
+/// **The built-in that takes a task standing where no role starts is left out**, both as a line's end
+/// and as where a walk begins: it is refused for where it stands ([`Unmet::TakeTaskOffStart`],
+/// `AMB-D-1132`), and the same placement is not refused twice.
+///
 /// **The picture inside an action is opened too.** A line in there can end the run on its own, and
 /// that is the same task left open. What takes a task and what closes one are asked of the action as a
 /// whole: taking is declared on the action's ways out, and the built-in that closes stands on a
@@ -1345,6 +1375,9 @@ fn leaves_task_open(
     let mut unmet = Vec::new();
     for &start in live {
         let Some(placement) = by_id.get(&start) else { continue };
+        if takes_a_task_off_start(conn, &routed, placement)? {
+            continue;
+        }
         let def = &defs[&placement.id];
         let mut lines = Vec::new();
         for exit in def.action_exits() {
@@ -1391,7 +1424,7 @@ fn leaves_task_open(
                 }
             };
             for to in tos {
-                if lets_go_of_the_task(conn, to.action_id)? {
+                if lets_go_of_the_task(conn, to.action_id)? || takes_a_task_off_start(conn, &routed, to)? {
                     continue;
                 }
                 if takes_a_task(conn, pic, to, &defs[&to.id])? {
@@ -1762,6 +1795,12 @@ fn takes_a_task(
 /// there is the built-in that takes one, which is what every role's round starts at (`AMB-D-1123`).
 fn takes_a_task_first(conn: &Connection, placement: &AutomationPlacement) -> Result<bool> {
     Ok(action_builtin(conn, placement.action_id)?.as_deref() == Some(TAKE_TASK.key))
+}
+
+/// **Whether `placement` is the built-in that takes a task, standing where no role starts** — in an
+/// automation whose roles say where they start (`routed`, [`role_entries`]). [`Unmet::TakeTaskOffStart`].
+fn takes_a_task_off_start(conn: &Connection, routed: &[i64], placement: &AutomationPlacement) -> Result<bool> {
+    Ok(!routed.is_empty() && !routed.contains(&placement.id) && takes_a_task_first(conn, placement)?)
 }
 
 /// Whether anything actually reaches one input — the action's input port `port_id`, on this placement.
@@ -3302,6 +3341,7 @@ fn past_the_task_checks(unmet: &Unmet) -> bool {
         unmet,
         Unmet::RoleStartsNowhere { .. }
             | Unmet::RoleStartTakesNoTask { .. }
+            | Unmet::TakeTaskOffStart { .. }
             | Unmet::LeavesTaskOpen { .. }
             | Unmet::HandsOnTaskTaken { .. }
     )
@@ -4935,7 +4975,12 @@ mod tests {
                 builtin: None,
                 placement: placement.id,
             };
-            assert_eq!(checked(tx, &automation), vec![refused.clone()]);
+            // The take the role started at before stands where no role starts now — a reason of its own.
+            let unmet = checked(tx, &automation);
+            assert!(
+                matches!(unmet.as_slice(), [first, Unmet::TakeTaskOffStart { .. }] if *first == refused),
+                "{unmet:?}",
+            );
             assert_eq!(refused.placement(), Some(placement.id));
             assert_eq!(refused.code(), ErrorCode::NotReadyAutomationRoleStartTakesNoTask);
             let id = placement.id.to_string();
@@ -4960,6 +5005,59 @@ mod tests {
                     [Unmet::LeavesTaskOpen { to: Some(_), to_builtin: Some(key), placement, .. }]
                         if key == TAKE_TASK.key && *placement == working.id
                 ),
+                "{unmet:?}",
+            );
+        });
+    }
+
+    /// **The built-in that takes a task, placed partway through a role, is refused for where it stands**
+    /// (`AMB-D-1132`) — and only for that: the line going on to it is not also refused as one that
+    /// leaves the task open.
+    #[test]
+    fn a_take_placed_partway_through_a_role_is_refused_for_where_it_stands() {
+        with_tx(|tx| {
+            let (automation, _, _, working) = taken_then_worked(tx);
+            let again = takes_first(tx, &automation);
+            let on = AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, working.id, None, EdgeTarget::Go(again.id), None).expect("work → take");
+            let take = read::automation_action(tx.conn(), again.action_id).expect("read").expect("the built-in's action");
+            let refused = Unmet::TakeTaskOffStart {
+                step: take.name.clone(),
+                builtin: Some(TAKE_TASK.key.into()),
+                placement: again.id,
+            };
+            assert_eq!(checked(tx, &automation), vec![refused.clone()]);
+            assert_eq!(refused.placement(), Some(again.id));
+            assert_eq!(refused.code(), ErrorCode::NotReadyAutomationTakeTaskOffStart);
+            let id = again.id.to_string();
+            let msg = refused.msg();
+            let named: Vec<(&str, &str)> = msg.fields().iter().collect();
+            assert_eq!(
+                named,
+                vec![("builtin", TAKE_TASK.key), ("placement", id.as_str()), ("step", take.name.as_str())],
+            );
+            let refused = launch(tx, automation.id, &here(&claude())).expect_err("refused");
+            assert!(refused.to_string().contains("can only stand where a role starts"), "{refused}");
+        });
+    }
+
+    /// **One that no line reaches is refused all the same** (`AMB-D-1132`): it is refused for standing
+    /// there, not for what a run would meet.
+    #[test]
+    fn a_take_standing_where_no_role_starts_is_refused_though_nothing_reaches_it() {
+        with_tx(|tx| {
+            let (automation, _, _, working) = taken_then_worked(tx);
+            let close = crate::ops::automation_builtin::action(tx, "close_task").expect("close");
+            let closing = automation::placement_add(tx, automation.id, close.id).expect("place close");
+            let on = AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, working.id, None, EdgeTarget::Go(closing.id), None).expect("work → close");
+            automation::edge_add(tx, on, closing.id, None, EdgeTarget::Done, None).expect("close → end");
+            assert_eq!(checked(tx, &automation), vec![], "the take stands where the role starts");
+
+            let aside = takes_first(tx, &automation);
+            let unmet = checked(tx, &automation);
+            assert!(
+                matches!(unmet.as_slice(), [Unmet::TakeTaskOffStart { placement, .. }] if *placement == aside.id),
                 "{unmet:?}",
             );
         });

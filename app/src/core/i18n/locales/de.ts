@@ -1901,6 +1901,7 @@ export const de: Translation = {
     not_ready_automation_action_draft: "Die platzierte Aktion „{action}“ wird noch erstellt",
     not_ready_automation_action_empty: "Die platzierte Aktion „{action}“ hat keinen Startschritt",
     not_ready_automation_role_start_takes_no_task: "Die Rolle „{role}“ startet bei „{step}“, nicht bei „Aufgabe übernehmen“",
+    not_ready_automation_take_task_off_start: "„{step}“ kann nur am Start einer Rolle stehen",
     not_ready_automation_open_exit: "{step}: Nach „{exit}“ ist nichts festgelegt",
     not_ready_automation_unwired_input: "{step}: An der erforderlichen Eingabe „{port}“ kommt nichts an",
     not_ready_automation_unanswered_cfg: "{step}: Die erforderliche Einstellung „{cfg}“ ist unbeantwortet",

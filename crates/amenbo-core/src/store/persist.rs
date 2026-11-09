@@ -1800,8 +1800,9 @@ impl Store {
         )
     }
 
-    /// **Fire one trigger of an automation** — file its task and start a run on it, or decide not to
-    /// (one operation = one transaction) — [`crate::ops::automation_run::fire`]. A launch its checks
+    /// **Fire one trigger of an automation** — start a run, filing its task first where the trigger is
+    /// aimed at a role started by a task, or decide not to (one operation = one transaction) —
+    /// [`crate::ops::automation_run::fire`]. A launch its checks
     /// refuse takes the whole transaction with it, so nothing of that time is left. `said` is what the
     /// trigger's scripts said to file one, run before this write
     /// ([`crate::ops::automation_run::ask_trigger`]); `None` for a trigger with no script. A trigger

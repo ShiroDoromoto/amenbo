@@ -1500,8 +1500,9 @@ export async function pauseRun(run: number): Promise<void> {
 }
 
 /**
- * **Ask a run to pause before it takes its next task** (`AMB-D-1019`). A run that takes no task is
- * refused, and a run waiting for one pauses on the spot
+ * **Ask a run to pause before it takes its next task** (`AMB-D-1019`). A run whose round takes no
+ * task is asked all the same and pauses where it comes back to where its round starts, and a run
+ * waiting for one pauses on the spot
  * (`amenbo_core::ops::automation_stop::pause_run_before_next_task`). Not a `WriteAck` write, for
  * `forceCancelRun`'s reason.
  */

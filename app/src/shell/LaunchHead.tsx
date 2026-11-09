@@ -9,8 +9,8 @@
 //   (`AMB-D-1019`): each finishes the task it is on and takes no new one, in every role alike. Once
 //   asked, the launch is paused, and the same place says "Resume", pressed (`aria-pressed`). Resumed,
 //   every role takes tasks again at its headcount — a role stopped on its own stays stopped
-//   (`../core/automations`'s `resumeLaunch`). A launch with a run that takes no task is refused by
-//   core, and the refusal is said on the toast.
+//   (`../core/automations`'s `resumeLaunch`). A run whose round takes no task (one of a role started
+//   by a trigger) is asked too, and pauses where it comes back to where its round starts.
 // - **"Stop"** is the force-cancel of every run of it (`AMB-D-1002`), so it asks first, as a run's own
 //   force-cancel does.
 //

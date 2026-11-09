@@ -1,7 +1,8 @@
 # Pausing one run waits for the action under way to end, and an action can be half of one task. The
 # other pause stops a run at the seam between tasks: it goes on until it next comes to the built-in
-# that takes one, and pauses there with no task in hand. Every role starts its round at that built-in,
-# so every run has the seam.
+# that takes one, and pauses there with no task in hand. A role started by a task starts its round at
+# that built-in; a run of a role started by a trigger takes no task, and pauses instead where it comes
+# back to where its round starts.
 #
 # A run started at a terminal opens no step, so neither pause settles here: the run stays `running`
 # with the request on it. What the road reads is that the run carries it.

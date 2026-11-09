@@ -1713,8 +1713,8 @@ pub struct Stopped {
 /// - **Its triggers file nothing** while it is stopped, and their `next_at` stays where it was.
 /// - **A run of it finishes the round it is on**, and pauses where the round is over, before it takes
 ///   its next task. One standing at a role's start waiting for room in the action that takes one is paused
-///   here at once ([`Stopped::paused`]). A run that takes no tasks has no round to finish and goes on to
-///   its end.
+///   here at once ([`Stopped::paused`]). A run whose round takes no task pauses where it comes back to
+///   where its round starts, and one that never does goes on to its end.
 ///
 /// Letting it start again picks up no run: those paused stay paused until somebody resumes them.
 /// Writing what already stands writes nothing.

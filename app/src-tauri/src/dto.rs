@@ -5062,8 +5062,8 @@ pub struct AutomationRunCardDto {
     /// Still `running` — the gap between the ask and the pause
     /// ([`amenbo_core::ops::automation_stop::pause_run_before_next_task`]).
     pub(crate) pause_before_next_task: bool,
-    /// **Whether asking it would do anything** — `running`, asked for neither pause yet, and it
-    /// takes tasks ([`amenbo_core::ops::automation_stop::pauses_before_next_task`]).
+    /// **Whether asking it would do anything** — `running`, and asked for neither pause yet
+    /// ([`amenbo_core::ops::automation_stop::pauses_before_next_task`]).
     pub(crate) pausable_before_next_task: bool,
     /// **Whether it stands before a built-in that is waiting** for something to turn up — still
     /// `running`, with nothing under way (`AMB-D-969`).

@@ -18,8 +18,8 @@
 //! taking one, so a run paused there holds none, and one picked up again goes on to take the next.
 //! What reads that flag is [`crate::ops::automation_step::open`], the one place that step is reached.
 //! A run standing there before a take that would wait for a task is paused at once instead: it holds
-//! no task, so there is nothing to wait for. A run that takes no tasks cannot be asked: it has no task
-//! boundary to stop at, and runs on to its end.
+//! no task, so there is nothing to wait for. A run whose round takes no task is asked all the same: it
+//! pauses where it comes back to where its round starts, and one that never does runs on to its end.
 //!
 //! **Canceling is for a paused run** ([`cancel`], `AMB-D-1002`). Nothing is under way then, so it ends
 //! the run at once and cuts nothing off. A run still going is refused: pause it first, or force-cancel
@@ -562,23 +562,21 @@ pub fn pause(tx: &WriteTx<'_>, run_id: i64) -> Result<Paused> {
 }
 
 /// **Ask a run to pause before it takes its next task** (`AMB-D-1019`). It finishes the task it is on
-/// and pauses where it next comes to the built-in that takes one where the round of its seat's role
-/// starts ([`crate::ops::automation_run::takes_its_task_at`]), without taking it.
+/// and pauses where it next comes to where the round of its seat's role starts
+/// ([`crate::ops::automation_run::round_starts_at`]) — for a round that starts by taking a task, the
+/// built-in that takes one — without taking it.
 ///
 /// A run standing there before a take that would wait for a task, or waiting for room in the action
 /// that step is the first of, is paused at once ([`Paused::Now`]): it holds no task, and its next look
 /// would only pause it. A run already asked for either pause is answered as it stands, still asked: the
-/// request is not taken back, and one asked to pause at the end of its action stops sooner. A run
-/// whose round does not start by taking a task is refused, having no task boundary to stop at.
+/// request is not taken back, and one asked to pause at the end of its action stops sooner. **A run
+/// whose round takes no task is asked all the same** — one of a role started by a trigger: it pauses
+/// where it comes back to where its round starts
+/// ([`crate::ops::automation_run::round_starts_at`]), and one that comes to its end first ends.
 pub fn pause_run_before_next_task(tx: &WriteTx<'_>, run_id: i64) -> Result<Paused> {
     let before = live_run(tx, run_id)?;
     match before.status {
         AutomationRunStatus::Running => {
-            if !crate::ops::automation_run::starts_by_taking_a_task(tx.conn(), run_id)? {
-                return Err(Error::invalid(format!(
-                    "run '{run_id}' takes no tasks, so it has no next task to pause before"
-                )));
-            }
             if before.pause_requested || before.pause_before_next_task {
                 return Ok(Paused::Asked(before));
             }
@@ -629,15 +627,10 @@ fn waits_to_take_a_task(conn: &Connection, run_id: i64) -> Result<bool> {
 }
 
 /// **Whether asking a run to pause before its next task would do anything** (`AMB-D-1019`): it is
-/// `running`, it is asked for neither pause yet, and its round starts by taking a task.
-///
-/// Where its round starts is read from the steps it copied, the last time it copied them, not the
-/// automation as it stands now (`AMB-D-961`).
-pub fn pauses_before_next_task(conn: &Connection, run: &AutomationRun) -> Result<bool> {
-    if run.status != AutomationRunStatus::Running || run.pause_requested || run.pause_before_next_task {
-        return Ok(false);
-    }
-    crate::ops::automation_run::starts_by_taking_a_task(conn, run.id)
+/// `running`, and it is asked for neither pause yet. A run whose round takes no task is asked too
+/// ([`pause_run_before_next_task`]).
+pub fn pauses_before_next_task(run: &AutomationRun) -> bool {
+    run.status == AutomationRunStatus::Running && !run.pause_requested && !run.pause_before_next_task
 }
 
 /// Whether this step is the built-in that takes a task.
@@ -852,8 +845,7 @@ pub fn pause_launch(tx: &WriteTx<'_>, launch_id: i64) -> Result<LaunchActed> {
 
 /// **Pause a launch before each of its runs takes its next task** (`AMB-D-1019`) — ask each run still
 /// going to ([`pause_run_before_next_task`]), and start no run in it until it is picked up again. Only
-/// this launch's runs are asked. A run that takes no tasks has no task boundary to stop at, and is
-/// refused as it is alone: the whole launch is refused with it, and nothing is written.
+/// this launch's runs are asked, a run whose round takes no task among them.
 pub fn pause_launch_before_next_task(tx: &WriteTx<'_>, launch_id: i64) -> Result<LaunchActed> {
     let before = live_launch(tx, launch_id)?;
     going(&before, "paused")?;

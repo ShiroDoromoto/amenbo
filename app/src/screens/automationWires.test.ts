@@ -54,6 +54,7 @@ function detail(steps: AutomationPlacementDto[], wires: AutomationDetailDto["wir
     edges: [],
     wires,
     maxHeadcount: 10,
+    failureValues: [],
     heldBy: [],
     unsaved: false,
     saveBlocks: [],

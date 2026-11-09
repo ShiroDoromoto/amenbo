@@ -574,6 +574,12 @@ triggers: Array<AutomationTriggerDto>,
  */
 failuresTo?: AutomationFailuresToDto, 
 /**
+ * **The classification a failed round's task is filed with**, by the ids of its values, at most
+ * one an axis (`AMB-D-1129`). Like `failures_to` it is kept apart from the saved versions. A
+ * required axis left without one is a reason in `save_blocks`.
+ */
+failureValues: Array<number>, 
+/**
  * **The automation's roles, in the order they are defined in.** A placement names the one whose
  * round reaches it (`AutomationPlacementDto::role_id`), and a step the one it falls back to
  * (`AutomationCarrierDto::chosen_at`).
@@ -1054,6 +1060,12 @@ headcount: number,
  * role the version does not hold, and for every role of an automation nobody has saved.
  */
 savedHeadcount?: number, 
+/**
+ * **What starts its round** ([`amenbo_core::model::RoleStart`]): a task of the role turning up, or
+ * a trigger aimed at it. A role a trigger starts takes no task, so it is offered nowhere a task or
+ * a failed round is filed to (`AMB-D-1142`).
+ */
+startsBy: "task" | "trigger", 
 /**
  * The icon it is drawn with, by the name the GUI knows it under. Absent for none chosen.
  */

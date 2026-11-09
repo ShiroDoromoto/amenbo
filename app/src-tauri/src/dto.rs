@@ -3553,6 +3553,11 @@ pub struct AutomationDetailDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) failures_to: Option<AutomationFailuresToDto>,
+    /// **The classification a failed round's task is filed with**, by the ids of its values, at most
+    /// one an axis (`AMB-D-1129`). Like `failures_to` it is kept apart from the saved versions. A
+    /// required axis left without one is a reason in `save_blocks`.
+    #[ts(type = "Array<number>")]
+    pub(crate) failure_values: Vec<i64>,
     /// **The automation's roles, in the order they are defined in.** A placement names the one whose
     /// round reaches it (`AutomationPlacementDto::role_id`), and a step the one it falls back to
     /// (`AutomationCarrierDto::chosen_at`).
@@ -3600,6 +3605,11 @@ pub struct AutomationRoleDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) saved_headcount: Option<u32>,
+    /// **What starts its round** ([`amenbo_core::model::RoleStart`]): a task of the role turning up, or
+    /// a trigger aimed at it. A role a trigger starts takes no task, so it is offered nowhere a task or
+    /// a failed round is filed to (`AMB-D-1142`).
+    #[ts(type = "\"task\" | \"trigger\"")]
+    pub(crate) starts_by: String,
     /// The icon it is drawn with, by the name the GUI knows it under. Absent for none chosen.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

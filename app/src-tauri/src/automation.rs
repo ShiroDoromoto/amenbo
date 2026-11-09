@@ -174,12 +174,17 @@ pub fn automation_import(project_id: i64, src: String) -> Result<WriteAck, CmdEr
 }
 
 /// **Rename an automation, rewrite its notes, put it out of the way, or choose who a failed round is
-/// filed to.** Only what is `Some` is written. How many of its runs may be going at once is its roles'
-/// headcount ([`automation_role_edit`]), not one of these.
+/// filed to and what it is classified under.** Only what is `Some` is written. How many of its runs may
+/// be going at once is its roles' headcount ([`automation_role_edit`]), not one of these.
 ///
 /// `failures_to` chooses a person or a role of this automation; core refuses a role of another one.
 /// There is no taking it back to nobody from here: a launch is refused without one, so the screen only
 /// ever moves it from one to another.
+///
+/// `failure_values` is the whole classification a failed round's task is filed with, by value ids —
+/// `Some(vec![])` for none ([`amenbo_core::ops::automation::update`]). A value of another project, two
+/// on one axis and a closed value the automation does not already hold are core's refusals. A required
+/// axis left empty is written all the same, and the save and the launch check refuse it.
 ///
 /// Archiving takes nothing away, and like every rewrite it goes through while a run of the automation
 /// is going — the run keeps the copy it started with ([`amenbo_core::ops::automation::update`]). It
@@ -196,10 +201,18 @@ pub fn automation_edit(
     notes: Option<String>,
     archived: Option<bool>,
     failures_to: Option<AutomationFailuresToDto>,
+    failure_values: Option<Vec<i64>>,
 ) -> Result<WriteAck, CmdError> {
     let failures_to = failures_to.map(|to| Some(to.into()));
     with_store_mut(|store| {
-        store.automation_update(id, name.as_deref(), notes.as_deref(), archived, failures_to, None)?;
+        store.automation_update(
+            id,
+            name.as_deref(),
+            notes.as_deref(),
+            archived,
+            failures_to,
+            failure_values.as_deref(),
+        )?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations"]))
@@ -3383,6 +3396,7 @@ fn detail_dto(
         archived: a.archived,
         triggers: a.triggers.into_iter().map(Into::into).collect(),
         failures_to: a.failures_to.map(Into::into),
+        failure_values: a.failure_values.iter().map(|value| value.value_id).collect(),
         edges: view.edges.into_iter().map(|e| edge_dto(e, &names)).collect(),
         wires,
         roles,
@@ -3584,6 +3598,7 @@ fn role_dto(
         name: role.name,
         headcount: role.headcount,
         saved_headcount,
+        starts_by: role.starts_by.as_str().to_string(),
         icon: role.icon,
         entry_placement_id: role.entry_placement_id,
         agent: role.agent,
@@ -3867,6 +3882,7 @@ mod tests {
         };
         let saved = json(Some(2));
         assert_eq!((saved["headcount"].as_u64(), saved["savedHeadcount"].as_u64()), (Some(3), Some(2)));
+        assert_eq!(saved["startsBy"], "task", "a role nobody changed is started by a task");
         assert!(json(None).get("savedHeadcount").is_none(), "a role the saved version does not hold");
     }
 
@@ -4081,6 +4097,70 @@ mod tests {
             let back = serde_json::from_value::<AutomationFailuresToDto>(wire).expect("reads");
             assert_eq!(FailuresTo::from(back), to);
         }
+    }
+
+    /// **The classification a failed round is filed with is written whole and read back on the detail.**
+    /// A required axis left empty is a reason the save would be refused, by the axis's name; choosing a
+    /// value on it takes the reason away, and writing none brings it back. Two values on one axis are
+    /// core's refusal, passed on, and leave what was written before.
+    #[test]
+    fn the_classification_of_a_failed_round_is_written_whole_and_read_back() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("automation-failure-values");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        let (automation_id, sound, picture) = {
+            let mut store = amenbo_core::Store::open().unwrap();
+            let project = store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "Failure".into(),
+                    view: amenbo_core::model::View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap();
+            let axis = store
+                .dimension_add(
+                    project.id,
+                    amenbo_core::ops::dimension::NewDimension {
+                        name: "テーマ".into(),
+                        applies_to: amenbo_core::model::DimensionAppliesTo::Task,
+                        ..Default::default()
+                    },
+                )
+                .unwrap()
+                .id;
+            let sound = store.dimension_value_add(axis, "音", None, None).unwrap().id;
+            let picture = store.dimension_value_add(axis, "絵", None, None).unwrap().id;
+            // An axis with no values cannot be required, so it turns required once it has some.
+            store.dimension_update(axis, None, None, None, None, None, None, Some(true), None, None, None).unwrap();
+            let id = store.automation_add(project.id, NewAutomation { name: "Dev".into(), ..Default::default() }).unwrap().id;
+            (id, sound, picture)
+        };
+        let detail = || automation_detail(automation_id).unwrap().expect("the automation");
+        let empty_axes = || {
+            detail()
+                .save_blocks
+                .into_iter()
+                .filter(|block| block.code == "not_ready_automation_failure_axis_empty")
+                .map(|block| block.fields.get("axis").cloned().unwrap_or_default())
+                .collect::<Vec<_>>()
+        };
+        assert!(detail().failure_values.is_empty(), "born with none");
+        assert_eq!(empty_axes(), vec!["テーマ".to_string()], "the required axis is a reason");
+
+        automation_edit(automation_id, None, None, None, None, Some(vec![sound])).unwrap();
+        assert_eq!(detail().failure_values, vec![sound]);
+        assert!(empty_axes().is_empty(), "a value on it takes the reason away");
+
+        assert!(
+            automation_edit(automation_id, None, None, None, None, Some(vec![sound, picture])).is_err(),
+            "two values on one axis are core's refusal",
+        );
+        assert_eq!(detail().failure_values, vec![sound], "a refusal writes nothing");
+
+        automation_edit(automation_id, None, None, None, None, Some(vec![])).unwrap();
+        assert!(detail().failure_values.is_empty(), "none written");
+        assert_eq!(empty_axes(), vec!["テーマ".to_string()]);
     }
 
     /// **A trigger as a screen writes it reads into core's** ([`amenbo_core::ops::automation::NewTrigger`]):

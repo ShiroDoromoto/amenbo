@@ -829,6 +829,8 @@ pub(super) fn automation_run_row(r: &Row) -> rusqlite::Result<AutomationRun> {
         stopped_detail: get(r, C.stopped_detail)?,
         launch_id: get(r, C.launch_id)?,
         role_id: get(r, C.role_id)?,
+        trigger_id: get(r, C.trigger_id)?,
+        incident_task_id: get(r, C.incident_task_id)?,
         created_at,
         updated_at,
     })

@@ -850,6 +850,8 @@ pub fn automation_run(r: &AutomationRun) -> Record {
                 ("stopped_detail", ov(&r.stopped_detail)),
                 ("launch_id", kv_opt(&r.launch_id)),
                 ("role_id", kv_opt(&r.role_id)),
+                ("trigger_id", kv_opt(&r.trigger_id)),
+                ("incident_task_id", kv_opt(&r.incident_task_id)),
             ],
             &r.created_at,
             &r.updated_at,

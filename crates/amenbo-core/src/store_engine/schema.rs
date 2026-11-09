@@ -1589,6 +1589,14 @@ datasets! {
         // last round. `SET NULL` rather than `RESTRICT`, so taking a role out is not stopped by the runs
         // that sat in it — they are a record of what ran, as `automation_run_task.role_id` is.
         role_id: fk_opt("automation_role", "SET NULL"),
+        // The trigger that started the run in a role started by a trigger, set at launch. NULL for a run
+        // started any other way — a trigger aimed at a role started by a task files a task, and the run
+        // is the task's — for one started before v139, and where the trigger has since been taken out
+        // (`SET NULL`, for the reason `role_id` is).
+        trigger_id: fk_opt("automation_trigger", "SET NULL"),
+        // The task filed where a run started by a trigger failed (`AMB-D-1128`): the trigger starts no
+        // run until it is closed. `SET NULL` for the reason `automation_run_task.task_id` is.
+        incident_task_id: fk_opt("task", "SET NULL"),
     }
 
     // **The step as it was at launch** — one row per step of the automation, written when the run is

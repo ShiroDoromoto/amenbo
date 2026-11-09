@@ -2836,6 +2836,17 @@ pub struct AutomationRun {
     /// where the role has since been taken out (`SET NULL`).
     #[serde(default)]
     pub role_id: Option<i64>,
+    /// **The trigger that started the run in a role started by a trigger** ([`AutomationTrigger`],
+    /// `AMB-D-1127`) — set at launch. `None` for a run started any other way — a trigger aimed at a role
+    /// started by a task files a task, and the run is the task's — for one started before v139, and
+    /// where the trigger has since been taken out (`SET NULL`).
+    #[serde(default)]
+    pub trigger_id: Option<i64>,
+    /// **The task filed where this run, started by a trigger, failed** (`AMB-D-1128`). Until it is
+    /// closed, the trigger starts no run
+    /// ([`crate::ops::automation_run::TriggerHeld::FailureOpen`]). `None` for every other run.
+    #[serde(default)]
+    pub incident_task_id: Option<i64>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

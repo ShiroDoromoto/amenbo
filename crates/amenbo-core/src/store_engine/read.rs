@@ -7431,6 +7431,14 @@ pub fn automation_run_ids_under_way_as(conn: &Connection, automation_id: i64, ro
     select_ids(conn, R.id, Some(&pred))
 }
 
+/// **The tasks filed where runs this trigger started failed** ([`crate::model::AutomationRun::incident_task_id`]),
+/// the newest run first. A task deleted since names nothing, so it is not among them.
+pub fn automation_trigger_incidents(conn: &Connection, trigger_id: i64) -> Result<Vec<i64>> {
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    let pred = Pred::eq(R.trigger_id, trigger_id).and(Pred::is_not_null(R.incident_task_id));
+    Ok(automation_run_rows(conn, &pred, None, 0)?.into_iter().filter_map(|run| run.incident_task_id).collect())
+}
+
 /// **The automations a trigger may start a run of** — every one carrying a trigger that is enabled and
 /// not archived, not stopped and not kept for export only, across projects, oldest first, each with all
 /// its triggers. A trigger is asked by the app's look, and that look is this machine's, not one

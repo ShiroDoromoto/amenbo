@@ -2485,6 +2485,9 @@ mod tests {
             // An axis is required only once it offers a value.
             crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None, None)
                 .expect("required");
+            // The task a failed round is filed as answers it too, or the launch is refused for that instead.
+            crate::ops::automation::update(tx, automation.id, None, None, None, None, Some(&[build.id][..]))
+                .expect("the failed round's classification");
 
             let err = launch_with(tx, &automation, &titled("an issue")).expect_err("no value on it");
             assert!(err.to_string().contains("職能"), "{err}");

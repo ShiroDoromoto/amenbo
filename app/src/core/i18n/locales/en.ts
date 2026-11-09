@@ -2179,6 +2179,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   not_ready_automation_role_starts_nowhere: "the role “{role}” starts nowhere",
   not_ready_automation_export_only: "it is an old definition, kept only to be exported",
   not_ready_automation_no_failures_to: "nobody is chosen to file a failed round to",
+  not_ready_automation_failure_axis_empty: "classification of the failure task: the required axis “{axis}” has no value",
   not_ready_automation_action_draft: "the action “{action}” placed on it is still being created",
   not_ready_automation_action_empty: "the action “{action}” placed on it has no start step",
   not_ready_automation_role_start_takes_no_task: "the role “{role}” starts at “{step}”, not at “Take a task”",

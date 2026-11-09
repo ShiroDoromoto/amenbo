@@ -1325,6 +1325,19 @@ datasets! {
         condition_role_id: fk_opt("automation_role", "RESTRICT"),
     }
 
+    // **The classification a failed round's task is filed with**: one value per axis, each one of the
+    // automation's project's own. The failed round's task carries these and nothing copied from the task
+    // the round worked. An axis the project requires with no row here holds the save and the launch
+    // (`ops::automation_run::check`). Like `automation.archived`, not part of a saved version, nor of the
+    // automation's export. `dimension_id` is denormalised, as `task_dimension_value`'s is, so one row
+    // per axis is held by the constraint below. Removing a value takes its rows with it, or moves them
+    // where the value's tasks move (`ops::dimension::value_delete`).
+    automation_failure_value {
+        automation_id: fk("automation", "RESTRICT"),
+        dimension_id: fk("dimension", "RESTRICT"),
+        value_id: fk("dimension_value", "RESTRICT"),
+    } => "UNIQUE (automation_id, dimension_id)"
+
     // **A setting, declared by an action and answered where it is placed.** The action's row is the
     // declaration alone, so its `value` is NULL; each placement of that action carries a row of its
     // own under the same `name`, and that is where the answer written while building sits. A step

@@ -155,6 +155,7 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "not_ready_automation_role_starts_nowhere",
   "not_ready_automation_export_only",
   "not_ready_automation_no_failures_to",
+  "not_ready_automation_failure_axis_empty",
   "not_ready_automation_action_empty",
   "not_ready_automation_action_draft",
   "not_ready_automation_role_start_takes_no_task",

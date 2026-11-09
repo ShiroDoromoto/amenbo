@@ -1891,6 +1891,7 @@ export const zhHans: Translation = {
     not_ready_automation_role_starts_nowhere: "角色“{role}”尚未确定开始",
     not_ready_automation_export_only: "这是旧的定义，只能导出",
     not_ready_automation_no_failures_to: "尚未决定失败的一轮提交给谁",
+    not_ready_automation_failure_axis_empty: "失败任务的分类：必填维度“{axis}”没有值",
     not_ready_automation_action_draft: "所放置的动作“{action}”仍在创建中",
     not_ready_automation_action_empty: "所放置的动作“{action}”没有起点步骤",
     not_ready_automation_role_start_takes_no_task: "角色“{role}”从“{step}”开始，而不是从“领取任务”开始",

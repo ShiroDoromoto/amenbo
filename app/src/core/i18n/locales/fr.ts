@@ -1908,6 +1908,7 @@ export const fr: Translation = {
     not_ready_automation_role_starts_nowhere: "le rôle « {role} » n’a pas de départ",
     not_ready_automation_export_only: "c'est une ancienne définition, qui ne peut plus qu'être exportée",
     not_ready_automation_no_failures_to: "personne n'est choisi pour recevoir un tour en échec",
+    not_ready_automation_failure_axis_empty: "classement de la tâche d’échec : l’axe obligatoire « {axis} » n’a pas de valeur",
     not_ready_automation_action_draft: "l'action « {action} » placée est encore en cours de création",
     not_ready_automation_action_empty: "l'action « {action} » placée n'a pas d'étape de départ",
     not_ready_automation_role_start_takes_no_task: "le rôle « {role} » part de « {step} », et non de « Prendre une tâche »",

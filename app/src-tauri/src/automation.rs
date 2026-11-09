@@ -199,7 +199,7 @@ pub fn automation_edit(
 ) -> Result<WriteAck, CmdError> {
     let failures_to = failures_to.map(|to| Some(to.into()));
     with_store_mut(|store| {
-        store.automation_update(id, name.as_deref(), notes.as_deref(), archived, failures_to)?;
+        store.automation_update(id, name.as_deref(), notes.as_deref(), archived, failures_to, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations"]))

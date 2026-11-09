@@ -1916,6 +1916,7 @@ export const uk: Translation = {
     not_ready_automation_role_starts_nowhere: "у ролі «{role}» немає старту",
     not_ready_automation_export_only: "це старе визначення, його можна лише експортувати",
     not_ready_automation_no_failures_to: "не вибрано, кому передавати невдалий прохід",
+    not_ready_automation_failure_axis_empty: "класифікація задачі про збій: обовʼязкова вісь «{axis}» не має значення",
     not_ready_automation_action_draft: "розміщена дія «{action}» ще створюється",
     not_ready_automation_action_empty: "розміщена дія «{action}» не має стартового кроку",
     not_ready_automation_role_start_takes_no_task: "роль «{role}» стартує з «{step}», а не з «Взяти завдання»",

@@ -1908,6 +1908,7 @@ export const it: Translation = {
     not_ready_automation_role_starts_nowhere: "il ruolo «{role}» non ha un inizio",
     not_ready_automation_export_only: "è una definizione vecchia e si può solo esportare",
     not_ready_automation_no_failures_to: "non è stato scelto a chi segnalare un giro fallito",
+    not_ready_automation_failure_axis_empty: "classificazione dell’attività di errore: l’asse obbligatorio «{axis}» non ha un valore",
     not_ready_automation_action_draft: "l'azione «{action}» posizionata è ancora in creazione",
     not_ready_automation_action_empty: "l'azione «{action}» posizionata non ha un passo d'inizio",
     not_ready_automation_role_start_takes_no_task: "il ruolo «{role}» inizia da «{step}», non da «Prendi un’attività»",

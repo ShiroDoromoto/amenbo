@@ -490,7 +490,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 (false, None) => None,
             };
             let a = store
-                .automation_update(id, name.as_deref(), notes.as_deref(), archived, failures_to)
+                .automation_update(id, name.as_deref(), notes.as_deref(), archived, failures_to, None)
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.update", "automation", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated automation: {} ({})", a.name, a.id));
         }

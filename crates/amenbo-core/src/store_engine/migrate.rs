@@ -1524,6 +1524,24 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 136,
+        name: "add automation_failure_value, the classification a failed round's task is filed with",
+        // **Not seeded: no row for any automation.** Which value of an axis a failed round's task should
+        // carry is the person's to say, not Amenbo's to guess. An automation in a project with a required
+        // axis is refused at its next save and launch until a person says. No task is touched.
+        apply: Apply::Sql(
+            "CREATE TABLE IF NOT EXISTS automation_failure_value (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    automation_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    dimension_id BIGINT NOT NULL DEFAULT 0 REFERENCES dimension(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    value_id BIGINT NOT NULL DEFAULT 0 REFERENCES dimension_value(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    UNIQUE (automation_id, dimension_id)
+);",
+        ),
+    },
+    Step {
+        to: 137,
         name: "add automation_role.starts_by, how a role starts its round",
         // **Every role starts by a task**, and so does every role a saved version holds, so a draft is
         // not taken for one changed since. That is how every role started until now. No task is touched.
@@ -1911,7 +1929,7 @@ fn take_the_wait_off_the_automation(ctx: &Ctx<'_>) -> Result<()> {
     Ok(())
 }
 
-/// v136: `automation_role.starts_by`, how a role starts its round, `task` on every row already there —
+/// v137: `automation_role.starts_by`, how a role starts its round, `task` on every row already there —
 /// the only way a role started until now (`AMB-D-1127`).
 ///
 /// **The roles a saved version holds are given the same `task`**, for v129's reason: a role read back
@@ -13553,6 +13571,43 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// v136: an automation written before the step arrives with no classification for its failed round's
+    /// task — which value that is was nobody's to say — and one value per axis can be written after.
+    #[test]
+    fn an_automation_written_before_v136_names_no_failure_classification() {
+        let dir = scratch("automation-failure-value");
+        let engine = store_at(&dir, 135);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'work');
+                 INSERT INTO dimension (id, project_id, name) VALUES (1, 1, 'テーマ');
+                 INSERT INTO dimension_value (id, dimension_id, name) VALUES (1, 1, '画面'), (2, 1, '記録');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let rows: i64 =
+            engine.conn().query_row("SELECT COUNT(*) FROM automation_failure_value", [], |r| r.get(0)).unwrap();
+        assert_eq!(rows, 0, "nothing is guessed");
+        engine
+            .conn()
+            .execute(
+                "INSERT INTO automation_failure_value (automation_id, dimension_id, value_id) VALUES (1, 1, 1)",
+                [],
+            )
+            .unwrap();
+        let second = engine.conn().execute(
+            "INSERT INTO automation_failure_value (automation_id, dimension_id, value_id) VALUES (1, 1, 2)",
+            [],
+        );
+        assert!(second.is_err(), "one value per axis");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// v133: a round written before the step names no seat — the order runs left their seats in was not
     /// kept — and a seat can be written on it after.
     #[test]
@@ -13580,12 +13635,12 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v136: every role written before the step starts by a task, and so does every role a saved version
+    /// v137: every role written before the step starts by a task, and so does every role a saved version
     /// holds, so the draft still reads as its newest version.
     #[test]
-    fn every_role_written_before_v136_starts_by_a_task() {
+    fn every_role_written_before_v137_starts_by_a_task() {
         let dir = scratch("automation-role-starts-by");
-        let engine = store_at(&dir, 135);
+        let engine = store_at(&dir, 136);
         let role = r#"{"id":1,"automation_id":1,"name":"reviewer","headcount":2,"take_order":"due","icon":null,"entry_placement_id":null,"agent":null,"model":null,"order_key":"m","created_at":"2026-11-10T00:00:00Z","updated_at":"2026-11-10T00:00:00Z"}"#;
         engine
             .conn()

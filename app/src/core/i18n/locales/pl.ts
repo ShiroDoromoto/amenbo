@@ -1916,6 +1916,7 @@ export const pl: Translation = {
     not_ready_automation_role_starts_nowhere: "rola „{role}” nie ma startu",
     not_ready_automation_export_only: "to stara definicja, którą można już tylko wyeksportować",
     not_ready_automation_no_failures_to: "nie wybrano, komu zgłaszać nieudany przebieg",
+    not_ready_automation_failure_axis_empty: "klasyfikacja zadania o niepowodzeniu: obowiązkowa oś „{axis}” nie ma wartości",
     not_ready_automation_action_draft: "umieszczona akcja „{action}” jest wciąż w tworzeniu",
     not_ready_automation_action_empty: "umieszczona akcja „{action}” nie ma kroku startowego",
     not_ready_automation_role_start_takes_no_task: "rola „{role}” startuje od „{step}”, a nie od „Pobierz zadanie”",

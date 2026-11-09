@@ -1347,8 +1347,9 @@ impl Store {
         self.write_one(&targets, |tx| crate::ops::automation_import::import(tx, project_id, file))
     }
 
-    /// Change an automation's name, notes, archived flag or where a failed round is filed (one
-    /// operation = one transaction) — [`crate::ops::automation::update`].
+    /// Change an automation's name, notes, archived flag, where a failed round is filed or the
+    /// classification a failed round's task is filed with (one operation = one transaction) —
+    /// [`crate::ops::automation::update`].
     pub fn automation_update(
         &mut self,
         id: i64,
@@ -1356,9 +1357,10 @@ impl Store {
         notes: Option<&str>,
         archived: Option<bool>,
         failures_to: Option<Option<crate::model::FailuresTo>>,
+        failure_values: Option<&[i64]>,
     ) -> Result<crate::model::Automation> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
-            crate::ops::automation::update(tx, id, name, notes, archived, failures_to)
+            crate::ops::automation::update(tx, id, name, notes, archived, failures_to, failure_values)
         })
     }
 

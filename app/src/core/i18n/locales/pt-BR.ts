@@ -1908,6 +1908,7 @@ export const ptBR: Translation = {
     not_ready_automation_role_starts_nowhere: "o papel “{role}” não tem início",
     not_ready_automation_export_only: "é uma definição antiga e só pode ser exportada",
     not_ready_automation_no_failures_to: "não foi escolhido para quem registrar uma rodada que falhou",
+    not_ready_automation_failure_axis_empty: "classificação da tarefa de falha: o eixo obrigatório “{axis}” não tem valor",
     not_ready_automation_action_draft: "a ação “{action}” posicionada ainda está em criação",
     not_ready_automation_action_empty: "a ação “{action}” posicionada não tem etapa de início",
     not_ready_automation_role_start_takes_no_task: "o papel “{role}” começa em “{step}”, e não em “Pegar uma tarefa”",

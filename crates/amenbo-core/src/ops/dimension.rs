@@ -241,7 +241,7 @@ fn closing_with_tasks_left(axis: &str, value: &str, left: usize) -> Error {
 /// does — every record already on the value keeps it, every filter naming it goes on resolving, and only
 /// the arrival of a new one is turned away. Refused rather than quietly ignored: a caller that asked for
 /// a classification and was handed none would leave the record filed under nothing at all.
-fn value_is_closed(axis: &str, value: &str) -> Error {
+pub(crate) fn value_is_closed(axis: &str, value: &str) -> Error {
     Error::Invalid(
         Msg::new(format!(
             "'{value}' is closed on '{axis}', so nothing new is filed under it — name an open value, or \
@@ -927,6 +927,7 @@ pub fn value_delete(tx: &WriteTx<'_>, value_id: i64, reassign_to: Option<i64>) -
             move_assignments(tx, &assignments, target.id)?;
             let on_decisions = read::decision_assignment_ids_of_value(tx.conn(), before.id)?;
             move_decision_assignments(tx, &on_decisions, target.id)?;
+            move_failure_values(tx, before.id, target.id)?;
         }
         None if axis.required && !assignments.is_empty() => {
             return Err(Error::Invalid(
@@ -986,6 +987,20 @@ fn move_decision_assignments(
     Ok(())
 }
 
+/// The same move for the automations that file a failed round's task under the value: they file it under
+/// the value the tasks move to. Each answered the axis with the value being removed, so none of them has a
+/// second row on the axis to collide with.
+fn move_failure_values(tx: &WriteTx<'_>, value_id: i64, target_id: i64) -> Result<()> {
+    let now = Timestamp::now();
+    for id in read::automation_failure_value_ids_of_value(tx.conn(), value_id)? {
+        let cur = read::automation_failure_value(tx.conn(), id)?
+            .expect("the row id was just read from the same transaction");
+        let moved = crate::model::AutomationFailureValue { value_id: target_id, updated_at: now, ..cur.clone() };
+        emit_update(tx, record::automation_failure_value(&cur), record::automation_failure_value(&moved))?;
+    }
+    Ok(())
+}
+
 /// Hard-delete one dimension value and the assignments on it, on both sides (pass an id already checked
 /// to exist) —
 /// the body of [`value_delete`], and the per-value step [`delete_subtree`] repeats down an axis.
@@ -999,6 +1014,11 @@ pub(crate) fn delete_value_subtree(tx: &WriteTx<'_>, value_id: i64) -> Result<()
     // value by value by delete_subtree, so its decision assignments leave with the values they name.
     for assignment_id in read::decision_assignment_ids_of_value(tx.conn(), value_id)? {
         tx.delete_record("decision_dimension_value", assignment_id)?;
+    }
+    // An automation filing a failed round's task under the value stops naming it. Where the axis is
+    // required, its save and launch are refused until a person names another (`ops::automation_run`).
+    for id in read::automation_failure_value_ids_of_value(tx.conn(), value_id)? {
+        tx.delete_record("automation_failure_value", id)?;
     }
     tx.delete_record("dimension_value", value_id)?;
     Ok(())
@@ -1021,10 +1041,11 @@ pub fn set(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<(TaskDimensi
     assign(tx, task_id, value_id, false)
 }
 
-/// **Carry a classification over from one task to another** — [`set`], except that a closed value is
-/// taken too. Closing retires a value from what is newly filed under it (`AMB-D-829`); a value carried
-/// over from a task that already holds it is that task's filing, copied, not a new one. It is what a
-/// failed round's task hands to the task filed for it, so that one can always finish being created.
+/// **Carry a classification chosen earlier onto a task** — [`set`], except that a closed value is taken
+/// too. Closing retires a value from what is newly filed under it (`AMB-D-829`); a value an automation
+/// named for its failed rounds' tasks before it closed is that earlier choice, carried out now, not a new
+/// one. It is what a failed round's task is filed under ([`crate::model::Automation::failure_values`]), so
+/// that task can always finish being created.
 pub(crate) fn carry_over(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<(TaskDimensionValue, bool)> {
     assign(tx, task_id, value_id, true)
 }
@@ -1061,7 +1082,8 @@ fn assign(
 
     // Read after the noop above, deliberately: closing retires a value from what is filed under it from
     // here on, and says nothing about what already is (`AMB-D-829`). A task carrying the value keeps it,
-    // and asking for it again is the same noop it was. A value carried over is that filing copied.
+    // and asking for it again is the same noop it was. A value carried over is a choice made before it
+    // closed, carried out now (`carry_over`).
     if value.closed && !closed_too {
         return Err(value_is_closed(&axis.name, &value.name));
     }

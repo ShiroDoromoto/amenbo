@@ -79,7 +79,7 @@ use crate::dto::{
     AutomationTriggerTriedDto,
     AutomationStepOpenDto, AutomationStepRunDto, AutomationTestRunDto, AutomationTestStepDto,
     AutomationWaitingTaskDto, AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
-    WriteAck,
+    ScheduleDto, WriteAck,
 };
 use crate::error::CmdError;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -2298,7 +2298,7 @@ fn held_back_dto(project: i64, held: automation_builtin::HeldBack) -> Automation
         blockers: held.blockers.into_iter().map(record).collect(),
         decisions: held.decisions.into_iter().map(record).collect(),
         not_started: held.not_started,
-        first_start: held.first_start.map(|day| day.format("%Y-%m-%d").to_string()),
+        first_start: held.first_start.map(ScheduleDto::from),
         drafts: held.drafts,
     }
 }
@@ -3699,7 +3699,7 @@ mod tests {
             blockers: vec![automation_builtin::HeldByRecord { id: 9, title: "the part before".into(), count: 1 }],
             decisions: Vec::new(),
             not_started: 1,
-            first_start: chrono::NaiveDate::from_ymd_opt(2026, 12, 1),
+            first_start: chrono::NaiveDate::from_ymd_opt(2026, 12, 1).map(amenbo_core::model::Schedule::Day),
             drafts: 0,
         };
         assert_eq!(
@@ -3711,9 +3711,21 @@ mod tests {
                 "blockers": [{ "id": 9, "title": "the part before", "count": 1 }],
                 "decisions": [],
                 "notStarted": 1,
-                "firstStart": "2026-12-01",
+                "firstStart": { "kind": "day", "day": "2026-12-01" },
                 "drafts": 0,
             }),
+        );
+        // A first start at an instant is handed on to the instant, not rounded to the day it falls on.
+        let at = amenbo_core::time::Timestamp::parse_rfc3339("2026-12-01T05:00:00Z").expect("instant");
+        let held = automation_builtin::HeldBack {
+            tasks: 1,
+            not_started: 1,
+            first_start: Some(amenbo_core::model::Schedule::At(at)),
+            ..Default::default()
+        };
+        assert_eq!(
+            serde_json::to_value(held_back_dto(2, held)).expect("json")["firstStart"],
+            serde_json::json!({ "kind": "at", "at": "2026-12-01T05:00:00Z" }),
         );
 
         let role = |held_back: Option<AutomationHeldBackDto>| {

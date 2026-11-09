@@ -34,6 +34,7 @@ import { exactLabel, formatNumber, t, tf } from "../core/i18n";
 import { builtinDoes } from "../core/builtinWords";
 import { useHeldBack } from "../core/automations";
 import { taskRef } from "../core/idref";
+import { scheduleText } from "../core/calendar";
 import { useRefNav } from "../core/refNav";
 import { Icon } from "../components/Icon";
 import { ExitMark, FilterChips } from "../screens/automationParts";
@@ -122,8 +123,8 @@ export function HeldBack({ held }: { held: AutomationHeldBackDto }) {
           </li>
         ))}
         {held.notStarted > 0 && (
-          <li title={held.firstStart === undefined ? undefined : tf("block.notStarted", { date: held.firstStart })}>
-            <span><Icon name="hourglass" /> {held.firstStart ?? t("detail.notStarted")}</span>
+          <li title={held.firstStart === undefined ? undefined : tf("block.notStarted", { date: scheduleText(held.firstStart) })}>
+            <span><Icon name="hourglass" /> {held.firstStart === undefined ? t("detail.notStarted") : scheduleText(held.firstStart)}</span>
             {count(held.notStarted)}
           </li>
         )}

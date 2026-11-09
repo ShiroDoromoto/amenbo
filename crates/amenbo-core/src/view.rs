@@ -86,6 +86,38 @@ pub fn not_started_until(start: Option<Schedule>, today: NaiveDate, now: Timesta
     })
 }
 
+/// How an `Option<Schedule>` is written under a key that once held only a day (`AMB-D-1082`): the key
+/// it has always had holds the reader's day it falls on, and `<key>_at` beside it holds the instant when
+/// it is one, `null` otherwise — so a reader of the old key still reads a day, and the time is there for
+/// one who wants it. Both keys are always written. `#[serde(flatten, with = "reader_day_wire::<key>")]`
+/// on a field writes them.
+pub mod reader_day_wire {
+    macro_rules! wire {
+        ($m:ident, $day:ident, $at:ident) => {
+            pub mod $m {
+                use chrono::NaiveDate;
+                use serde::{Serialize, Serializer};
+
+                use crate::model::Schedule;
+                use crate::time::Timestamp;
+
+                #[derive(Serialize)]
+                struct Wire {
+                    $day: Option<NaiveDate>,
+                    $at: Option<Timestamp>,
+                }
+
+                pub fn serialize<S: Serializer>(v: &Option<Schedule>, s: S) -> Result<S::Ok, S::Error> {
+                    Wire { $day: v.map(|v| v.day()), $at: v.and_then(|v| v.at()) }.serialize(s)
+                }
+            }
+        };
+    }
+
+    wire!(not_started_until, not_started_until, not_started_until_at);
+    wire!(first_start, first_start, first_start_at);
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct Ref {
     pub id: String,
@@ -205,11 +237,12 @@ pub struct TaskCompact {
     /// Derived from premises: the decision_ids of linked decisions that are not live grounds. Empty means
     /// the premises hold.
     pub blocked_by_decisions: Vec<i64>,
-    /// Derived from the declared start day: the date this task is waiting for, when that day is still
-    /// ahead ([`not_started_until`]). The third reason a task is not ready, beside the two above — always
-    /// serialized, `null` when the start day is no reason. A start at an instant still ahead is the
-    /// reader's day it falls on.
-    pub not_started_until: Option<NaiveDate>,
+    /// Derived from the declared start: the day or the instant this task is waiting for, when it is
+    /// still ahead ([`not_started_until`]). The third reason a task is not ready, beside the two above —
+    /// always serialized, `null` when the start is no reason. Written as [`reader_day_wire`] writes it:
+    /// `not_started_until` the reader's day, and `not_started_until_at` the instant when it is one.
+    #[serde(flatten, with = "reader_day_wire::not_started_until")]
+    pub not_started_until: Option<Schedule>,
     /// Still being put together: the fourth reason a task is not ready (`AMB-D-553`). Carried on the row
     /// rather than derived, because the stage a creation is at is stored and not computed — and carried
     /// at all because a draft **is** listed (`AMB-D-555`), so its row has to be able to say why it is not
@@ -339,10 +372,12 @@ pub struct TaskDetail {
     pub blocked_by: Vec<TaskRef>,
     /// Premises: linked decisions that are not live grounds (id + title). Empty means the premises hold.
     pub blocked_by_decisions: Vec<DecisionRef>,
-    /// The declared start day, when it is still ahead ([`not_started_until`]) — the third reason this task
-    /// is not ready, beside the two above. Always serialized, `null` when the start day is no reason. A
-    /// start at an instant still ahead is the reader's day it falls on.
-    pub not_started_until: Option<NaiveDate>,
+    /// The declared start, a day or an instant, when it is still ahead ([`not_started_until`]) — the
+    /// third reason this task is not ready, beside the two above. Always serialized, `null` when the
+    /// start is no reason. Written as [`reader_day_wire`] writes it: `not_started_until` the reader's
+    /// day, and `not_started_until_at` the instant when it is one.
+    #[serde(flatten, with = "reader_day_wire::not_started_until")]
+    pub not_started_until: Option<Schedule>,
     /// Still being put together — the fourth reason this task is not ready (`AMB-D-553`). The one premise
     /// the reader of a detail page can settle on the spot: finishing the creation is what clears it.
     pub draft: bool,

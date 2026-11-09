@@ -178,9 +178,15 @@ pub(crate) fn held_back(conn: &Connection, project_id: i64, roles: &[i64], cfg: 
             }
             task.blocked_by_open.iter().for_each(|id| bump(&mut blockers, *id));
             task.blocked_by_decisions.iter().for_each(|id| bump(&mut decisions, *id));
-            if let Some(day) = task.not_started_until {
+            if let Some(start) = task.not_started_until {
                 held.not_started += 1;
-                held.first_start = Some(held.first_start.map_or(day, |first| first.min(day)));
+                // A day weighs in at the moment it begins for the reader, an instant at its own; at a tie
+                // the day is named, as `waiting_on_start` names it.
+                let weight = |s: crate::model::Schedule| (s.begins(), s.at().is_some());
+                held.first_start = Some(match held.first_start {
+                    Some(first) if weight(first) <= weight(start) => first,
+                    _ => start,
+                });
             }
             if task.draft {
                 held.drafts += 1;
@@ -684,9 +690,20 @@ mod tests {
                 held.decisions,
                 vec![HeldByRecord { id: premise.id, title: "the premise".into(), count: 1 }],
             );
-            assert_eq!((held.not_started, held.first_start), (1, Some(day)));
+            assert_eq!((held.not_started, held.first_start), (1, Some(crate::model::Schedule::Day(day))));
             assert!(held.values.is_empty());
             assert_eq!(held.drafts, 0);
+
+            // A start at an instant before that day is the first, and it is carried to the instant.
+            let sooner = ours(tx, "sooner", &automation, None);
+            let at = crate::time::Timestamp(crate::time::Timestamp::now().0 + chrono::Duration::hours(2));
+            task::update(tx, sooner, TaskPatch { start: Some(crate::model::Schedule::At(at)), ..Default::default() })
+                .expect("start");
+            let held = run_held_back(tx.conn(), run.id).expect("held back").expect("still waiting");
+            assert_eq!((held.not_started, held.first_start), (2, Some(crate::model::Schedule::At(at))));
+            let json = serde_json::to_value(&held).expect("json");
+            assert_eq!(json["first_start"], serde_json::json!(at.local_date().to_string()), "the day, as it always was");
+            assert_eq!(json["first_start_at"], serde_json::json!(at.to_rfc3339_z()), "and the instant beside it");
 
             ours(tx, "one it can take", &automation, None);
             assert_eq!(run_held_back(tx.conn(), run.id).expect("held back"), None, "no longer waiting");

@@ -2231,7 +2231,7 @@ pub fn task_detail(
         row.draft,
         !row.waiting_on_values.is_empty(),
     );
-    let not_started_until = crate::view::not_started_until(row.start, today, now).map(|s| s.day());
+    let not_started_until = crate::view::not_started_until(row.start, today, now);
     let blocks: Vec<crate::view::TaskRef> =
         row.blocks.into_iter().map(|(id, name)| crate::view::TaskRef { id, name }).collect();
 

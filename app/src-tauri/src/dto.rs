@@ -471,7 +471,7 @@ pub struct PremiseChangeDto {
 /// form of [`amenbo_core::model::Schedule`]. A day (`YYYY-MM-DD`) is the reader's own calendar day; an
 /// instant (RFC3339 UTC) is shown in the reader's zone, and wherever the screen cuts by day it is read on
 /// the reader's day it falls on.
-#[derive(Serialize, TS, Debug, PartialEq)]
+#[derive(Serialize, TS, Debug, Clone, PartialEq)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum ScheduleDto {
@@ -4522,13 +4522,13 @@ pub struct AutomationHeldBackDto {
     pub(crate) blockers: Vec<AutomationHeldByRecordDto>,
     /// The linked decisions that are not live grounds, most tasks first.
     pub(crate) decisions: Vec<AutomationHeldByRecordDto>,
-    /// How many wait for their start day.
+    /// How many wait for their start.
     #[ts(type = "number")]
     pub(crate) not_started: usize,
-    /// The first of those start days (`YYYY-MM-DD`). Absent when none waits for one.
+    /// The first of those starts — a day, or an instant (`AMB-D-1082`). Absent when none waits for one.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub(crate) first_start: Option<String>,
+    pub(crate) first_start: Option<ScheduleDto>,
     /// How many are still being created.
     #[ts(type = "number")]
     pub(crate) drafts: usize,

@@ -4200,11 +4200,21 @@ impl Instructor {
                             .cloned()
                             .unwrap_or_else(|| "<the action>".to_string())
                     ),
+                    // The built-in that takes a task stands only where a role that starts with a task
+                    // starts, and is put there by the role's own button (`start-role`):
+                    // the panel offers it on no line, so no road can place it from there.
+                    (None, None, Some("take_task")) => return Err(
+                        "the built-in that takes a task is offered on no line — it stands only where a role starts, \
+                         and is put there by `start-role`"
+                            .to_string(),
+                    ),
                     // A built-in comes last in that panel, under a head of its own, and opens under
                     // the row with what it does before the button that places it. It is named by its
-                    // key, and found by what it is (`BUILTIN_WORDS`).
+                    // key, and found by what it is (`BUILTIN_WORDS`). Every one placed this way reads
+                    // that head without the built-in that takes a task, which the panel never offers.
                     (None, None, Some(builtin)) => format!(
-                        "{plus} In the panel that opens beside the picture, under the head for the built-ins, press the row for {} — its name is written in the interface's language. Confirm what it does opens under the row, then press the button under it that places it.",
+                        "{plus} In the panel that opens beside the picture, under the head for the built-ins, confirm no row is listed for {} — it is placed only by a role's own start button. Press the row for {} — its name is written in the interface's language. Confirm what it does opens under the row, then press the button under it that places it.",
+                        builtin_words("take_task")?.called,
                         builtin_words(builtin)?.called
                     ),
                     _ => return Err(
@@ -10025,9 +10035,9 @@ title: y
 steps_gui:
   - { type: action, domain: automation, op: builtin-open, with: { builtin: take_task } }
   - { type: assert, domain: automation, op: builtin-read, with: { builtin: take_task, settings: [絞り込み], exits: [着手した, 着手できるタスクが無い], used_by: 0 } }
-  - { type: action, domain: automation, op: insert-box, with: { after: draft, exit: drafted, builtin: take_task } }
+  - { type: action, domain: automation, op: insert-box, with: { after: draft, exit: drafted, builtin: wait } }
   - { type: action, domain: automation, op: open-placed }
-  - { type: assert, domain: automation, op: builtin-read, with: { builtin: take_task, used_by: 1 } }
+  - { type: assert, domain: automation, op: builtin-read, with: { builtin: wait, used_by: 1 } }
   - { type: action, domain: automation, op: pick-box, with: { builtin: take_task } }
   - { type: assert, domain: automation, op: pictured, with: { builtin: take_task } }
   - { type: assert, domain: automation, op: line-pictured, with: { from: draft, exit: drafted, to_builtin: close_task } }
@@ -10047,7 +10057,12 @@ steps_gui:
                 && lines[1].contains("no automation runs it"),
             "{}", lines[1]
         );
-        assert!(lines[2].contains("head for the built-ins") && lines[2].contains(take), "{}", lines[2]);
+        assert!(
+            lines[2].contains("head for the built-ins")
+                && lines[2].contains(&format!("confirm no row is listed for {take}"))
+                && lines[2].contains("Press the row for the built-in that waits"),
+            "{}", lines[2]
+        );
         assert!(lines[3].contains("opens the action's build screen"), "{}", lines[3]);
         assert!(lines[4].contains("run by one automation"), "{}", lines[4]);
         assert!(lines[5].contains("press the box of") && lines[5].contains(take), "{}", lines[5]);
@@ -10065,6 +10080,16 @@ steps_gui:
         assert!(
             ins.action(Domain::Automation, "insert-box", &with).is_err(),
             "a box picked off the library and off the built-ins at once is refused"
+        );
+        let with = serde_yaml::from_str::<Args>("{ after: draft, exit: drafted, builtin: take_task }").unwrap();
+        assert!(
+            ins.action(Domain::Automation, "insert-box", &with).unwrap_err().contains("start-role"),
+            "the built-in that takes a task is offered on no line, so a road placing it there is refused"
+        );
+        let with = serde_yaml::from_str::<Args>("{ after: draft, exit: drafted, undecided: true, builtin: take_task }").unwrap();
+        assert!(
+            ins.action(Domain::Automation, "insert-box", &with).is_err(),
+            "nor after a way out nothing has been decided for"
         );
         let with = serde_yaml::from_str::<Args>("{ builtin: タスクに着手する }").unwrap();
         assert!(

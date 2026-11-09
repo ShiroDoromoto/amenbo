@@ -51,6 +51,7 @@ describe("a built-in's words", () => {
         { name: "着手できるタスクが無い", outputs: [] },
       ],
       usedBy: 2,
+      startsARoleOnly: true,
     };
     const shown = builtinShown(take);
     expect(shown.key).toBe("take_task");

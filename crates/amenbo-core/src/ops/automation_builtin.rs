@@ -105,6 +105,16 @@ pub struct Builtin {
     pub work: Work,
 }
 
+impl Builtin {
+    /// **Whether it can stand only where a role that starts with a task starts** — the built-in that
+    /// takes a task. A library offers it nowhere, and the launch check refuses it anywhere else: off a
+    /// role's start (`Unmet::TakeTaskOffStart`), and at the start of a role a trigger starts
+    /// (`Unmet::RoleStartTakesTask`).
+    pub fn starts_a_role_only(&self) -> bool {
+        self.key == TAKE_TASK.key
+    }
+}
+
 /// **Where a built-in's work is done.**
 pub enum Work {
     /// Inside the transaction that opens its step ([`Carry`]) — work that reads and writes the store and
@@ -1094,6 +1104,14 @@ mod tests {
             let takes = builtin.exits.iter().flat_map(|e| e.outs).any(|p| p.kind == AutomationPortKind::TaskTake);
             assert!(!takes, "{} takes a task", builtin.key);
         }
+    }
+
+    /// **Only the built-in that takes a task is kept to where a role starts** — every other one a
+    /// library offers wherever a step can go.
+    #[test]
+    fn only_taking_a_task_is_kept_to_where_a_role_starts() {
+        let kept: Vec<&str> = all().iter().filter(|b| b.starts_a_role_only()).map(|b| b.key).collect();
+        assert_eq!(kept, vec![TAKE_TASK.key]);
     }
 
     /// **A built-in's action is written once, from the definition, and found again after that** — one

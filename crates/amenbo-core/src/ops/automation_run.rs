@@ -1905,8 +1905,14 @@ fn takes_a_task_first(conn: &Connection, placement: &AutomationPlacement) -> Res
 
 /// **Whether `placement` is the built-in that takes a task, standing where no role starts** — in an
 /// automation whose roles say where they start (`routed`, [`role_entries`]). [`Unmet::TakeTaskOffStart`].
+/// Which built-in that is, the definition says ([`crate::ops::automation_builtin::Builtin::starts_a_role_only`]),
+/// the same mark a library reads to offer it nowhere.
 fn takes_a_task_off_start(conn: &Connection, routed: &[i64], placement: &AutomationPlacement) -> Result<bool> {
-    Ok(!routed.is_empty() && !routed.contains(&placement.id) && takes_a_task_first(conn, placement)?)
+    if routed.is_empty() || routed.contains(&placement.id) {
+        return Ok(false);
+    }
+    let builtin = action_builtin(conn, placement.action_id)?;
+    Ok(builtin.as_deref().and_then(crate::ops::automation_builtin::find).is_some_and(|b| b.starts_a_role_only()))
 }
 
 /// Whether anything actually reaches one input — the action's input port `port_id`, on this placement.

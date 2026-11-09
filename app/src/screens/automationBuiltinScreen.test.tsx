@@ -21,6 +21,7 @@ const take: AutomationBuiltinDto = {
   inputs: [{ name: "hint", kind: "value", required: false }],
   exits: [{ name: "taken", outputs: [{ name: "task", kind: "task_take", required: true }] }, { name: "完了", outputs: [] }],
   usedBy: 2,
+  startsARoleOnly: false,
 };
 
 const bare: AutomationBuiltinDto = { ...take, steps: [], halts: [], settings: [], inputs: [], exits: [] };

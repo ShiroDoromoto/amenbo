@@ -3515,6 +3515,9 @@ pub struct AutomationBuiltinDto {
     pub(crate) exits: Vec<AutomationBuiltinExitDto>,
     #[ts(type = "number")]
     pub(crate) used_by: usize,
+    /// Whether it can stand only where a role that starts with a task starts. The library offers it
+    /// nowhere: the build screen places it with the role's own start button.
+    pub(crate) starts_a_role_only: bool,
 }
 
 /// **A way out of a built-in**, and what leaving through it hands on — [`AutomationExitDto`] without

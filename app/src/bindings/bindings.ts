@@ -385,7 +385,12 @@ settings: Array<AutomationCfgDto>, inputs: Array<AutomationPortDto>,
  * The ways out it leaves by, each with what it hands on. The error way out every step carries is
  * not among them.
  */
-exits: Array<AutomationBuiltinExitDto>, usedBy: number, };
+exits: Array<AutomationBuiltinExitDto>, usedBy: number, 
+/**
+ * Whether it can stand only where a role that starts with a task starts. The library offers it
+ * nowhere: the build screen places it with the role's own start button.
+ */
+startsARoleOnly: boolean, };
 
 /**
  * **A way out of a built-in**, and what leaving through it hands on — [`AutomationExitDto`] without

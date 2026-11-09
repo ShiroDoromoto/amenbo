@@ -247,6 +247,7 @@ describe("the built-ins in the panel", () => {
     inputs: [],
     exits: [{ name: "taken", outputs: [{ name: "task", kind: "task_take", required: true }] }, { name: "完了", outputs: [] }],
     usedBy: 1,
+    startsARoleOnly: false,
   };
 
   beforeEach(() => {
@@ -270,6 +271,26 @@ describe("the built-ins in the panel", () => {
 
   it("have no head while the build carries none", async () => {
     hoisted.builtins = [];
+    await render();
+    const heads = [...container.querySelectorAll(".autolib__head")].map((one) => one.textContent);
+    expect(heads).not.toContain(t("auto.actions.reachBuiltin"));
+  });
+
+  it("leave out the one kept to where a role starts, on a line and after a way out alike", async () => {
+    const kept: AutomationBuiltinDto = { ...take, key: "take_task", name: "Start a role", startsARoleOnly: true };
+    hoisted.builtins = [kept, take];
+    for (const target of [{ edgeId: 9 }, { fromId: 3, exitName: "taken" }]) {
+      await render(target);
+      expect(rows().some((row) => row.includes("Take a task"))).toBe(true);
+      expect(rows().some((row) => row.includes("Start a role"))).toBe(false);
+      await typeInto(container.querySelector<HTMLInputElement>("input")!, "Start");
+      expect(rows().some((row) => row.includes("Start a role"))).toBe(false);
+      await typeInto(container.querySelector<HTMLInputElement>("input")!, "");
+    }
+  });
+
+  it("have no head when the only one there is is kept to where a role starts", async () => {
+    hoisted.builtins = [{ ...take, startsARoleOnly: true }];
     await render();
     const heads = [...container.querySelectorAll(".autolib__head")].map((one) => one.textContent);
     expect(heads).not.toContain(t("auto.actions.reachBuiltin"));
@@ -315,6 +336,7 @@ describe("the built-in that splits by an axis", () => {
     inputs: [],
     exits: [{ name: "分類なし", outputs: [] }],
     usedBy: 0,
+    startsARoleOnly: false,
   };
   const axis = (over: Partial<DimensionDto> & { id: number; name: string }): DimensionDto => ({
     notes: "",

@@ -1519,6 +1519,9 @@ export const zhHans: Translation = {
     "auto.about.archive": "已归档",
     "auto.about.remove": "删除此自动化",
     "auto.about.removeConfirm": "要删除此自动化吗？其中的放置、每个放置之后要做的事，以及它们之间的传递都会一并消失。放置过的动作仍留在库中。此操作无法撤销。",
+    "auto.about.removeConfirmWithRuns": "要删除此自动化吗？它的 {runs} 次运行和 {rounds} 轮记录会一并消失，其中的放置、每个放置之后要做的事以及它们之间的传递也会消失。放置过的动作仍留在库中。此操作无法撤销。",
+    "auto.about.removeNotArchived": "此自动化有运行记录，无法直接删除。先将其归档，即可连同运行记录一起删除。",
+    "auto.about.removeRunning": "此自动化有正在运行或已暂停的运行。请先停止，再删除自动化。",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

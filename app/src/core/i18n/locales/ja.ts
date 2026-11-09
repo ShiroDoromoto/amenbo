@@ -1523,6 +1523,9 @@ export const ja: Translation = {
     "auto.about.archive": "アーカイブ",
     "auto.about.remove": "このオートメーションを消す",
     "auto.about.removeConfirm": "このオートメーションを消します。中の配置・次にすること・受け渡しも一緒に消えます。配置していたアクションはライブラリに残ります。戻せません",
+    "auto.about.removeConfirmWithRuns": "このオートメーションを消します。実行 {runs} 件と、その周 {rounds} 件の記録も一緒に消えます。中の配置・次にすること・受け渡しも消えます。配置していたアクションはライブラリに残ります。戻せません",
+    "auto.about.removeNotArchived": "実行の記録があるので、このままでは消せません。アーカイブすると、実行の記録ごと消せます。",
+    "auto.about.removeRunning": "走っている・一時停止中の実行があります。止めてから消してください。",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

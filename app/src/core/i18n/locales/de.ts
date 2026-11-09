@@ -1521,6 +1521,9 @@ export const de: Translation = {
     "auto.about.archive": "Archiviert",
     "auto.about.remove": "Diese Automation löschen",
     "auto.about.removeConfirm": "Diese Automation löschen? Ihre Platzierungen, was nach jeder geschieht, und die Übergaben dazwischen gehen mit. Die platzierten Aktionen bleiben in der Bibliothek. Das lässt sich nicht rückgängig machen.",
+    "auto.about.removeConfirmWithRuns": "Diese Automation löschen? Ihre {runs} Läufe und {rounds} Runden gehen mit, ebenso ihre Platzierungen, was nach jeder geschieht, und die Übergaben dazwischen. Die platzierten Aktionen bleiben in der Bibliothek. Das lässt sich nicht rückgängig machen.",
+    "auto.about.removeNotArchived": "Hinter dieser Automation stehen Läufe, daher lässt sie sich so nicht löschen. Archiviere sie zuerst, dann lässt sie sich mitsamt ihren Läufen löschen.",
+    "auto.about.removeRunning": "Ein Lauf dieser Automation läuft oder ist pausiert. Stoppe ihn, bevor du die Automation löschst.",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

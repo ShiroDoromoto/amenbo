@@ -66,7 +66,7 @@ use crate::dto::{
     AutomationActionCardDto, AutomationActionDetailDto, AutomationBuiltinDto,
     AutomationBuiltinExitDto, AutomationBuiltinRunDto, AutomationCardDto, AutomationCfgDto,
     AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationFailuresToDto, AutomationHeldBackDto,
-    AutomationHeldByRecordDto, AutomationHeldByValueDto, AutomationLaunchAsksDto,
+    AutomationHeldByRecordDto, AutomationHeldByValueDto, AutomationHistoryDto, AutomationLaunchAsksDto,
     AutomationCarrierDto, AutomationLaunchBlockDto,
     AutomationLaunchAttentionDto, AutomationLaunchCheckDto, AutomationLaunchFailedDto, AutomationLaunchIncidentDto, AutomationLaunchRoleStateDto,
     AutomationLaunchStateDto,
@@ -329,10 +329,10 @@ pub fn automation_trigger_try_stop(tag: u64) {
 /// **Delete an automation and everything built into it** — its steps with their declarations and
 /// the edges and wires between them ([`amenbo_core::ops::automation::delete`]).
 ///
-/// **Core refuses it while a run stands behind it**, naming how many. A run carries its own copy of
-/// the steps and would go on reading correctly, but it is filed under the automation it was
-/// launched from — so the refusal is what keeps the record able to say what was run. It reaches the
-/// screen as the sentence core wrote, which is why nothing is re-asked here before the write.
+/// **An archived one takes its runs with it** — their steps, rounds, launches and files
+/// (`AMB-D-1143`); [`automation_history`] counts them for the confirm. Core refuses the delete while
+/// one of those runs is running or paused, or a launch has not ended, and refuses one not archived
+/// while any run stands behind it. A refusal reaches the screen as the sentence core wrote.
 #[tauri::command]
 pub fn automation_remove(id: i64) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
@@ -340,6 +340,15 @@ pub fn automation_remove(id: i64) -> Result<WriteAck, CmdError> {
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations"]))
+}
+
+/// **How many runs, and rounds of them, the automation `id` has behind it**
+/// ([`amenbo_core::store::Store::automation_history`]) — what deleting it, once archived, takes away.
+/// Read before the delete, since afterwards there is nothing left to count.
+#[tauri::command]
+pub fn automation_history(id: i64) -> Result<AutomationHistoryDto, CmdError> {
+    let store = open_store_read()?;
+    Ok(store.automation_history(id)?.into())
 }
 
 /// **The library this project reaches** — the device's own actions first, then the project's own.

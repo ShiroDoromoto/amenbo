@@ -39,6 +39,7 @@ import type {
   AutomationEdgeDto,
   AutomationFailuresToDto,
   AutomationHeldBackDto,
+  AutomationHistoryDto,
   AutomationLaunchAsksDto,
   AutomationLaunchCheckDto,
   AutomationLaunchStateDto,
@@ -262,13 +263,23 @@ export async function stopTriggerTry(tag: number): Promise<void> {
  * **Delete an automation and everything built into it** — its steps with their declarations and
  * the lines between them.
  *
- * **Refused while a run stands behind it**, naming how many: a run is filed under the automation it
- * was launched from, so core will not let that record lose what was run. The refusal reaches the
- * caller as core's own sentence, which is what the screen draws.
+ * **An archived one takes its runs with it**, and their rounds ({@link fetchAutomationHistory} counts
+ * them). Core refuses it while one of its runs is running or paused or a launch has not ended, and
+ * refuses one not archived while any run stands behind it. The refusal reaches the caller as core's
+ * own sentence, which is what the screen draws.
  */
 export async function deleteAutomation(id: number): Promise<void> {
   if (!inTauri()) return;
   return ack("automation_remove", { id });
+}
+
+/**
+ * **How many runs, and rounds of them, the automation `id` has behind it** — what deleting it, once
+ * archived, takes away. Read before the delete, since afterwards there is nothing left to count.
+ */
+export async function fetchAutomationHistory(id: number): Promise<AutomationHistoryDto> {
+  if (!inTauri()) return { runs: 0, rounds: 0 };
+  return invoke<AutomationHistoryDto>("automation_history", { id });
 }
 
 /**

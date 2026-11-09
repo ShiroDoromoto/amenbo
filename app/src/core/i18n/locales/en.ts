@@ -1764,6 +1764,9 @@ const ui = {
   "auto.about.archive": "Archived",
   "auto.about.remove": "Delete this automation",
   "auto.about.removeConfirm": "Delete this automation? Its placements, what happens after each and the handoffs between them go with it. The actions it placed stay in the library. This cannot be undone.",
+  "auto.about.removeConfirmWithRuns": "Delete this automation? Its {runs} run(s) and {rounds} round(s) go with it, as do its placements, what happens after each and the handoffs between them. The actions it placed stay in the library. This cannot be undone.",
+  "auto.about.removeNotArchived": "This automation has runs behind it, so it cannot be deleted as it is. Archive it first, and it can be deleted together with its runs.",
+  "auto.about.removeRunning": "A run of this automation is running or paused. Stop it before deleting the automation.",
 
   // The "running" tab: what is under way, what each run is on, and the three presses that
   // move it (`app/src/screens/RunningTab.tsx`).

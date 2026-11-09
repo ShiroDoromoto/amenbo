@@ -28,15 +28,18 @@
 // so it saves the way the name does, and a switch says by its shape that it turns back.
 //
 // **Deleting is the opposite, so it goes through the machine's own confirm** and names what goes
-// with it. Core refuses it while a run stands behind it, saying how many
-// (`amenbo_core::ops::automation::delete`); that sentence is drawn rather than re-asked here, so the
-// screen and the store cannot come to disagree about when a definition can go.
+// with it. An archived automation takes its runs with it (`AMB-D-1143`), so the confirm names how
+// many runs and rounds go — counted before the write, since afterwards there is nothing to count.
+// What keeps it from going is said rather than confirmed past: while a run is running or paused the
+// press stands disabled with why under it, and one not archived with runs behind it is refused with
+// the way to put it away first. Anything else core refuses (`amenbo_core::ops::automation::delete`),
+// such as a launch not yet ended, is drawn in core's words.
 import { useEffect, useState } from "react";
 import { Switch } from "./automationParts";
-import { deleteAutomation, editAutomation } from "../core/automations";
+import { deleteAutomation, editAutomation, fetchAutomationHistory } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
 import { asTyped } from "../core/keys";
-import { errText, t } from "../core/i18n";
+import { errText, t, tf } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
 import { useCliCommandName } from "../core/cliCommand";
 import type { AutomationDetailDto } from "../bindings/bindings";
@@ -119,12 +122,23 @@ export function AutomationAboutPanel({
     } catch { /* where the clipboard is unavailable, quietly skip */ }
   };
 
-  // Physical, and it takes every step with it, so the confirm comes before the write and core's
-  // refusal is drawn rather than swallowed as though the definition were already gone.
+  const running = automation.heldBy.length > 0;
+
+  // Physical, and it takes every step with it — and, archived, every run — so the confirm comes
+  // before the write and core's refusal is drawn rather than swallowed as though the definition were
+  // already gone.
   const remove = async () => {
-    if (!(await confirmDialog(t("auto.about.removeConfirm")))) return;
     setRefused(null);
     try {
+      const history = await fetchAutomationHistory(automation.id);
+      if (history.runs > 0 && !automation.archived) {
+        setRefused(t("auto.about.removeNotArchived"));
+        return;
+      }
+      const ask = history.runs > 0
+        ? tf("auto.about.removeConfirmWithRuns", { runs: history.runs, rounds: history.rounds })
+        : t("auto.about.removeConfirm");
+      if (!(await confirmDialog(ask))) return;
       await deleteAutomation(automation.id);
       onDeleted();
     } catch (e) {
@@ -170,10 +184,11 @@ export function AutomationAboutPanel({
       </label>
 
       <div className="actpanel__foot">
-        <button type="button" className="btn btn--danger" onClick={() => void remove()}>
+        <button type="button" className="btn btn--danger" disabled={running} onClick={() => void remove()}>
           {t("auto.about.remove")}
         </button>
       </div>
+      {running && <p className="autostep__said">{t("auto.about.removeRunning")}</p>}
     </div>
   );
 }

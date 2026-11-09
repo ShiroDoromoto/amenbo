@@ -1518,6 +1518,9 @@ export const vi: Translation = {
     "auto.about.archive": "Đã lưu trữ",
     "auto.about.remove": "Xoá tự động hoá này",
     "auto.about.removeConfirm": "Xoá tự động hoá này? Các vị trí, việc tiếp theo sau mỗi vị trí và các chuyển giao giữa chúng sẽ mất theo. Các hành động đã đặt vẫn còn trong thư viện. Không thể hoàn tác.",
+    "auto.about.removeConfirmWithRuns": "Xoá tự động hoá này? {runs} lần chạy và {rounds} vòng của nó sẽ mất theo, cùng các vị trí, việc tiếp theo sau mỗi vị trí và các chuyển giao giữa chúng. Các hành động đã đặt vẫn còn trong thư viện. Không thể hoàn tác.",
+    "auto.about.removeNotArchived": "Tự động hoá này có lịch sử chạy nên không thể xoá như hiện tại. Hãy lưu trữ trước, khi đó có thể xoá cùng lịch sử chạy.",
+    "auto.about.removeRunning": "Có lần chạy của tự động hoá này đang chạy hoặc tạm dừng. Hãy dừng nó trước khi xoá tự động hoá.",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

@@ -1517,6 +1517,9 @@ export const hi: Translation = {
     "auto.about.archive": "संग्रहित",
     "auto.about.remove": "यह ऑटोमेशन हटाएँ",
     "auto.about.removeConfirm": "यह ऑटोमेशन हटाएँ? इसके प्लेसमेंट, हर एक के बाद क्या होता है, और उनके बीच के हस्तांतरण साथ चले जाएँगे। रखे गए ऐक्शन लाइब्रेरी में बने रहेंगे। इसे वापस नहीं लाया जा सकता।",
+    "auto.about.removeConfirmWithRuns": "यह ऑटोमेशन हटाएँ? इसके {runs} रन और {rounds} राउंड साथ चले जाएँगे, और इसके प्लेसमेंट, हर एक के बाद क्या होता है, और उनके बीच के हस्तांतरण भी। रखे गए ऐक्शन लाइब्रेरी में बने रहेंगे। इसे वापस नहीं लिया जा सकता।",
+    "auto.about.removeNotArchived": "इस ऑटोमेशन के पीछे रन हैं, इसलिए इसे ऐसे ही नहीं हटाया जा सकता। पहले इसे संग्रहित करें, फिर इसे इसके रन समेत हटाया जा सकता है।",
+    "auto.about.removeRunning": "इस ऑटोमेशन का एक रन चल रहा है या रुका हुआ है। ऑटोमेशन हटाने से पहले उसे रोकें।",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

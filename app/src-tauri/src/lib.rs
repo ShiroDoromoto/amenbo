@@ -501,6 +501,7 @@ pub fn run() {
       automation::automation_trigger_try,
       automation::automation_trigger_try_stop,
       automation::automation_remove,
+      automation::automation_history,
       automation::automation_action_page,
       automation::automation_action_page_everywhere,
       automation::automation_action_add,

@@ -710,6 +710,13 @@ export type AutomationHeldByRecordDto = { id: number, title: string, count: numb
 export type AutomationHeldByValueDto = { dimensionId: number, axis: string, value: string, count: number, };
 
 /**
+ * **How many runs, and rounds of them, an automation has behind it** — what deleting it, once
+ * archived, takes away with it ([`amenbo_core::model::AutomationHistory`]). The delete's confirm
+ * names both, read before the delete since afterwards there is nothing left to count.
+ */
+export type AutomationHistoryDto = { runs: number, rounds: number, };
+
+/**
  * **What a launch asks the person starting it for** — the dialog every press opens asks for that and
  * nothing else (`AMB-D-970`).
  *

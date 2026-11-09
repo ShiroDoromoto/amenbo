@@ -649,13 +649,14 @@ name: string, outputs: Array<AutomationPortDto>, };
 export type AutomationFailuresToDto = { "kind": "human" } | { "kind": "role", roleId: number, };
 
 /**
- * **What is keeping a waiting run waiting** (`AMB-D-999`) — the tasks its filter matches that cannot
- * be taken, counted by what stops them (`amenbo_core::ops::automation_builtin::HeldBack`). A task
- * stopped by two things is counted under both, and once in `tasks`.
+ * **What is keeping a waiting run, or a role of a launch, waiting** (`AMB-D-999`) — the tasks its
+ * filter matches that cannot be taken, counted by what stops them
+ * (`amenbo_core::ops::automation_builtin::HeldBack`). A task stopped by two things is counted under
+ * both, and once in `tasks`.
  */
 export type AutomationHeldBackDto = { 
 /**
- * The project the run is in — where a value holding tasks back is closed.
+ * The project the run or the launch is in — where a value holding tasks back is closed.
  */
 project: number, 
 /**
@@ -873,7 +874,13 @@ waiting: number,
 /**
  * The first three of them, in the order the role takes them in.
  */
-firstWaiting: Array<AutomationWaitingTaskDto>, };
+firstWaiting: Array<AutomationWaitingTaskDto>, 
+/**
+ * **What keeps its tasks from being taken** (`AMB-D-999`) — the values still open before theirs and
+ * the rest of what stops them, with how many tasks each holds back. Read only where none of its
+ * tasks is waiting to be taken; absent there too when nothing is held back.
+ */
+heldBack?: AutomationHeldBackDto, };
 
 /**
  * **One launch as its pane draws it, read at once** ([`amenbo_core::ops::automation_run::launch_state`])

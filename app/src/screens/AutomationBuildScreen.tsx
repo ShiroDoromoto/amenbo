@@ -281,13 +281,13 @@ export function AutomationBuildScreen({
       : automation?.triggers.find((one) => one.id === triggerOpen.id);
   const triggerShown = triggerOpen === "new" || openTrigger !== undefined;
   // The picture in the middle is that role's round from its waiting tasks — where they come from, what
-  // it files for other roles (`automationGraph`) — laid out again only when the
-  // definition, the role or the agents change. A step that chose its own agent names it on the
-  // picture as the table of carriers does.
+  // it files for other roles (`automationGraph`) — laid out again only when the definition, the role,
+  // the agents or what core put on for the reader change. A step that chose its own agent names it on
+  // the picture as the table of carriers does.
   const agents = useAgents(projectId);
   const roundGraph = useMemo(
-    () => automationGraph(automation, role?.id, (id) => agents.find((one) => one.id === id)?.label ?? id),
-    [automation, role?.id, agents],
+    () => automationGraph(automation, role?.id, (id) => agents.find((one) => one.id === id)?.label ?? id, forYou),
+    [automation, role?.id, agents, forYou],
   );
   // How wide that round's row has to be, as the picture tells it, and whether the three places go one
   // under another to give it that.
@@ -566,7 +566,6 @@ export function AutomationBuildScreen({
                     graph={roundGraph}
                     onRowNeeds={setRowNeeds}
                     selectedBoxId={testing !== null ? test.marked : pressed?.id}
-                    placedForYou={forYou}
                     onPickBox={(box) => setShowing({ kind: "box", id: box })}
                     onInsert={(edgeId) => setShowing({ kind: "library", target: { edgeId } })}
                     onOpenExit={({ boxId, exitName }) => setShowing({ kind: "library", target: { fromId: boxId, exitName } })}

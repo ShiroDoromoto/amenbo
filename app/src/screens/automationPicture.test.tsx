@@ -423,7 +423,9 @@ describe("the picture of the steps", () => {
     const one = detail({
       placements: [step({ id: 1, name: "write" }), step({ id: 2, name: "close" })],
     });
-    await render({ graph: one, placedForYou: new Set([2]) });
+    // The screen hands the boxes it put on to the picture's graph (`automationGraph`), which marks them.
+    const marked = { ...one, boxes: one.boxes.map((box) => (box.id === 2 ? { ...box, forYou: true } : box)) };
+    await render({ graph: marked });
     const box = (name: string) => nodes().find((node) => node.textContent?.includes(name))!;
     expect(box("close").textContent).toContain(t("auto.pic.placedForYou"));
     expect(box("close").textContent).toContain(t("auto.pic.placedForYouWhy"));

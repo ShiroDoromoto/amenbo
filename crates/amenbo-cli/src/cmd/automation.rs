@@ -28,7 +28,7 @@ use amenbo_core::model::{
 use amenbo_core::model::AttachmentTarget;
 use amenbo_core::ops::automation_stop::Ending;
 use amenbo_core::model::AutomationPictureOwner;
-use amenbo_core::model::{AutomationRole, FailuresTo};
+use amenbo_core::model::{AutomationFailureValue, AutomationRole, ClassifiedSide, FailuresTo};
 use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep, RoleChange};
 use amenbo_core::ops::automation_report::{Next, Produced};
 use amenbo_core::ops::automation_run::{
@@ -45,7 +45,7 @@ use amenbo_core::Store;
 use crate::cli::*;
 use crate::cmd::arg::{body_arg, body_arg_opt};
 use crate::cmd::labels::task_label;
-use crate::cmd::place::project_or_bound;
+use crate::cmd::place::{project_or_bound, resolve_dim_pairs};
 use crate::cmd::task::resolve_task;
 use crate::output::{confirm, human, print_json, write_envelope, write_envelope_with, CliError, Flags};
 
@@ -423,7 +423,8 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     default_agent.as_deref(),
                 )
                 .map_err(CliError::from)?;
-                render_automation(flags, &view, &carriers);
+                let failure_values = failure_values_line(store, &view.automation.failure_values)?;
+                render_automation(flags, &view, &carriers, &failure_values);
             }
         }
         AutomationCmd::Export { id, out, force } => {
@@ -482,6 +483,8 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             archived,
             failures_to,
             no_failures_to,
+            failure_dim,
+            no_failure_dim,
         } => {
             let notes = body_arg_opt(notes)?;
             let failures_to = match (no_failures_to, failures_to.as_deref()) {
@@ -489,8 +492,22 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 (false, Some(to)) => Some(Some(failures_to_arg(to)?)),
                 (false, None) => None,
             };
+            let failure_values = if no_failure_dim {
+                Some(Vec::new())
+            } else if failure_dim.is_empty() {
+                None
+            } else {
+                Some(failure_values_arg(store, id, &failure_dim)?)
+            };
             let a = store
-                .automation_update(id, name.as_deref(), notes.as_deref(), archived, failures_to, None)
+                .automation_update(
+                    id,
+                    name.as_deref(),
+                    notes.as_deref(),
+                    archived,
+                    failures_to,
+                    failure_values.as_deref(),
+                )
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.update", "automation", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated automation: {} ({})", a.name, a.id));
         }
@@ -1641,11 +1658,13 @@ fn next_line(next: &Next) -> String {
 
 // ───────────────────────── what was built ─────────────────────────
 
-/// One automation in full: the placements on it, and what each runs under.
+/// One automation in full: the placements on it, and what each runs under. `failure_values` is the line
+/// [`failure_values_line`] wrote, which needs the store to name the axes.
 fn render_automation(
     flags: &Flags,
     view: &AutomationView,
     carriers: &BTreeMap<(i64, i64), Carrier>,
+    failure_values: &str,
 ) {
     let a = &view.automation;
     human(flags, format!("Automation {}  {}", a.id, a.name));
@@ -1663,6 +1682,7 @@ fn render_automation(
         human(flags, export_only_line(a.id));
     } else {
         human(flags, failures_to_line(a.failures_to, &view.roles));
+        human(flags, failure_values);
     }
     for trigger in &a.triggers {
         human(flags, trigger_line(trigger));
@@ -1751,6 +1771,51 @@ fn failures_to_line(to: Option<FailuresTo>, roles: &[AutomationRole]) -> String 
             None => format!("failed rounds go to role {role_id}"),
         },
     }
+}
+
+/// `--failure-dim` as typed, laid over the classification the automation already files a failed round's
+/// task with: an axis named takes the value given in place of the one it had, and an axis not named keeps
+/// its own — so a person can fill the axes one at a time. Answers the whole set, which is what the store
+/// writes. A value the store refuses (another project's, a closed one the automation does not hold, two of
+/// one axis) is refused there.
+fn failure_values_arg(store: &Store, id: i64, pairs: &[String]) -> Result<Vec<i64>, CliError> {
+    let view = store.automation_detail(id).map_err(CliError::from)?.ok_or_else(|| {
+        CliError::from(amenbo_core::Error::not_found(format!("automation '{id}' not found")))
+    })?;
+    let a = &view.automation;
+    let named = resolve_dim_pairs(store, a.project_id, pairs, ClassifiedSide::Task)?;
+    let mut named_axes = Vec::with_capacity(named.len());
+    for value_id in &named {
+        if let Some(value) = store.dimension_value(*value_id).map_err(CliError::from)? {
+            named_axes.push(value.dimension_id);
+        }
+    }
+    let mut values: Vec<i64> = a
+        .failure_values
+        .iter()
+        .filter(|v| !named_axes.contains(&v.dimension_id))
+        .map(|v| v.value_id)
+        .collect();
+    values.extend(named);
+    Ok(values)
+}
+
+/// The classification a failed round's task is filed with, on a line of its own, as `<axis>=<value>` in
+/// the order it was written — or none yet, and how to give it.
+fn failure_values_line(store: &Store, values: &[AutomationFailureValue]) -> Result<String, CliError> {
+    if values.is_empty() {
+        return Ok("failed rounds are filed with no classification — give one with `automation update --failure-dim`"
+            .to_string());
+    }
+    let mut pairs = Vec::with_capacity(values.len());
+    for v in values {
+        let axis = store.dimension(v.dimension_id).map_err(CliError::from)?;
+        let value = store.dimension_value(v.value_id).map_err(CliError::from)?;
+        let axis = axis.map_or_else(|| v.dimension_id.to_string(), |d| d.name);
+        let value = value.map_or_else(|| v.value_id.to_string(), |d| d.name);
+        pairs.push(format!("{axis}={value}"));
+    }
+    Ok(format!("failed rounds are filed as {}", pairs.join(", ")))
 }
 
 /// `--failures-to` as typed: `human` for a person, or a role's id.

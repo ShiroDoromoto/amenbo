@@ -1911,6 +1911,61 @@ fn a_start_is_refused_until_somebody_is_named_to_file_a_failed_round_to() {
     assert!(after["automation"]["failures_to"].is_null(), "a role taken out is filed nothing: {after}");
 }
 
+/// **The classification a failed round's task is filed with is given on `update --failure-dim`**, one
+/// axis at a time: an axis named takes the value given in place of its old one, the others keep theirs,
+/// and `--no-failure-dim` takes them all off. While an axis the project requires has no value, the save
+/// and the start are refused and name the flag; `show` reads the classification back.
+#[test]
+fn a_failed_rounds_classification_is_given_one_axis_at_a_time_on_update() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, _, _, _) = a_picture(&cli, true);
+    let p = id_str(&cli.json(&["automation", "show", &a, "--json"])["automation"]["project_id"]);
+    cli.json(&["dimension", "add", "--project", &p, "--name", "FailArea", "--json"]);
+    cli.json(&["dimension", "value-add", "FailArea", "--name", "core", "--json"]);
+    cli.json(&["dimension", "value-add", "FailArea", "--name", "ui", "--json"]);
+    cli.json(&["dimension", "update", "FailArea", "--required", "true", "--json"]);
+    cli.json(&["dimension", "add", "--project", &p, "--name", "FailKind", "--json"]);
+    cli.json(&["dimension", "value-add", "FailKind", "--name", "bug", "--json"]);
+
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains("failed rounds are filed with no classification"), "{text}");
+    let (err, code) = cli.run_err(&["automation", "save", &a, "--json"]);
+    assert_ne!(code, 0, "a required axis with no value holds the save: {err}");
+    assert!(err.contains("not_ready"), "{err}");
+    assert!(err.contains("FailArea"), "{err}");
+    assert!(err.contains("--failure-dim"), "the refusal names the way to give it: {err}");
+
+    let one = cli.json(&["automation", "update", &a, "--failure-dim", "FailKind=bug", "--json"]);
+    assert_eq!(one["automation"]["failure_values"].as_array().map(Vec::len), Some(1), "{one}");
+    let (_, code) = cli.run_err(&["automation", "save", &a, "--json"]);
+    assert_ne!(code, 0, "the required axis is still empty");
+
+    let two = cli.json(&["automation", "update", &a, "--failure-dim", "FailArea=core", "--json"]);
+    assert_eq!(two["automation"]["failure_values"].as_array().map(Vec::len), Some(2), "the other axis kept its value: {two}");
+    saved(&cli, &a);
+
+    let moved = cli.json(&["automation", "update", &a, "--failure-dim", "FailArea=ui", "--json"]);
+    assert_eq!(moved["automation"]["failure_values"].as_array().map(Vec::len), Some(2), "a value replaces the axis's old one: {moved}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains("failed rounds are filed as FailKind=bug, FailArea=ui"), "{text}");
+
+    let (_, code) = cli.run_err(&["automation", "update", &a, "--failure-dim", "FailArea"]);
+    assert_ne!(code, 0, "a pair with no `=` is refused");
+    let (_, code) = cli.run_err(&["automation", "update", &a, "--failure-dim", "FailArea=core", "--no-failure-dim"]);
+    assert_ne!(code, 0, "giving one and taking them all off at once is refused");
+
+    let none = cli.json(&["automation", "update", &a, "--no-failure-dim", "--json"]);
+    assert_eq!(none["automation"]["failure_values"].as_array().map(Vec::len), Some(0), "{none}");
+    let (err, code) = cli.run_err(&["automation", "start", &a, "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("not_ready"), "{err}");
+    assert!(err.contains("--failure-dim"), "{err}");
+
+    cli.json(&["automation", "update", &a, "--failure-dim", "FailArea=core", "--json"]);
+    cli.json(&["automation", "start", &a, "--json"]);
+}
+
 /// **A launch starts from the newest saved version, and a test run tries the draft.** An automation
 /// never saved is refused before anything is started, and the refusal names the save; a test run of
 /// the same draft needs no save and says it read the draft.

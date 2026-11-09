@@ -58,7 +58,7 @@ import {
 import { asTyped } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
 import { errText, t, tf } from "../core/i18n";
-import { ERROR_EXIT } from "./automationLayout";
+import { ERROR_EXIT, SPLIT_BY_DIM } from "./automationLayout";
 import { kindLabel } from "./automationPortKinds";
 import { ExitMark, ReachChip, usedCount, WhereMark, type WhereTo } from "./automationParts";
 import { SavedMark } from "./AutomationSaved";
@@ -70,9 +70,6 @@ import type {
   AutomationPortDto,
   DimensionDto,
 } from "../bindings/bindings";
-
-/** The built-in that splits by an axis (`amenbo_core::ops::automation_builtin_split::SPLIT_BY_DIM`). */
-const SPLIT_BY_DIM = "split_by_dim";
 
 /**
  * **Which axis the built-in that splits by one splits by** — a pulldown of the axes a task holds one

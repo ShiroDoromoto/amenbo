@@ -558,10 +558,11 @@ impl From<amenbo_core::Error> for CliError {
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidAutomationArchived) => Some(format!(
                 "Bring it back first: `{cmd} automation update <id> --archived false`."
             )),
-            // The other side of archiving: an automation its runs are filed under stays, and archiving is
-            // how it goes out of the way with its runs still saying what was run.
+            // The other side of archiving: an automation its runs are filed under is deleted with them only
+            // once it is archived, so archiving is the way out — either to keep it out of the way, or to
+            // delete it after.
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidAutomationHasRuns) => Some(format!(
-                "Archive it instead: `{cmd} automation update <id> --archived true` keeps it, and its runs, out of the way."
+                "Archive it first: `{cmd} automation update <id> --archived true` keeps it, and its runs, out of the way; `{cmd} automation rm <id>` then deletes it with its runs."
             )),
             // The counterpart to `already_reserved`. That one means someone else holds it (→ move on to
             // the next task); this one means a premise you declared is unmet (→ resolve the premise).

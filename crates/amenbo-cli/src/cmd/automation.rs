@@ -611,11 +611,23 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             write_envelope(flags, "automation.stop", "automation", resource, None, false, line);
         }
         AutomationCmd::Rm { id } => {
-            if !confirm(flags, "delete automation")? {
+            // Read before the delete: an archived automation takes its runs with it, and afterwards
+            // there is nothing left to count.
+            let history = store.automation_history(id).map_err(CliError::from)?;
+            let what = match history.runs {
+                0 => "delete automation".to_string(),
+                runs => format!("delete automation with its {runs} run(s) and {} round(s)", history.rounds),
+            };
+            if !confirm(flags, &what)? {
                 return Ok(0);
             }
             store.automation_delete(id).map_err(CliError::from)?;
-            write_envelope(flags, "automation.rm", "automation", json!({ "id": id, "deleted": true }), None, false, format!("✓ Deleted automation: {id}"));
+            let line = match history.runs {
+                0 => format!("✓ Deleted automation: {id}"),
+                runs => format!("✓ Deleted automation: {id}, with its {runs} run(s) and {} round(s)", history.rounds),
+            };
+            let resource = json!({ "id": id, "deleted": true, "runs": history.runs, "rounds": history.rounds });
+            write_envelope(flags, "automation.rm", "automation", resource, None, false, line);
         }
         AutomationCmd::Save { id } => {
             // Core hands the newest version straight back when nothing was written since it, so whether

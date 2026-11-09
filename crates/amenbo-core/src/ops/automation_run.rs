@@ -6758,8 +6758,8 @@ mod tests {
         });
     }
 
-    /// **An automation a run was launched from is not deleted, and the refusal says so by its code** — the
-    /// code is what the CLI answers with archiving, which is how such an automation goes out of the way.
+    /// **An automation a run was launched from is not deleted while it is not archived, and the refusal
+    /// says so by its code** — the code is what the CLI answers with archiving, after which it can go.
     #[test]
     fn an_automation_its_runs_are_filed_under_is_refused_as_having_runs() {
         with_tx(|tx| {
@@ -6772,6 +6772,67 @@ mod tests {
             assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationHasRuns));
             assert_eq!(msg.fields().iter().collect::<Vec<_>>(), vec![("count", "1")]);
             automation::update(tx, automation.id, None, None, Some(true), None, None).expect("archiving is the way instead");
+        });
+    }
+
+    /// **An archived automation is deleted with every run launched from it** (`AMB-D-1143`) — the run,
+    /// its rounds, its launch and what was attached to it go, and the blob comes back to be reclaimed.
+    /// The task it worked on stays, with the role taken off it. Before that, a run still under way and
+    /// a launch that has not ended are each refused.
+    #[test]
+    fn an_archived_automation_is_deleted_with_its_runs() {
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let role = born(tx, &automation);
+            let task = crate::ops::test_support::mk_task_in(tx, "一件", Some(automation.project_id));
+            give_to(tx, task, role.id);
+            let run = launch(tx, automation.id, &here(&claude())).expect("launch");
+            let launch_id = run.launch_id.expect("a launch opened for it");
+            let now = Timestamp::now();
+            let round = crate::model::AutomationRunTask {
+                id: read::next_id(tx.conn(), "automation_run_task").expect("id"),
+                run_id: run.id,
+                seq: 1,
+                task_id: Some(task),
+                role_id: Some(role.id),
+                created_at: now,
+                updated_at: now,
+                ..Default::default()
+            };
+            emit_create(tx, record::automation_run_task(&round)).expect("round");
+            let hash = "e".repeat(64);
+            let attachment = crate::ops::attachment::add_blob(
+                tx,
+                crate::model::AttachmentTarget::AutomationRun,
+                run.id,
+                &hash,
+                "issue.md",
+                Some("text/markdown"),
+                12,
+                ActorKind::Human,
+            )
+            .expect("hand a file over");
+            automation::update(tx, automation.id, None, None, Some(true), None, None).expect("archive");
+            let history = read::automation_history(tx.conn(), automation.id).expect("count");
+            assert_eq!(history.runs, 1);
+            assert!(history.rounds >= 1, "{history:?}");
+
+            let refused = automation::delete(tx, automation.id).expect_err("its run is still running");
+            assert!(matches!(refused, Error::Invalid(_)), "{refused:?}");
+            crate::ops::automation_stop::stop(tx, run.id, crate::ops::automation_stop::Ending::Canceled)
+                .expect("stop the run");
+            let refused = automation::delete(tx, automation.id).expect_err("its launch has not ended");
+            assert!(matches!(refused, Error::Invalid(_)), "{refused:?}");
+            crate::ops::automation_stop::stop_launch(tx, launch_id).expect("end the launch");
+
+            let orphaned = automation::delete(tx, automation.id).expect("archived, and nothing at work");
+            assert!(orphaned.contains(&hash), "the blob it pointed at comes back as a candidate");
+            assert!(read::automation_run(tx.conn(), run.id).expect("read").is_none(), "the run went");
+            assert!(read::automation_run_task_ids(tx.conn(), run.id).expect("read").is_empty(), "its rounds went");
+            assert!(read::automation_launch(tx.conn(), launch_id).expect("read").is_none(), "its launch went");
+            assert!(read::attachment(tx.conn(), attachment.id).expect("read").is_none(), "the file went");
+            let kept = read::task(tx.conn(), task).expect("read").expect("the task stays");
+            assert_eq!(kept.role_id, None, "with the role taken off it");
         });
     }
 

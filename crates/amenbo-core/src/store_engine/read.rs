@@ -7403,11 +7403,24 @@ pub fn automation_placement_ids_using_action(conn: &Connection, action_id: i64) 
     select_ids(conn, P.id, Some(&Pred::eq(P.action_id, action_id)))
 }
 
-/// The runs one automation has behind it. A definition with a run is not deleted: the run reads its own
-/// copy of the steps, but the row it was launched from is what it is filed under.
+/// The runs one automation has behind it. A definition with a run is not deleted until it is archived,
+/// and then goes with them: the run reads its own copy of the steps, but the row it was launched from is
+/// what it is filed under.
 pub fn automation_run_ids(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
     const R: col::automation_run::Cols = col::automation_run::ALL;
     select_ids(conn, R.id, Some(&Pred::eq(R.automation_id, automation_id)))
+}
+
+/// **How much of a run's record one automation has behind it** — its runs, and the rounds they went
+/// (one per task a run took, [`crate::model::AutomationRunTask`]). Deleting an archived automation takes
+/// all of them with it, and this is what its confirmation counts.
+pub fn automation_history(conn: &Connection, automation_id: i64) -> Result<crate::model::AutomationHistory> {
+    let runs = automation_run_ids(conn, automation_id)?;
+    let mut rounds = 0;
+    for run in &runs {
+        rounds += automation_run_task_ids(conn, *run)?.len();
+    }
+    Ok(crate::model::AutomationHistory { runs: runs.len(), rounds })
 }
 
 /// The runs of one automation that are still going — `running` or `paused`. A paused run can be picked

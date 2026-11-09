@@ -3136,6 +3136,15 @@ pub struct AutomationRunTask {
     pub updated_at: Timestamp,
 }
 
+/// **How much of a run's record one automation has behind it**: its runs, and the rounds they went
+/// ([`AutomationRunTask`], one per task a run took). Deleting an archived automation takes all of it,
+/// and its confirmation names both counts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AutomationHistory {
+    pub runs: usize,
+    pub rounds: usize,
+}
+
 /// **One task a round filed for another role to work** — passed from the role of the round
 /// (`run_task_id`'s [`AutomationRunTask::role_id`]) to `to_role_id`. Written where the task is filed
 /// ([`crate::ops::automation_builtin_make`]), so it stands whether or not the run goes on to take it.

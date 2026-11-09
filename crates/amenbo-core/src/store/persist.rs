@@ -1787,11 +1787,15 @@ impl Store {
     }
 
     /// Delete an automation and everything built into it (one operation = one transaction). The
-    /// subtree rides one transaction: apply it half-way and a step's ways out outlive the step.
+    /// subtree rides one transaction: apply it half-way and a step's ways out outlive the step. An
+    /// archived one takes its runs with it, and the files attached to them are reclaimed once the
+    /// transaction commits, as [`Self::project_delete`] does.
     pub fn automation_delete(&mut self, id: i64) -> Result<()> {
-        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
+        let orphaned = self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
             crate::ops::automation::delete(tx, id)
-        })
+        })?;
+        self.reclaim_after_delete(&orphaned);
+        Ok(())
     }
 
     /// **Stop every run a previous launch left standing** — the ones that are `running`

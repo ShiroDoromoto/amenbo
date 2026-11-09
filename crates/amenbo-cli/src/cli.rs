@@ -1878,8 +1878,8 @@ pub enum AutomationCmd {
         #[arg(long)]
         project: Option<String>,
     },
-    /// Change an automation's name, notes, whether it is archived, or where a failed round is filed
-    /// (only the given fields change)
+    /// Change an automation's name, notes, whether it is archived, where a failed round is filed, or the
+    /// classification its task is filed with (only the given fields change)
     Update {
         /// automation id
         id: i64,
@@ -1898,6 +1898,15 @@ pub enum AutomationCmd {
         /// leave where a failed round is filed unsaid again; a start is then refused
         #[arg(long, conflicts_with = "failures_to")]
         no_failures_to: bool,
+        /// classify the task a failed round is filed as, by name: `<axis>=<value>`, one per axis
+        /// (repeat for several axes). An axis named here takes this value in place of the one it had;
+        /// the axes not named keep theirs
+        #[arg(long = "failure-dim", value_name = "AXIS=VALUE")]
+        failure_dim: Vec<String>,
+        /// take every value off the task a failed round is filed as; a start is then refused while
+        /// the project requires an axis
+        #[arg(long, conflicts_with = "failure_dim")]
+        no_failure_dim: bool,
     },
     /// Add a trigger to an automation, after the ones it has: every so many minutes, whenever no seat
     /// of its role is taken, whenever few enough tasks match a filter, or whenever a program says so,

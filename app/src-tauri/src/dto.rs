@@ -4487,14 +4487,15 @@ pub struct AutomationStepOpenDto {
     pub(crate) missing: Vec<String>,
 }
 
-/// **What is keeping a waiting run waiting** (`AMB-D-999`) — the tasks its filter matches that cannot
-/// be taken, counted by what stops them (`amenbo_core::ops::automation_builtin::HeldBack`). A task
-/// stopped by two things is counted under both, and once in `tasks`.
+/// **What is keeping a waiting run, or a role of a launch, waiting** (`AMB-D-999`) — the tasks its
+/// filter matches that cannot be taken, counted by what stops them
+/// (`amenbo_core::ops::automation_builtin::HeldBack`). A task stopped by two things is counted under
+/// both, and once in `tasks`.
 #[derive(Serialize, TS, Clone)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct AutomationHeldBackDto {
-    /// The project the run is in — where a value holding tasks back is closed.
+    /// The project the run or the launch is in — where a value holding tasks back is closed.
     #[ts(type = "number")]
     pub(crate) project: i64,
     /// How many tasks are held back.
@@ -4833,6 +4834,12 @@ pub struct AutomationLaunchRoleStateDto {
     pub(crate) waiting: usize,
     /// The first three of them, in the order the role takes them in.
     pub(crate) first_waiting: Vec<AutomationWaitingTaskDto>,
+    /// **What keeps its tasks from being taken** (`AMB-D-999`) — the values still open before theirs and
+    /// the rest of what stops them, with how many tasks each holds back. Read only where none of its
+    /// tasks is waiting to be taken; absent there too when nothing is held back.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) held_back: Option<AutomationHeldBackDto>,
 }
 
 /// **One task waiting for a role to take it** ([`amenbo_core::ops::automation_run::WaitingTask`]).

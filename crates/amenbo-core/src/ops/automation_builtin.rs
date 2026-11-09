@@ -271,7 +271,7 @@ pub struct Waits {
 ///
 /// A task stopped by two things is counted under both, and once in [`HeldBack::tasks`]. Each list runs
 /// from the one holding the most tasks down.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct HeldBack {
     /// How many tasks are held back.
     pub tasks: usize,
@@ -290,7 +290,7 @@ pub struct HeldBack {
 
 /// One value holding tasks back — by the axis's id, which is where a person goes to close it, and by
 /// the words a face shows.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct HeldByValue {
     pub dimension_id: i64,
     pub axis: String,
@@ -299,7 +299,7 @@ pub struct HeldByValue {
 }
 
 /// One task or decision holding tasks back, by its id and its title.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct HeldByRecord {
     pub id: i64,
     pub title: String,

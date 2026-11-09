@@ -2516,7 +2516,7 @@ describe("one role's round, as the build screen draws it", () => {
 
   it("makes room in an action's box for the marks after its name, so the name is not cut", () => {
     // One action alone on its role's round, its name long enough that the box is wider than the least.
-    const widthOf = (over: Partial<AutomationPlacementDto>) => {
+    const widthOf = (over: Partial<AutomationPlacementDto>, forYou?: ReadonlySet<number>) => {
       const alone: AutomationDetailDto = {
         ...automation,
         roles: [{ id: 20, name: "Design", headcount: 1, entryPlacementId: 1, passes: [] }],
@@ -2532,7 +2532,7 @@ describe("one role's round, as the build screen draws it", () => {
         edges: [],
         wires: [],
       };
-      return at(layOut(automationGraph(alone, 20)), 1).w;
+      return at(layOut(automationGraph(alone, 20, undefined, forYou)), 1).w;
     };
     const plain = widthOf({});
     expect(plain).toBeGreaterThan(132);
@@ -2540,6 +2540,8 @@ describe("one role's round, as the build screen draws it", () => {
     expect(widthOf({ steps: [] }) - plain).toBe(4 + wordW(t("auto.pic.emptyMark")));
     expect(widthOf({ draft: true }) - plain).toBe(4 + wordW(t("chip.draft")));
     expect(widthOf({ version: 1, latestVersion: 2 }) - plain).toBe(4 + wordW(tf("auto.pic.behindMark", { version: 1 })));
+    // The mark that says Amenbo put the box on for the reader takes its padding besides.
+    expect(widthOf({}, new Set([1])) - plain).toBe(4 + 8 + wordW(t("auto.pic.placedForYou")));
     // The warning takes its icon and the count of what the box is missing. A role's round does not
     // warn yet, so it is measured on its own.
     expect(marksW({ empty: false, draft: false, behind: undefined, unfed: ["notes", "plan"] })).toBe(4 + 18 + wordW("2"));

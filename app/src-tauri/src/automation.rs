@@ -2159,8 +2159,9 @@ pub fn automation_launch_incidents(launch_id: i64) -> Result<Vec<AutomationLaunc
 
 /// **One launch as its pane draws it, read at once** ([`automation_run::launch_state`]) — where the launch
 /// stands, and for every role, in the order they are defined in, its headcount beside the definition's,
-/// how many are under way and still to go, whether it is held, the runs in its seats, and its tasks
-/// waiting to be taken with the first three of them. The pane draws one launch from this one read, and
+/// how many are under way and still to go, whether it is held, the runs in its seats, its tasks
+/// waiting to be taken with the first three of them, and what keeps them from being taken where none
+/// is (`AMB-D-999`). The pane draws one launch from this one read, and
 /// reads it again when the store changes.
 #[tauri::command]
 pub fn automation_launch_state(launch_id: i64) -> Result<AutomationLaunchStateDto, CmdError> {
@@ -2191,6 +2192,7 @@ pub fn automation_launch_state(launch_id: i64) -> Result<AutomationLaunchStateDt
                     from_role: task.from_role_id,
                 })
                 .collect(),
+            held_back: role.held_back.map(|held| held_back_dto(state.launch.project_id, held)),
         });
     }
     Ok(AutomationLaunchStateDto {
@@ -2254,13 +2256,19 @@ pub fn automation_run_held_back(run_id: i64) -> Result<Option<AutomationHeldBack
     let Some(run) = read::automation_run(conn, run_id)? else {
         return Ok(None);
     };
+    Ok(Some(held_back_dto(run.project_id, held)))
+}
+
+/// **What is keeping tasks waiting, as the GUI reads it** ([`automation_builtin::HeldBack`]) — for a run
+/// ([`automation_run_held_back`]) and for each role of a launch ([`automation_launch_state`]) alike.
+fn held_back_dto(project: i64, held: automation_builtin::HeldBack) -> AutomationHeldBackDto {
     let record = |r: automation_builtin::HeldByRecord| AutomationHeldByRecordDto {
         id: r.id,
         title: r.title,
         count: r.count,
     };
-    Ok(Some(AutomationHeldBackDto {
-        project: run.project_id,
+    AutomationHeldBackDto {
+        project,
         tasks: held.tasks,
         values: held
             .values
@@ -2277,7 +2285,7 @@ pub fn automation_run_held_back(run_id: i64) -> Result<Option<AutomationHeldBack
         not_started: held.not_started,
         first_start: held.first_start.map(|day| day.format("%Y-%m-%d").to_string()),
         drafts: held.drafts,
-    }))
+    }
 }
 
 /// The event the workspace hears when a step of a run is ready to be drawn.
@@ -3655,6 +3663,61 @@ mod tests {
         let live = runs_still_standing(1..=6, |run| Ok(statuses.get(&run).copied()))
             .expect("nothing to fail");
         assert_eq!(live, HashSet::from([1, 2]));
+    }
+
+    /// **What holds tasks back reaches the GUI as core counted it** (`AMB-D-999`): the value with its
+    /// axis's id and how many it holds, the count of tasks, and the first start day as `YYYY-MM-DD`. A
+    /// role of a launch with nothing held back leaves it out.
+    #[test]
+    fn what_holds_tasks_back_is_handed_on_as_counted() {
+        let held = automation_builtin::HeldBack {
+            tasks: 3,
+            values: vec![automation_builtin::HeldByValue {
+                dimension_id: 4,
+                axis: "Release".into(),
+                value: "v1".into(),
+                count: 2,
+            }],
+            blockers: vec![automation_builtin::HeldByRecord { id: 9, title: "the part before".into(), count: 1 }],
+            decisions: Vec::new(),
+            not_started: 1,
+            first_start: chrono::NaiveDate::from_ymd_opt(2026, 12, 1),
+            drafts: 0,
+        };
+        assert_eq!(
+            serde_json::to_value(held_back_dto(2, held)).expect("json"),
+            serde_json::json!({
+                "project": 2,
+                "tasks": 3,
+                "values": [{ "dimensionId": 4, "axis": "Release", "value": "v1", "count": 2 }],
+                "blockers": [{ "id": 9, "title": "the part before", "count": 1 }],
+                "decisions": [],
+                "notStarted": 1,
+                "firstStart": "2026-12-01",
+                "drafts": 0,
+            }),
+        );
+
+        let role = |held_back: Option<AutomationHeldBackDto>| {
+            let dto = AutomationLaunchRoleStateDto {
+                role: 1,
+                name: "Build".into(),
+                icon: None,
+                defined: 1,
+                headcount: 1,
+                under_way: 0,
+                to_let_go: 0,
+                held: false,
+                runs: Vec::new(),
+                waiting: 0,
+                first_waiting: Vec::new(),
+                held_back,
+            };
+            serde_json::to_value(dto).expect("json")
+        };
+        assert!(role(None).get("heldBack").is_none(), "nothing held back is left out");
+        let named = role(Some(held_back_dto(2, automation_builtin::HeldBack { tasks: 1, ..Default::default() })));
+        assert_eq!(named["heldBack"]["tasks"], 1);
     }
 
     /// **A step's event names the launch its run belongs to**, for the window to find that launch's

@@ -99,6 +99,9 @@ export type PicBox = {
   /** The steps inside the action standing here, in order, each with its kind — drawn inside its box
    *  on a role's picture. Absent everywhere else. */
   stepCards?: readonly PicStep[];
+  /** Amenbo put this box on for the reader rather than the reader themselves (`AMB-T-5797`,
+   *  `AMB-D-1123`) — its head is marked so on a role's picture. Absent wherever it is not. */
+  forYou?: boolean;
 };
 
 /**
@@ -261,16 +264,19 @@ export type PicGraph = {
  * with their steps inside, and handed on to the roles it files a task for and the roles its lines
  * leave for. A role that is gone draws the whole automation.
  * `agentLabel` names the agent a step chose for itself (`stepKind`); absent, its id is written.
+ * `forYou` holds the boxes Amenbo put on for the reader while the screen was open, marked on theirs.
  */
 export function automationGraph(
   detail: AutomationDetailDto | null,
   roleId?: number,
   agentLabel?: (id: string) => string,
+  forYou?: ReadonlySet<number>,
 ): PicGraph | null {
   if (detail === null) return null;
+  const marked = <T extends PicBox>(box: T): T => (forYou?.has(box.id) === true ? { ...box, forYou: true } : box);
   const whole: PicGraph = {
     starts: detail.roles.flatMap((one) => (one.entryPlacementId === undefined ? [] : [one.entryPlacementId])),
-    boxes: detail.placements,
+    boxes: detail.placements.map(marked),
     edges: detail.edges,
     wires: detail.wires,
   };
@@ -327,7 +333,7 @@ export function automationGraph(
     entryId: role.entryPlacementId,
     boxes: detail.placements
       .filter((one) => drawn.has(one.id))
-      .map((one) => ({ ...one, stepCards: one.steps.map((step) => stepKind(step, agentLabel)) })),
+      .map((one) => marked({ ...one, stepCards: one.steps.map((step) => stepKind(step, agentLabel)) })),
     edges: detail.edges.filter((edge) => drawn.has(edge.fromId)),
     wires: detail.wires,
     round: {
@@ -406,6 +412,9 @@ const ROUND_SMALL = 11 / 12;
  *  after it, before the count of what the box is missing. The screen sets the same. */
 const HEAD_GAP = 4;
 const MARK_ICON_W = 18;
+/** The padding across the mark that says Amenbo put a box on for the reader: it stands on a ground of
+ *  its own, unlike the other marks. The screen sets the same. */
+const FOR_MARK_PAD_W = 8;
 /** A step inside an action's box, as the mock draws it: its name over its kind, never wider than
  *  `STEP_CARD_MAX_W`, and the arrow between two of them. `STEP_CARD_PAD_W` is its padding and border
  *  across. Its kind goes on to the next line where it does not fit, and the card stands taller by
@@ -507,6 +516,9 @@ export type PicNode = {
   /** The box stands on an older version of its action than the newest — the two numbers
    *  (`behindOf`). Absent where it stands on the newest, and on a built-in. */
   behind?: { version: number; latest: number };
+  /** Amenbo put the box on for the reader (`PicBox`): its head says so, and its second line what it
+   *  is there for. */
+  forYou?: boolean;
   /** The steps inside the action standing here, each with its kind, on a role's picture (`PicBox`),
    *  and how wide its card is drawn (`stepCardW`) — the screen draws it that wide, so its steps go on
    *  to the next row where the layout counted them to. */
@@ -1033,7 +1045,7 @@ function tonesOf(
 }
 
 /** The marks a box's head carries after its name: what it is missing, and what it is. */
-type HeadMarks = Pick<PicNode, "empty" | "draft" | "behind" | "unfed">;
+type HeadMarks = Pick<PicNode, "empty" | "draft" | "behind" | "forYou" | "unfed">;
 
 /**
  * **The marks after each box's name**, as `nodeMaker` draws them and `roundSize` makes room for them.
@@ -1048,6 +1060,7 @@ function marksMaker(graph: PicGraph, live: ReadonlySet<number>): (box: PicBox) =
     empty: box.draft !== true && box.builtin === undefined && box.steps !== undefined && box.steps.length === 0,
     draft: box.draft === true,
     behind: behindOf(box),
+    forYou: box.forYou === true,
     unfed: !reached.has(box.id)
       ? []
       : box.inputs
@@ -1140,13 +1153,15 @@ function stepRowsH(cards: readonly PicStep[], wide: number): number {
 }
 
 /** How wide the marks after a box's name are written, each past the head's gap: the words in the
- *  screen's smallest size, and the warning's icon before the count of what it is missing. */
+ *  screen's smallest size, the warning's icon before the count of what it is missing, and the padding
+ *  of the mark that says Amenbo put the box on. */
 export function marksW(marks: HeadMarks): number {
   const words = [
     marks.unfed.length > 0 ? MARK_ICON_W + wordW(String(marks.unfed.length)) : undefined,
     marks.empty === true ? wordW(t("auto.pic.emptyMark")) : undefined,
     marks.draft === true ? wordW(t("chip.draft")) : undefined,
     marks.behind !== undefined ? wordW(tf("auto.pic.behindMark", { version: marks.behind.version })) : undefined,
+    marks.forYou === true ? FOR_MARK_PAD_W + wordW(t("auto.pic.placedForYou")) : undefined,
   ];
   return words.reduce<number>((sum, one) => (one === undefined ? sum : sum + HEAD_GAP + one), 0);
 }

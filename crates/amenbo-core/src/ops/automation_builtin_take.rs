@@ -1700,6 +1700,60 @@ mod tests {
         });
     }
 
+    /// **A launch read at once names what keeps a role's tasks from being taken, role by role**
+    /// (`AMB-D-999`): where none of a role's tasks is there to take, the value still open before theirs
+    /// and how many it holds back. A role with a task to take counts nothing, and the tasks of one role
+    /// are not counted under the other's.
+    #[test]
+    fn a_launch_read_at_once_names_what_holds_each_roles_tasks_back() {
+        use crate::model::DimensionRole;
+        use crate::ops::automation_run::launch_state;
+        use crate::ops::dimension::{self, NewDimension};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, [(builder, _), (reviewer, _)]) = by_role(tx, project);
+            let axis = dimension::add(
+                tx,
+                project,
+                NewDimension {
+                    name: "リリース".into(),
+                    ordered: true,
+                    role: DimensionRole::Closable,
+                    sequential: true,
+                    ..NewDimension::default()
+                },
+            )
+            .expect("axis");
+            let v1 = dimension::value_add(tx, axis.id, "v1", None).expect("v1");
+            let v2 = dimension::value_add(tx, axis.id, "v2", None).expect("v2");
+            let filed = |title: &str, role: i64, value: i64| {
+                let id = for_ai(tx, title, project, None);
+                give_to(tx, id, role);
+                dimension::set(tx, id, value).expect("value");
+                id
+            };
+            filed("build it", builder, v1.id);
+            filed("held, a", reviewer, v2.id);
+            filed("held, b", reviewer, v2.id);
+            filed("held behind it too", builder, v2.id);
+            let launch = launched(tx, &automation).launch_id.expect("a launch");
+
+            let state = launch_state(tx.conn(), launch).expect("read");
+            let [build, review] = &state.roles[..] else { panic!("two roles, not {:?}", state.roles) };
+            assert_eq!(build.name, "実装");
+            assert_eq!(build.waiting, 1);
+            assert_eq!(build.held_back, None, "a role with a task to take is not kept waiting");
+            assert_eq!(review.name, "レビュー");
+            assert_eq!(review.waiting, 0);
+            let held = review.held_back.as_ref().expect("the reviewer has nothing to take");
+            assert_eq!(held.tasks, 2, "the builder's task held behind v1 is not counted here");
+            assert_eq!(
+                held.values,
+                vec![HeldByValue { dimension_id: axis.id, axis: "リリース".into(), value: "v1".into(), count: 2 }],
+            );
+        });
+    }
+
     /// **Raised again before the seats have gone, the headcount calls the rest off**: the runs under way
     /// keep their seats, and each goes round as before.
     #[test]

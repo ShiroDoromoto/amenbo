@@ -4588,13 +4588,13 @@ mod tests {
             let filing = NewRole { name: "起票係".into(), starts_by: Some(RoleStart::Trigger), ..NewRole::default() };
             let filing = role_add(tx, automation.id, filing).expect("a role a trigger starts");
             let to = Some(Some(FailuresTo::Role { role_id: filing.id }));
-            let refused = update(tx, automation.id, None, None, None, to).expect_err("takes no task");
+            let refused = update(tx, automation.id, None, None, None, to, None).expect_err("takes no task");
             assert!(matches!(refused, Error::Invalid(_)), "{refused}");
             assert!(refused.to_string().contains("starts its round by a trigger"), "{refused}");
 
             let born = read::automation_roles_of(tx.conn(), automation.id).expect("read").remove(0);
             let to = Some(Some(FailuresTo::Role { role_id: born.id }));
-            update(tx, automation.id, None, None, None, to).expect("to the role born with it");
+            update(tx, automation.id, None, None, None, to, None).expect("to the role born with it");
             let switched = RoleChange { starts_by: Some(RoleStart::Trigger), ..RoleChange::default() };
             let refused = role_update(tx, born.id, switched).expect_err("failed rounds are filed to it");
             assert!(matches!(refused, Error::Invalid(_)), "{refused}");

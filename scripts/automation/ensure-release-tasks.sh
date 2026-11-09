@@ -8,8 +8,10 @@
 # kind of work, and finishes creating it. The axes and values are named in Japanese, so the names
 # below are the ones written in the board.
 #
-# Its one argument is the product's value, by name. It has one way out, done, and its report names
-# the tasks it filed, or says it filed none.
+# Its first argument is the product's value, by name. Its second, which may be left out, is the id of
+# the automation role that works release tasks: each task filed is worked under it, so the release
+# automation's seat takes it. Left out, the task is filed under no role. It has one way out, done, and
+# its report names the tasks it filed, or says it filed none.
 #
 # A filter splits on whitespace before it reads a value, so a value's name cannot be written in one.
 # The filter names each value by its slug instead; `task add --dim` takes the name as an argument of
@@ -31,7 +33,10 @@ die() { echo "✗ $*" >&2; exit 1; }
     die "run this as a script step: AMENBO_INPUT and AMENBO_OUTPUT are not set"
 
 product="${1:-}"
-[ -n "$product" ] || die "no product: pass the product's value as the argument"
+[ -n "$product" ] || die "no product: pass the product's value as the first argument"
+role="${2:-}"
+role_args=()
+[ -z "$role" ] || role_args=(--role "$role")
 
 amenbo_ai() { amenbo "$@" --actor ai; }
 
@@ -56,7 +61,7 @@ while IFS= read -r release; do
     found=$(amenbo_ai task list --filter "dim:リリース=$slug dim:プロダクト=$product_slug dim:作業種別=リリース作業" --json |
         jq -r .total_matched) || die "could not list the release tasks of \"$name\""
     [ "$found" = 0 ] || continue
-    id=$(amenbo_ai task add --title "$name をリリースする" --notes - --to human \
+    id=$(amenbo_ai task add --title "$name をリリースする" --notes - --to human ${role_args[@]+"${role_args[@]}"} \
         --dim "リリース=$name" --dim "プロダクト=$product" --dim テーマ=メイン --dim 作業種別=リリース作業 \
         --json <<< "$notes" | jq -r '.task.id // empty') || die "could not file the release task of \"$name\""
     [ -n "$id" ] || die "filing the release task of \"$name\" gave no task id"

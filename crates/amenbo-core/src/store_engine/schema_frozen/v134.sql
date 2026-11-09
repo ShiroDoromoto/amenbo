@@ -312,7 +312,6 @@ CREATE TABLE IF NOT EXISTS automation_role (
     order_key TEXT NOT NULL DEFAULT '',
     headcount BIGINT NOT NULL DEFAULT 1,
     take_order TEXT NOT NULL DEFAULT 'priority',
-    starts_by TEXT NOT NULL DEFAULT 'task',
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
 );

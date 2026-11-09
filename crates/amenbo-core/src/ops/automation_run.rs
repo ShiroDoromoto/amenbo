@@ -7975,6 +7975,9 @@ mod tests {
             };
             assert!(why.contains(&format!("the file '{brief}' is not there")), "{why}");
             std::fs::remove_dir_all(&dir).ok();
+        });
+    }
+
     /// **A run a trigger started that fails files a task, and holds its trigger back until it is closed**
     /// (`AMB-D-1128`) — with no task of its own, the failure is filed in the automation's project to the
     /// person, naming the run, and the run names it. While it is open the trigger is not due, starts no

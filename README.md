@@ -398,6 +398,7 @@ amenbo automation place-add 3 --action 7               # 33: put that action on 
 amenbo automation agent-set 33 --step 11 --agent claude-code # who carries that step out at this spot, ahead of its role's default (--model too)
 amenbo automation role-update 8 --name Implement --entry 31 --agent claude-code # the role it was born with (8, from role-list): where its round starts — take_task, as every role's does — and the agent its steps fall back to; 31 then takes only a task of that role
 amenbo automation update 3 --failures-to 8           # where a failed round is filed: a role of it (8, from role-list) or `human`; a start is refused until one is named
+amenbo automation update 3 --failure-dim "Category=bug" # the classification a failed round's task is filed with, one axis at a time (the others keep theirs; --no-failure-dim takes all off); a start is refused while an axis the project requires has none
 amenbo automation place-add 3 --builtin fold_worktree  # 34: leaves by its way out for unmerged while the branch is not in
 amenbo automation place-add 3 --builtin close_task     # 35: done, with the commit handed to it recorded
 amenbo automation edge-add --from 32: --to 33         # what happens after each way out (--max-times caps a way back)

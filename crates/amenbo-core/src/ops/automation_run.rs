@@ -267,7 +267,7 @@ impl Unmet {
             Unmet::FailureAxisEmpty { axis } => {
                 format!(
                     "the task a failed round is filed as has no value on '{axis}', which this project requires \
-                     — choose one for it"
+                     — choose one with `automation update --failure-dim`"
                 )
             }
             Unmet::ActionEmpty { action, placement: Some(_) } => {

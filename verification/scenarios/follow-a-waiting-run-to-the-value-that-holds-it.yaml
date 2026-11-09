@@ -1,24 +1,26 @@
-# A run set to wait for a task can wait on something a person has to do. On a category whose tasks
-# wait along its order, the task it would take is held until the value before its own is closed, and
-# nothing on the run moves until somebody closes it. So the card the run's pane stands on while it
-# waits says how many of the tasks it looks for it cannot take, and what stops them — and the value
-# that stops them is a way to where it is closed.
+# A launch set to wait for a task can wait on something a person has to do. On a category whose tasks
+# wait along its order, the task its role would take is held until the value before its own is closed,
+# and nothing on the launch moves until somebody closes it. Started with no task it can take, it opens
+# no run: its pane stands with its roles on the bar. So the role whose tasks are held says there how
+# many of them it cannot take, and what stops them — and the value that stops them is a way to where
+# it is closed.
 #
-# The road follows that way: read the value on the waiting run's card, press it, land on the panel
-# managing the project's categories with that axis marked, close the value there, and watch the run
-# take the task on its next look. The value will not close while its own work is open, so the work
-# before it is finished first — the order a person clears a stage in.
+# The road follows that way: read the value under the role on the launch's pane, press it, land on the
+# panel managing the project's categories with that axis marked, close the value there, and watch the
+# launch take the task on its next look. The value will not close while its own work is open, so the
+# work before it is finished first — the order a person clears a stage in.
 #
 # The road is the screen's alone. A run started at a terminal opens no step (`automation start`), and
-# the terminal counts nothing a run waits on.
+# the terminal counts nothing a launch waits on.
 id: follow-a-waiting-run-to-the-value-that-holds-it
-title: A run waiting for a task says the value that keeps its task from being taken, and pressing it leads to where that value is closed
+title: A launch waiting for a task says, on its role, the value that keeps the role's task from being taken, and pressing it leads to where that value is closed
 description: >
   On a category whose tasks wait along its order, file one task on its first value and hand one on
-  its second to the AI. Start an automation whose built-in that takes a task waits for one. Read the
-  run's pane say one task cannot be taken yet, held by the first value; press that value and land on
-  the category panel with the category marked. Finish the first task, close the first value, and
-  read the run take the second task within 30 seconds.
+  its second to the AI. Start an automation whose built-in that takes a task waits for one: no run
+  opens, and the launch's pane stands. Read its role on the bar say one task cannot be taken yet,
+  held by the first value; press that value and land on the category panel with the category marked.
+  Finish the first task, close the first value, and read the launch take the second task within 30
+  seconds, in the pane that was standing.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
 
@@ -105,25 +107,26 @@ steps_gui:
       setting: 着手できるタスクが無いとき
       value: 着手できるタスクが出るまで待つ
 
+  # No task it can take: the launch opens and no run does, and the screen goes to the launch's pane.
   - type: action
     domain: automation
     op: start
     with:
       target: auto
-    as: run
+      waits: true
 
-  # Waiting, and saying on its pane why: the one task it looks for is held by the first value.
-  - type: action
-    domain: workspace
-    op: show-face
+  # Waiting, and saying on its role why: the one task it looks for is held by the first value.
+  - type: assert
+    domain: automation
+    op: launch-pane
     with:
-      face: workspace
+      target: auto
 
   - type: assert
     domain: automation
     op: held-back
     with:
-      target: run
+      target: auto
       tasks: 1
       dimension: Release
       value: v1
@@ -134,7 +137,7 @@ steps_gui:
     domain: automation
     op: open-held-value
     with:
-      target: run
+      target: auto
       dimension: Release
       value: v1
 
@@ -159,7 +162,7 @@ steps_gui:
       dimension: Release
       value: v1
 
-  # Taken by the run that was waiting, with nobody starting it again — on its next look.
+  # Taken by the launch that was waiting, with nobody starting it again — on its next look.
   - type: action
     domain: task
     op: wait-field
@@ -169,11 +172,11 @@ steps_gui:
       equals: in_progress
       seconds: 30
 
+  # In the launch's pane that was standing, with that run's row now under its header.
   - type: assert
     domain: automation
     op: run-pane
     with:
-      target: run
       step: build
       action: work
       task: later

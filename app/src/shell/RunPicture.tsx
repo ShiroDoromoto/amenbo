@@ -51,7 +51,11 @@
 // under the seats, with the first three of them by reference and title; one passed on from another
 // role says which.
 //
-// **A role with no task is on the bar at the bottom**, by its icon, its name and its headcount.
+// **A role with no task is on the bar at the bottom**, by its icon, its name and its headcount. Where
+// tasks of its own are there but none can be taken, it says under its name how many, and what stops
+// them with how many each (`AMB-D-999`): a value still open before theirs, say "v1 (Release)", is
+// pressed to its dimension's screen, where it is closed. It is counted again when the store changes,
+// not on each look for a task.
 //
 // **A seat is pressed to turn this same pane to its terminal.** The terminal has a bar over it: the way
 // back to the roles, and whose round it is — the role, the seat, the task, the step and how long it has
@@ -116,7 +120,8 @@ import { incidentOf } from "../core/runWords";
 import { quietAt, type Quiet } from "../talk/moving";
 import { runFrameId } from "../talk/layout";
 import { useRunOutputs } from "../talk/runOutputs";
-import type { AutomationLaunchStateDto, AutomationRunCardDto, TaskRoleDto } from "../bindings/bindings";
+import type { AutomationHeldBackDto, AutomationLaunchStateDto, AutomationRunCardDto, TaskRoleDto } from "../bindings/bindings";
+import { HeldBack } from "./BuiltinCard";
 
 /** How the run in a seat stands, as its row says it. */
 export type SeatState =
@@ -200,6 +205,9 @@ export type IdleRole = {
   readonly icon: string | null;
   /** Its headcount; null for a run kept from before launches, which holds none. */
   readonly headcount: number | null;
+  /** What keeps its tasks from being taken (`AMB-D-999`); null where nothing is held back, and on a
+   *  run kept from before launches, which reads none. */
+  readonly heldBack: AutomationHeldBackDto | null;
 };
 
 /** How the run in a seat stands: off its row, and off the pane's own run where it is that one — null
@@ -229,7 +237,10 @@ export function desksOf(launch: AutomationLaunchStateDto, front: Say | null): { 
   const idle: IdleRole[] = [];
   for (const role of launch.roles) {
     if (role.runs.length === 0 && role.waiting === 0) {
-      idle.push({ role: role.role, name: role.name, icon: role.icon ?? null, headcount: role.headcount });
+      idle.push({
+        role: role.role, name: role.name, icon: role.icon ?? null, headcount: role.headcount,
+        heldBack: role.heldBack !== undefined && role.heldBack.tasks > 0 ? role.heldBack : null,
+      });
       continue;
     }
     desks.push({
@@ -295,7 +306,7 @@ export function runDesks(run: Say, roles: readonly TaskRoleDto[]): { desks: Desk
   const deskOf = (role: number | null, name: string, icon: string | null): Desk => ({
     role, name, icon, headcount: 1, held: false, seats: [seat], free: 0, waiting: 0, first: [], control: null,
   });
-  const idleOf = (role: TaskRoleDto): IdleRole => ({ role: role.id, name: role.name, icon: role.icon, headcount: null });
+  const idleOf = (role: TaskRoleDto): IdleRole => ({ role: role.id, name: role.name, icon: role.icon, headcount: null, heldBack: null });
   if (at === null) {
     // A pane no step has arrived in, on a run that has not read back yet, has no round to draw.
     const drawn = going && (run.round !== undefined || run.step !== "");
@@ -1016,13 +1027,20 @@ export const RunRoles = memo(
           <div className="runroles__idle">
             <span className="runroles__idlecount">{tf("auto.run.roles.idle", { n: idle.length })}</span>
             {idle.map((role) => (
-              <span key={role.role} className="runroles__idleone" data-role={role.role}>
-                <RoleIcon role={role} size={18} />
-                {role.name}
-                {role.headcount !== null && (
-                  <span className="runroles__idlecountone">{tf("auto.run.roles.headcount", { n: role.headcount })}</span>
-                )}
-              </span>
+              <div
+                key={role.role}
+                className={`runroles__idleone${role.heldBack === null ? "" : " runroles__idleone--held"}`}
+                data-role={role.role}
+              >
+                <span className="runroles__idlename">
+                  <RoleIcon role={role} size={18} />
+                  {role.name}
+                  {role.headcount !== null && (
+                    <span className="runroles__idlecountone">{tf("auto.run.roles.headcount", { n: role.headcount })}</span>
+                  )}
+                </span>
+                {role.heldBack !== null && <HeldBack held={role.heldBack} />}
+              </div>
             ))}
           </div>
         )}

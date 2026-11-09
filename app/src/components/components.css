@@ -2902,8 +2902,13 @@ button.runseat:focus-visible { outline: 2px solid var(--c-accent); outline-offse
   font-size: var(--fs-xs); color: var(--c-text-muted);
 }
 .runroles__idleone { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px dashed var(--c-rule); border-radius: var(--r-sm); }
-.runroles__idleone > .identicon { flex: none; opacity: .6; }
+.runroles__idlename > .identicon { flex: none; opacity: .6; }
 .runroles__idlecountone { font-variant-numeric: tabular-nums; }
+.runroles__idlename { display: inline-flex; align-items: center; gap: 6px; }
+/* A role whose tasks are held back says what holds them under its name, read from the left. */
+.runroles__idleone--held { flex-direction: column; align-items: flex-start; gap: 4px; padding: 4px 8px; }
+.runroles__idleone--held .slot__held,
+.runroles__idleone--held .slot__held-list { align-items: flex-start; }
 /* The lines under the pane, one for each failed round that was filed as a task, newest first, scrolled
    past a handful: its time, muted and never squeezed, then what happened in red on one line, cut where
    it runs out — the filed task a link. */

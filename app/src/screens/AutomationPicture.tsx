@@ -568,10 +568,10 @@ export function AutomationPicture({
     </>
   );
   if (picture.nodes.length === 0) {
-    // A role whose round reaches nothing — it starts nowhere — on an automation that has something on
-    // it: its waiting tasks with no line on from them, and that said in words, so the middle is not
-    // left blank. With nothing on the automation, the screen's press that gives the role its start
-    // says it.
+    // A role whose round reaches nothing — it starts nowhere — and with no box on no round beside it,
+    // on an automation that has something on it: its waiting tasks with no line on from them, and that
+    // said in words, so the middle is not left blank. With nothing on the automation, the screen's
+    // press that gives the role its start says it.
     return round !== undefined && round.whole.boxes.length > 0 ? (
       <div className="autopic__flow" ref={flowRef}>
         {waiting}

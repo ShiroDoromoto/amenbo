@@ -2369,6 +2369,35 @@ describe("one role's round, as the build screen draws it", () => {
     expect(graph.edges.map((one) => one.id)).toEqual([2, 3, 4, 5]);
   });
 
+  it("draws a box no round reaches on every role's picture, its lines in the picture rather than received or handed on", () => {
+    // A line moved off the tidying box leaves it on no round: it still goes on into Design and Build.
+    const stray: AutomationDetailDto = {
+      ...automation,
+      placements: [...automation.placements, step({ id: 6, name: "片付ける" })],
+      edges: [
+        ...automation.edges,
+        edge({ id: 6, fromId: 6, toId: 3 }),
+        edge({ id: 7, fromId: 6, exitName: "*", toId: 5 }),
+      ],
+    };
+    for (const roleId of [10, 20, 30, 40]) {
+      expect(automationGraph(stray, roleId)!.boxes.map((box) => box.id)).toContain(6);
+      expect(automationGraph(stray, roleId)!.edges.map((one) => one.id)).toEqual(expect.arrayContaining([6, 7]));
+    }
+    const design = automationGraph(stray, 20)!;
+    expect(design.boxes.map((box) => box.id)).toEqual([2, 3, 4, 6]);
+    // The line into Design's round is drawn, so the action is not among where the round receives from.
+    expect(design.round!.receives.roles).toEqual(["Research"]);
+    expect(design.round!.handOff.has(6)).toBe(false);
+    // Its line out to Build's box is named for Build, but Design hands Build only what its own round does.
+    expect(design.round!.handOff.get(7)).toBe("Build");
+    expect(design.round!.passes.map((one) => one.role.name)).toEqual(["Build"]);
+    // Research hands Design its task by its own line, and nothing on to Build through the box on no round.
+    expect(automationGraph(stray, 10)!.round!.passes.map((one) => one.role.name)).toEqual(["Design"]);
+    // It stands on the picture, where it can be picked, though the round does not reach it.
+    expect(layOut(design).nodes.map((node) => node.boxId)).toContain(6);
+  });
+
   it("says where the round receives its task from, and whom it hands on to", () => {
     expect(automationGraph(automation, 20)!.round).toMatchObject({
       role: { id: 20, name: "Design" },

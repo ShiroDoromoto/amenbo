@@ -687,13 +687,13 @@ blockers: Array<AutomationHeldByRecordDto>,
  */
 decisions: Array<AutomationHeldByRecordDto>, 
 /**
- * How many wait for their start day.
+ * How many wait for their start.
  */
 notStarted: number, 
 /**
- * The first of those start days (`YYYY-MM-DD`). Absent when none waits for one.
+ * The first of those starts — a day, or an instant (`AMB-D-1082`). Absent when none waits for one.
  */
-firstStart?: string, 
+firstStart?: ScheduleDto, 
 /**
  * How many are still being created.
  */

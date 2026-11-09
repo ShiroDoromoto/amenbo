@@ -314,6 +314,15 @@ impl Schedule {
             Schedule::At(t) => t.local_date(),
         }
     }
+
+    /// The moment this starts, for weighing one against another: a day begins when it begins for the
+    /// reader ([`crate::time::local_day_start_utc`]), and an instant is its own moment (`AMB-D-1082`).
+    pub fn begins(&self) -> Timestamp {
+        match self {
+            Schedule::Day(d) => crate::time::local_day_start_utc(*d),
+            Schedule::At(t) => *t,
+        }
+    }
 }
 
 /// How an `Option<Schedule>` is carried through serde: as the two keys of its columns, side by side

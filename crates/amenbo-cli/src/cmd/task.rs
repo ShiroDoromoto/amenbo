@@ -20,6 +20,15 @@ use crate::cmd::place::{default_bound_folder, made_in, made_in_run_step, project
 use crate::cmd::premise::{attach_comments_since, attach_premise_change, comments_since_when, premise_change, premise_change_lines, premise_change_when, warn_comments_since, warn_if_premise_added_to_reserved, warn_premise_change};
 use crate::output::{confirm, count_header, human, print_json, warn_body, write_envelope, CliError, Flags};
 
+/// A start as a reader is told it: a day as the day, and an instant in the reader's own zone, to the
+/// minute (`AMB-D-1082`).
+fn start_text(start: Schedule) -> String {
+    match start {
+        Schedule::Day(day) => time::date_to_string(day),
+        Schedule::At(at) => at.0.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string(),
+    }
+}
+
 /// Resolve a task reference (`AMB-T-n`, or the bare `T-n` / `#n` / `n`). The numbers are globally unique on the device, so no
 /// project context is needed. The id **is** the conversational number: nothing is abbreviated and nothing is
 /// prefix-matched. The return type mirrors core's `resolve`, so `.map_err(CliError::from)?` works as is.
@@ -128,12 +137,8 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                 // An empty mailbox that means "not yet" has to say so on the spot. A start day mistyped far
                 // into the future hides a task in the one way nothing else catches — the list is empty and
                 // reads as finished — so the count and the first day arrive with the emptiness.
-                // A start at an instant is said in the reader's own zone, to the minute (`AMB-D-1082`).
                 if let Some(w) = &result.waiting_on_start {
-                    let earliest = match w.earliest {
-                        Schedule::Day(day) => time::date_to_string(day),
-                        Schedule::At(at) => at.0.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string(),
-                    };
+                    let earliest = start_text(w.earliest);
                     human(flags, format!("  ({} waiting on a start day — earliest {earliest})", w.count));
                 }
                 // The same, for the tasks a value still open before theirs is holding back (`AMB-D-990`).
@@ -151,8 +156,10 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                     // when it is a reason — like `due:`, and unlike the marked-when-empty lines of `task
                     // show`, a listing row states what is so, and a date column of `-` on every other row
                     // buys nothing.
+                    // A row is space-separated `key:value`s, so the time of an instant joins its day
+                    // with a `T` rather than a space.
                     let waiting = t.not_started_until
-                        .map(|d| format!(" waiting-until:{}", time::date_to_string(d)))
+                        .map(|start| format!(" waiting-until:{}", start_text(start).replace(' ', "T")))
                         .unwrap_or_default();
                     // The same thing said about the fourth premise: a task still being created is listed
                     // like any other (`AMB-D-555`), so the row is where it says why the mailbox skips it.
@@ -293,9 +300,9 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                 // was never looked at" is back to guessing why the task is not in the mailbox.
                 match detail.not_started_until {
                     None => human(flags, "not started until: (none)"),
-                    Some(d) => human(
+                    Some(start) => human(
                         flags,
-                        format!("not started until: {} (cannot start yet)", time::date_to_string(d)),
+                        format!("not started until: {} (cannot start yet)", start_text(start)),
                     ),
                 }
                 // The fourth reason (`AMB-D-553`). Marked even when empty, like the three above: a task

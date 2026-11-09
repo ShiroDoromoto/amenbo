@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { HeldBack } from "./BuiltinCard";
 import { RefNavProvider, type RefNav } from "../core/refNav";
 import { t, tf } from "../core/i18n";
+import { scheduleText } from "../core/calendar";
 import type { AutomationHeldBackDto } from "../bindings/bindings";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -33,12 +34,12 @@ const held: AutomationHeldBackDto = {
   blockers: [{ id: 321, title: "先行", count: 2 }],
   decisions: [{ id: 990, title: "根拠", count: 1 }],
   notStarted: 1,
-  firstStart: "2026-10-01",
+  firstStart: { kind: "day", day: "2026-10-01" },
   drafts: 1,
 };
 
-function render(nav: RefNav) {
-  act(() => root.render(createElement(RefNavProvider, { value: nav, children: createElement(HeldBack, { held }) })));
+function render(nav: RefNav, given: AutomationHeldBackDto = held) {
+  act(() => root.render(createElement(RefNavProvider, { value: nav, children: createElement(HeldBack, { held: given }) })));
 }
 
 const press = (text: string) =>
@@ -56,6 +57,14 @@ describe("HeldBack", () => {
     expect(lines[2]).toContain("根拠");
     expect(lines[3]).toContain("2026-10-01");
     expect(lines[4]).toContain(t("chip.draft"));
+  });
+
+  it("names a first start at an instant to the minute, on the reader's clock", () => {
+    const firstStart = { kind: "at", at: "2026-10-01T05:30:00Z" } as const;
+    render({}, { ...held, firstStart });
+    const line = [...container.querySelectorAll("li")][3];
+    expect(line.textContent).toContain(scheduleText(firstStart));
+    expect(scheduleText(firstStart)).toMatch(/ \d{2}:\d{2}$/);
   });
 
   it("takes a value to its axis on the run's project, and a task or a decision to itself", () => {

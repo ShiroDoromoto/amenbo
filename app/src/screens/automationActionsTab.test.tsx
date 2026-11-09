@@ -499,6 +499,7 @@ describe("the built-ins", () => {
     inputs: [],
     exits: [{ name: "taken", outputs: [] }],
     usedBy: 0,
+    startsARoleOnly: false,
   };
 
   beforeEach(() => {

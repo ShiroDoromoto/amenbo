@@ -42,6 +42,9 @@
 //
 // **A role's start is not picked here** (`AMB-D-1123`): each role takes from its own waiting tasks, so
 // the built-in that takes a task is its only start, and the build screen puts it on with one press.
+// **Nor is that built-in offered here at all**: it stands nowhere but where a role that starts with a
+// task starts, which the launch check holds to, so the built-ins listed leave out the one core marks as
+// kept there (`startsARoleOnly`) — wherever the panel was opened.
 import { useState } from "react";
 import {
   insertAutomationAction,
@@ -235,6 +238,7 @@ export function AutomationLibraryPanel({
     );
   // Searched in the words the reader sees, which are the screen's language and not the store's.
   const shownBuiltins = builtins
+    .filter((one: AutomationBuiltinDto) => !one.startsARoleOnly)
     .map(builtinShown)
     .filter((one: AutomationBuiltinDto) => w === "" || `${one.name} ${one.does}`.toLowerCase().includes(w));
 

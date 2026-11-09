@@ -50,6 +50,7 @@ describe("a built-in's words", () => {
         { name: "着手した", outputs: [{ name: "タスク", kind: "task_take", required: true }] },
       ],
       usedBy: 2,
+      startsARoleOnly: true,
     };
     const shown = builtinShown(take);
     expect(shown.key).toBe("take_task");

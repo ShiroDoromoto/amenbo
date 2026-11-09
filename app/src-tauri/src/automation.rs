@@ -442,6 +442,7 @@ pub fn automation_builtin_page() -> Result<Vec<AutomationBuiltinDto>, CmdError> 
                 })
                 .collect(),
             used_by,
+            starts_a_role_only: one.starts_a_role_only(),
         });
     }
     Ok(out)

@@ -345,11 +345,15 @@ fn hand_the_task_back(
 ///   any more files to the human, since a failure filed to nobody is one nobody reads.
 /// - **It is filed in the round's task's project**, so the edge stays inside one project. A role is
 ///   named only there, since a task takes a role from its own project's automations.
-/// - **It carries every classification the round's task has**, a closed value included
-///   ([`crate::ops::dimension::carry_over`]), and the time axis's default only where that task has
-///   none on it. The round's task finished being created, so it answers every axis its project
-///   requires, and so does this one: its creation is finished like any other's (`AMB-D-554`), and
-///   finishing it failing is an error, not a task left being written.
+/// - **It carries the classification the automation is set to file a failed round's task with**
+///   ([`crate::model::Automation::failure_values`], `AMB-D-1129`), a value closed since included
+///   ([`crate::ops::dimension::carry_over`]), and the time axis's default only where that classification
+///   gives none on it. Nothing is copied from the round's task: what a failure is filed under is the
+///   person's to say, not Amenbo's to guess. The classification names the automation's project's axes,
+///   so it is carried only where the round's task is in that project, as the role is. The launch check
+///   refuses an automation whose classification leaves an axis its project requires with no value
+///   ([`crate::ops::automation_run::Unmet::FailureAxisEmpty`]), so this task's creation is finished like
+///   any other's (`AMB-D-554`), and finishing it failing is an error, not a task left being written.
 fn file_the_failure(tx: &WriteTx<'_>, run: &AutomationRun, task_id: i64, line: &str) -> Result<i64> {
     let conn = tx.conn();
     let project_id = read::task(conn, task_id)?.and_then(|t| t.project_id);
@@ -375,13 +379,18 @@ fn file_the_failure(tx: &WriteTx<'_>, run: &AutomationRun, task_id: i64, line: &
             made_in_run_step_id: None,
         },
     )?;
-    let carried = read::task_dimension_assignments(conn, task_id)?;
-    for &(_, value) in &carried {
+    let classified: Vec<(i64, i64)> = match read::automation(conn, run.automation_id)? {
+        Some(automation) if project_id == Some(run.project_id) => {
+            automation.failure_values.iter().map(|v| (v.dimension_id, v.value_id)).collect()
+        }
+        _ => Vec::new(),
+    };
+    for &(_, value) in &classified {
         crate::ops::dimension::carry_over(tx, filed.id, value)?;
     }
     if let Some(project_id) = project_id {
         let today = crate::time::today();
-        let named: Vec<i64> = carried.iter().map(|&(axis, _)| axis).collect();
+        let named: Vec<i64> = classified.iter().map(|&(axis, _)| axis).collect();
         if let Some((_, value)) = crate::ops::task::time_axis_default(conn, project_id, today, &named)? {
             crate::ops::dimension::set(tx, filed.id, value)?;
         }
@@ -1609,7 +1618,7 @@ mod tests {
             )
             .expect("a role");
             let to = Some(Some(crate::model::FailuresTo::Role { role_id: role.id }));
-            automation::update(tx, p.automation.id, None, None, None, to).expect("to the role");
+            automation::update(tx, p.automation.id, None, None, None, to, None).expect("to the role");
             let run = a_run(tx, &p.automation);
             let first = opened(tx, &run, &p.first);
             let task = a_task_in_hand(tx, p.project, first.run_step.id);
@@ -1626,11 +1635,11 @@ mod tests {
         });
     }
 
-    /// **A filed round carries every classification its task has** — a value since closed included,
-    /// and both values on a multi-select axis — so it finishes being created even where its project
-    /// requires axes, and a role's seat can take it.
+    /// **A filed round carries the classification its automation is set to file it with** — a value
+    /// closed since it was named included — and nothing the round's task has, so it finishes being
+    /// created even where its project requires axes, and a role's seat can take it.
     #[test]
-    fn a_round_filed_carries_its_tasks_classification_and_finishes_being_created() {
+    fn a_round_filed_carries_its_automations_classification_and_finishes_being_created() {
         use crate::model::{DimensionCardinality, DimensionRole};
         use crate::ops::dimension::{self, NewDimension};
         with_tx(|tx| {
@@ -1641,8 +1650,6 @@ mod tests {
                 automation::NewRole { name: "直す人".into(), ..Default::default() },
             )
             .expect("a role");
-            let to = Some(Some(crate::model::FailuresTo::Role { role_id: role.id }));
-            automation::update(tx, p.automation.id, None, None, None, to).expect("to the role");
             let product = dimension::add(
                 tx,
                 p.project,
@@ -1650,7 +1657,7 @@ mod tests {
             )
             .expect("an axis");
             let old = dimension::value_add(tx, product.id, "旧版", None).expect("a value");
-            dimension::value_add(tx, product.id, "本体", None).expect("a value");
+            let main = dimension::value_add(tx, product.id, "本体", None).expect("a value");
             let kind = dimension::add(
                 tx,
                 p.project,
@@ -1659,17 +1666,20 @@ mod tests {
             .expect("an axis");
             let build = dimension::value_add(tx, kind.id, "実装", None).expect("a value");
             let test = dimension::value_add(tx, kind.id, "テスト", None).expect("a value");
+            let to = Some(Some(crate::model::FailuresTo::Role { role_id: role.id }));
+            let values = [old.id, build.id];
+            automation::update(tx, p.automation.id, None, None, None, to, Some(&values[..])).expect("to the role");
             let run = a_run(tx, &p.automation);
             let first = opened(tx, &run, &p.first);
             let task = a_task_in_hand(tx, p.project, first.run_step.id);
-            for value in [old.id, build.id, test.id] {
+            for value in [main.id, test.id] {
                 dimension::set(tx, task, value).expect("classify the task");
             }
             for axis in [product.id, kind.id] {
                 dimension::update(tx, axis, None, None, None, None, None, None, Some(true), None, None, None)
                     .expect("required");
             }
-            dimension::value_set_closed(tx, old.id, true).expect("close a value the task holds");
+            dimension::value_set_closed(tx, old.id, true).expect("close a value the automation names");
 
             step_ended(tx, first.run_step.id).expect("step ended").expect("a run to end");
 
@@ -1677,10 +1687,10 @@ mod tests {
             assert!(!filed.draft, "filed and finished");
             assert_eq!(filed.role_id, Some(role.id), "filed to the role");
             let mut carried = read::task_dimension_assignments(tx.conn(), filed.id).expect("read");
-            let mut held = read::task_dimension_assignments(tx.conn(), task).expect("read");
             carried.sort();
-            held.sort();
-            assert_eq!(carried, held, "every classification the task has, carried over");
+            let mut named = vec![(product.id, old.id), (kind.id, build.id)];
+            named.sort();
+            assert_eq!(carried, named, "the automation's classification, and nothing of the task's");
         });
     }
 

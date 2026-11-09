@@ -1916,6 +1916,7 @@ export const ru: Translation = {
     not_ready_automation_role_starts_nowhere: "у роли «{role}» нет старта",
     not_ready_automation_export_only: "это старое определение, его можно только экспортировать",
     not_ready_automation_no_failures_to: "не выбрано, кому передавать неудавшийся проход",
+    not_ready_automation_failure_axis_empty: "классификация задачи о сбое: у обязательной оси «{axis}» нет значения",
     not_ready_automation_action_draft: "размещённое действие «{action}» ещё создаётся",
     not_ready_automation_action_empty: "у размещённого действия «{action}» нет стартового шага",
     not_ready_automation_role_start_takes_no_task: "роль «{role}» стартует с «{step}», а не с «Взять задачу»",

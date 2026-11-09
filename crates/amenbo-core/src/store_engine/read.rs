@@ -6670,13 +6670,45 @@ pub fn automation_actions_splitting(
     automation_rows(conn, A.table, &pred, &[Sort::by(A.id)], super::hydrate::automation_action_row)
 }
 
-/// The `automation` record with this id, with its triggers.
+/// The `automation` record with this id, with its triggers and the classification its failed round's
+/// task is filed with.
 pub fn automation(conn: &Connection, id: i64) -> Result<Option<crate::model::Automation>> {
     let Some(mut automation) = super::hydrate::row_by_id(conn, "automation", id, super::hydrate::automation_row)? else {
         return Ok(None);
     };
+    automation.failure_values = automation_failure_values_of(conn, id)?;
     automation.triggers = automation_triggers_of(conn, id)?;
     Ok(Some(automation))
+}
+
+/// The classification one automation's failed round's task is filed with, in the order it was written.
+pub fn automation_failure_values_of(
+    conn: &Connection,
+    automation_id: i64,
+) -> Result<Vec<crate::model::AutomationFailureValue>> {
+    const V: col::automation_failure_value::Cols = col::automation_failure_value::ALL;
+    automation_rows(
+        conn,
+        V.table,
+        &Pred::eq(V.automation_id, automation_id),
+        &[Sort::by(V.id)],
+        super::hydrate::automation_failure_value_row,
+    )
+}
+
+/// The rows of the classification failed rounds are filed with that name this value, ascending — what
+/// has to move or go before the value does.
+pub fn automation_failure_value_ids_of_value(conn: &Connection, value_id: i64) -> Result<Vec<i64>> {
+    const V: col::automation_failure_value::Cols = col::automation_failure_value::ALL;
+    select_ids(conn, V.id, Some(&Pred::eq(V.value_id, value_id)))
+}
+
+/// The row of the classification failed rounds are filed with that has this id.
+pub fn automation_failure_value(
+    conn: &Connection,
+    id: i64,
+) -> Result<Option<crate::model::AutomationFailureValue>> {
+    super::hydrate::row_by_id(conn, "automation_failure_value", id, super::hydrate::automation_failure_value_row)
 }
 
 /// The `automation_trigger` record with this id.

@@ -2004,7 +2004,7 @@ mod tests {
             let project = mk_project(tx, "amenbo");
             let (automation, [(builder, _), (reviewer, _)]) = by_role(tx, project);
             let to = Some(Some(FailuresTo::Role { role_id: reviewer }));
-            automation::update(tx, automation.id, None, None, None, to).expect("to the reviewer");
+            automation::update(tx, automation.id, None, None, None, to, None).expect("to the reviewer");
             let built = for_ai(tx, "to build", project, None);
             give_to(tx, built, builder);
 

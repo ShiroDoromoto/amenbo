@@ -1890,6 +1890,7 @@ export const nl: Translation = {
     not_ready_automation_role_starts_nowhere: "de rol „{role}” heeft geen start",
     not_ready_automation_export_only: "het is een oude definitie en kan alleen nog worden geëxporteerd",
     not_ready_automation_no_failures_to: "er is niet gekozen bij wie een mislukte ronde wordt gemeld",
+    not_ready_automation_failure_axis_empty: "indeling van de mislukkingstaak: de verplichte as ‘{axis}’ heeft geen waarde",
     not_ready_automation_action_draft: "de geplaatste actie ‘{action}’ wordt nog aangemaakt",
     not_ready_automation_action_empty: "de geplaatste actie ‘{action}’ heeft geen startstap",
     not_ready_automation_role_start_takes_no_task: "de rol „{role}” start bij „{step}”, niet bij „Taak oppakken”",

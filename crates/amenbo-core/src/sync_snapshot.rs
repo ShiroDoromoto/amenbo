@@ -249,6 +249,14 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
         "automation_placement" | "automation_version" | "automation_role" | "automation_trigger" => {
             "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)"
         }
+        // The classification a failed round's task is filed with, closed by its three ends as a task's
+        // own classification is: the automation, the axis and the value all inside.
+        "automation_failure_value" => concat!(
+            "automation_id IN (SELECT id FROM automation WHERE project_id = ?1)",
+            " AND dimension_id IN (SELECT id FROM dimension WHERE project_id = ?1)",
+            " AND value_id IN (SELECT id FROM dimension_value WHERE dimension_id IN",
+            " (SELECT id FROM dimension WHERE project_id = ?1))",
+        ),
         "automation_action_step" | "automation_action_version" => {
             "action_id IN (SELECT id FROM automation_action WHERE project_id = ?1)"
         }
@@ -1107,6 +1115,20 @@ mod tests {
                   updated_at) \
              VALUES (?1, 'レビュー', 'eye', ?2, 'claude-code', 'opus', 'a0', ?3, ?3)",
             rusqlite::params![automation, placement, at],
+        );
+        let (axis, value): (i64, i64) = conn
+            .query_row(
+                "SELECT v.dimension_id, v.id FROM dimension_value v JOIN dimension d ON d.id = v.dimension_id \
+                 WHERE d.project_id = ?1 ORDER BY v.id LIMIT 1",
+                [project],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        put(
+            "INSERT INTO automation_failure_value \
+                 (automation_id, dimension_id, value_id, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?4)",
+            rusqlite::params![automation, axis, value, at],
         );
         put(
             "INSERT INTO automation_trigger \

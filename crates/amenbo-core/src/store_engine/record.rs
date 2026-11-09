@@ -591,10 +591,19 @@ pub fn automation_trigger(t: &AutomationTrigger) -> Record {
     let [script_program, script_args, script_timeout_minutes] = script_values(&t.script);
     let [task_script_program, task_script_args, task_script_timeout_minutes] =
         script_values(&t.task.script().cloned());
-    let (task_title, task_notes, task_path) = match &t.task {
-        TriggerTask::Fixed { title, notes } => (tv(title), tv(notes), Value::Null),
-        TriggerTask::File { path } => (Value::Null, Value::Null, tv(path)),
-        TriggerTask::Script { .. } => (Value::Null, Value::Null, Value::Null),
+    let (task_title, task_notes, task_path, task_data, task_files) = match &t.task {
+        TriggerTask::Fixed { title, notes, data, files } => (
+            tv(title),
+            tv(notes),
+            Value::Null,
+            ov(data),
+            match files.is_empty() {
+                true => Value::Null,
+                false => Value::Text(serde_json::to_string(files).expect("a list of strings is JSON")),
+            },
+        ),
+        TriggerTask::File { path } => (Value::Null, Value::Null, tv(path), Value::Null, Value::Null),
+        TriggerTask::Script { .. } => (Value::Null, Value::Null, Value::Null, Value::Null, Value::Null),
     };
     Record::new(
         "automation_trigger",
@@ -629,6 +638,8 @@ pub fn automation_trigger(t: &AutomationTrigger) -> Record {
                 ("last_filed_at", tsov(&t.last_filed_at)),
                 ("order_key", tv(&t.order_key)),
                 ("condition_role_id", kv_opt(&t.condition.as_ref().and_then(|c| c.role_id))),
+                ("task_data", task_data),
+                ("task_files", task_files),
             ],
             &t.created_at,
             &t.updated_at,
@@ -850,6 +861,10 @@ pub fn automation_run(r: &AutomationRun) -> Record {
                 ("stopped_detail", ov(&r.stopped_detail)),
                 ("launch_id", kv_opt(&r.launch_id)),
                 ("role_id", kv_opt(&r.role_id)),
+                ("start_trigger", ov(&r.start_trigger)),
+                ("start_title", ov(&r.start_title)),
+                ("start_notes", ov(&r.start_notes)),
+                ("start_data", ov(&r.start_data)),
             ],
             &r.created_at,
             &r.updated_at,

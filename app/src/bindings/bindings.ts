@@ -1681,16 +1681,18 @@ lastFiledAt?: string, };
 export type AutomationTriggerInputDto = { name: string, roleId?: number, when: AutomationTriggerWhenDto, condition?: AutomationTriggerConditionDto, script?: AutomationScriptInputDto, task: AutomationTriggerTaskInputDto, };
 
 /**
- * **What the task a trigger files says** — the wire form of [`amenbo_core::model::TriggerTask`]:
- * `fixed` with its title and notes, `file` read from its full path, `script` written by a program.
+ * **What a trigger hands on** — the wire form of [`amenbo_core::model::TriggerTask`]: `fixed` with its
+ * title, notes, data (JSON text, absent for none) and the full paths of its files (absent for none),
+ * `file` read from its full path, `script` written by a program.
  */
-export type AutomationTriggerTaskDto = { "kind": "fixed", title: string, notes: string, } | { "kind": "file", path: string, } | { "kind": "script", script: AutomationStepScriptDto, };
+export type AutomationTriggerTaskDto = { "kind": "fixed", title: string, notes: string, data?: string, files?: Array<string>, } | { "kind": "file", path: string, } | { "kind": "script", script: AutomationStepScriptDto, };
 
 /**
- * **What the task a trigger files is written to say** ([`amenbo_core::ops::automation::NewTriggerTask`])
- * — [`AutomationTriggerTaskDto`] with the program's timeout left out where it is the default.
+ * **What a trigger is written to hand on** ([`amenbo_core::ops::automation::NewTriggerTask`]) —
+ * [`AutomationTriggerTaskDto`] with the program's timeout left out where it is the default, and a
+ * `fixed`'s data and files left out where it has none.
  */
-export type AutomationTriggerTaskInputDto = { "kind": "fixed", title: string, notes: string, } | { "kind": "file", path: string, } | { "kind": "script", script: AutomationScriptInputDto, };
+export type AutomationTriggerTaskInputDto = { "kind": "fixed", title: string, notes: string, data?: string, files?: Array<string>, } | { "kind": "file", path: string, } | { "kind": "script", script: AutomationScriptInputDto, };
 
 /**
  * **What a trigger's own parts said, tried as it is typed** — the wire form of

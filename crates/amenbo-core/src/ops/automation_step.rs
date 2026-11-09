@@ -344,7 +344,7 @@ fn open_as(
     if let Some(held) = super::automation_builtin::hold(tx, &run_step, &def, &exits)? {
         return Ok(match held {
             super::automation_builtin::Held::Holding => Opened::Holding { run_step_id: run_step.id },
-            super::automation_builtin::Held::FellOver(next) => Opened::Carried { run_step_id: run_step.id, next },
+            super::automation_builtin::Held::FellOver(next) => Opened::Carried { run_step_id: run_step.id, next: *next },
         });
     }
     if def.builtin.is_some() {

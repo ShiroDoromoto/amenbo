@@ -575,7 +575,12 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 (None, false, None, None) => unreachable!("clap asks for a when unless --rm, --on or --off"),
             };
             let task = match (title, task_from_file, task_from_script) {
-                (Some(title), _, _) => NewTriggerTask::Fixed { title, notes: body_arg_opt(notes)?.unwrap_or_default() },
+                (Some(title), _, _) => NewTriggerTask::Fixed {
+                    title,
+                    notes: body_arg_opt(notes)?.unwrap_or_default(),
+                    data: String::new(),
+                    files: Vec::new(),
+                },
                 (None, Some(path), _) => NewTriggerTask::File { path },
                 (None, None, Some(program)) => NewTriggerTask::Script(NewScript {
                     program,

@@ -1556,6 +1556,14 @@ pub const STEPS: &[Step] = &[
         // lines on every automation, in the draft and in every saved version. No task is touched.
         apply: Apply::Custom(take_the_way_out_for_nothing_to_take_off),
     },
+    Step {
+        to: 139,
+        name: "add what a trigger hands on beside its title and notes, and what a run was handed by the trigger that started it",
+        // **Every trigger hands on no data and no file, and every run was handed nothing** — which is
+        // what each did until now: a trigger's title and notes went only to the task it filed. No task
+        // is touched.
+        apply: Apply::Custom(add_what_a_trigger_hands_on),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -2098,6 +2106,27 @@ fn take_the_way_out_for_nothing_to_take_off(ctx: &Ctx<'_>) -> Result<()> {
                     &format!("UPDATE automation_version SET {column} = ?1 WHERE id = ?2"),
                     rusqlite::params![now, version_id],
                 )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// v139: `automation_trigger.task_data` and `task_files`, what a trigger hands on beside its title and
+/// notes, and `automation_run.start_trigger`, `start_title`, `start_notes` and `start_data`, what the
+/// trigger that started a run handed it. All NULL on every row already there: no trigger handed on
+/// data or a file, and no run kept what it was handed. Added only where they are not there yet, v68's
+/// guard and for v53's reason.
+fn add_what_a_trigger_hands_on(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    for (table, columns) in [
+        ("automation_trigger", &["task_data", "task_files"][..]),
+        ("automation_run", &["start_trigger", "start_title", "start_notes", "start_data"][..]),
+    ] {
+        let there = column_names(tx, table)?;
+        for column in columns {
+            if !there.iter().any(|c| c == column) {
+                tx.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} TEXT;"))?;
             }
         }
     }
@@ -14245,6 +14274,65 @@ mod tests {
             .query_row("SELECT status, updated_at FROM task WHERE id = 1", [], |r| Ok((r.get(0)?, r.get(1)?)))
             .unwrap();
         assert_eq!(task_after, task_before, "no task is touched");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v139: a trigger and a run written at v138 are kept as they were, the trigger handing on no data
+    /// and no file, and the run handed nothing by a trigger — read back through the registry.
+    #[test]
+    fn a_trigger_and_a_run_are_kept_as_they_were_at_v139() {
+        let dir = scratch("trigger-hands-on");
+        let engine = store_at(&dir, 138);
+        let at = "2026-11-10T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, created_at, updated_at) VALUES (1, 1, 'auto', '{at}', '{at}');
+                 INSERT INTO automation_trigger (id, automation_id, enabled, name, when_kind, every_minutes, task_kind,
+                                                 task_title, task_notes, next_at, order_key, created_at, updated_at)
+                 VALUES (1, 1, 1, '毎朝', 'every', 60, 'fixed', '在庫を見る', 'メモ', '{at}', 'm', '{at}', '{at}');
+                 INSERT INTO automation_run (id, automation_id, project_id, status, started_at, created_at, updated_at)
+                 VALUES (1, 1, 1, 'running', '{at}', '{at}', '{at}');"#
+            ))
+            .unwrap();
+
+        run(&engine, &dir, steps_through(139), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 139);
+        let trigger = crate::store_engine::read::automation_trigger(engine.conn(), 1).unwrap().expect("the trigger");
+        assert_eq!(
+            trigger.task,
+            crate::model::TriggerTask::Fixed {
+                title: "在庫を見る".into(),
+                notes: "メモ".into(),
+                data: None,
+                files: Vec::new(),
+            },
+        );
+        let run = crate::store_engine::read::automation_run(engine.conn(), 1).unwrap().expect("the run");
+        assert_eq!(
+            (run.start_trigger, run.start_title, run.start_notes, run.start_data),
+            (None, None, None, None),
+            "handed nothing by a trigger",
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v139: a store with no automation is raised past it with nothing written.
+    #[test]
+    fn a_store_with_no_automation_is_raised_past_v139_with_nothing_written() {
+        let dir = scratch("trigger-hands-on-empty");
+        let engine = store_at(&dir, 138);
+
+        run(&engine, &dir, steps_through(139), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 139);
+        let count = |table: &str| -> i64 {
+            engine.conn().query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0)).unwrap()
+        };
+        assert_eq!(count("automation_trigger"), 0);
+        assert_eq!(count("automation_run"), 0);
         std::fs::remove_dir_all(&dir).ok();
     }
 

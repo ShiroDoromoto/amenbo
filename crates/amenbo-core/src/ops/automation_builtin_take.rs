@@ -812,7 +812,7 @@ mod tests {
             }
             assert_eq!(status(tx, b), TaskStatus::Todo, "the next task is not taken");
             let paused = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
-            assert!(!automation_stop::pauses_before_next_task(tx.conn(), &paused).expect("judge"));
+            assert!(!automation_stop::pauses_before_next_task(&paused));
 
             let resumed = automation_stop::resume(tx, run.id, None, nothing_asked(), None).expect("resume");
             assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "back at the take");
@@ -1178,10 +1178,10 @@ mod tests {
         });
     }
 
-    /// **A run that takes no tasks cannot be asked on its own** (`AMB-D-1019`): it is refused and left
-    /// as it was.
+    /// **A run that takes no tasks is asked all the same** (`AMB-D-1019`, `AMB-D-1127`): the request is
+    /// written, and takes hold where the run comes back to where its round starts.
     #[test]
-    fn a_run_that_takes_no_tasks_cannot_be_asked_on_its_own() {
+    fn a_run_that_takes_no_tasks_is_asked_all_the_same() {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let taskless =
@@ -1202,11 +1202,12 @@ mod tests {
             };
             let plain = launch_past_the_task_checks(tx, taskless.id, &by).expect("launch");
 
-            let refused = automation_stop::pause_run_before_next_task(tx, plain.id).expect_err("refused");
-            assert!(matches!(refused, crate::error::Error::Invalid(_)), "{refused:?}");
+            assert!(automation_stop::pauses_before_next_task(&plain), "asking it would do something");
+            let asked = automation_stop::pause_run_before_next_task(tx, plain.id).expect("asked");
+            assert!(matches!(asked, automation_stop::Paused::Asked(_)), "{asked:?}");
             let plain = read::automation_run(tx.conn(), plain.id).expect("read").expect("run");
             assert_eq!(plain.status, AutomationRunStatus::Running);
-            assert!(!plain.pause_before_next_task);
+            assert!(plain.pause_before_next_task);
         });
     }
 

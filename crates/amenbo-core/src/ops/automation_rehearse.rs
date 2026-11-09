@@ -3,9 +3,10 @@
 //!
 //! **Each role is walked in turn** (`AMB-D-1123`), in the order the roles are defined in: a task of
 //! that role is filed, a run is launched in its seat, and that run is walked from where the role's round
-//! starts — the step that takes a task — to its end. The next role is walked once the run before it has
-//! completed. An automation none of whose roles names where its round starts is refused by the launch
-//! check, as a launch of it is.
+//! starts — the step that takes a task — to its end. A role started by a trigger has no task filed for
+//! it (`AMB-D-1127`): its run walks from where its round starts with none. The next role is walked once
+//! the run before it has completed. An automation none of whose roles names where its round starts is
+//! refused by the launch check, as a launch of it is.
 //!
 //! **It walks the same road a run does.** The launch check refuses it where it would refuse a launch,
 //! the steps are copied into a run, each step is opened by [`super::automation_step`] — which resolves
@@ -26,9 +27,9 @@
 //!
 //! **Nothing it writes is kept.** The whole walk is one write transaction that is never committed
 //! ([`crate::store::Store::automation_rehearse`]): the run, its steps, the task filed from what was
-//! handed over ([`HandedAtLaunch`]) with the first run, the placeholder tasks and the lines a run leaves
-//! on its task are all gone the moment it returns, and nobody watching the store sees any of them. What
-//! survives is the account handed back ([`Rehearsal`]).
+//! handed over ([`HandedAtLaunch`]) with the first run of a role started by a task, the placeholder
+//! tasks and the lines a run leaves on its task are all gone the moment it returns, and nobody watching
+//! the store sees any of them. What survives is the account handed back ([`Rehearsal`]).
 //!
 //! **Which way out a step takes is chosen here**, since nobody is doing the work that would decide it.
 //! The first time a step is reached it leaves by the first way out it declares; each time it is reached
@@ -143,10 +144,14 @@ pub fn rehearse(
         .ok_or_else(|| Error::not_found(format!("automation '{automation_id}' not found")))?
         .project_id;
     let seats = automation_run::rehearsal_seats(tx.conn(), automation_id, ReadsFrom::Draft)?;
-    for (i, role_id) in seats.into_iter().enumerate() {
-        // What was handed is filed once, with the first run, as a launch files it.
-        let handed = if i == 0 { handed } else { &nothing };
-        let mut filed = Some(made_up(tx, project_id, role_id)?);
+    let mut to_hand = Some(handed);
+    for (role_id, by_trigger) in seats {
+        // A role started by a trigger takes no task (`AMB-D-1127`): nothing is made up for it, and what
+        // was handed waits for the first role that takes one. That role files it once, as a launch does.
+        let (handed, mut filed) = match by_trigger {
+            true => (&nothing, None),
+            false => (to_hand.take().unwrap_or(&nothing), Some(made_up(tx, project_id, role_id)?)),
+        };
         let run =
             automation_run::launch_in_seat_past_the_limit(tx, automation_id, &by, handed, ReadsFrom::Draft, role_id)?;
         walk_run(tx, &run, &by, &mut filed, &mut rehearsal)?;
@@ -579,6 +584,54 @@ mod tests {
             assert_eq!(roles, [[Some(drafting); 3], [Some(finishing); 3]].concat(), "{rehearsal:?}");
             assert_eq!(rehearsal.status, AutomationRunStatus::Completed);
             assert_eq!(rehearsal.cut, None);
+        });
+    }
+
+    /// **A role started by a trigger is walked with no task made up for it** (`AMB-D-1127`) — its run
+    /// walks from the agent's step where its round starts to its end, and the role after it, started by a
+    /// task, takes the task made up for it.
+    #[test]
+    fn a_role_started_by_a_trigger_is_walked_with_no_task() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation =
+                automation::add(tx, project, NewAutomation { name: "roles".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
+                    .expect("automation");
+            let (_, deciding) = mk_placed(tx, &automation, "decide", "decide the next work", "claude");
+            let on = AutomationPictureOwner::Automation;
+            automation::edge_add(tx, on, deciding.id, None, EdgeTarget::Done, None).expect("decide → end");
+            let born = start_at(tx, automation.id, deciding.id);
+            let change = automation::RoleChange {
+                starts_by: Some(crate::model::RoleStart::Trigger),
+                entry_placement_id: Some(Some(deciding.id)),
+                ..automation::RoleChange::default()
+            };
+            automation::role_update(tx, born, change).expect("started by a trigger");
+            let taking = mk_round(tx, &automation, "finish");
+            let finishing =
+                NewRole { name: "仕上げ".into(), entry_placement_id: Some(taking), ..NewRole::default() };
+            let finishing = automation::role_add(tx, automation.id, finishing).expect("another role").id;
+
+            let rehearsal = walk(tx, &automation, &HandedAtLaunch::default());
+            assert_eq!(
+                walked(&rehearsal),
+                vec![
+                    ("decide", DONE_EXIT),
+                    ("タスクに着手する", TAKEN),
+                    ("finish", DONE_EXIT),
+                    ("タスクを閉じる", DONE_EXIT),
+                ],
+                "{rehearsal:?}",
+            );
+            let roles: Vec<Option<i64>> = rehearsal.steps.iter().map(|s| s.role_id).collect();
+            assert_eq!(roles, [vec![Some(born)], vec![Some(finishing); 3]].concat(), "{rehearsal:?}");
+            assert_eq!(rehearsal.status, AutomationRunStatus::Completed);
+            let filed: Vec<Option<i64>> = read::task_ids_in_project(tx.conn(), project)
+                .expect("read")
+                .into_iter()
+                .map(|id| read::task(tx.conn(), id).expect("read").expect("the task").role_id)
+                .collect();
+            assert_eq!(filed, vec![Some(finishing)], "a task made up for the role started by a task alone");
         });
     }
 

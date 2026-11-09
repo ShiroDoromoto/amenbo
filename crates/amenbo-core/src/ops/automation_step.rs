@@ -257,13 +257,15 @@ fn open_as(
         )?;
         return Ok(Opened::LeftTaskOpen { run: stopped.run });
     }
-    // **Where the run takes its next task** is the built-in that takes one where the round of its seat's
-    // role starts (`AMB-D-1123`); one standing anywhere else on the picture is a step like any other.
-    let takes_its_task = super::automation_run::takes_its_task_at(conn, run_id, &def)?;
+    // **Where the run starts its next round** is where the round of its seat's role starts
+    // (`AMB-D-1123`): the built-in that takes its next task, or, for a role started by a trigger, the
+    // step it starts at, which takes none. One standing anywhere else on the picture is a step like any
+    // other.
+    let round_starts = super::automation_run::round_starts_at(conn, run_id, &def)?;
     // **A run asked to pause before its next task pauses here, without taking one** (`AMB-D-1009`), as
     // does a run of an automation a person stopped. Nothing is written but the pause, so picking it up
     // again opens this step afresh.
-    if takes_its_task && (run.pause_before_next_task || super::automation_stop::automation_stopped(conn, &run)?) {
+    if round_starts && (run.pause_before_next_task || super::automation_stop::automation_stopped(conn, &run)?) {
         let run = super::automation_stop::settle(tx, run, AutomationPauseKind::BeforeNextTask)?.run;
         return Ok(Opened::Waiting { run });
     }
@@ -272,7 +274,7 @@ fn open_as(
     // headcount raised again before then leaves the run in its seat. **So is a seat of a role stopped
     // taking tasks**: it stays empty until the role is taken up again, and is filled then.
     if !rehearsing
-        && takes_its_task
+        && round_starts
         && (super::automation_run::over_headcount(conn, &run)?
             || super::automation_run::role_held(conn, &run)?)
     {

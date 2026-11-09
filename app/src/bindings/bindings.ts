@@ -1175,8 +1175,8 @@ pauseRequested: boolean,
  */
 pauseBeforeNextTask: boolean, 
 /**
- * **Whether asking it would do anything** — `running`, asked for neither pause yet, and it
- * takes tasks ([`amenbo_core::ops::automation_stop::pauses_before_next_task`]).
+ * **Whether asking it would do anything** — `running`, and asked for neither pause yet
+ * ([`amenbo_core::ops::automation_stop::pauses_before_next_task`]).
  */
 pausableBeforeNextTask: boolean, 
 /**

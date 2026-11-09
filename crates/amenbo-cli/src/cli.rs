@@ -2655,8 +2655,8 @@ pub enum AutomationCmd {
         /// run id
         run: i64,
         /// pause before the run takes its next task rather than at the end of the action; one waiting
-        /// for a task, or for room in the action that takes it, pauses there and then. Refused for a run
-        /// that takes no tasks. It cannot be taken back
+        /// for a task, or for room in the action that takes it, pauses there and then. A run whose round
+        /// takes no task pauses where it comes back to where its round starts. It cannot be taken back
         #[arg(long)]
         before_next_task: bool,
     },

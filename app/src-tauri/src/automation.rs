@@ -2121,9 +2121,7 @@ fn run_card(
         ended_at: run.ended_at.map(|at| at.to_rfc3339_z()),
         pause_requested: run.pause_requested,
         pause_before_next_task: run.pause_before_next_task,
-        pausable_before_next_task: amenbo_core::ops::automation_stop::pauses_before_next_task(
-            conn, &run,
-        )?,
+        pausable_before_next_task: amenbo_core::ops::automation_stop::pauses_before_next_task(&run),
         waiting: run.status == amenbo_core::model::AutomationRunStatus::Running
             && amenbo_core::ops::automation_run::is_waiting(conn, run.id)?,
         waits_for_room: run.status == amenbo_core::model::AutomationRunStatus::Running
@@ -3278,8 +3276,7 @@ pub fn automation_launch_pause(launch_id: i64) -> Result<(), CmdError> {
 }
 
 /// **Pause a launch before each of its runs takes its next task**
-/// ([`amenbo_core::ops::automation_stop::pause_launch_before_next_task`], `AMB-D-1019`). Refused where a
-/// run of it takes no tasks.
+/// ([`amenbo_core::ops::automation_stop::pause_launch_before_next_task`], `AMB-D-1019`).
 #[tauri::command]
 pub fn automation_launch_pause_before_next_task(launch_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;

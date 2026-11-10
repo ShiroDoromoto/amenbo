@@ -591,8 +591,8 @@ pub fn automation_trigger(t: &AutomationTrigger) -> Record {
     let [script_program, script_args, script_timeout_minutes] = script_values(&t.script);
     let [task_script_program, task_script_args, task_script_timeout_minutes] =
         script_values(&t.task.script().cloned());
-    let (task_title, task_notes, task_path, task_data, task_files) = match &t.task {
-        TriggerTask::Fixed { title, notes, data, files } => (
+    let (task_title, task_notes, task_path, task_data, task_files, task_key) = match &t.task {
+        TriggerTask::Fixed { title, notes, data, files, key } => (
             tv(title),
             tv(notes),
             Value::Null,
@@ -601,10 +601,11 @@ pub fn automation_trigger(t: &AutomationTrigger) -> Record {
                 true => Value::Null,
                 false => Value::Text(serde_json::to_string(files).expect("a list of strings is JSON")),
             },
+            ov(key),
         ),
-        TriggerTask::File { path } => (Value::Null, Value::Null, tv(path), Value::Null, Value::Null),
+        TriggerTask::File { path } => (Value::Null, Value::Null, tv(path), Value::Null, Value::Null, Value::Null),
         TriggerTask::Script { .. } | TriggerTask::Asked => {
-            (Value::Null, Value::Null, Value::Null, Value::Null, Value::Null)
+            (Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null)
         }
     };
     Record::new(
@@ -642,6 +643,7 @@ pub fn automation_trigger(t: &AutomationTrigger) -> Record {
                 ("condition_role_id", kv_opt(&t.condition.as_ref().and_then(|c| c.role_id))),
                 ("task_data", task_data),
                 ("task_files", task_files),
+                ("task_key", task_key),
             ],
             &t.created_at,
             &t.updated_at,
@@ -869,6 +871,7 @@ pub fn automation_run(r: &AutomationRun) -> Record {
                 ("start_data", ov(&r.start_data)),
                 ("trigger_id", kv_opt(&r.trigger_id)),
                 ("incident_task_id", kv_opt(&r.incident_task_id)),
+                ("start_key", ov(&r.start_key)),
             ],
             &r.created_at,
             &r.updated_at,

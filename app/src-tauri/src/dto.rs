@@ -4165,7 +4165,7 @@ impl From<amenbo_core::model::TriggerTask> for AutomationTriggerTaskDto {
     fn from(t: amenbo_core::model::TriggerTask) -> Self {
         use amenbo_core::model::TriggerTask;
         match t {
-            TriggerTask::Fixed { title, notes, data, files } => {
+            TriggerTask::Fixed { title, notes, data, files, .. } => {
                 AutomationTriggerTaskDto::Fixed { title, notes, data, files: (!files.is_empty()).then_some(files) }
             }
             TriggerTask::File { path } => AutomationTriggerTaskDto::File { path },
@@ -4206,6 +4206,7 @@ impl From<AutomationTriggerTaskInputDto> for amenbo_core::ops::automation::NewTr
                 notes,
                 data: data.unwrap_or_default(),
                 files: files.unwrap_or_default(),
+                key: String::new(),
             },
             AutomationTriggerTaskInputDto::File { path } => NewTriggerTask::File { path },
             AutomationTriggerTaskInputDto::Script { script } => NewTriggerTask::Script(script.into()),

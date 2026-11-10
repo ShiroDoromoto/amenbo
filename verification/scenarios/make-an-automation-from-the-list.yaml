@@ -15,6 +15,11 @@ description: >
   launch place says nothing is placed on it yet. Then go back to the list and read the row it made —
   under the name it was given, with nothing placed on it.
 
+given:
+  # A project for the road to stand in. With nothing given, the store opens empty: no project header
+  # carries the automations button, and there is no project for the automation to be made in.
+  - { type: action, domain: project, op: create, with: { name: SCENARIO PROJECT — the list's } }
+
 steps_gui:
   - type: action
     domain: automation

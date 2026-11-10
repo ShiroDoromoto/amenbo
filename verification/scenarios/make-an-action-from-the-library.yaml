@@ -15,6 +15,11 @@ description: >
   step in on the build screen the press opens. Then go back to the list and read the row it made,
   marked as this project's.
 
+given:
+  # A project for the road to stand in. With nothing given, the store opens empty: no project header
+  # carries the automations button, and the switch has no project's library to pick.
+  - { type: action, domain: project, op: create, with: { name: SCENARIO PROJECT — the library's } }
+
 steps_gui:
   - type: action
     domain: automation

@@ -3011,10 +3011,10 @@ struct StartedScript {
 /// with its folder written and its group taken, so stopping it stops every process it started
 /// (`AMB-D-1016`) — or why it could not be, in the words the run's step is failed with.
 ///
-/// An input whose file cannot be read out of the blob store is a program that could not be started,
-/// and leaves by the error way out like one — rather than leaving the step under way with nothing
-/// running it. A program whose group cannot be taken is ended again, for the same reason: one that
-/// could not be stopped is not one to leave running.
+/// An input whose file — or a file its trigger handed on — cannot be read out of the blob store is a
+/// program that could not be started, and leaves by the error way out like one — rather than leaving
+/// the step under way with nothing running it. A program whose group cannot be taken is ended again,
+/// for the same reason: one that could not be stopped is not one to leave running.
 fn start_script(
     app: &tauri::AppHandle,
     store: &amenbo_core::Store,
@@ -3024,8 +3024,15 @@ fn start_script(
     let given = script
         .given(&store.blobs())
         .map_err(|e| format!("its inputs could not be read: {}", CmdError::from(e).message_en))?;
-    let prepared =
-        amenbo_core::ops::automation_script::prepare(&script.script, &given, Some((run_id, script.run_step.id)))?;
+    let start = script
+        .start(&store.blobs())
+        .map_err(|e| format!("what its trigger handed on could not be read: {}", CmdError::from(e).message_en))?;
+    let prepared = amenbo_core::ops::automation_script::prepare(
+        &script.script,
+        &given,
+        start.as_ref(),
+        Some((run_id, script.run_step.id)),
+    )?;
     let terminal = crate::pty::open_script(app, run_id, &prepared).map_err(|e| e.message_en)?;
     let group = terminal
         .pid

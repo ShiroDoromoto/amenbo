@@ -4102,6 +4102,13 @@ impl Instructor {
             // it, the way the placement panel's do, and the tick writes on the press — which is the
             // difference the last clause of the instruction turns on.
             (Domain::Automation, "update") => {
+                if with.contains_key("failure_dim") {
+                    return Err(
+                        "the screen road's `update` does not write `failure_dim` — a road writes it \
+                         from the terminal"
+                            .to_string(),
+                    );
+                }
                 let mut said: Vec<String> = Vec::new();
                 if let Some(name) = arg_str(with, "name") {
                     said.push(format!("set the name to \"{name}\""));

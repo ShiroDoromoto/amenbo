@@ -4124,8 +4124,11 @@ const REGISTRY: &[OpSpec] = &[
     // The three fields the definition itself holds, written after it is built: its name, its notes,
     // and whether it is kept out of a reader's way. Archiving takes nothing away and stops nothing
     // already running, which is why it is one of the three rather than a verb of its own — and why
-    // `archived` is a yes or a no rather than words, so it is not among the strings.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "update", required: &["target"], refs: &["target"], strings: &["name", "notes"], binds: false },
+    // `archived` is a yes or a no rather than words, so it is not among the strings. `failure_dim`
+    // (`<axis>=<value>`) is the classification a failed round's task is filed with: a project that
+    // requires an axis refuses the save and the start until it carries a value on it. Only the
+    // terminal road writes it.
+    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "update", required: &["target"], refs: &["target"], strings: &["name", "notes", "failure_dim"], binds: false },
     // Deleting one, with every placement, edge and wire built onto it. **Core refuses it while a run
     // stands behind the definition**, naming how many, because a run is filed under what it was
     // launched from — so a road that deletes one either never started it or reads that refusal. The

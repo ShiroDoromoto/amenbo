@@ -56,8 +56,9 @@ impl Driver<'_> {
                 let id = self.bound_id(&args, "automation", bind)?;
                 Ok(Outcome::action(format!("built automation {id} `{name}`")))
             }
-            // The three fields the definition itself holds. Only what a step names is written, the
-            // way the command reads it, so a road that renames one leaves its notes alone.
+            // The three fields the definition itself holds, and the classification a failed round's
+            // task is filed with (`failure_dim`, as `<axis>=<value>`). Only what a step names is
+            // written, the way the command reads it, so a road that renames one leaves its notes alone.
             "update" => {
                 let automation = self.resolve(with)?;
                 let mut args: Vec<String> =
@@ -72,10 +73,14 @@ impl Driver<'_> {
                     args.push("--archived".into());
                     args.push(archived.to_string());
                 }
+                if let Some(v) = with.get("failure_dim").and_then(|v| v.as_str()) {
+                    args.push("--failure-dim".into());
+                    args.push(v.to_string());
+                }
                 if args.len() == 3 {
                     return Err(
-                        "`update` writes a name, notes or whether it is archived — a step naming \
-                         none of the three would write nothing"
+                        "`update` writes a name, notes, whether it is archived or the classification \
+                         a failed round is filed with — a step naming none of them would write nothing"
                             .to_string(),
                     );
                 }

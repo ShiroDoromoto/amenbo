@@ -1852,8 +1852,10 @@ impl Store {
     /// ([`crate::ops::automation_run::ask_trigger`]); `None` for a trigger with no script. A trigger
     /// taken away since it was found due files nothing.
     ///
-    /// The files the trigger hands on are read from their paths first, outside the transaction, held to
-    /// the per-file limit of an attachment and put in the blob store, as an attachment's bytes always are
+    /// The file the trigger's task is read from, then the files the trigger hands on, are read from
+    /// their paths first, outside the transaction (`AMB-D-1134`,
+    /// [`crate::ops::automation_run::read_trigger_file`]) — the files held to the per-file limit of an
+    /// attachment and put in the blob store, as an attachment's bytes always are
     /// ([`crate::ops::automation_run::read_trigger_files`]). One not there, or not read, is an error, and
     /// nothing is started (`AMB-D-1135`).
     pub fn automation_trigger_fire(
@@ -1865,8 +1867,10 @@ impl Store {
         let Some(trigger) = crate::store_engine::read::automation_trigger(self.engine.conn(), trigger_id)? else {
             return Ok(None);
         };
+        let from_file = crate::ops::automation_run::read_trigger_file(&trigger.task)
+            .map_err(crate::error::Error::invalid)?;
         let files = crate::ops::automation_run::read_trigger_files(
-            crate::ops::automation_run::trigger_files(&trigger.task),
+            crate::ops::automation_run::trigger_files(&trigger.task, from_file.as_ref()),
             &self.config.attachment_limits,
             &self.blobs(),
         )?;
@@ -1875,7 +1879,10 @@ impl Store {
         let by = crate::ops::automation_run::Launcher { default_agent: agent.as_deref(), ..*by };
         self.write_one(
             &[WriteTarget::AutomationPart(AutomationPart::Automation, automation_id)],
-            |tx| crate::ops::automation_run::fire(tx, trigger_id, &by, crate::time::Timestamp::now(), said, &files),
+            |tx| {
+                let now = crate::time::Timestamp::now();
+                crate::ops::automation_run::fire(tx, trigger_id, &by, now, said, from_file.as_ref(), &files)
+            },
         )
     }
 

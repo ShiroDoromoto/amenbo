@@ -1756,12 +1756,12 @@ mod tests {
 
             let early = Timestamp(due.0 - chrono::Duration::seconds(1));
             assert_eq!(triggers_due(tx.conn(), early).expect("ask"), TriggersDue { due: vec![], ask: vec![], next_at: Some(due) });
-            assert!(fire(tx, trigger_id, &by, early, None, &[]).expect("fire").is_none(), "not before it is due");
+            assert!(fire(tx, trigger_id, &by, early, None, None, &[]).expect("fire").is_none(), "not before it is due");
             assert!(under_way(tx).is_empty(), "and no run");
             assert_eq!(next_at(tx), due);
 
             assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![trigger_id]);
-            let run = fire(tx, trigger_id, &by, due, None, &[]).expect("fire").expect("a run");
+            let run = fire(tx, trigger_id, &by, due, None, None, &[]).expect("fire").expect("a run");
             assert_eq!(run.started_by_kind, None, "nobody pressed start");
             let filed = taken_first(tx, &run, &take);
             assert_eq!(filed.title, "受信箱を見る");
@@ -1778,7 +1778,7 @@ mod tests {
 
             // The run is still under way, in the role's one seat.
             assert!(triggers_due(tx.conn(), then).expect("ask").due.is_empty(), "not due while it is full");
-            assert!(fire(tx, trigger_id, &by, then, None, &[]).expect("fire").is_none(), "no task with no run to go to");
+            assert!(fire(tx, trigger_id, &by, then, None, None, &[]).expect("fire").is_none(), "no task with no run to go to");
             assert_eq!(under_way(tx), vec![run.id]);
             assert_eq!(next_at(tx), then, "a time it decides no leaves nothing");
         });
@@ -1819,7 +1819,7 @@ mod tests {
             assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![first.id, second.id], "both due at once");
             let claude = ["claude".to_string()];
             let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
-            assert!(fire(tx, first.id, &by, due, None, &[]).expect("fire").is_some(), "the first files its task");
+            assert!(fire(tx, first.id, &by, due, None, None, &[]).expect("fire").is_some(), "the first files its task");
             let read_one = |id: i64| read::automation_trigger(tx.conn(), id).expect("read").expect("there");
             let moved = read_one(first.id);
             assert_eq!((moved.next_at, moved.last_filed_at), (TriggerWhen::Every { minutes: 60 }.after(due), Some(due)));
@@ -1833,7 +1833,7 @@ mod tests {
             )
             .expect("turn it off");
             assert!(triggers_due(tx.conn(), due).expect("ask").due.is_empty(), "the one turned off is not asked");
-            assert!(fire(tx, second.id, &by, due, None, &[]).expect("fire").is_none(), "nor fired");
+            assert!(fire(tx, second.id, &by, due, None, None, &[]).expect("fire").is_none(), "nor fired");
             assert_eq!(read_one(second.id), off, "and keeps its next_at");
 
             automation::trigger_set(tx, automation.id, None).expect("take them away");
@@ -1887,10 +1887,10 @@ mod tests {
                 tx.queued_activity().into_iter().filter(|l| l.event["kind"] == "task.filed_by_trigger").collect::<Vec<_>>()
             };
             let early = Timestamp(kept.next_at.0 - chrono::Duration::seconds(1));
-            assert!(fire(tx, trigger_id, &by, early, None, &[]).expect("fire").is_none(), "not before it is due");
+            assert!(fire(tx, trigger_id, &by, early, None, None, &[]).expect("fire").is_none(), "not before it is due");
             assert!(named(tx).is_empty(), "a time it decides no leaves no line");
 
-            let run = fire(tx, trigger_id, &by, kept.next_at, None, &[]).expect("fire").expect("a run");
+            let run = fire(tx, trigger_id, &by, kept.next_at, None, None, &[]).expect("fire").expect("a run");
             let filed = taken_first(tx, &run, &take);
             assert_eq!(filed.role_id, Some(role.id), "filed under the trigger's role");
             assert_eq!(filed.assignee_kind, Some(ActorKind::Ai), "the AI's");
@@ -1942,10 +1942,10 @@ mod tests {
                 by: None,
             };
             let early = Timestamp(due.0 - chrono::Duration::seconds(1));
-            assert!(fire(tx, trigger_id, &by, early, None, &[]).expect("fire").is_none(), "not before it is due");
+            assert!(fire(tx, trigger_id, &by, early, None, None, &[]).expect("fire").is_none(), "not before it is due");
 
             assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![trigger_id], "idle and due");
-            let run = fire(tx, trigger_id, &by, due, None, &[]).expect("fire").expect("a run");
+            let run = fire(tx, trigger_id, &by, due, None, None, &[]).expect("fire").expect("a run");
             assert_eq!(taken_first(tx, &run, &take).title, "手が空いたら見る");
             let then = TriggerWhen::Idle.after(due);
             assert_eq!(next_at(tx), then, "a minute on from when it filed");
@@ -1953,12 +1953,12 @@ mod tests {
             // One run under way, with room for another: an idle trigger still waits.
             let found = triggers_due(tx.conn(), then).expect("ask");
             assert!(found.due.is_empty() && found.next_at.is_none(), "not due while a run is going: {found:?}");
-            assert!(fire(tx, trigger_id, &by, then, None, &[]).expect("fire").is_none(), "nothing filed beside it");
+            assert!(fire(tx, trigger_id, &by, then, None, None, &[]).expect("fire").is_none(), "nothing filed beside it");
             assert_eq!(next_at(tx), then, "a time it decides no leaves nothing");
 
             stop(tx, run.id, Ending::Canceled).expect("end it");
             assert_eq!(triggers_due(tx.conn(), then).expect("ask").due, vec![trigger_id], "idle again");
-            assert!(fire(tx, trigger_id, &by, then, None, &[]).expect("fire").is_some(), "so it files the next one");
+            assert!(fire(tx, trigger_id, &by, then, None, None, &[]).expect("fire").is_some(), "so it files the next one");
         });
     }
 
@@ -1991,21 +1991,21 @@ mod tests {
 
             let waiting = mk_task_in(tx, "待っている", Some(project));
             assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![trigger_id], "one todo, fewer than two");
-            assert!(fire(tx, trigger_id, &by, due, None, &[]).expect("fire").is_some(), "so it files one");
+            assert!(fire(tx, trigger_id, &by, due, None, None, &[]).expect("fire").is_some(), "so it files one");
             let then = TriggerWhen::Tasks.after(due);
             assert_eq!(next_at(tx), then, "a minute on from when it filed");
 
             // Room for one more run, but two todo now: it waits.
             let another = mk_task_in(tx, "もう一つ", Some(project));
             assert!(triggers_due(tx.conn(), then).expect("ask").due.is_empty(), "not due with two todo");
-            assert!(fire(tx, trigger_id, &by, then, None, &[]).expect("fire").is_none(), "nothing filed");
+            assert!(fire(tx, trigger_id, &by, then, None, None, &[]).expect("fire").is_none(), "nothing filed");
             assert_eq!(next_at(tx), then, "a time it decides no leaves nothing");
 
             for id in [waiting, another] {
                 task::set_status(tx, id, TaskStatus::Done, ActorKind::Human).expect("done");
             }
             assert_eq!(triggers_due(tx.conn(), then).expect("ask").due, vec![trigger_id], "fewer again");
-            assert!(fire(tx, trigger_id, &by, then, None, &[]).expect("fire").is_some(), "so it files the next one");
+            assert!(fire(tx, trigger_id, &by, then, None, None, &[]).expect("fire").is_some(), "so it files the next one");
 
             // Laid on an `every`, it holds the clock back too.
             let hourly = automation::NewTrigger { when: TriggerWhen::Every { minutes: 60 }, ..trigger };
@@ -2015,7 +2015,7 @@ mod tests {
             mk_task_in(tx, "三つ目", Some(project));
             mk_task_in(tx, "四つ目", Some(project));
             assert!(triggers_due(tx.conn(), due).expect("ask").due.is_empty(), "due on the clock, but two todo");
-            assert!(fire(tx, trigger_id, &by, due, None, &[]).expect("fire").is_none());
+            assert!(fire(tx, trigger_id, &by, due, None, None, &[]).expect("fire").is_none());
             assert_eq!(next_at(tx), due);
         });
     }
@@ -2160,7 +2160,7 @@ mod tests {
             let tried = trigger_try(&written, &now, || false);
             assert_eq!(
                 tried,
-                TriggerTried::Files { title: "調査を起票する".into(), notes: "3 件まで".into() },
+                TriggerTried::Files { title: "調査を起票する".into(), notes: "3 件まで".into(), data: None, files: Vec::new() },
                 "tried before it is first due",
             );
             assert!(read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read").is_empty(), "no run");
@@ -2216,7 +2216,7 @@ mod tests {
             assert_eq!(draft.condition, Some(ConditionCount { matched: 1, below: 2 }));
             assert_eq!(
                 draft.try_now(|| false),
-                TriggerTried::Files { title: "調査を起票する".into(), notes: "3 件まで".into() },
+                TriggerTried::Files { title: "調査を起票する".into(), notes: "3 件まで".into(), data: None, files: Vec::new() },
             );
             let kept = read::automation(tx.conn(), automation.id).expect("read").expect("there");
             assert!(kept.triggers.is_empty(), "no trigger written");
@@ -2230,11 +2230,31 @@ mod tests {
             let draft = trigger_draft(tx.conn(), automation.id, typed(from_file)).expect("ready");
             assert_eq!(
                 draft.try_now(|| false),
-                TriggerTried::Files { title: "報告を読む".into(), notes: "未整理のもの".into() },
+                TriggerTried::Files { title: "報告を読む".into(), notes: "未整理のもの".into(), data: None, files: Vec::new() },
                 "the file as it stands now",
             );
             std::fs::remove_file(&path).expect("gone");
             assert!(matches!(draft.try_now(|| false), TriggerTried::SaidNothing { .. }), "a file that is not there");
+            let brief = dir.join("brief.md");
+            let json = serde_json::json!({ "title": "報告を読む", "data": { "stage": 5 }, "files": [brief.to_string_lossy()] });
+            std::fs::write(&path, json.to_string()).expect("written");
+            let TriggerTried::SaidNothing { why } = draft.try_now(|| false) else { panic!("a file it hands on is not there") };
+            assert!(why.contains("is not there"), "{why}");
+            std::fs::write(&brief, "# 方針\n").expect("written");
+            assert_eq!(
+                draft.try_now(|| false),
+                TriggerTried::Files {
+                    title: "報告を読む".into(),
+                    notes: String::new(),
+                    data: Some(r#"{"stage":5}"#.into()),
+                    files: vec!["brief.md".into()],
+                },
+                "its JSON, with the names the files would be attached by",
+            );
+            std::fs::write(&path, r#"{"notes":"題が無い"}"#).expect("written");
+            let TriggerTried::SaidNothing { why } = draft.try_now(|| false) else { panic!("the task it files needs a title") };
+            assert!(why.contains("needs a title"), "{why}");
+            std::fs::remove_dir_all(&dir).ok();
 
             mk_task_in(tx, "もう一つ", Some(project));
             let full = trigger_draft(tx.conn(), automation.id, typed(fixed())).expect("ready");
@@ -2291,50 +2311,63 @@ mod tests {
 
             let other = TriggerScripts { ask: Some(StepScript { timeout_minutes: 6, ..script }), write: None };
             let said = |scripts: &TriggerScripts| ScriptsSaid { scripts: scripts.clone(), wrote: None };
-            assert!(fire(tx, trigger_id, &by, due, None, &[]).expect("fire").is_none(), "no answer, no task");
-            assert!(fire(tx, trigger_id, &by, due, Some(&said(&other)), &[]).expect("fire").is_none(), "another script's yes");
+            assert!(fire(tx, trigger_id, &by, due, None, None, &[]).expect("fire").is_none(), "no answer, no task");
+            assert!(fire(tx, trigger_id, &by, due, Some(&said(&other)), None, &[]).expect("fire").is_none(), "another script's yes");
             assert_eq!(next_at(tx), due, "a time it decides no leaves nothing");
 
-            assert!(fire(tx, trigger_id, &by, due, Some(&said(&scripts)), &[]).expect("fire").is_some(), "its own script's yes");
+            assert!(fire(tx, trigger_id, &by, due, Some(&said(&scripts)), None, &[]).expect("fire").is_some(), "its own script's yes");
             assert_eq!(next_at(tx), TriggerWhen::Script.after(due), "a minute on from when it filed");
         });
     }
 
-    /// **A trigger's task may be read from a file**, as the file stands when it fires: its first line is
-    /// the title of the task filed and the rest its notes. A file it cannot read files nothing — an
-    /// error, as a launch refused is — and leaves `next_at` where it was.
+    /// **A trigger's task may be read from a file**, as the file stands when it fires (`AMB-D-1134`): its
+    /// first line is the title of the task filed and the rest its notes, or, where it is JSON, its
+    /// `title` and `notes`. A file not there says nothing, in a sentence that names it, and starts
+    /// nothing (`AMB-D-1135`); what was read from another path starts nothing either; and one that gives
+    /// no title is refused, as the task it files needs one — each leaving `next_at` where it was.
     #[test]
     fn a_trigger_files_the_task_its_file_says() {
         use crate::model::TriggerWhen;
-        use crate::ops::automation_run::{fire, triggers_due};
+        use crate::ops::automation_run::{fire, read_trigger_file, triggers_due, TriggerFileSaid};
         with_tx(|tx| {
             let (automation, take, _) = entry(tx);
             let dir = std::env::temp_dir().join(format!("amenbo-trigger-file-{}", std::process::id()));
             std::fs::create_dir_all(&dir).expect("dir");
             let path = dir.join("task.md");
+            let shown = path.to_string_lossy().into_owned();
             let trigger = automation::NewTrigger {
                 name: String::new(),
                 role_id: None,
                 when: TriggerWhen::Every { minutes: 5 },
                 condition: None,
                 script: None,
-                task: automation::NewTriggerTask::File { path: path.to_string_lossy().into_owned() },
+                task: automation::NewTriggerTask::File { path: shown.clone() },
             };
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
-            let next_at = |tx: &WriteTx<'_>| {
-                read::automation(tx.conn(), automation.id).expect("read").expect("there").triggers.into_iter().next().expect("kept").next_at
+            let kept = |tx: &WriteTx<'_>| {
+                read::automation(tx.conn(), automation.id).expect("read").expect("there").triggers.into_iter().next().expect("kept")
             };
-            let due = next_at(tx);
+            let due = kept(tx).next_at;
             let claude = ["claude".to_string()];
             let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
 
             assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![trigger_id], "nothing to run first");
-            assert!(fire(tx, trigger_id, &by, due, None, &[]).is_err(), "no file there to read");
-            assert_eq!(next_at(tx), due, "and nothing moves on");
+            let missing = read_trigger_file(&kept(tx).task).expect_err("no file there to read");
+            assert!(missing.contains(&format!("the file '{shown}' is not there")), "{missing}");
+            assert!(fire(tx, trigger_id, &by, due, None, None, &[]).expect("fire").is_none(), "nothing read, nothing started");
+
+            std::fs::write(&path, r#"{"version":2,"notes":"本文だけ","key":"x"}"#).expect("write");
+            let untitled = read_trigger_file(&kept(tx).task).expect("read").expect("a file");
+            let refused = fire(tx, trigger_id, &by, due, None, Some(&untitled), &[]).expect_err("no title");
+            assert!(refused.to_string().contains("needs a title"), "{refused}");
+            assert_eq!(kept(tx).next_at, due, "and nothing moves on");
             assert!(read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read").is_empty());
 
             std::fs::write(&path, "ファイルで起こす\n\n本文").expect("write");
-            let run = fire(tx, trigger_id, &by, due, None, &[]).expect("fire").expect("a run");
+            let read = read_trigger_file(&kept(tx).task).expect("read").expect("a file");
+            let elsewhere = TriggerFileSaid { path: "/elsewhere/task.md".into(), ..read.clone() };
+            assert!(fire(tx, trigger_id, &by, due, None, Some(&elsewhere), &[]).expect("fire").is_none(), "read from another path");
+            let run = fire(tx, trigger_id, &by, due, None, Some(&read), &[]).expect("fire").expect("a run");
             let filed = taken_first(tx, &run, &take);
             assert_eq!(filed.title, "ファイルで起こす");
             assert_eq!(filed.notes, "本文");
@@ -2385,13 +2418,13 @@ mod tests {
 
             let wrote = Some(("書いてもらう".to_string(), "本文".to_string()));
             let other = TriggerScripts { ask: None, write: Some(StepScript { timeout_minutes: 6, ..script }) };
-            assert!(fire(tx, trigger_id, &by, due, None, &[]).expect("fire").is_none(), "nothing written, no task");
+            assert!(fire(tx, trigger_id, &by, due, None, None, &[]).expect("fire").is_none(), "nothing written, no task");
             let rewritten = ScriptsSaid { scripts: other, wrote: wrote.clone() };
-            assert!(fire(tx, trigger_id, &by, due, Some(&rewritten), &[]).expect("fire").is_none(), "another program's");
+            assert!(fire(tx, trigger_id, &by, due, Some(&rewritten), None, &[]).expect("fire").is_none(), "another program's");
             assert_eq!(next_at(tx), due, "a time it decides no leaves nothing");
 
             let said = ScriptsSaid { scripts, wrote };
-            let run = fire(tx, trigger_id, &by, due, Some(&said), &[]).expect("fire").expect("a run");
+            let run = fire(tx, trigger_id, &by, due, Some(&said), None, &[]).expect("fire").expect("a run");
             let filed = taken_first(tx, &run, &take);
             assert_eq!(filed.title, "書いてもらう");
             assert_eq!(filed.notes, "本文");
@@ -2429,14 +2462,14 @@ mod tests {
             };
 
             assert_eq!(triggers_due(tx.conn(), due).expect("ask"), TriggersDue::default(), "not asked at all");
-            assert!(fire(tx, trigger_id, &by, due, None, &[]).expect("fire").is_none(), "it decides no");
+            assert!(fire(tx, trigger_id, &by, due, None, None, &[]).expect("fire").is_none(), "it decides no");
             let after = read::automation(tx.conn(), automation.id).expect("read").expect("there");
             assert_eq!(after.triggers, before.triggers, "next_at is where it was");
             assert!(read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read").is_empty());
 
             automation::stop(tx, automation.id, false).expect("start it again");
             assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![trigger_id]);
-            assert!(fire(tx, trigger_id, &by, due, None, &[]).expect("fire").is_some(), "and it files its task");
+            assert!(fire(tx, trigger_id, &by, due, None, None, &[]).expect("fire").is_some(), "and it files its task");
         });
     }
 
@@ -2463,7 +2496,7 @@ mod tests {
             let nothing: [String; 0] = [];
             let by = Launcher { default_agent: None, startable: Some(&nothing), models: nothing_asked(), workspace_open: None, by: None };
 
-            assert!(fire(tx, trigger_id, &by, due, None, &[]).is_err(), "the launch check refuses it");
+            assert!(fire(tx, trigger_id, &by, due, None, None, &[]).is_err(), "the launch check refuses it");
             let after = read::automation(tx.conn(), automation.id).expect("read").expect("there");
             assert_eq!(after.triggers, before.triggers, "next_at is where it was");
             assert_eq!(after.updated_at, before.updated_at);

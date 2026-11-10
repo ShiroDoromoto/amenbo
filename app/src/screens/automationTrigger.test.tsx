@@ -584,7 +584,7 @@ describe("trying it as it is typed", () => {
   const previewNotes = () => page().querySelector("[data-preview=notes]")?.textContent;
 
   it("tries what was typed without saving, and previews the task it would file", async () => {
-    hoisted.try.mockResolvedValue({ kind: "files", title: "Read the new reports", notes: "Three came in." });
+    hoisted.try.mockResolvedValue({ kind: "files", title: "Read the new reports", notes: "Three came in.", data: null, key: null, files: [] });
     const { onClose } = await draw(detail());
     await press(radio(t("auto.trigger.taskFile")));
     await type(box(t("auto.trigger.taskPath")), "/Users/alice/next.md");

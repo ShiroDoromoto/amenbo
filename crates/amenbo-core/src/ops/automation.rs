@@ -1724,9 +1724,10 @@ fn checked_trigger(
     })
 }
 
-/// The data a trigger hands on as it is written ([`NewTriggerTask::Fixed`]): `None` where it is blank,
+/// The data a trigger hands on as it is written ([`NewTriggerTask::Fixed`]), or as its file says it
+/// ([`crate::ops::automation_run::task_from_file`]): `None` where it is blank,
 /// and refused where it is not JSON or is over [`MAX_TRIGGER_DATA_BYTES`]. Kept as written, trimmed.
-fn checked_trigger_data(data: &str) -> Result<Option<String>> {
+pub(crate) fn checked_trigger_data(data: &str) -> Result<Option<String>> {
     let data = data.trim();
     if data.is_empty() {
         return Ok(None);
@@ -1743,9 +1744,10 @@ fn checked_trigger_data(data: &str) -> Result<Option<String>> {
     Ok(Some(data.to_string()))
 }
 
-/// The files a trigger hands on as they are written ([`NewTriggerTask::Fixed`]): each trimmed, a blank
+/// The files a trigger hands on as they are written ([`NewTriggerTask::Fixed`]), or as its file names
+/// them ([`crate::ops::automation_run::task_from_file`]): each trimmed, a blank
 /// one left out, and refused where one is not named by its full path. None is read here.
-fn checked_trigger_files(files: Vec<String>) -> Result<Vec<String>> {
+pub(crate) fn checked_trigger_files(files: Vec<String>) -> Result<Vec<String>> {
     files
         .into_iter()
         .map(|path| path.trim().to_string())

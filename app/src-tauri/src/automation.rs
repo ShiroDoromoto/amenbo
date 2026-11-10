@@ -4435,7 +4435,7 @@ mod tests {
                 notes: "メモ".into(),
                 data: None,
                 key: None,
-                files: None,
+                files: Vec::new(),
             },
             "no task matches, so fewer than one do",
         );

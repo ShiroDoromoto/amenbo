@@ -2152,8 +2152,8 @@ pub struct TriggerCondition {
     pub below: u32,
 }
 
-/// The most bytes the data a trigger hands on may take — the `data` of a [`TriggerTask::Fixed`], or what
-/// a program writes as its `data`: 64 KiB.
+/// The most bytes the data a trigger hands on may take — the `data` of a [`TriggerTask::Fixed`], the one
+/// its file says, or what a program writes as its `data`: 64 KiB.
 pub const MAX_TRIGGER_DATA_BYTES: usize = 64 * 1024;
 
 /// **What a trigger hands on** — the second part of [`AutomationTrigger`]: a title, notes, data as JSON
@@ -2177,8 +2177,11 @@ pub enum TriggerTask {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         files: Vec<String>,
     },
-    /// What the file at `path`, by its full path, says when the task is filed: its first line that is
-    /// not blank is the title, and what follows it the notes
+    /// What the file at `path`, by its full path, says each time it starts a run, read then and never
+    /// when it is written; one not there then starts nothing. A JSON object says the title, notes, data
+    /// and files, `{"version":2,"title":"…","notes":"…","data":{…},"files":["/full/path",…]}`, each left
+    /// out where it has none — the files read from their paths then too. Any other file says it in
+    /// lines: its first line that is not blank is the title, and what follows it the notes
     /// ([`crate::ops::automation_run::task_from_file`]).
     File { path: String },
     /// What the program writes in its `output.json` each time it starts a run —

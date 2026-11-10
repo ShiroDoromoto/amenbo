@@ -7539,6 +7539,13 @@ pub fn automations_triggered(conn: &Connection) -> Result<Vec<crate::model::Auto
     Ok(found)
 }
 
+/// **The triggers keeping since when they waited** ([`crate::model::AutomationTrigger::waiting_since`]),
+/// of any automation — what a look clears where they are waiting no more.
+pub fn automation_trigger_ids_waiting(conn: &Connection) -> Result<Vec<i64>> {
+    const T: col::automation_trigger::Cols = col::automation_trigger::ALL;
+    select_ids(conn, T.id, Some(&Pred::is_not_null(T.waiting_since)))
+}
+
 /// The automations of one project, for the project delete's walk.
 pub fn automation_ids_in_project(conn: &Connection, project_id: i64) -> Result<Vec<i64>> {
     const A: col::automation::Cols = col::automation::ALL;

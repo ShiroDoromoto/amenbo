@@ -677,6 +677,7 @@ pub fn automation_trigger(t: &AutomationTrigger) -> Record {
                         None => Value::Null,
                     },
                 ),
+                ("waiting_since", tsov(&t.waiting_since)),
             ],
             &t.created_at,
             &t.updated_at,

@@ -53,6 +53,7 @@ use crate::ops::automation_step::{taskfilter_expr, taskfilter_sort, TASKFILTER_S
 use crate::query::{self, ListParams};
 use crate::reach::Reach;
 use crate::store_engine::read;
+use crate::time::Timestamp;
 
 /// The way out it leaves by once it has reserved a task.
 pub const TAKEN: &str = "着手した";
@@ -134,6 +135,79 @@ fn take(carry: &Carry<'_, '_>) -> Result<Carried> {
 /// however many the filter matches, and none is counted or sorted.
 pub(crate) fn turned_up(conn: &Connection, project_id: i64, roles: &[i64], cfg: &[RunDefCfg]) -> Result<bool> {
     query::any_in_roles(conn, Reach::binding(project_id), &expression(answer(cfg, FILTER)), roles)
+}
+
+/// **Since when there has been a task to take** (`AMB-D-1145`) — of the tasks [`turned_up`] asks after,
+/// the earliest any of them came to be takeable ([`takeable_at`]). `None` where there is none.
+///
+/// The tasks are read oldest made first, a page at a time, and the read stops at the first one made no
+/// earlier than the best found so far: no task comes to be takeable before it is made, so none made after
+/// it can have waited longer. Most reads stop at the first task.
+pub(crate) fn takeable_since(
+    conn: &Connection,
+    project_id: i64,
+    roles: &[i64],
+    cfg: &[RunDefCfg],
+) -> Result<Option<Timestamp>> {
+    let expr = expression(answer(cfg, FILTER));
+    let mut since: Option<Timestamp> = None;
+    let mut offset = 0;
+    loop {
+        let page = query::list_in_roles(
+            conn,
+            Reach::binding(project_id),
+            ListParams {
+                filter_expr: Some(expr.clone()),
+                sort: "created".to_string(),
+                limit: Some(PAGE),
+                offset: Some(offset),
+                ..Default::default()
+            },
+            roles,
+        )?;
+        for listed in &page.tasks {
+            let Some(task) = read::task(conn, listed.id)? else { continue };
+            if since.is_some_and(|since| since <= task.created_at) {
+                return Ok(since);
+            }
+            let at = takeable_at(conn, &task)?;
+            since = Some(since.map_or(at, |since| since.min(at)));
+        }
+        if page.tasks.len() < PAGE {
+            return Ok(since);
+        }
+        offset += PAGE;
+    }
+}
+
+/// **When a task came to be takeable** — which nothing writes down, so it is read as the latest of:
+///
+/// - when it was made (`created_at`);
+/// - when its status last changed (`status_changed_at`): handed back to `todo`, or opened again;
+/// - when it may be started (`start`), a day counted from when it begins for the reader;
+/// - when the last of the tasks it waits on was closed — each one's `status_changed_at`, or its
+///   `completed_at` where that was never stamped.
+///
+/// A decision it rests on settling, a value ordered before its own closing, its draft being finished and
+/// the role it is worked under being given to it leave no time behind, so they are not counted: a task
+/// held back by one of them reads as takeable from the latest of the rest.
+fn takeable_at(conn: &Connection, task: &crate::model::Task) -> Result<Timestamp> {
+    let mut at = task.created_at;
+    at = at.max(task.status_changed_at.unwrap_or(at));
+    if let Some(start) = task.start {
+        at = at.max(start.begins());
+    }
+    for edge_id in read::task_dependency_ids(conn, task.id)? {
+        let Some(edge) = read::task_dependency(conn, edge_id)? else { continue };
+        if edge.task_id != task.id {
+            continue;
+        }
+        let Some(blocker) = read::task(conn, edge.blocked_by_id)? else { continue };
+        if let Some(closed) = blocker.status_changed_at.or(blocker.completed_at) {
+            at = at.max(closed);
+        }
+    }
+    Ok(at)
 }
 
 /// **What it looks for while it waits**, as a person reads it beside the automation: the filter it
@@ -1355,7 +1429,7 @@ mod tests {
     }
 
     /// **A run is a seat of one role, and takes only that role's tasks.** It is bound at launch to the
-    /// first role with a task to take, and a task of another role is left however high it stands.
+    /// role with a task to take, and a task of another role is left however high it stands.
     #[test]
     fn a_run_takes_only_the_tasks_of_the_role_it_is_a_seat_of() {
         with_tx(|tx| {
@@ -1365,7 +1439,7 @@ mod tests {
             give_to(tx, reviewed, reviewer);
 
             let run = launched(tx, &automation);
-            assert_eq!(run.role_id, Some(reviewer), "the first role with a task to take");
+            assert_eq!(run.role_id, Some(reviewer), "the only role with a task to take");
             let built = for_ai(tx, "to build", project, Some(Priority::High));
             give_to(tx, built, builder);
 
@@ -1405,7 +1479,7 @@ mod tests {
             give_to(tx, reviewed, reviewer);
 
             let first = launched(tx, &automation);
-            assert_eq!(first.role_id, Some(builder), "the first role with a task to take");
+            assert_eq!(first.role_id, Some(builder), "its tasks have waited as long, and it is the first role");
             let launch = first.launch_id.expect("a launch");
             open_entry(tx, &first);
 
@@ -1425,6 +1499,77 @@ mod tests {
             let err = launched_or_refused(tx, &automation).expect_err("every seat is taken");
             let crate::error::Error::Invalid(msg) = err else { panic!("a launch past its seats is invalid") };
             assert_eq!(msg.code(), Some(crate::error::ErrorCode::InvalidAutomationRunLimit));
+        });
+    }
+
+    /// Have task `id` made, and its status last changed, at `at`.
+    fn made_at(tx: &WriteTx<'_>, id: i64, at: &str) {
+        tx.conn()
+            .execute(
+                "UPDATE task SET created_at = ?1, status_changed_at = ?1 WHERE id = ?2",
+                rusqlite::params![at, id],
+            )
+            .expect("made then");
+    }
+
+    /// **The role whose task has waited longest is seated first** (`AMB-D-1145`), whatever order the roles
+    /// are defined in, and a launch topped up is weighed by since when the task it would take has waited.
+    #[test]
+    fn the_role_whose_task_has_waited_longest_is_seated_first() {
+        use crate::ops::automation_run::{top_ups_due, TopUpDue};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, [(builder, _), (reviewer, _)]) = by_role(tx, project);
+            let built = for_ai(tx, "to build", project, None);
+            give_to(tx, built, builder);
+            made_at(tx, built, "2026-01-02T00:00:00Z");
+            let reviewed = for_ai(tx, "to review", project, None);
+            give_to(tx, reviewed, reviewer);
+            made_at(tx, reviewed, "2026-01-01T00:00:00Z");
+
+            let run = launched(tx, &automation);
+            assert_eq!(run.role_id, Some(reviewer), "its task has waited a day longer, the later role though it is");
+            let launch = run.launch_id.expect("a launch");
+            open_entry(tx, &run);
+            assert_eq!(status(tx, reviewed), TaskStatus::InProgress);
+
+            let since = crate::time::Timestamp::parse_rfc3339("2026-01-02T00:00:00Z").expect("a time");
+            assert_eq!(top_ups_due(tx.conn(), &[launch]).expect("ask"), vec![TopUpDue { launch_id: launch, since }]);
+        });
+    }
+
+    /// **A task has waited from when it came to be takeable**, not from when it was made: from its start,
+    /// and from the last task it waits on being closed, whichever is later.
+    #[test]
+    fn a_task_has_waited_from_when_it_came_to_be_takeable() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, [(builder, _), (reviewer, _)]) = by_role(tx, project);
+            let start = crate::time::Timestamp::parse_rfc3339("2026-01-04T00:00:00Z").expect("a time");
+            let reviewed = for_ai(tx, "to review", project, None);
+            give_to(tx, reviewed, reviewer);
+            task::update(tx, reviewed, TaskPatch { start: Some(Schedule::At(start)), ..Default::default() })
+                .expect("its start");
+            made_at(tx, reviewed, "2026-01-01T00:00:00Z");
+            let first = mk_task_in(tx, "first", Some(project));
+            let built = for_ai(tx, "to build", project, None);
+            give_to(tx, built, builder);
+            crate::ops::dependency::add(tx, built, first, None).expect("depend");
+            task::set_status(tx, first, TaskStatus::Done, ActorKind::Human).expect("done");
+            made_at(tx, first, "2025-12-30T00:00:00Z");
+            tx.conn()
+                .execute(
+                    "UPDATE task SET status_changed_at = ?1, completed_at = ?1 WHERE id = ?2",
+                    rusqlite::params!["2026-01-03T00:00:00Z", first],
+                )
+                .expect("closed then");
+            made_at(tx, built, "2025-12-31T00:00:00Z");
+
+            assert_eq!(
+                launched(tx, &automation).role_id,
+                Some(builder),
+                "takeable since the third, where the reviewer's task is since its start on the fourth",
+            );
         });
     }
 

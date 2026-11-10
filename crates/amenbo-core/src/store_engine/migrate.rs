@@ -1608,6 +1608,13 @@ pub const STEPS: &[Step] = &[
         // trigger reads as having no such time. No task is touched.
         apply: Apply::Custom(let_a_trigger_keep_why_it_could_not_start),
     },
+    Step {
+        to: 146,
+        name: "add automation_trigger.waiting_since, since when a trigger has been held back by the run limit alone",
+        // **Unseeded.** No trigger was ever held back by the run limit with a time kept, so every trigger
+        // reads as not waiting; the next look finds the ones that are. No task is touched.
+        apply: Apply::Custom(let_a_trigger_keep_since_when_it_waits),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -2314,6 +2321,23 @@ fn let_a_trigger_keep_why_it_could_not_start(ctx: &Ctx<'_>) -> Result<()> {
     }
     if !there.iter().any(|c| c == "refused_why") {
         tx.execute_batch("ALTER TABLE automation_trigger ADD COLUMN refused_why TEXT;")?;
+    }
+    Ok(())
+}
+
+/// v146: `automation_trigger.waiting_since`, since when a trigger has been held back by the most runs of
+/// its automation that go at once alone (`AMB-D-1145`). NULL on every row already there.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. Nullable with no default but NULL,
+/// so `ALTER TABLE` adds it as it stands; the `CHECK` is the one every timestamp column carries, frozen
+/// here as text.
+fn let_a_trigger_keep_since_when_it_waits(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_trigger")?.iter().any(|c| c == "waiting_since") {
+        tx.execute_batch(
+            "ALTER TABLE automation_trigger ADD COLUMN waiting_since TEXT CHECK(waiting_since GLOB \
+             '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');",
+        )?;
     }
     Ok(())
 }
@@ -14727,6 +14751,9 @@ mod tests {
         run(&engine, &dir, steps_through(145), &mut crate::progress::ignore).unwrap();
 
         assert_eq!(engine.format_version().unwrap(), 145);
+        // Read through the registry once the store is raised to the latest, as the registry names the
+        // later steps' columns too.
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
         let read = || crate::store_engine::read::automation_trigger(engine.conn(), 1).unwrap().expect("the trigger");
         let before = read();
         assert_eq!(before.last_refused, None, "no trigger kept a time it could not start before");
@@ -14743,6 +14770,39 @@ mod tests {
         assert_eq!(refused.why.fields.get("path").map(String::as_str), Some("/tmp/next.md"));
         assert!(
             engine.conn().execute("UPDATE automation_trigger SET refused_at = 'yesterday' WHERE id = 1", []).is_err(),
+            "an instant, as every time is",
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v146: a trigger written at v145 is not waiting, and one written then keeps since when it waits,
+    /// read back through the registry.
+    #[test]
+    fn a_trigger_written_before_v146_is_not_waiting() {
+        let dir = scratch("trigger-waiting");
+        let engine = store_at(&dir, 145);
+        let at = "2026-11-10T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, created_at, updated_at) VALUES (1, 1, 'auto', '{at}', '{at}');
+                 INSERT INTO automation_trigger (id, automation_id, enabled, name, when_kind, every_minutes, task_kind,
+                                                 task_path, next_at, order_key, created_at, updated_at)
+                 VALUES (1, 1, 1, '毎朝', 'every', 60, 'file', '/tmp/next.md', '{at}', 'm', '{at}', '{at}');"#
+            ))
+            .unwrap();
+
+        run(&engine, &dir, steps_through(146), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 146);
+        let read = || crate::store_engine::read::automation_trigger(engine.conn(), 1).unwrap().expect("the trigger");
+        let before = read();
+        assert_eq!((before.name.as_str(), before.waiting_since), ("毎朝", None), "no trigger was waiting before");
+        engine.conn().execute("UPDATE automation_trigger SET waiting_since = ?1 WHERE id = 1", [at]).unwrap();
+        assert_eq!(read().waiting_since.map(|since| since.to_rfc3339_z()).as_deref(), Some(at));
+        assert!(
+            engine.conn().execute("UPDATE automation_trigger SET waiting_since = 'yesterday' WHERE id = 1", []).is_err(),
             "an instant, as every time is",
         );
         std::fs::remove_dir_all(&dir).ok();

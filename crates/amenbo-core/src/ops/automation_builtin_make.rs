@@ -1757,7 +1757,7 @@ mod tests {
             let under_way = |tx: &WriteTx<'_>| read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read");
 
             let early = Timestamp(due.0 - chrono::Duration::seconds(1));
-            assert_eq!(triggers_due(tx.conn(), early).expect("ask"), TriggersDue { due: vec![], ask: vec![], next_at: Some(due) });
+            assert_eq!(triggers_due(tx.conn(), early).expect("ask"), TriggersDue { next_at: Some(due), ..TriggersDue::default() });
             assert!(fire(tx, trigger_id, &by, early, None, None, &[]).expect("fire").is_none(), "not before it is due");
             assert!(under_way(tx).is_empty(), "and no run");
             assert_eq!(next_at(tx), due);

@@ -28,14 +28,19 @@
 //! wait ([`wake`]); a `start` typed in a terminal cannot reach this process, so that one waits out the
 //! idle sleep.
 //!
-//! **One launch keeps its runs going side by side** (`top_up`). Each look asks every running launch
-//! whether one of its automation's roles has a free seat under the headcount the launch holds for it,
+//! **One launch keeps its runs going side by side** (`launches_to_top_up`). Each look asks every running
+//! launch whether one of its automation's roles has a free seat under the headcount the launch holds for it,
 //! and a task of its own to take, and starts one more run in that seat where it does — so a launch fills
 //! its seats one run a look, a run that ends makes room for the next, and a headcount raised on the
 //! launch takes hold on the next look. A role none of whose runs is about to take a
 //! task is the only one given another, so two runs are not started for one task.
 //!
-//! **Triggers are asked here too** (`fire_triggers`): each look asks which are due before it looks at
+//! **Where an automation is at the most runs that go at once, the one that has waited longest goes
+//! first** (`AMB-D-1145`, `start_in_turn`). The triggers due and the launches to top up are started in one
+//! line, oldest first: a role's run from when the task it would take came to be takeable, a trigger's from
+//! when the run limit alone first held it back — a time kept on the trigger in the store, not here.
+//!
+//! **Triggers are asked here too** (`triggers_to_fire`): each look asks which are due before it looks at
 //! the runs, so a run a trigger started is opened in the same look. A trigger keeps the time it is next
 //! due in the store and nothing runs beside this thread for it (`AMB-D-983`'s shape): a look sleeps no
 //! longer than until the soonest one. The app being closed is what stops them — a terminal starts no
@@ -183,16 +188,18 @@ fn sleep(how_long: Duration) -> bool {
 /// that stops a run — a required input with nothing in it — stops it inside the op that found it, so
 /// this sees it as a run that is no longer running rather than as a failure to handle.
 ///
-/// The triggers are fired first (`fire_triggers`), then the running launches are topped up (`top_up`),
-/// and the wait is cut short to when the next trigger is due.
+/// Before the runs, new ones are started: the triggers that are due (`triggers_to_fire`) and the running
+/// launches with a free seat and a task (`launches_to_top_up`) go in one line, longest waiting first
+/// (`start_in_turn`), and the wait is cut short to when the next trigger is due.
 fn advance(
     app: &tauri::AppHandle,
     held: &mut HashMap<i64, Instant>,
     asking: &mut HashMap<i64, Asking>,
     refused: &mut HashMap<i64, Instant>,
 ) -> Result<Duration, crate::error::CmdError> {
-    let next_trigger = fire_triggers(held, asking)?;
-    top_up(refused)?;
+    let (mut starts, next_trigger) = triggers_to_fire(held, asking)?;
+    starts.extend(launches_to_top_up(refused)?);
+    start_in_turn(starts, held, refused);
     let running = {
         let store = crate::commands::open_store_read()?;
         amenbo_core::store_engine::read::automation_run_ids_running(store.read_model().conn())?
@@ -259,14 +266,25 @@ fn advance(
         .map_or(WHILE_IDLE, |due| due.saturating_duration_since(Instant::now()).min(WHILE_IDLE)))
 }
 
-/// **Fire every trigger that is due** ([`amenbo_core::ops::automation_run::fire`]), and answer when the
-/// next one not yet due is, if any.
-///
-/// Each is fired in a write of its own, so one refused does not take the others with it. Nobody pressed
-/// anything, so the launch says nothing about who did, cannot see a window, and has asked nobody which
-/// agents this machine can start (`AMB-D-792`): no step is judged on its agent, and the run waits for
-/// its first step to be opened as one started from a terminal does. The models are asked, as a press
-/// in the app asks them.
+/// **One run a look may start**, and since when it has waited (`AMB-D-1145`) — a trigger to fire, with
+/// what its scripts said where it has any, or a launch to top up.
+struct Start {
+    /// For a trigger, since the run limit alone first held it back, or this look where it did not; for a
+    /// launch, since the task its run would take came to be takeable.
+    since: amenbo_core::time::Timestamp,
+    what: Starting,
+}
+
+/// **What [`Start`] starts.**
+enum Starting {
+    /// Fire this trigger, handing it what its scripts said.
+    Trigger(i64, Option<Box<ScriptsSaid>>),
+    /// Give this launch one more run.
+    TopUp(i64),
+}
+
+/// **The triggers to fire on this look** ([`amenbo_core::ops::automation_run::triggers_due`]), each with
+/// since when it has waited, and when the next one not yet due is, if any.
 ///
 /// A trigger whose launch was refused — its automation not saved, its entry not the built-in that files
 /// a task, the file its task is read from not there — goes into `held` and is not asked again until
@@ -278,25 +296,31 @@ fn advance(
 /// finds the answer fires it, handing it what they said. Whatever they said, they are not asked again
 /// for `SCRIPT_ASKED_AGAIN`. One that said nothing — a program that fell over — is warned about, files
 /// nothing, and keeps why on the trigger ([`keep_unanswered`]).
-fn fire_triggers(
+///
+/// **Since when the run limit alone holds a trigger back is kept on it** before anything is started
+/// ([`keep_waiting`]), so it is weighed from then once there is room.
+fn triggers_to_fire(
     held: &mut HashMap<i64, Instant>,
     asking: &mut HashMap<i64, Asking>,
-) -> Result<Option<Instant>, crate::error::CmdError> {
+) -> Result<(Vec<Start>, Option<Instant>), crate::error::CmdError> {
+    let now = amenbo_core::time::Timestamp::now();
     let found = {
         let store = crate::commands::open_store_read()?;
-        amenbo_core::ops::automation_run::triggers_due(store.read_model().conn(), amenbo_core::time::Timestamp::now())?
+        amenbo_core::ops::automation_run::triggers_due(store.read_model().conn(), now)?
     };
+    keep_waiting(&found.waiting, &found.waiting_no_more);
+    let since = |trigger: &i64| found.since.get(trigger).copied().unwrap_or(now);
     let to_ask = |trigger: &i64| found.ask.iter().any(|(asked, _)| asked == trigger);
     held.retain(|trigger, due| (found.due.contains(trigger) || to_ask(trigger)) && Instant::now() < *due);
     asking.retain(|trigger, standing| match standing {
         Asking::Running(_) => true,
         Asking::Answered(until) => to_ask(trigger) && Instant::now() < *until,
     });
-    let mut due: Vec<(i64, Option<ScriptsSaid>)> = found
+    let mut due: Vec<Start> = found
         .due
-        .into_iter()
+        .iter()
         .filter(|trigger| !held.contains_key(trigger))
-        .map(|trigger| (trigger, None))
+        .map(|trigger| Start { since: since(trigger), what: Starting::Trigger(*trigger, None) })
         .collect();
     for (trigger, scripts) in &found.ask {
         if !held.contains_key(trigger) && !asking.contains_key(trigger) {
@@ -312,7 +336,10 @@ fn fire_triggers(
         };
         *standing = Asking::Answered(Instant::now() + SCRIPT_ASKED_AGAIN);
         match said {
-            Some(Ok(Some(said))) => due.push((*trigger, Some(said))),
+            Some(Ok(Some(said))) => {
+                let what = Starting::Trigger(*trigger, Some(Box::new(said)));
+                due.push(Start { since: since(trigger), what });
+            }
             Some(Ok(None)) => {}
             Some(Err(why)) => {
                 log::warn!("trigger {trigger} had no answer from its script: {why}");
@@ -324,35 +351,81 @@ fn fire_triggers(
             }
         }
     }
-    if !due.is_empty() {
-        let offered = crate::agent_models::offered_here();
-        let by = amenbo_core::ops::automation_run::Launcher {
-            default_agent: None,
-            startable: None,
-            models: &offered,
-            workspace_open: None,
-            by: None,
-        };
-        for (trigger, said) in due {
-            let fired =
-                crate::commands::with_store_mut(|store| Ok(store.automation_trigger_fire(trigger, &by, said.as_ref())?));
-            match fired {
-                Ok(Some(run)) => log::info!("trigger {trigger} started run {}", run.id),
-                Ok(None) => {}
-                Err(e) => {
-                    log::warn!("trigger {trigger} could not start a run: {}", e.message_en);
-                    held.insert(trigger, Instant::now() + WHILE_WAITING);
-                }
-            }
-        }
-    }
-    let now = amenbo_core::time::Timestamp::now();
     let next_at = found.next_at.map(|at| Instant::now() + (at.0 - now.0).to_std().unwrap_or(Duration::ZERO));
     let answered = asking.values().filter_map(|standing| match standing {
         Asking::Answered(until) => Some(*until),
         Asking::Running(_) => None,
     });
-    Ok(next_at.into_iter().chain(answered).min())
+    Ok((due, next_at.into_iter().chain(answered).min()))
+}
+
+/// **Keep since when the run limit alone has held these triggers back, and clear it on the ones it holds
+/// back no more** ([`amenbo_core::ops::automation_run::trigger_waits`]). Nothing is written where there
+/// is neither. A store that cannot take it is warned about, and the next look finds them again.
+fn keep_waiting(waiting: &[i64], no_more: &[i64]) {
+    if waiting.is_empty() && no_more.is_empty() {
+        return;
+    }
+    let kept = crate::commands::with_store_mut(|store| Ok(store.automation_trigger_waits(waiting, no_more)?));
+    if let Err(e) = kept {
+        log::warn!("the triggers held back by the run limit could not keep since when: {}", e.message_en);
+    }
+}
+
+/// **Start the runs found on this look, longest waiting first** (`AMB-D-1145`) — a trigger's and a
+/// launch's alike, so neither always goes before the other where an automation is at the most runs that
+/// go at once. Two that have waited as long go in the order found, the triggers first.
+///
+/// Each is started in a write of its own, so one refused does not take the others with it, and each asks
+/// again there whether it may start: one that the runs started before it on this look left no room for
+/// starts nothing, and waits for the next. Nobody pressed anything, so the launch says nothing about who
+/// did, cannot see a window, and has asked nobody which agents this machine can start (`AMB-D-792`): no
+/// step is judged on its agent, and the run waits for its first step to be opened as one started from a
+/// terminal does. The models are asked, as a press in the app asks them. A run topped up is started by
+/// whoever opened its launch.
+///
+/// A trigger or a launch whose run was refused goes into `held` or `refused`, and is not asked again
+/// until `WHILE_WAITING` has passed.
+fn start_in_turn(mut starts: Vec<Start>, held: &mut HashMap<i64, Instant>, refused: &mut HashMap<i64, Instant>) {
+    if starts.is_empty() {
+        return;
+    }
+    starts.sort_by_key(|start| start.since);
+    let offered = crate::agent_models::offered_here();
+    let by = amenbo_core::ops::automation_run::Launcher {
+        default_agent: None,
+        startable: None,
+        models: &offered,
+        workspace_open: None,
+        by: None,
+    };
+    for start in starts {
+        match start.what {
+            Starting::Trigger(trigger, said) => {
+                let fired = crate::commands::with_store_mut(|store| {
+                    Ok(store.automation_trigger_fire(trigger, &by, said.as_deref())?)
+                });
+                match fired {
+                    Ok(Some(run)) => log::info!("trigger {trigger} started run {}", run.id),
+                    Ok(None) => {}
+                    Err(e) => {
+                        log::warn!("trigger {trigger} could not start a run: {}", e.message_en);
+                        held.insert(trigger, Instant::now() + WHILE_WAITING);
+                    }
+                }
+            }
+            Starting::TopUp(launch) => {
+                match crate::commands::with_store_mut(|store| Ok(store.automation_launch_top_up(launch, &by)?)) {
+                    Ok(Some(run)) => log::info!("launch {launch} had room and a task, and started run {}", run.id),
+                    Ok(None) => {}
+                    Err(e) => {
+                        log::warn!("launch {launch} could not start another run: {}", e.message_en);
+                        refused.insert(launch, Instant::now() + WHILE_WAITING);
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// **Keep on a trigger that its programs gave no answer, and why** (`AMB-D-1136`,
@@ -380,50 +453,26 @@ fn ask(trigger: i64, scripts: TriggerScripts) -> Asking {
     Asking::Running(answer)
 }
 
-/// **Start one more run in each running launch where a role has a free seat and a task to take**
-/// ([`amenbo_core::ops::automation_run::top_up`]).
+/// **The running launches to give one more run on this look, where a role has a free seat and a task to
+/// take** ([`amenbo_core::ops::automation_run::top_ups_due`]), each with since when that task has waited.
 ///
 /// Asked every look, as the runs are. A launch stays running with no run going until a person stops
-/// it, so what is asked is kept small: a few small reads and one row of the tasks for each role. Each run is
-/// started in a write of its own, launched as a trigger launches — no window is seen and no agent probe
-/// is passed, and the models are asked; who it is started by is the launch's. A launch whose run was
-/// refused goes into `refused` and is not asked again until `WHILE_WAITING` has passed, rather than
-/// every second with a warning each time.
-fn top_up(refused: &mut HashMap<i64, Instant>) -> Result<(), crate::error::CmdError> {
+/// it, so what is asked is kept small: a few small reads, and for each role with a free seat the tasks
+/// it would take read oldest made first until none can have waited longer. A launch whose run was
+/// refused is in `refused` and is not asked again until `WHILE_WAITING` has passed, rather than every
+/// second with a warning each time.
+fn launches_to_top_up(refused: &mut HashMap<i64, Instant>) -> Result<Vec<Start>, crate::error::CmdError> {
     let now = Instant::now();
     refused.retain(|_, due| now < *due);
-    let due = {
-        let store = crate::commands::open_store_read()?;
-        let conn = store.read_model().conn();
-        let running: Vec<i64> = amenbo_core::store_engine::read::automation_launches_running(conn)?
-            .into_iter()
-            .map(|launch| launch.id)
-            .filter(|launch| !refused.contains_key(launch))
-            .collect();
-        amenbo_core::ops::automation_run::launches_to_top_up(conn, &running)?
-    };
-    if due.is_empty() {
-        return Ok(());
-    }
-    let offered = crate::agent_models::offered_here();
-    let by = amenbo_core::ops::automation_run::Launcher {
-        default_agent: None,
-        startable: None,
-        models: &offered,
-        workspace_open: None,
-        by: None,
-    };
-    for launch in due {
-        match crate::commands::with_store_mut(|store| Ok(store.automation_launch_top_up(launch, &by)?)) {
-            Ok(Some(run)) => log::info!("launch {launch} had room and a task, and started run {}", run.id),
-            Ok(None) => {}
-            Err(e) => {
-                log::warn!("launch {launch} could not start another run: {}", e.message_en);
-                refused.insert(launch, Instant::now() + WHILE_WAITING);
-            }
-        }
-    }
-    Ok(())
+    let store = crate::commands::open_store_read()?;
+    let conn = store.read_model().conn();
+    let running: Vec<i64> = amenbo_core::store_engine::read::automation_launches_running(conn)?
+        .into_iter()
+        .map(|launch| launch.id)
+        .filter(|launch| !refused.contains_key(launch))
+        .collect();
+    let due = amenbo_core::ops::automation_run::top_ups_due(conn, &running)?;
+    Ok(due.into_iter().map(|due| Start { since: due.since, what: Starting::TopUp(due.launch_id) }).collect())
 }
 
 /// **End the terminal of a run that is over** — completed, failed or canceled — and forget what was

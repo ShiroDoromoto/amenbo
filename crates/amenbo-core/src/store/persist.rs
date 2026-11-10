@@ -1905,6 +1905,29 @@ impl Store {
         )
     }
 
+    /// **Keep since when the triggers `waiting` have been held back by the run limit alone, and clear it
+    /// on the ones `no_more`** (one operation = one transaction) — what a look found
+    /// ([`crate::ops::automation_run::TriggersDue`], [`crate::ops::automation_run::trigger_waits`]). A
+    /// trigger taken away since is passed over.
+    pub fn automation_trigger_waits(&mut self, waiting: &[i64], no_more: &[i64]) -> Result<()> {
+        let mut automations = std::collections::BTreeSet::new();
+        for &id in waiting.iter().chain(no_more) {
+            if let Some(trigger) = crate::store_engine::read::automation_trigger(self.engine.conn(), id)? {
+                automations.insert(trigger.automation_id);
+            }
+        }
+        if automations.is_empty() {
+            return Ok(());
+        }
+        let targets: Vec<WriteTarget> = automations
+            .into_iter()
+            .map(|automation_id| WriteTarget::AutomationPart(AutomationPart::Automation, automation_id))
+            .collect();
+        self.write_one(&targets, |tx| {
+            crate::ops::automation_run::trigger_waits(tx, waiting, no_more, crate::time::Timestamp::now())
+        })
+    }
+
     /// [`Self::automation_trigger_fire`], before what it answers is kept.
     fn fire_trigger(
         &mut self,

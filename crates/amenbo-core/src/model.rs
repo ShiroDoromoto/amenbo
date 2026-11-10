@@ -2062,8 +2062,9 @@ pub const MIN_TRIGGER_EVERY_MINUTES: u32 = 1;
 /// third is a run like any other.
 ///
 /// A time it answers no leaves nothing behind — no task, no run, no record — so the only things it
-/// keeps are `next_at` and `last_filed_at`, which move on only when a task is filed, and `last_refused`,
-/// written only when it was to start one and could not. A time it files one leaves a line in that
+/// keeps are `next_at` and `last_filed_at`, which move on only when a task is filed, `last_refused`,
+/// written only when it was to start one and could not, and `waiting_since`, while the run limit alone
+/// holds it back. A time it files one leaves a line in that
 /// task's timeline naming it by `name` ([`crate::activity_log::event::task_filed_by_trigger`]). Each
 /// trigger of an automation keeps its own: one filing a task moves no other one's on.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -2117,6 +2118,14 @@ pub struct AutomationTrigger {
     /// decides no, or waits for a seat, writes nothing here.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_refused: Option<TriggerRefusal>,
+    /// **Since when it has been held back by the most runs of its automation that go at once alone**
+    /// (`AMB-D-1145`) — the first look that found it due, its condition holding and its role's seats
+    /// leaving it room, with the automation at its limit. `None` where it is not waiting so: a run it
+    /// starts clears it, and so does a look that finds it held back by anything else or not due. The
+    /// looks weigh it by this against the roles whose tasks wait for a seat, longest waiting first
+    /// ([`crate::ops::automation_run::triggers_due`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waiting_since: Option<Timestamp>,
     /// The order the automation's triggers are written in.
     pub order_key: String,
     pub created_at: Timestamp,

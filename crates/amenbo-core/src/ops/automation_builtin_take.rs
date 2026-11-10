@@ -1636,6 +1636,95 @@ mod tests {
         });
     }
 
+    /// **A launch at the most runs that go at once is given no more** (`AMB-D-1145`), whatever seats are
+    /// free and tasks wait, and nothing is written. With the limit lifted it tops up again.
+    #[test]
+    fn a_launch_at_its_run_limit_is_not_topped_up() {
+        use crate::ops::automation_run::{launch_limit_set, launches_to_top_up, top_up};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = round_picture(tx, project);
+            crate::ops::test_support::room_for(tx, automation.id, 3);
+            for title in ["a", "b", "c", "d"] {
+                ours(tx, title, &automation, None);
+            }
+            let (launch, _, _) = two_at_work(tx, &automation);
+
+            launch_limit_set(tx, launch, Some(2)).expect("two at once");
+            assert!(
+                launches_to_top_up(tx.conn(), &[launch]).expect("ask").is_empty(),
+                "a third seat is free and tasks wait, but two is the most",
+            );
+            assert!(top_up(tx, launch, &launcher()).expect("top up").is_none(), "nothing is written");
+
+            launch_limit_set(tx, launch, None).expect("no limit");
+            assert_eq!(launches_to_top_up(tx.conn(), &[launch]).expect("ask"), vec![launch]);
+            assert!(top_up(tx, launch, &launcher()).expect("top up").is_some(), "the third seat is filled");
+        });
+    }
+
+    /// **A run limit lowered on the launch stops no task under way** (`AMB-D-1145`): the runs past it go
+    /// as they finish their task — whichever finishes first — ending where they come to take the next,
+    /// completed, and no more go than were past it.
+    #[test]
+    fn a_run_limit_lowered_on_the_launch_lets_runs_go_as_they_finish_a_round() {
+        use crate::ops::automation_run::{launch_limit_set, launches_to_top_up};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = round_picture(tx, project);
+            crate::ops::test_support::room_for(tx, automation.id, 2);
+            for title in ["a", "b", "c", "d"] {
+                ours(tx, title, &automation, None);
+            }
+            let (launch, _, [(first, first_work), (second, second_work)]) = two_at_work(tx, &automation);
+
+            launch_limit_set(tx, launch, Some(1)).expect("one at once");
+            assert_eq!(
+                read::automation_launch_run_ids_under_way(tx.conn(), launch).expect("runs"),
+                vec![first.id, second.id],
+                "no task under way is stopped",
+            );
+            assert!(launches_to_top_up(tx.conn(), &[launch]).expect("ask").is_empty());
+
+            let Next::Step(take) = round_finished(tx, second.id, &second_work) else { panic!("back round to the take") };
+            let Opened::LetGo { run: let_go } = open(tx, second.id, take.id, Some(&[])).expect("open the take") else {
+                panic!("the first to finish its task goes, whichever it is");
+            };
+            assert_eq!(let_go.status, AutomationRunStatus::Completed);
+
+            let Next::Step(take) = round_finished(tx, first.id, &first_work) else { panic!("back round to the take") };
+            assert!(
+                matches!(open(tx, first.id, take.id, Some(&[])).expect("open the take"), Opened::Carried { .. }),
+                "the one left takes its next task",
+            );
+        });
+    }
+
+    /// **Raised again before the runs past it have gone, the run limit calls the rest off**: the runs
+    /// under way keep their seats, and each goes round as before.
+    #[test]
+    fn a_run_limit_raised_again_calls_off_the_runs_still_to_go() {
+        use crate::ops::automation_run::{launch_limit_reset, launch_limit_set};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = round_picture(tx, project);
+            crate::ops::test_support::room_for(tx, automation.id, 2);
+            for title in ["a", "b", "c", "d"] {
+                ours(tx, title, &automation, None);
+            }
+            let (launch, _, [(first, first_work), _]) = two_at_work(tx, &automation);
+
+            launch_limit_set(tx, launch, Some(1)).expect("lower it");
+            assert_eq!(launch_limit_reset(tx, launch).expect("back to the definition").run_limit, None);
+
+            let Next::Step(take) = round_finished(tx, first.id, &first_work) else { panic!("back round to the take") };
+            assert!(
+                matches!(open(tx, first.id, take.id, Some(&[])).expect("open the take"), Opened::Carried { .. }),
+                "the run keeps its seat and takes its next task",
+            );
+        });
+    }
+
     /// **A launch read at once names each role's tasks waiting to be taken**: how many there are, and
     /// the first of them in the order the role takes them in. The tasks the runs have taken are under
     /// way, and are not among them.

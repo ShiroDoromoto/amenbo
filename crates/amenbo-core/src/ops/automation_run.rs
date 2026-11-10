@@ -2811,7 +2811,8 @@ pub(crate) fn end_with_no_task(tx: &WriteTx<'_>, run: AutomationRun) -> Result<A
 /// **The launch a run about to be made is started in** — the one standing for the automation, or a new
 /// one opened by `by` where none is ([`AutomationLaunch`]). A new one copies the headcount of each role
 /// of `pic`, the definition launched ([`crate::model::AutomationLaunchRole`]): from then on its seats
-/// are as many as it holds, changed on it alone ([`launch_headcount_set`]).
+/// are as many as it holds, changed on it alone ([`launch_headcount_set`]). It copies the run limit of
+/// `pic` the same way ([`launch_limit_set`]).
 ///
 /// **A paused launch is refused.** A person paused it, and a run started in it would not be paused.
 fn join_launch(
@@ -2835,6 +2836,7 @@ fn join_launch(
                 status: AutomationLaunchStatus::Running,
                 started_by_kind: by,
                 ended_at: None,
+                run_limit: pic.run_limit(),
                 created_at: now,
                 updated_at: now,
             };
@@ -2989,6 +2991,30 @@ pub fn launch_headcounts(conn: &Connection, launch_id: i64) -> Result<Vec<RoleHe
         });
     }
     Ok(found)
+}
+
+/// **The most runs that go at once in one launch, beside its definition** ([`launch_limit`]) — read
+/// beside [`launch_headcounts`]. `None` is no limit, where as many go as the headcounts come to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct LaunchLimit {
+    /// The run limit the newest saved version gives — what the next launch copies.
+    pub defined: Option<u32>,
+    /// The run limit this launch holds. `defined` once the launch has ended.
+    pub limit: Option<u32>,
+}
+
+/// **The most runs that go at once in one launch, beside its definition** ([`LaunchLimit`]). Once the
+/// launch has ended, it is back at its definition, as each role's headcount is ([`launch_headcounts`]).
+pub fn launch_limit(conn: &Connection, launch_id: i64) -> Result<LaunchLimit> {
+    let launch = read::automation_launch(conn, launch_id)?.ok_or_else(|| not_found("launch", launch_id))?;
+    let automation =
+        read::automation(conn, launch.automation_id)?.ok_or_else(|| not_found("automation", launch.automation_id))?;
+    let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+    let defined = pic.run_limit();
+    Ok(match launch.status {
+        AutomationLaunchStatus::Ended => LaunchLimit { defined, limit: defined },
+        _ => LaunchLimit { defined, limit: launch.run_limit },
+    })
 }
 
 /// **How many of a role's tasks waiting to be taken a launch's pane names** — the rest it counts.
@@ -3238,6 +3264,44 @@ pub(crate) fn launch_role_write(
 pub fn launch_headcount_reset(tx: &WriteTx<'_>, launch_id: i64, role_id: i64) -> Result<AutomationLaunchRole> {
     let (_, role) = launch_role(tx.conn(), launch_id, role_id)?;
     launch_headcount_set(tx, launch_id, role_id, role.headcount)
+}
+
+/// **Change the most runs that go at once in this launch alone**, across its roles — from 1 up to
+/// [`crate::model::MAX_RUN_LIMIT`], or `None` for no limit (`AMB-D-1145`). The definition is left as it
+/// is, and once the launch ends the next one copies the definition again, as a headcount changed on a
+/// launch is ([`launch_headcount_set`]).
+///
+/// A limit the launch already holds is answered as it stands, and nothing is written. Refused for a
+/// launch that has ended.
+pub fn launch_limit_set(tx: &WriteTx<'_>, launch_id: i64, limit: Option<u32>) -> Result<AutomationLaunch> {
+    let limit = limit.map(crate::ops::automation::checked_run_limit).transpose()?;
+    let before = launch_under_way(tx.conn(), launch_id)?;
+    if before.run_limit == limit {
+        return Ok(before);
+    }
+    let after = AutomationLaunch { run_limit: limit, updated_at: Timestamp::now(), ..before.clone() };
+    crate::ops::emit_update(tx, record::automation_launch(&before), record::automation_launch(&after))?;
+    Ok(after)
+}
+
+/// **Put this launch back at its definition's run limit** — the one the newest saved version of its
+/// automation gives, as [`launch_limit_set`] would set it, and refused where it is.
+pub fn launch_limit_reset(tx: &WriteTx<'_>, launch_id: i64) -> Result<AutomationLaunch> {
+    let defined = launch_limit(tx.conn(), launch_id)?.defined;
+    launch_limit_set(tx, launch_id, defined)
+}
+
+/// **A launch that has not ended** — what its run limit is changed on. A launch that does not exist is
+/// not_found (`AMB-D-986`).
+fn launch_under_way(conn: &Connection, launch_id: i64) -> Result<AutomationLaunch> {
+    let launch = read::automation_launch(conn, launch_id)?.ok_or_else(|| not_found("launch", launch_id))?;
+    if launch.status == AutomationLaunchStatus::Ended {
+        return Err(Error::invalid(format!(
+            "launch '{launch_id}' has ended — the most runs that go at once is changed on a launch under \
+             way, and the next one copies the definition"
+        )));
+    }
+    Ok(launch)
 }
 
 /// **A launch not ended, and one role of the newest saved version of its automation** — what changing a

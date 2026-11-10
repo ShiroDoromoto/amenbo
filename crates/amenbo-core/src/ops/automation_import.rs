@@ -56,7 +56,8 @@ pub fn parse(text: &str) -> Result<AutomationFile> {
 ///
 /// Refused for a file of another format, for a built-in this build does not have or has at an older
 /// version than the file, for an axis the project has no axis of that name for, for a role whose
-/// headcount is outside 1 to [`crate::model::MAX_ROLE_HEADCOUNT`], and for a file whose places and
+/// headcount is outside 1 to [`crate::model::MAX_ROLE_HEADCOUNT`], for a run limit outside 1 to
+/// [`crate::model::MAX_RUN_LIMIT`], and for a file whose places and
 /// names do not hold together. The caller's transaction takes the refusal back whole.
 pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Result<Automation> {
     if file.format != FORMAT {
@@ -72,7 +73,8 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
         .collect::<Result<Vec<_>>>()?;
 
     // Where a failed round is filed is the automation's, and a file does not carry it: the new
-    // automation names nobody until somebody says. How many runs go at once comes in with the roles.
+    // automation names nobody until somebody says. How many runs go at once comes in with the roles and
+    // the run limit.
     let new = NewAutomation { name: file.name.clone(), notes: file.notes.clone(), failures_to: None };
     // Born with no role: the file's roles are its roles, and only a file with none (one written before
     // roles existed) leaves it the role an automation is born with, so that it has one.
@@ -154,6 +156,7 @@ pub fn import(tx: &WriteTx<'_>, project_id: i64, file: &AutomationFile) -> Resul
         let born = NewRole { entry_placement_id: old_start, ..automation::born_role(&automation) };
         automation::role_add(tx, automation.id, born)?;
     }
+    automation::run_limit_set(tx, automation.id, file.run_limit)?;
     read::automation(tx.conn(), automation.id)?
         .ok_or_else(|| Error::not_found(format!("automation '{}' not found", automation.id)))
 }
@@ -410,6 +413,7 @@ mod tests {
             ..NewRole::default()
         };
         automation::role_add(tx, automation.id, filing).expect("a bare role a trigger starts");
+        automation::run_limit_set(tx, automation.id, Some(4)).expect("a run limit");
         automation::version_add(tx, automation.id).expect("save the automation");
         export(tx.conn(), automation.id).expect("export")
     }
@@ -488,6 +492,7 @@ mod tests {
                 "each role comes in starting the way it did"
             );
             assert_eq!((imported.project_id, imported.name.as_str()), (into, "1件やりきる"));
+            assert_eq!(imported.run_limit, Some(4), "the run limit comes in");
             assert!(read::automation_version_latest(tx.conn(), imported.id).expect("read").is_none(), "not saved");
             assert!(automation::unsaved(tx.conn(), imported.id).expect("unsaved"), "left being written");
 
@@ -550,6 +555,15 @@ mod tests {
             misstarted["roles"][0]["starts_by"] = serde_json::json!("hand");
             assert!(parse(&misstarted.to_string()).is_err(), "a way of starting that is neither is refused");
 
+            let mut unlimited = serde_json::to_value(&file).expect("json");
+            unlimited.as_object_mut().expect("a file").remove("run_limit");
+            let unlimited = parse(&unlimited.to_string()).expect("a file from before run limits");
+            assert_eq!(unlimited.run_limit, None, "an older file reads as no limit");
+
+            for limit in [0, crate::model::MAX_RUN_LIMIT + 1] {
+                let limited = AutomationFile { run_limit: Some(limit), ..file.clone() };
+                assert!(matches!(import(tx, project, &limited), Err(Error::Invalid(_))), "a run limit of {limit}");
+            }
             for headcount in [0, crate::model::MAX_ROLE_HEADCOUNT + 1] {
                 let mut counted = file.clone();
                 counted.roles[0].headcount = headcount;

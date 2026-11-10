@@ -49,7 +49,7 @@ use crate::model::{
     AutomationPort, AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationRole,
     AutomationStep, AutomationVersion, AutomationWire, StepScript, ACTION_BOUNDARY,
     DEFAULT_MAX_TIMES, DEFAULT_ROLE_HEADCOUNT, DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
-    ERROR_EXIT, FailuresTo, MAX_EXPECTED_MINUTES, MAX_ROLE_HEADCOUNT, MAX_SCRIPT_TIMEOUT_MINUTES,
+    ERROR_EXIT, FailuresTo, MAX_EXPECTED_MINUTES, MAX_ROLE_HEADCOUNT, MAX_RUN_LIMIT, MAX_SCRIPT_TIMEOUT_MINUTES,
     AutomationFailureValue, AutomationTrigger, AutomationTriggerValue, Priority, RoleStart, TakeOrder,
     TriggerCondition, TriggerTask, TriggerWhen,
     MAX_TRIGGER_DATA_BYTES,
@@ -1308,6 +1308,7 @@ pub(crate) fn add_with_no_role(tx: &WriteTx<'_>, project_id: i64, new: NewAutoma
         export_only: false,
         triggers: Vec::new(),
         stopped: false,
+        run_limit: None,
         order_key,
         created_at: now,
         updated_at: now,
@@ -1355,7 +1356,8 @@ fn checked_trigger_role(conn: &Connection, automation_id: i64, role_id: Option<i
 /// classification a failed round's task is filed with. Only the `Some` fields are written. Archiving
 /// takes nothing away: it is what keeps an automation nobody launches any more out of the lists. A run of
 /// the automation going on does not stop it. How many of its tasks go at once is not written here: it is
-/// its roles' headcount ([`role_update`]). `failures_to` is `Some(Some(to))` to file failed rounds to a
+/// its roles' headcount ([`role_update`]), and the most runs that go at once across them
+/// ([`run_limit_set`]). `failures_to` is `Some(Some(to))` to file failed rounds to a
 /// person or to one of the automation's own roles, and `Some(None)` to leave it unsaid again, which the
 /// launch check refuses.
 ///
@@ -1391,6 +1393,25 @@ pub fn update(
         after.failure_values = failure_values_set(tx, &before, values)?;
     }
     after.updated_at = Timestamp::now();
+    emit_update(tx, record::automation(&before), record::automation(&after))?;
+    Ok(after)
+}
+
+/// **Have the most runs of an automation that go at once, across its roles, be `limit`** — from 1 up to
+/// [`MAX_RUN_LIMIT`], or `None` for no limit, where as many go as the roles' headcounts come to
+/// (`AMB-D-1145`). It is part of the draft, as a role's headcount is: it is saved with the next version,
+/// and a launch copies it from the newest one when it opens. A launch under way keeps the limit it holds
+/// ([`crate::ops::automation_run::launch_limit_set`]).
+///
+/// A limit the automation already holds is answered as it stands, and nothing is written.
+pub fn run_limit_set(tx: &WriteTx<'_>, id: i64, limit: Option<u32>) -> Result<Automation> {
+    let before = live_automation(tx, id)?;
+    rewritable(tx, Def::Automation(id))?;
+    let limit = limit.map(checked_run_limit).transpose()?;
+    if before.run_limit == limit {
+        return Ok(before);
+    }
+    let after = Automation { run_limit: limit, updated_at: Timestamp::now(), ..before.clone() };
     emit_update(tx, record::automation(&before), record::automation(&after))?;
     Ok(after)
 }
@@ -2009,9 +2030,9 @@ pub fn save(tx: &WriteTx<'_>, automation_id: i64, default_agent: Option<&str>) -
 }
 
 /// **Does the draft hold anything its newest saved version does not?** For an automation nobody has
-/// saved, anything on its picture at all is unsaved — but the one role it is born with (`born_role`),
-/// as long as nothing past a name is written on it, is not something to save. Its name and notes are
-/// not part of a version, so writing them leaves this as it was.
+/// saved, anything on its picture at all is unsaved, a run limit among it — but the one role it is born
+/// with (`born_role`), as long as nothing past a name is written on it, is not something to save. Its
+/// name and notes are not part of a version, so writing them leaves this as it was.
 pub fn unsaved(conn: &Connection, automation_id: i64) -> Result<bool> {
     let automation =
         read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
@@ -2019,6 +2040,7 @@ pub fn unsaved(conn: &Connection, automation_id: i64) -> Result<bool> {
     match read::automation_version_latest(conn, automation_id)? {
         Some(latest) => Ok(!draft.is(&latest)?),
         None => Ok(!draft.placements.is_empty()
+            || draft.run_limit.is_some()
             || draft.roles.len() > 1
             || !draft.roles.iter().all(only_named)),
     }
@@ -2036,7 +2058,8 @@ fn only_named(role: &AutomationRole) -> bool {
 }
 
 /// **Throw away what is written on the automation since its newest version**, putting every row back as
-/// that version holds it, under the id it was saved with (`AMB-D-961`). Its name and notes are not part of a version, so they stay as they are.
+/// that version holds it, under the id it was saved with (`AMB-D-961`), and the run limit back at the one
+/// it holds. Its name and notes are not part of a version, so they stay as they are.
 ///
 /// Not refused while a run of it goes on (`AMB-D-1015`): the run reads its own copy. Refused for an
 /// automation nobody has saved, since there is nothing to go back to, and when a placement the version
@@ -2081,12 +2104,19 @@ pub fn discard(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVersion
     }
     restore_rows(tx, &draft.roles, saved_roles(&saved), record::automation_role)?;
     restore_rows(tx, &draft.placements, &saved.placements, record::automation_placement)?;
+    // Read again: a role taken off above may have let go of where failed rounds are filed.
+    let before = live_automation(tx, automation_id)?;
+    if before.run_limit != saved.run_limit {
+        let after = Automation { run_limit: saved.run_limit, updated_at: Timestamp::now(), ..before.clone() };
+        emit_update(tx, record::automation(&before), record::automation(&after))?;
+    }
     Ok(saved)
 }
 
 /// **The automation's picture** — the rows a version is saved from, with the version of its action each
 /// placement stands on, the answers written for their settings, the agents chosen for their steps, the
-/// edges and wires drawn on the automation, and the roles defined in it.
+/// edges and wires drawn on the automation, the roles defined in it, and the most runs that go at once
+/// across them.
 /// Read off its tables (the draft, [`Picture::read`]) or off a saved version ([`Picture::saved`]), and
 /// asked the same way either way, as [`ActionDef`] is.
 pub(crate) struct Picture {
@@ -2096,6 +2126,7 @@ pub(crate) struct Picture {
     edges: Vec<AutomationEdge>,
     wires: Vec<AutomationWire>,
     roles: Vec<AutomationRole>,
+    run_limit: Option<u32>,
 }
 
 /// The roles a version holds, as the JSON it keeps them in. A version saved before roles existed and
@@ -2121,6 +2152,7 @@ impl Picture {
             edges: read::automation_edges_of(conn, AutomationPictureOwner::Automation, automation.id)?,
             wires: read::automation_wires_of(conn, AutomationPictureOwner::Automation, automation.id)?,
             roles: read::automation_roles_of(conn, automation.id)?,
+            run_limit: automation.run_limit,
         })
     }
 
@@ -2133,12 +2165,18 @@ impl Picture {
             edges: serde_json::from_str(&version.edges).map_err(Error::from)?,
             wires: serde_json::from_str(&version.wires).map_err(Error::from)?,
             roles: serde_json::from_str(saved_roles(version)).map_err(Error::from)?,
+            run_limit: version.run_limit,
         })
     }
 
     /// The roles defined in the automation, in the order they are defined in.
     pub(crate) fn roles(&self) -> &[AutomationRole] {
         &self.roles
+    }
+
+    /// The most runs that go at once across the roles ([`Automation::run_limit`]), `None` for no limit.
+    pub(crate) fn run_limit(&self) -> Option<u32> {
+        self.run_limit
     }
 
     /// The answers written for one placement's settings.
@@ -2197,16 +2235,17 @@ impl Picture {
         lines_back(&starts, &boxes, &self.edges)
     }
 
-    /// Whether `saved` holds this picture, row for row. Every op that writes a row moves its
-    /// `updated_at`, so a row written since the save differs from its copy even where it was written back
-    /// to the same value.
+    /// Whether `saved` holds this picture, row for row, and the same run limit. Every op that writes a row
+    /// moves its `updated_at`, so a row written since the save differs from its copy even where it was
+    /// written back to the same value.
     fn is(&self, saved: &AutomationVersion) -> Result<bool> {
         Ok(same_rows(&self.placements, &saved.placements)?
             && same_rows(&self.cfgs, &saved.cfgs)?
             && same_rows(&self.placement_steps, &saved.placement_steps)?
             && same_rows(&self.edges, &saved.edges)?
             && same_rows(&self.wires, &saved.wires)?
-            && same_rows(&self.roles, saved_roles(saved))?)
+            && same_rows(&self.roles, saved_roles(saved))?
+            && self.run_limit == saved.run_limit)
     }
 }
 
@@ -2233,6 +2272,7 @@ pub fn version_add(tx: &WriteTx<'_>, automation_id: i64) -> Result<AutomationVer
         edges: serde_json::to_string(&picture.edges).map_err(Error::from)?,
         wires: serde_json::to_string(&picture.wires).map_err(Error::from)?,
         roles: serde_json::to_string(&picture.roles).map_err(Error::from)?,
+        run_limit: picture.run_limit,
         created_at: now,
         updated_at: now,
     };
@@ -2878,6 +2918,18 @@ pub(crate) fn checked_headcount(headcount: u32) -> Result<u32> {
         )));
     }
     Ok(headcount)
+}
+
+/// The most runs of an automation that go at once: from 1 up to [`MAX_RUN_LIMIT`] (`AMB-D-1145`), checked
+/// as a headcount is ([`checked_headcount`], `AMB-D-1122`). A number past it is turned away rather than
+/// brought down to it. No limit is `None`, which is not asked here.
+pub(crate) fn checked_run_limit(limit: u32) -> Result<u32> {
+    if !(1..=MAX_RUN_LIMIT).contains(&limit) {
+        return Err(Error::invalid(format!(
+            "the most runs of an automation that go at once is from 1 to {MAX_RUN_LIMIT}, not {limit}"
+        )));
+    }
+    Ok(limit)
 }
 
 /// The placement a role's round starts at has to be one of the same automation's.
@@ -4859,6 +4911,40 @@ mod tests {
 
             role_update(tx, role.id, RoleChange { headcount: Some(3), ..RoleChange::default() }).expect("change it");
             assert!(unsaved(tx.conn(), automation.id).expect("unsaved"), "the headcount is part of the version");
+        });
+    }
+
+    /// **The run limit is part of the draft and of a saved version** (`AMB-D-1145`): none at birth, from 1
+    /// to the cap or none, the draft reads as changed once it moves away from the saved one, and going
+    /// back to the saved version puts it back.
+    #[test]
+    fn the_run_limit_is_saved_with_the_version_and_held_to_its_range() {
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            assert_eq!(automation.run_limit, None, "no limit at birth");
+            for wrong in [0, MAX_RUN_LIMIT + 1] {
+                assert!(
+                    matches!(run_limit_set(tx, automation.id, Some(wrong)), Err(Error::Invalid(_))),
+                    "a run limit of {wrong}",
+                );
+            }
+            assert_eq!(live_automation(tx, automation.id).expect("read").run_limit, None, "nothing written");
+
+            let set = run_limit_set(tx, automation.id, Some(4)).expect("set it");
+            assert_eq!(set.run_limit, Some(4));
+            assert_eq!(live_automation(tx, automation.id).expect("read").run_limit, Some(4));
+            let saved = version_add(tx, automation.id).expect("save");
+            assert_eq!(saved.run_limit, Some(4), "saved with the version");
+            assert!(!unsaved(tx.conn(), automation.id).expect("unsaved"), "nothing changed since");
+
+            run_limit_set(tx, automation.id, None).expect("no limit");
+            assert!(unsaved(tx.conn(), automation.id).expect("unsaved"), "the run limit is part of the version");
+            discard(tx, automation.id).expect("go back to the saved version");
+            assert_eq!(live_automation(tx, automation.id).expect("read").run_limit, Some(4), "put back");
+            assert!(!unsaved(tx.conn(), automation.id).expect("unsaved"));
+
+            let most = run_limit_set(tx, automation.id, Some(MAX_RUN_LIMIT)).expect("the most");
+            assert_eq!(most.run_limit, Some(MAX_RUN_LIMIT));
         });
     }
 

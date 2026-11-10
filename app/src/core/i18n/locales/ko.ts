@@ -1952,6 +1952,7 @@ export const ko: Translation = {
     invalid_make_task_blocker_open: "가져올 작업이 닫히지 않은 {ref}에 의존하게 되어 가져올 수 없습니다",
     invalid_make_task_value_closed: "「분류」가 가리키는 값 「{value}」은 닫혀 있습니다",
     invalid_make_task_required_empty: "이 프로젝트에서 필수인 {axes}에 작업의 값이 없습니다",
+    invalid_trigger_axis_empty: "필수 축 «{axis}»에 값이 없습니다",
     invalid_make_task_task_not_a_number: "「의존할 기존 작업」은 한 줄에 작업 번호 하나를 읽는데, 「{line}」은 번호가 아닙니다",
     invalid_make_task_decision_not_a_number: "「연결할 결정」은 한 줄에 결정 번호 하나를 읽는데, 「{line}」은 번호가 아닙니다",
     invalid_make_task_task_not_in_project: "「의존할 기존 작업」이 가리키는 {line}은 이 프로젝트의 작업이 아닙니다",

@@ -1744,6 +1744,8 @@ mod tests {
                 condition: None,
                 script: None,
                 task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: "what to do".into(), data: String::new(), files: Vec::new() },
+                values: Vec::new(),
+                priority: None,
             };
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
             let next_at = |tx: &WriteTx<'_>| {
@@ -1801,6 +1803,8 @@ mod tests {
                 condition: None,
                 script: None,
                 task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                values: Vec::new(),
+                priority: None,
             };
             let first = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers.remove(0);
             let second = AutomationTrigger {
@@ -1863,6 +1867,8 @@ mod tests {
                 condition: None,
                 script: None,
                 task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                values: Vec::new(),
+                priority: None,
             };
 
             let other = automation::add(
@@ -1925,6 +1931,8 @@ mod tests {
                 condition: None,
                 script: None,
                 task: automation::NewTriggerTask::Fixed { title: "手が空いたら見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                values: Vec::new(),
+                priority: None,
             };
             let written = Timestamp::now();
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
@@ -1980,6 +1988,8 @@ mod tests {
                 condition: Some(TriggerCondition { filter: "status:todo".into(), role_id: None, below: 2 }),
                 script: None,
                 task: automation::NewTriggerTask::Fixed { title: "足りなければ起こす".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                values: Vec::new(),
+                priority: None,
             };
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger.clone())).expect("trigger").triggers[0].id;
             let next_at = |tx: &WriteTx<'_>| {
@@ -2061,6 +2071,8 @@ mod tests {
                 condition: Some(TriggerCondition { filter: "status:todo".into(), role_id: counted, below: 2 }),
                 script: None,
                 task: automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                values: Vec::new(),
+                priority: None,
             };
 
             let other = automation::add(
@@ -2147,6 +2159,8 @@ mod tests {
                 condition: Some(TriggerCondition { filter: "status:todo".into(), role_id: None, below: 2 }),
                 script: None,
                 task: automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: "3 件まで".into(), data: String::new(), files: Vec::new() },
+                values: Vec::new(),
+                priority: None,
             };
             let written = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].clone();
             mk_task_in(tx, "待っている", Some(project));
@@ -2208,6 +2222,8 @@ mod tests {
                 condition: Some(TriggerCondition { filter: "status:todo".into(), role_id: None, below: 2 }),
                 script: None,
                 task,
+                values: Vec::new(),
+                priority: None,
             };
             let fixed = || automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: "3 件まで".into(), data: String::new(), files: Vec::new() };
             mk_task_in(tx, "待っている", Some(project));
@@ -2295,6 +2311,8 @@ mod tests {
                     timeout_minutes: Some(5),
                 }),
                 task: automation::NewTriggerTask::Fixed { title: "判定で起こす".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                values: Vec::new(),
+                priority: None,
             };
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
             let next_at = |tx: &WriteTx<'_>| {
@@ -2343,6 +2361,8 @@ mod tests {
                 condition: None,
                 script: None,
                 task: automation::NewTriggerTask::File { path: shown.clone() },
+                values: Vec::new(),
+                priority: None,
             };
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
             let kept = |tx: &WriteTx<'_>| {
@@ -2398,6 +2418,8 @@ mod tests {
                     args: Vec::new(),
                     timeout_minutes: None,
                 }),
+                values: Vec::new(),
+                priority: None,
             };
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
             let next_at = |tx: &WriteTx<'_>| {
@@ -2448,6 +2470,8 @@ mod tests {
                 condition: None,
                 script: None,
                 task: automation::NewTriggerTask::Fixed { title: "見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                values: Vec::new(),
+                priority: None,
             };
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
             automation::stop(tx, automation.id, true).expect("stop");
@@ -2489,6 +2513,8 @@ mod tests {
                 condition: None,
                 script: None,
                 task: automation::NewTriggerTask::Fixed { title: "見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                values: Vec::new(),
+                priority: None,
             };
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
             let before = read::automation(tx.conn(), automation.id).expect("read").expect("there");

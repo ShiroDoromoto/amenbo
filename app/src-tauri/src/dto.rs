@@ -3981,8 +3981,9 @@ impl From<AutomationScriptInputDto> for amenbo_core::ops::automation::NewScript 
 }
 
 /// **An automation's trigger** — the wire form of [`amenbo_core::model::AutomationTrigger`]: whether
-/// to file a task now (`when`, with its `condition` and `script`), what the task says (`task`), and
-/// the role it is worked under. The words for each kind are the GUI's (`AMB-D-396`).
+/// to file a task now (`when`, with its `condition` and `script`), what the task says (`task`), the
+/// role it is worked under, and the classification and priority of the task it files. The words for
+/// each kind are the GUI's (`AMB-D-396`).
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -4006,6 +4007,14 @@ pub struct AutomationTriggerDto {
     #[ts(optional)]
     pub(crate) script: Option<AutomationStepScriptDto>,
     pub(crate) task: AutomationTriggerTaskDto,
+    /// **The classification of the task it files**, by the ids of its values, at most one an axis
+    /// (`AMB-D-1136`). Empty where it gives none, as one aimed at a role started by a trigger does.
+    #[ts(type = "Array<number>")]
+    pub(crate) values: Vec<i64>,
+    /// The priority of the task it files. Absent for none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "\"high\" | \"medium\" | \"low\"")]
+    pub(crate) priority: Option<&'static str>,
     /// When it is next asked whether to file a task, as an RFC3339 instant. Read only: it is counted
     /// from the write.
     pub(crate) next_at: String,
@@ -4027,6 +4036,8 @@ impl From<amenbo_core::model::AutomationTrigger> for AutomationTriggerDto {
             condition: t.condition.map(Into::into),
             script: t.script.map(Into::into),
             task: t.task.into(),
+            values: t.values.iter().map(|v| v.value_id).collect(),
+            priority: t.priority.map(|p| p.as_str()),
             next_at: t.next_at.to_rfc3339_z(),
             last_filed_at: t.last_filed_at.map(|at| at.to_rfc3339_z()),
         }
@@ -4069,6 +4080,8 @@ impl From<AutomationTriggerInputDto> for amenbo_core::ops::automation::NewTrigge
             condition: t.condition.map(Into::into),
             script: t.script.map(Into::into),
             task: t.task.into(),
+            values: Vec::new(),
+            priority: None,
         }
     }
 }

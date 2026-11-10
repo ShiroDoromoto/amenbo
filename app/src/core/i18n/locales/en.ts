@@ -2248,6 +2248,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   invalid_make_task_blocker_open: "The task to take would depend on {ref}, which is not closed, so it could not be taken",
   invalid_make_task_value_closed: "“Classification” names the value “{value}”, which is closed",
   invalid_make_task_required_empty: "The task would carry no value on {axes}, which this project requires",
+  invalid_trigger_axis_empty: "The required axis “{axis}” has no value",
   invalid_make_task_task_not_a_number: "“Existing tasks it depends on” reads one task number a line, and “{line}” is not one",
   invalid_make_task_decision_not_a_number: "“Decisions to link” reads one decision number a line, and “{line}” is not one",
   invalid_make_task_task_not_in_project: "“Existing tasks it depends on” names {line}, which is not in this project",

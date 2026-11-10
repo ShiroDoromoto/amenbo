@@ -928,6 +928,7 @@ pub fn value_delete(tx: &WriteTx<'_>, value_id: i64, reassign_to: Option<i64>) -
             let on_decisions = read::decision_assignment_ids_of_value(tx.conn(), before.id)?;
             move_decision_assignments(tx, &on_decisions, target.id)?;
             move_failure_values(tx, before.id, target.id)?;
+            move_trigger_values(tx, before.id, target.id)?;
         }
         None if axis.required && !assignments.is_empty() => {
             return Err(Error::Invalid(
@@ -1001,6 +1002,20 @@ fn move_failure_values(tx: &WriteTx<'_>, value_id: i64, target_id: i64) -> Resul
     Ok(())
 }
 
+/// The same move for the triggers that file their task under the value: they file it under the value
+/// the tasks move to. Each answered the axis with the value being removed, so none of them has a second
+/// row on the axis to collide with.
+fn move_trigger_values(tx: &WriteTx<'_>, value_id: i64, target_id: i64) -> Result<()> {
+    let now = Timestamp::now();
+    for id in read::automation_trigger_value_ids_of_value(tx.conn(), value_id)? {
+        let cur = read::automation_trigger_value(tx.conn(), id)?
+            .expect("the row id was just read from the same transaction");
+        let moved = crate::model::AutomationTriggerValue { value_id: target_id, updated_at: now, ..cur.clone() };
+        emit_update(tx, record::automation_trigger_value(&cur), record::automation_trigger_value(&moved))?;
+    }
+    Ok(())
+}
+
 /// Hard-delete one dimension value and the assignments on it, on both sides (pass an id already checked
 /// to exist) —
 /// the body of [`value_delete`], and the per-value step [`delete_subtree`] repeats down an axis.
@@ -1019,6 +1034,11 @@ pub(crate) fn delete_value_subtree(tx: &WriteTx<'_>, value_id: i64) -> Result<()
     // required, its save and launch are refused until a person names another (`ops::automation_run`).
     for id in read::automation_failure_value_ids_of_value(tx.conn(), value_id)? {
         tx.delete_record("automation_failure_value", id)?;
+    }
+    // A trigger filing its task under the value stops naming it, the same way. Where the axis is
+    // required, its save and start are refused until a person names another (`ops::automation`).
+    for id in read::automation_trigger_value_ids_of_value(tx.conn(), value_id)? {
+        tx.delete_record("automation_trigger_value", id)?;
     }
     tx.delete_record("dimension_value", value_id)?;
     Ok(())
@@ -1045,7 +1065,8 @@ pub fn set(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<(TaskDimensi
 /// too. Closing retires a value from what is newly filed under it (`AMB-D-829`); a value an automation
 /// named for its failed rounds' tasks before it closed is that earlier choice, carried out now, not a new
 /// one. It is what a failed round's task is filed under ([`crate::model::Automation::failure_values`]), so
-/// that task can always finish being created.
+/// that task can always finish being created, and what a trigger files its task under
+/// ([`crate::model::AutomationTrigger::values`]).
 pub(crate) fn carry_over(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<(TaskDimensionValue, bool)> {
     assign(tx, task_id, value_id, true)
 }

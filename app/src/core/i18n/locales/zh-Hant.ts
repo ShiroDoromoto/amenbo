@@ -1957,6 +1957,7 @@ export const zhHant: Translation = {
     invalid_make_task_blocker_open: "要領取的任務會依賴尚未關閉的 {ref}，因此無法領取",
     invalid_make_task_value_closed: "「分類」指定的值「{value}」已關閉",
     invalid_make_task_required_empty: "任務在此專案必填的 {axes} 上沒有值",
+    invalid_trigger_axis_empty: "必填的軸「{axis}」沒有值",
     invalid_make_task_task_not_a_number: "「依賴的既有任務」每行讀取一個任務編號，而「{line}」不是編號",
     invalid_make_task_decision_not_a_number: "「要關聯的決定」每行讀取一個決定編號，而「{line}」不是編號",
     invalid_make_task_task_not_in_project: "「依賴的既有任務」指定的 {line} 不屬於此專案",

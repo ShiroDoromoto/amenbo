@@ -1982,6 +1982,7 @@ export const pl: Translation = {
     invalid_make_task_blocker_open: "Zadanie do pobrania zależałoby od {ref}, które nie jest zamknięte, więc nie można go było pobrać",
     invalid_make_task_value_closed: "„Klasyfikacja” wskazuje wartość „{value}”, która jest zamknięta",
     invalid_make_task_required_empty: "Zadanie nie miałoby wartości na {axes}, czego wymaga ten projekt",
+    invalid_trigger_axis_empty: "Wymagana oś «{axis}» nie ma wartości",
     invalid_make_task_task_not_a_number: "„Istniejące zadania, od których zależy” czyta jeden numer zadania w wierszu, a „{line}” nim nie jest",
     invalid_make_task_decision_not_a_number: "„Decyzje do powiązania” czyta jeden numer decyzji w wierszu, a „{line}” nim nie jest",
     invalid_make_task_task_not_in_project: "„Istniejące zadania, od których zależy” wskazuje {line}, które nie należy do tego projektu",

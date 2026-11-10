@@ -822,6 +822,8 @@ mod tests {
                 condition: None,
                 script: None,
                 task: NewTriggerTask::Fixed { title: "在庫を見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                values: Vec::new(),
+                priority: None,
             };
             trigger_set(tx, automation.id, Some(daily)).unwrap();
             let read = crate::store_engine::read::automation(tx.conn(), automation.id).unwrap().unwrap();

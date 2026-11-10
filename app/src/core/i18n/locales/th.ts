@@ -1956,6 +1956,7 @@ export const th: Translation = {
     invalid_make_task_blocker_open: "งานที่จะรับจะขึ้นกับ {ref} ซึ่งยังไม่ปิด จึงรับงานไม่ได้",
     invalid_make_task_value_closed: "“การจัดประเภท” ระบุค่า “{value}” ซึ่งถูกปิดแล้ว",
     invalid_make_task_required_empty: "งานจะไม่มีค่าบน {axes} ซึ่งโปรเจกต์นี้บังคับ",
+    invalid_trigger_axis_empty: "แกนที่บังคับ «{axis}» ไม่มีค่า",
     invalid_make_task_task_not_a_number: "“งานที่มีอยู่ที่งานนี้ขึ้นกับ” อ่านหมายเลขงานบรรทัดละหนึ่ง และ “{line}” ไม่ใช่หมายเลข",
     invalid_make_task_decision_not_a_number: "“การตัดสินใจที่จะลิงก์” อ่านหมายเลขการตัดสินใจบรรทัดละหนึ่ง และ “{line}” ไม่ใช่หมายเลข",
     invalid_make_task_task_not_in_project: "“งานที่มีอยู่ที่งานนี้ขึ้นกับ” ระบุ {line} ซึ่งไม่ได้อยู่ในโปรเจกต์นี้",

@@ -456,6 +456,9 @@ pub enum ErrorCode {
     InvalidMakeTaskBlockerOpen,
     InvalidMakeTaskValueClosed,
     InvalidMakeTaskRequiredEmpty,
+    // The task a trigger files would carry no value on an axis its project requires — refused at the
+    // trigger's save, and at its start. Carries the axis's name.
+    InvalidTriggerAxisEmpty,
     InvalidMakeTaskTaskNotANumber,
     InvalidMakeTaskDecisionNotANumber,
     InvalidMakeTaskTaskNotInProject,
@@ -598,6 +601,7 @@ impl ErrorCode {
             ErrorCode::InvalidMakeTaskBlockerOpen => "invalid_make_task_blocker_open",
             ErrorCode::InvalidMakeTaskValueClosed => "invalid_make_task_value_closed",
             ErrorCode::InvalidMakeTaskRequiredEmpty => "invalid_make_task_required_empty",
+            ErrorCode::InvalidTriggerAxisEmpty => "invalid_trigger_axis_empty",
             ErrorCode::InvalidMakeTaskTaskNotANumber => "invalid_make_task_task_not_a_number",
             ErrorCode::InvalidMakeTaskDecisionNotANumber => "invalid_make_task_decision_not_a_number",
             ErrorCode::InvalidMakeTaskTaskNotInProject => "invalid_make_task_task_not_in_project",
@@ -732,6 +736,7 @@ impl ErrorCode {
         ErrorCode::InvalidMakeTaskBlockerOpen,
         ErrorCode::InvalidMakeTaskValueClosed,
         ErrorCode::InvalidMakeTaskRequiredEmpty,
+        ErrorCode::InvalidTriggerAxisEmpty,
         ErrorCode::InvalidMakeTaskTaskNotANumber,
         ErrorCode::InvalidMakeTaskDecisionNotANumber,
         ErrorCode::InvalidMakeTaskTaskNotInProject,
@@ -997,6 +1002,7 @@ mod tests {
             "invalid_make_task_blocker_open",
             "invalid_make_task_value_closed",
             "invalid_make_task_required_empty",
+            "invalid_trigger_axis_empty",
             "invalid_make_task_task_not_a_number",
             "invalid_make_task_decision_not_a_number",
             "invalid_make_task_task_not_in_project",

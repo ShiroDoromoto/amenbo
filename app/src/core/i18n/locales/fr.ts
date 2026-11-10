@@ -1974,6 +1974,7 @@ export const fr: Translation = {
     invalid_make_task_blocker_open: "La tâche à prendre dépendrait de {ref}, qui n’est pas fermée, elle n’a donc pas pu être prise",
     invalid_make_task_value_closed: "« Classement » nomme la valeur « {value} », qui est fermée",
     invalid_make_task_required_empty: "La tâche n’aurait aucune valeur sur {axes}, que ce projet exige",
+    invalid_trigger_axis_empty: "L’axe obligatoire « {axis} » n’a pas de valeur",
     invalid_make_task_task_not_a_number: "« Tâches existantes dont elle dépend » lit un numéro de tâche par ligne, et « {line} » n’en est pas un",
     invalid_make_task_decision_not_a_number: "« Décisions à lier » lit un numéro de décision par ligne, et « {line} » n’en est pas un",
     invalid_make_task_task_not_in_project: "« Tâches existantes dont elle dépend » nomme {line}, qui n’est pas dans ce projet",

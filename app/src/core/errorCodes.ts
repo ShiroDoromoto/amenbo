@@ -189,6 +189,7 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "invalid_make_task_blocker_open",
   "invalid_make_task_value_closed",
   "invalid_make_task_required_empty",
+  "invalid_trigger_axis_empty",
   "invalid_make_task_task_not_a_number",
   "invalid_make_task_decision_not_a_number",
   "invalid_make_task_task_not_in_project",

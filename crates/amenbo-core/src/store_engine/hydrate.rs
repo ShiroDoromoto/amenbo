@@ -41,7 +41,8 @@ use crate::model::{
     AutomationPort, AutomationPortDirection, AutomationPortKind,
     AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunPass, AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
-    AutomationFailureValue, AutomationStep, AutomationStoppedReason, AutomationTrigger, AutomationVersion,
+    AutomationFailureValue, AutomationStep, AutomationStoppedReason, AutomationTrigger, AutomationTriggerValue,
+    AutomationVersion,
     AutomationWire, Database, RoleStart, TakeOrder, TriggerCondition, TriggerTask, TriggerWhen,
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
     DecisionMadeIn, DecisionStatus, DecisionTaskLink,
@@ -544,7 +545,9 @@ fn failures_to(kind: Option<String>, role_id: Option<i64>) -> rusqlite::Result<O
 }
 
 /// One trigger of an automation, read back from its row. A kind of when or of task beside a missing
-/// part is a row nothing writes, and reads as an error.
+/// part is a row nothing writes, and reads as an error. The classification of the task it files is rows
+/// of its own, so it is left empty here, for the reader that holds the connection to fill in
+/// ([`super::read::automation_trigger`]).
 pub(super) fn automation_trigger_row(r: &Row) -> rusqlite::Result<AutomationTrigger> {
     const C: col::automation_trigger::Cols = col::automation_trigger::ALL;
     let when = match (get(r, C.when_kind)?.as_str(), get(r, C.every_minutes)?) {
@@ -606,6 +609,8 @@ pub(super) fn automation_trigger_row(r: &Row) -> rusqlite::Result<AutomationTrig
         condition,
         script: ask_script,
         task,
+        values: Vec::new(),
+        priority: enum_opt(r, C.task_priority, Priority::parse)?,
         next_at: ts(r, C.next_at)?,
         last_filed_at: ts_opt(r, C.last_filed_at)?,
         order_key: get(r, C.order_key)?,
@@ -622,6 +627,20 @@ pub(super) fn automation_failure_value_row(r: &Row) -> rusqlite::Result<Automati
     Ok(AutomationFailureValue {
         id: get(r, C.id)?,
         automation_id: get(r, C.automation_id)?,
+        dimension_id: get(r, C.dimension_id)?,
+        value_id: get(r, C.value_id)?,
+        created_at,
+        updated_at,
+    })
+}
+
+/// One value of the classification a trigger's task is filed with, read back from its row.
+pub(super) fn automation_trigger_value_row(r: &Row) -> rusqlite::Result<AutomationTriggerValue> {
+    const C: col::automation_trigger_value::Cols = col::automation_trigger_value::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(AutomationTriggerValue {
+        id: get(r, C.id)?,
+        trigger_id: get(r, C.trigger_id)?,
         dimension_id: get(r, C.dimension_id)?,
         value_id: get(r, C.value_id)?,
         created_at,

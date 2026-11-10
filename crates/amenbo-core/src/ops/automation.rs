@@ -50,7 +50,8 @@ use crate::model::{
     AutomationStep, AutomationVersion, AutomationWire, StepScript, ACTION_BOUNDARY,
     DEFAULT_MAX_TIMES, DEFAULT_ROLE_HEADCOUNT, DEFAULT_SCRIPT_TIMEOUT_MINUTES, DONE_EXIT,
     ERROR_EXIT, FailuresTo, MAX_EXPECTED_MINUTES, MAX_ROLE_HEADCOUNT, MAX_SCRIPT_TIMEOUT_MINUTES,
-    AutomationFailureValue, AutomationTrigger, RoleStart, TakeOrder, TriggerCondition, TriggerTask, TriggerWhen,
+    AutomationFailureValue, AutomationTrigger, AutomationTriggerValue, Priority, RoleStart, TakeOrder,
+    TriggerCondition, TriggerTask, TriggerWhen,
     MAX_TRIGGER_DATA_BYTES,
     MIN_TRIGGER_EVERY_MINUTES,
 };
@@ -1475,6 +1476,11 @@ pub struct NewTrigger {
     pub condition: Option<TriggerCondition>,
     pub script: Option<NewScript>,
     pub task: NewTriggerTask,
+    /// [`AutomationTrigger::values`] — the classification of the task it files, as value ids, at most one
+    /// per axis: exactly these, the ones it had and no longer names taken off. Empty for none.
+    pub values: Vec<i64>,
+    /// [`AutomationTrigger::priority`] — `None` for none.
+    pub priority: Option<Priority>,
 }
 
 /// **What a trigger is written to hand on** ([`NewTrigger::task`]) — a [`TriggerTask`] as it is
@@ -1516,6 +1522,12 @@ pub enum NewTriggerTask {
 /// that is not this automation's own is refused, whether the task is to be worked under it or the
 /// condition counts the tasks worked under it. Taking triggers away from an automation that has none
 /// writes nothing.
+///
+/// The classification and the priority of the task it files are refused on a trigger aimed at a role
+/// started by a trigger, which files none. Where it files one, the classification is checked as the
+/// one a failed round's task is filed with is ([`checked_trigger_values`]), and an axis the project
+/// requires left with no value is refused ([`trigger_axes_empty`], `AMB-D-1136`) — the time axis's value
+/// for today counting as given, since the task is filed under it then.
 pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Result<Automation> {
     let before = live_automation(tx, id)?;
     if before.triggers.is_empty() && trigger.is_none() {
@@ -1525,15 +1537,16 @@ pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Re
         refuse_trigger_on_export_only(&before)?;
     }
     let now = Timestamp::now();
-    let written = trigger.map(|new| checked_trigger(tx.conn(), &before, new, now, &[])).transpose()?;
+    let written = trigger.map(|new| checked_trigger(tx.conn(), &before, new, now, &[], &[])).transpose()?;
     for old in &before.triggers {
-        tx.delete_record("automation_trigger", old.id)?;
+        delete_trigger(tx, old)?;
     }
     let mut after = before;
     after.triggers = match written {
         None => Vec::new(),
-        Some(trigger) => {
+        Some(mut trigger) => {
             emit_create(tx, record::automation_trigger(&trigger))?;
+            trigger.values = trigger_values_write(tx, trigger.id, &[], &trigger.values)?;
             vec![trigger]
         }
     };
@@ -1547,22 +1560,24 @@ pub fn trigger_add(tx: &WriteTx<'_>, automation_id: i64, new: NewTrigger) -> Res
     let automation = live_automation(tx, automation_id)?;
     refuse_trigger_on_export_only(&automation)?;
     let sibs: Vec<(i64, String)> = automation.triggers.iter().map(|t| (t.id, t.order_key.clone())).collect();
-    let trigger = checked_trigger(tx.conn(), &automation, new, Timestamp::now(), &sibs)?;
+    let mut trigger = checked_trigger(tx.conn(), &automation, new, Timestamp::now(), &sibs, &[])?;
     emit_create(tx, record::automation_trigger(&trigger))?;
+    trigger.values = trigger_values_write(tx, trigger.id, &[], &trigger.values)?;
     Ok(trigger)
 }
 
 /// **Write one trigger afresh** — what it is called, its role, when it files a task, what it looks at
-/// and asks first, and what the task says — checked as [`trigger_set`] says. It keeps its id, its place
-/// among the automation's triggers, whether it is enabled and when it last filed a task. When it is next
-/// asked is counted afresh from now, as writing it again with [`trigger_set`] does.
+/// and asks first, what the task says, and its classification and priority — checked as [`trigger_set`]
+/// says, a closed value it already names let stay. It keeps its id, its place among the automation's
+/// triggers, whether it is enabled and when it last filed a task. When it is next asked is counted
+/// afresh from now, as writing it again with [`trigger_set`] does.
 pub fn trigger_update(tx: &WriteTx<'_>, id: i64, new: NewTrigger) -> Result<AutomationTrigger> {
     let before = live_trigger(tx, id)?;
     let automation = live_automation(tx, before.automation_id)?;
     refuse_trigger_on_export_only(&automation)?;
     let now = Timestamp::now();
-    let written = checked_trigger(tx.conn(), &automation, new, now, &[])?;
-    let after = AutomationTrigger {
+    let written = checked_trigger(tx.conn(), &automation, new, now, &[], &before.values)?;
+    let mut after = AutomationTrigger {
         id: before.id,
         enabled: before.enabled,
         last_filed_at: before.last_filed_at,
@@ -1571,25 +1586,62 @@ pub fn trigger_update(tx: &WriteTx<'_>, id: i64, new: NewTrigger) -> Result<Auto
         ..written
     };
     emit_update(tx, record::automation_trigger(&before), record::automation_trigger(&after))?;
+    after.values = trigger_values_write(tx, after.id, &before.values, &after.values)?;
     Ok(after)
 }
 
 /// **A trigger as it would be written on automation `automation_id`, writing nothing** — checked as
 /// [`trigger_set`] says, and refused where it would refuse it, so what a person has typed and not yet
 /// saved can be tried ([`automation_run::trigger_draft`]). Its id is the one the next trigger written
-/// would take, and its first time to be asked is counted from now; neither is kept anywhere.
+/// would take, and its first time to be asked is counted from now; neither is kept anywhere, nor are the
+/// rows of its classification, which carry no id of their own. It is checked as a new trigger is, so a
+/// closed value is refused even where a trigger already written names it.
 pub fn trigger_drafted(conn: &Connection, automation_id: i64, new: NewTrigger) -> Result<AutomationTrigger> {
     let automation = read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
     refuse_trigger_on_export_only(&automation)?;
-    checked_trigger(conn, &automation, new, Timestamp::now(), &[])
+    checked_trigger(conn, &automation, new, Timestamp::now(), &[], &[])
 }
 
 /// **Take one trigger away from its automation.** The others are left as they are, and the tasks it
 /// filed stay as they were.
 pub fn trigger_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
-    live_trigger(tx, id)?;
-    tx.delete_record("automation_trigger", id)?;
+    let trigger = live_trigger(tx, id)?;
+    delete_trigger(tx, &trigger)
+}
+
+/// Delete one trigger's row and the rows of the classification of the task it files, which point at it.
+fn delete_trigger(tx: &WriteTx<'_>, trigger: &AutomationTrigger) -> Result<()> {
+    for value in &trigger.values {
+        tx.delete_record("automation_trigger_value", value.id)?;
+    }
+    tx.delete_record("automation_trigger", trigger.id)?;
     Ok(())
+}
+
+/// **Have the classification of the task trigger `trigger_id` files be exactly `wanted`**, where it was
+/// `before`. A value it already names keeps its row; one it no longer names is taken off, and one newly
+/// named is written. Answers the rows as they now stand, in the order they were written.
+fn trigger_values_write(
+    tx: &WriteTx<'_>,
+    trigger_id: i64,
+    before: &[AutomationTriggerValue],
+    wanted: &[AutomationTriggerValue],
+) -> Result<Vec<AutomationTriggerValue>> {
+    let conn = tx.conn();
+    for old in before {
+        if !wanted.iter().any(|v| v.value_id == old.value_id) {
+            tx.delete_record("automation_trigger_value", old.id)?;
+        }
+    }
+    for new in wanted {
+        if before.iter().any(|v| v.value_id == new.value_id) {
+            continue;
+        }
+        let id = read::next_id(conn, "automation_trigger_value")?;
+        let row = AutomationTriggerValue { id, trigger_id, ..new.clone() };
+        emit_create(tx, record::automation_trigger_value(&row))?;
+    }
+    Ok(read::automation_trigger_values_of(conn, trigger_id)?)
 }
 
 /// **Have one trigger be asked** (`enabled` true) **or not** (false). One that is not files nothing,
@@ -1623,16 +1675,47 @@ fn refuse_trigger_on_export_only(automation: &Automation) -> Result<()> {
 
 /// **A trigger as it is written** on `automation`, checked as [`trigger_set`] says, its first time to
 /// be asked counted from `now`. It is given the next id, enabled, and the place after `sibs` among the
-/// automation's triggers — the first where it is given none, as [`trigger_set`] does.
+/// automation's triggers — the first where it is given none, as [`trigger_set`] does. `held` is the
+/// classification the trigger already has, where it is written afresh. The rows of its classification
+/// are not written here, and carry no id yet ([`trigger_values_write`]).
 fn checked_trigger(
     conn: &Connection,
     automation: &Automation,
     new: NewTrigger,
     now: Timestamp,
     sibs: &[(i64, String)],
+    held: &[AutomationTriggerValue],
 ) -> Result<AutomationTrigger> {
-    let NewTrigger { name, role_id, when, condition, script, task } = new;
+    let NewTrigger { name, role_id, when, condition, script, task, values, priority } = new;
     checked_trigger_role(conn, automation.id, role_id)?;
+    let files_a_task = match role_id {
+        Some(role_id) => role_in(conn, role_id)?.starts_by != RoleStart::Trigger,
+        None => true,
+    };
+    if !files_a_task && (!values.is_empty() || priority.is_some()) {
+        return Err(Error::invalid(
+            "a trigger aimed at a role started by a trigger files no task, so it gives the task no \
+             classification and no priority",
+        ));
+    }
+    let id = read::next_id(conn, "automation_trigger")?;
+    let values: Vec<AutomationTriggerValue> = checked_trigger_values(conn, automation, &values, held)?
+        .into_iter()
+        .map(|(dimension_id, value_id)| AutomationTriggerValue {
+            id: 0,
+            trigger_id: id,
+            dimension_id,
+            value_id,
+            created_at: now,
+            updated_at: now,
+        })
+        .collect();
+    if files_a_task {
+        let given: Vec<(i64, i64)> = values.iter().map(|v| (v.dimension_id, v.value_id)).collect();
+        if let Some(axis) = trigger_axes_empty(conn, automation.project_id, &given)?.into_iter().next() {
+            return Err(trigger_axis_empty(&axis));
+        }
+    }
     match when {
         TriggerWhen::Every { minutes } if minutes < MIN_TRIGGER_EVERY_MINUTES => {
             return Err(Error::invalid(format!(
@@ -1678,10 +1761,6 @@ fn checked_trigger(
     let task = match task {
         NewTriggerTask::Fixed { title, notes, data, files } => {
             let title = title.trim();
-            let files_a_task = match role_id {
-                Some(role_id) => role_in(conn, role_id)?.starts_by != RoleStart::Trigger,
-                None => true,
-            };
             if title.is_empty() && files_a_task {
                 return Err(Error::invalid(
                     "a trigger aimed at a role started by a task, or at no role, files a task, and the task \
@@ -1712,7 +1791,7 @@ fn checked_trigger(
         NewTriggerTask::Asked => TriggerTask::Asked,
     };
     Ok(AutomationTrigger {
-        id: read::next_id(conn, "automation_trigger")?,
+        id,
         automation_id: automation.id,
         enabled: true,
         name: name.trim().to_string(),
@@ -1721,12 +1800,86 @@ fn checked_trigger(
         condition,
         script,
         task,
+        values,
+        priority,
         next_at: when.after(now),
         last_filed_at: None,
         order_key: place(sibs, &Position::Bottom)?,
         created_at: now,
         updated_at: now,
     })
+}
+
+/// **The classification of the task a trigger files, as it is written** ([`NewTrigger::values`]) — as
+/// (axis, value), in the order given. Refused, as the classification a failed round's task is filed with
+/// is ([`failure_values_set`]): a value that is not there, one of another project's axes, one of an axis
+/// that classifies decisions only, two values of one axis, and a closed value the trigger does not name
+/// already (`held`, `AMB-D-829`).
+fn checked_trigger_values(
+    conn: &Connection,
+    automation: &Automation,
+    values: &[i64],
+    held: &[AutomationTriggerValue],
+) -> Result<Vec<(i64, i64)>> {
+    let mut wanted: Vec<(i64, i64)> = Vec::new();
+    for &value_id in values {
+        let value = read::dimension_value(conn, value_id)?
+            .ok_or_else(|| crate::ops::dimension::VALUE_NOUN.not_found(value_id.to_string()))?;
+        let axis = read::dimension(conn, value.dimension_id)?
+            .ok_or_else(|| crate::ops::dimension::NOUN.not_found(value.dimension_id.to_string()))?;
+        crate::ops::guard_same_project(
+            Some(automation.project_id),
+            Some(axis.project_id),
+            "the classification of the task a trigger files",
+        )?;
+        if !axis.applies_to.on_task() {
+            return Err(Error::invalid(format!(
+                "'{}' classifies decisions only, so the task a trigger files cannot be filed under '{}'",
+                axis.name, value.name
+            )));
+        }
+        if wanted.iter().any(|&(on, _)| on == axis.id) {
+            return Err(Error::invalid(format!(
+                "two values of '{}' are named, and the task a trigger files is filed under one value of an axis",
+                axis.name
+            )));
+        }
+        if value.closed && !held.iter().any(|v| v.value_id == value_id) {
+            return Err(crate::ops::dimension::value_is_closed(&axis.name, &value.name));
+        }
+        wanted.push((axis.id, value_id));
+    }
+    Ok(wanted)
+}
+
+/// **The axes `project_id` requires that `given` — a trigger's classification, as (axis, value) —
+/// leaves with no value**, by name, in the project's order of axes. The time axis's value for today is
+/// counted as given where `given` names none on it, since the task is filed under it then — as the
+/// classification a failed round's task is filed with counts it (`AMB-D-1129`).
+pub(crate) fn trigger_axes_empty(conn: &Connection, project_id: i64, given: &[(i64, i64)]) -> Result<Vec<String>> {
+    let mut axes: Vec<i64> = given.iter().map(|&(axis, _)| axis).collect();
+    if let Some((axis, _)) = crate::ops::task::time_axis_default(conn, project_id, crate::time::today(), &axes)? {
+        axes.push(axis);
+    }
+    Ok(read::required_dimensions(conn, project_id, crate::model::ClassifiedSide::Task)?
+        .into_iter()
+        .filter(|(axis, _)| !axes.contains(axis))
+        .map(|(_, name)| name)
+        .collect())
+}
+
+/// **The task a trigger files would carry no value on `axis`, which its project requires**
+/// (`AMB-D-1136`) — refused at the trigger's save, and at its start where the axis became required
+/// after it was written. Carries the axis's name.
+pub(crate) fn trigger_axis_empty(axis: &str) -> Error {
+    Error::Invalid(
+        Msg::new(format!(
+            "the task a trigger files would carry no value on '{axis}', which this project requires — \
+             name a value of it on the trigger"
+        ))
+        .coded(ErrorCode::InvalidTriggerAxisEmpty)
+        .with("axis", axis),
+    )
 }
 
 /// The data a trigger hands on as it is written ([`NewTriggerTask::Fixed`]), or as its file says it
@@ -2135,7 +2288,7 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     }
     // The triggers point at the automation and at its roles, so they go before either.
     for trigger in &automation.triggers {
-        tx.delete_record("automation_trigger", trigger.id)?;
+        delete_trigger(tx, trigger)?;
     }
     for value in &automation.failure_values {
         tx.delete_record("automation_failure_value", value.id)?;
@@ -4835,6 +4988,8 @@ mod tests {
                 data: data.into(),
                 files: files.iter().map(|f| f.to_string()).collect(),
             },
+            values: Vec::new(),
+            priority: None,
         };
         with_tx(|tx| {
             let automation = mk_automation(tx);
@@ -4885,6 +5040,151 @@ mod tests {
         });
     }
 
+    /// **The classification and the priority of the task a trigger files are written with it**
+    /// (`AMB-D-1136`, `AMB-D-1142`) — by [`trigger_set`], [`trigger_add`], [`trigger_update`] and
+    /// [`trigger_drafted`] alike, aimed at a role started by a task or at no role. An axis the project
+    /// requires left with no value is refused naming it, the time axis's value for today counting as
+    /// given; a value of another project, one of an axis for decisions only, two of one axis and a
+    /// closed one are refused, but a closed one the trigger already names stays. Aimed at a role started
+    /// by a trigger, which files no task, either is refused. Taking the trigger away, or the value, takes
+    /// its rows with it; moving the value's tasks moves them.
+    #[test]
+    fn a_trigger_writes_the_classification_and_priority_of_its_task() {
+        use crate::model::{DimensionAppliesTo, DimensionRole, Priority};
+        use crate::ops::dimension::{self, NewDimension};
+        let classified = |role_id: Option<i64>, values: &[i64], priority: Option<Priority>| NewTrigger {
+            role_id,
+            values: values.to_vec(),
+            priority,
+            ..hourly_trigger("ボス戦の曲")
+        };
+        let empty = |refused: Result<AutomationTrigger>, axis: &str| {
+            let refused = refused.expect_err("an axis left empty");
+            assert_eq!(refused.error_code(), ErrorCode::InvalidTriggerAxisEmpty, "{refused}");
+            let named: Vec<(&str, &str)> = refused.fields().expect("its values").iter().collect();
+            assert_eq!(named, vec![("axis", axis)]);
+        };
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let project = automation.project_id;
+            let named = |name: &str| NewDimension { name: name.into(), ..Default::default() };
+            let require = |tx: &WriteTx<'_>, axis: i64| {
+                dimension::update(tx, axis, None, None, None, None, None, None, Some(true), None, None, None)
+                    .expect("required");
+            };
+            let product = dimension::add(tx, project, named("プロダクト")).expect("an axis");
+            let game = dimension::value_add(tx, product.id, "サンプルゲーム", None).expect("a value");
+            let tool = dimension::value_add(tx, product.id, "ツール", None).expect("a value");
+            let theme = dimension::add(tx, project, named("テーマ")).expect("an axis");
+            let sound = dimension::value_add(tx, theme.id, "音", None).expect("a value");
+            let screen = dimension::value_add(tx, theme.id, "画面", None).expect("a value");
+            let closable = NewDimension { role: DimensionRole::Closable, ..named("作業種別") };
+            let kind = dimension::add(tx, project, closable).expect("an axis");
+            let build = dimension::value_add(tx, kind.id, "実装", None).expect("a value");
+            let research = dimension::value_add(tx, kind.id, "調査", None).expect("a value");
+            require(tx, product.id);
+            require(tx, theme.id);
+            let by_trigger = role_add(
+                tx,
+                automation.id,
+                NewRole { name: "起票係".into(), starts_by: Some(RoleStart::Trigger), ..NewRole::default() },
+            )
+            .expect("a role started by a trigger");
+
+            empty(trigger_add(tx, automation.id, classified(None, &[game.id], None)), "テーマ");
+            empty(trigger_drafted(tx.conn(), automation.id, classified(None, &[], None)), "プロダクト");
+            let refused = trigger_set(tx, automation.id, Some(classified(None, &[sound.id], None)));
+            assert_eq!(refused.expect_err("an axis left empty").error_code(), ErrorCode::InvalidTriggerAxisEmpty);
+            assert!(read::automation_triggers_of(tx.conn(), automation.id).expect("read").is_empty(), "nothing written");
+
+            let medium = Some(Priority::Medium);
+            let drafted = trigger_drafted(tx.conn(), automation.id, classified(None, &[game.id, sound.id], medium))
+                .expect("a draft");
+            assert_eq!(drafted.values.iter().map(|v| v.value_id).collect::<Vec<_>>(), vec![game.id, sound.id]);
+            assert_eq!(drafted.priority, medium);
+            let written = trigger_add(tx, automation.id, classified(None, &[game.id, sound.id], medium)).expect("both");
+            let read_back = read::automation_trigger(tx.conn(), written.id).expect("read").expect("kept");
+            assert_eq!(read_back, written);
+            assert_eq!(read_back.priority, medium);
+            assert_eq!(
+                read_back.values.iter().map(|v| (v.dimension_id, v.value_id)).collect::<Vec<_>>(),
+                vec![(product.id, game.id), (theme.id, sound.id)],
+            );
+            let set = only(
+                trigger_set(tx, automation.id, Some(classified(None, &[tool.id, screen.id], None))).expect("set"),
+            )
+            .expect("one");
+            assert_eq!(set.values.iter().map(|v| v.value_id).collect::<Vec<_>>(), vec![tool.id, screen.id]);
+            assert_eq!(set.priority, None);
+            assert!(read::automation_trigger(tx.conn(), written.id).expect("read").is_none(), "the other is gone");
+
+            let high = Some(Priority::High);
+            let updated =
+                trigger_update(tx, set.id, classified(None, &[tool.id, sound.id, build.id], high)).expect("update");
+            assert_eq!(updated.values.iter().map(|v| v.value_id).collect::<Vec<_>>(), vec![tool.id, sound.id, build.id]);
+            assert_eq!(updated.values[0].id, set.values[0].id, "a value it already names keeps its row");
+            assert_eq!(read::automation_trigger(tx.conn(), set.id).expect("read").expect("kept"), updated);
+            empty(trigger_update(tx, set.id, classified(None, &[tool.id], None)), "テーマ");
+
+            let other = mk_project(tx, "other");
+            let elsewhere = dimension::add(tx, other, named("テーマ")).expect("an axis");
+            let theirs = dimension::value_add(tx, elsewhere.id, "音", None).expect("a value");
+            let decisions = NewDimension { applies_to: DimensionAppliesTo::Decision, ..named("論点") };
+            let decisions = dimension::add(tx, project, decisions).expect("an axis");
+            let point = dimension::value_add(tx, decisions.id, "設計", None).expect("a value");
+            dimension::value_set_closed(tx, research.id, true).expect("close it");
+            for (values, why) in [
+                (vec![tool.id, sound.id, theirs.id], "another project's value"),
+                (vec![tool.id, sound.id, point.id], "an axis for decisions only"),
+                (vec![tool.id, sound.id, screen.id], "two values of one axis"),
+                (vec![tool.id, sound.id, research.id], "a closed value"),
+            ] {
+                let refused = trigger_update(tx, set.id, classified(None, &values, None));
+                assert!(refused.is_err(), "{why} is refused");
+            }
+            dimension::value_set_closed(tx, build.id, true).expect("close it");
+            trigger_update(tx, set.id, classified(None, &[tool.id, sound.id, build.id], None))
+                .expect("a closed value it already names stays");
+
+            let aimed = Some(by_trigger.id);
+            for wrong in [classified(aimed, &[tool.id], None), classified(aimed, &[], medium)] {
+                let refused = trigger_add(tx, automation.id, wrong);
+                assert!(matches!(refused, Err(Error::Invalid(_))), "no task is filed: {refused:?}");
+            }
+            trigger_add(tx, automation.id, NewTrigger { role_id: Some(by_trigger.id), ..hourly_trigger("") })
+                .expect("nothing to give a task that is not filed");
+
+            let values_of = |tx: &WriteTx<'_>| -> Vec<i64> {
+                read::automation_trigger_values_of(tx.conn(), set.id).expect("read").iter().map(|v| v.value_id).collect()
+            };
+            dimension::value_delete(tx, sound.id, Some(screen.id)).expect("move what is on it");
+            assert_eq!(values_of(tx), vec![tool.id, screen.id, build.id], "moved where the tasks move");
+            dimension::delete(tx, kind.id).expect("the axis goes");
+            assert_eq!(values_of(tx), vec![tool.id, screen.id], "and its value with it");
+            trigger_delete(tx, set.id).expect("taken away");
+            assert!(values_of(tx).is_empty(), "its rows go with it");
+        });
+    }
+
+    /// **A trigger's classification counts the time axis's value for today as given** (`AMB-D-1129`'s
+    /// count) — a required time axis with a value whose period holds today is not refused.
+    #[test]
+    fn a_trigger_counts_todays_time_axis_value_as_given() {
+        use crate::ops::dimension::{self, NewDimension};
+        with_tx(|tx| {
+            let automation = mk_automation(tx);
+            let today = crate::time::today();
+            let time =
+                NewDimension { name: "スプリント".into(), role: crate::model::DimensionRole::TimeAxis, ..Default::default() };
+            let axis = dimension::add(tx, automation.project_id, time).expect("a time axis");
+            let week = dimension::value_add(tx, axis.id, "今週", None).expect("a value");
+            dimension::value_set_dates(tx, week.id, Some(today), None).expect("a period holding today");
+            dimension::update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None, None)
+                .expect("required");
+            trigger_add(tx, automation.id, hourly_trigger("見る")).expect("today's value is given");
+        });
+    }
+
     /// **A trigger is written, counted from the write, and taken away** — an `every`, an `idle`, a
     /// `tasks` or a `script`, with or without a condition or a script. A wait under a minute, a task with
     /// no title, a condition whose filter does not read or names a project, one below 0, a `tasks` with
@@ -4901,6 +5201,8 @@ mod tests {
             condition: None,
             script: None,
             task: NewTriggerTask::Fixed { title: title.into(), notes: "メモ".into(), data: String::new(), files: Vec::new() },
+            values: Vec::new(),
+            priority: None,
         };
         with_tx(|tx| {
             let automation = mk_automation(tx);
@@ -5042,6 +5344,8 @@ mod tests {
             condition: None,
             script: None,
             task: NewTriggerTask::Fixed { title: title.into(), notes: String::new(), data: String::new(), files: Vec::new() },
+            values: Vec::new(),
+            priority: None,
         }
     }
 

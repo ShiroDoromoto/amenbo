@@ -1982,6 +1982,7 @@ export const uk: Translation = {
     invalid_make_task_blocker_open: "Завдання, яке треба взяти, залежало б від {ref}, яке не закрите, тому його не вдалося взяти",
     invalid_make_task_value_closed: "«Класифікація» називає значення «{value}», яке закрите",
     invalid_make_task_required_empty: "Завдання не мало б значення за {axes}, а цей проєкт цього вимагає",
+    invalid_trigger_axis_empty: "Обов’язкова вісь «{axis}» не має значення",
     invalid_make_task_task_not_a_number: "«Наявні завдання, від яких воно залежить» читає один номер завдання на рядок, а «{line}» — не номер",
     invalid_make_task_decision_not_a_number: "«Рішення для зв’язку» читає один номер рішення на рядок, а «{line}» — не номер",
     invalid_make_task_task_not_in_project: "«Наявні завдання, від яких воно залежить» називає {line}, якого немає в цьому проєкті",

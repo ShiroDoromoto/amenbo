@@ -1963,6 +1963,7 @@ export const de: Translation = {
     invalid_make_task_blocker_open: "Die zu übernehmende Aufgabe hinge von {ref} ab, das nicht abgeschlossen ist, daher konnte sie nicht übernommen werden",
     invalid_make_task_value_closed: "„Klassifizierung“ nennt den Wert „{value}“, der geschlossen ist",
     invalid_make_task_required_empty: "Die Aufgabe hätte keinen Wert auf {axes}, was dieses Projekt verlangt",
+    invalid_trigger_axis_empty: "Die Pflichtachse „{axis}“ hat keinen Wert",
     invalid_make_task_task_not_a_number: "„Bestehende Aufgaben, von denen sie abhängt“ liest eine Aufgabennummer pro Zeile, und „{line}“ ist keine",
     invalid_make_task_decision_not_a_number: "„Zu verknüpfende Entscheidungen“ liest eine Entscheidungsnummer pro Zeile, und „{line}“ ist keine",
     invalid_make_task_task_not_in_project: "„Bestehende Aufgaben, von denen sie abhängt“ nennt {line}, das nicht in diesem Projekt ist",

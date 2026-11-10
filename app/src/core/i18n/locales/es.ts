@@ -1974,6 +1974,7 @@ export const es: Translation = {
     invalid_make_task_blocker_open: "La tarea a tomar dependería de {ref}, que no está cerrada, así que no se pudo tomar",
     invalid_make_task_value_closed: "«Clasificación» nombra el valor «{value}», que está cerrado",
     invalid_make_task_required_empty: "La tarea no tendría valor en {axes}, que este proyecto exige",
+    invalid_trigger_axis_empty: "El eje obligatorio «{axis}» no tiene valor",
     invalid_make_task_task_not_a_number: "«Tareas existentes de las que depende» lee un número de tarea por línea, y «{line}» no lo es",
     invalid_make_task_decision_not_a_number: "«Decisiones que enlazar» lee un número de decisión por línea, y «{line}» no lo es",
     invalid_make_task_task_not_in_project: "«Tareas existentes de las que depende» nombra {line}, que no es de este proyecto",

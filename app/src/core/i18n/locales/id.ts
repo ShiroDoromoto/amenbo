@@ -1957,6 +1957,7 @@ export const id: Translation = {
     invalid_make_task_blocker_open: "Tugas yang akan diambil akan bergantung pada {ref}, yang belum ditutup, jadi tidak bisa diambil",
     invalid_make_task_value_closed: "“Klasifikasi” menyebut nilai “{value}”, yang sudah ditutup",
     invalid_make_task_required_empty: "Tugas tidak akan punya nilai pada {axes}, yang diwajibkan proyek ini",
+    invalid_trigger_axis_empty: "Sumbu wajib «{axis}» tidak punya nilai",
     invalid_make_task_task_not_a_number: "“Tugas yang sudah ada yang menjadi tempatnya bergantung” membaca satu nomor tugas per baris, dan “{line}” bukan nomor",
     invalid_make_task_decision_not_a_number: "“Keputusan yang ditautkan” membaca satu nomor keputusan per baris, dan “{line}” bukan nomor",
     invalid_make_task_task_not_in_project: "“Tugas yang sudah ada yang menjadi tempatnya bergantung” menyebut {line}, yang tidak ada di proyek ini",

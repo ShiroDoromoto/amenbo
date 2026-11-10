@@ -1017,6 +1017,7 @@ export const fr: Translation = {
     "auto.trigger.taskFixed": "Texte fixe",
     "auto.trigger.taskFile": "Fichier",
     "auto.trigger.taskScript": "Sortie d’un script",
+    "auto.trigger.taskAsked": "Sortie du script qui décide",
     "auto.trigger.taskTitle": "Titre",
     "auto.trigger.taskNotes": "Notes",
     "auto.trigger.taskPath": "Chemin du fichier",

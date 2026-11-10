@@ -1244,6 +1244,7 @@ const ui = {
   "auto.trigger.taskFixed": "Fixed text",
   "auto.trigger.taskFile": "File",
   "auto.trigger.taskScript": "Script output",
+  "auto.trigger.taskAsked": "The deciding script's output",
   "auto.trigger.taskTitle": "Title",
   "auto.trigger.taskNotes": "Notes",
   "auto.trigger.taskPath": "File path",

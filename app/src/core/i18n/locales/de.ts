@@ -1009,6 +1009,7 @@ export const de: Translation = {
     "auto.trigger.taskFixed": "Fester Text",
     "auto.trigger.taskFile": "Datei",
     "auto.trigger.taskScript": "Ausgabe eines Skripts",
+    "auto.trigger.taskAsked": "Ausgabe des prüfenden Skripts",
     "auto.trigger.taskTitle": "Titel",
     "auto.trigger.taskNotes": "Notizen",
     "auto.trigger.taskPath": "Dateipfad",

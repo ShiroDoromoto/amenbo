@@ -1007,6 +1007,7 @@ export const zhHans: Translation = {
     "auto.trigger.taskFixed": "固定文本",
     "auto.trigger.taskFile": "文件",
     "auto.trigger.taskScript": "脚本输出",
+    "auto.trigger.taskAsked": "判定脚本的输出",
     "auto.trigger.taskTitle": "标题",
     "auto.trigger.taskNotes": "正文",
     "auto.trigger.taskPath": "文件路径",

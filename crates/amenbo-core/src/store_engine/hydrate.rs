@@ -591,6 +591,8 @@ pub(super) fn automation_trigger_row(r: &Row) -> rusqlite::Result<AutomationTrig
             script: script(r, C.task_script_program, C.task_script_args, C.task_script_timeout_minutes)?
                 .ok_or_else(|| bad("a script trigger task with no program".to_string()))?,
         },
+        "asked" if ask_script.is_some() => TriggerTask::Asked,
+        "asked" => return Err(bad("a trigger handing on what its script writes, with no script".to_string())),
         kind => return Err(bad(format!("bad trigger task {kind:?}"))),
     };
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;

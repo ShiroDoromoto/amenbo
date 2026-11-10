@@ -1005,6 +1005,7 @@ export const tr: Translation = {
     "auto.trigger.taskFixed": "Sabit metin",
     "auto.trigger.taskFile": "Dosya",
     "auto.trigger.taskScript": "Betik çıktısı",
+    "auto.trigger.taskAsked": "Karar veren betiğin çıktısı",
     "auto.trigger.taskTitle": "Başlık",
     "auto.trigger.taskNotes": "Notlar",
     "auto.trigger.taskPath": "Dosya yolu",

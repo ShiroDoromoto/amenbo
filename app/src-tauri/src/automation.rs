@@ -4225,6 +4225,11 @@ mod tests {
             json(AutomationTrigger { task: TriggerTask::File { path: "/tmp/next.md".into() }, ..base.clone() })["task"],
             serde_json::json!({ "kind": "file", "path": "/tmp/next.md" }),
         );
+        assert_eq!(
+            json(AutomationTrigger { task: TriggerTask::Asked, ..base.clone() })["task"],
+            serde_json::json!({ "kind": "asked" }),
+            "what its own script writes",
+        );
         let handing = TriggerTask::Fixed {
             title: String::new(),
             notes: String::new(),
@@ -4368,6 +4373,10 @@ mod tests {
         assert_eq!(when(serde_json::json!({ "kind": "idle" })).when, TriggerWhen::Idle);
         assert_eq!(when(serde_json::json!({ "kind": "tasks" })).task, NewTriggerTask::File { path: "/x".into() });
         assert_eq!(
+            read(serde_json::json!({ "when": { "kind": "script" }, "task": { "kind": "asked" } })).task,
+            NewTriggerTask::Asked,
+        );
+        assert_eq!(
             read(serde_json::json!({
                 "when": { "kind": "idle" },
                 "task": { "kind": "fixed", "title": "", "notes": "", "data": "{\"issue\": 123}", "files": ["/tmp/brief.md"] },
@@ -4430,7 +4439,13 @@ mod tests {
                 "task": { "kind": "fixed", "title": "受信箱を見る", "notes": "メモ" },
             }))
             .unwrap(),
-            AutomationTriggerTriedDto::Files { title: "受信箱を見る".into(), notes: "メモ".into(), data: None, files: Vec::new() },
+            AutomationTriggerTriedDto::Files {
+                title: "受信箱を見る".into(),
+                notes: "メモ".into(),
+                data: None,
+                key: None,
+                files: Vec::new(),
+            },
             "no task matches, so fewer than one do",
         );
         assert!(

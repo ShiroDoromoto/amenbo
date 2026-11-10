@@ -4137,7 +4137,8 @@ impl From<AutomationTriggerConditionDto> for amenbo_core::model::TriggerConditio
 
 /// **What a trigger hands on** — the wire form of [`amenbo_core::model::TriggerTask`]: `fixed` with its
 /// title, notes, data (JSON text, absent for none) and the full paths of its files (absent for none),
-/// `file` read from its full path, `script` written by a program.
+/// `file` read from its full path, `script` written by a program, `asked` written by the trigger's own
+/// script beside its say to start.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(tag = "kind", rename_all = "lowercase")]
@@ -4154,6 +4155,7 @@ pub enum AutomationTriggerTaskDto {
     },
     File { path: String },
     Script { script: AutomationStepScriptDto },
+    Asked,
 }
 
 impl From<amenbo_core::model::TriggerTask> for AutomationTriggerTaskDto {
@@ -4165,6 +4167,7 @@ impl From<amenbo_core::model::TriggerTask> for AutomationTriggerTaskDto {
             }
             TriggerTask::File { path } => AutomationTriggerTaskDto::File { path },
             TriggerTask::Script { script } => AutomationTriggerTaskDto::Script { script: script.into() },
+            TriggerTask::Asked => AutomationTriggerTaskDto::Asked,
         }
     }
 }
@@ -4188,6 +4191,7 @@ pub enum AutomationTriggerTaskInputDto {
     },
     File { path: String },
     Script { script: AutomationScriptInputDto },
+    Asked,
 }
 
 impl From<AutomationTriggerTaskInputDto> for amenbo_core::ops::automation::NewTriggerTask {
@@ -4202,6 +4206,7 @@ impl From<AutomationTriggerTaskInputDto> for amenbo_core::ops::automation::NewTr
             },
             AutomationTriggerTaskInputDto::File { path } => NewTriggerTask::File { path },
             AutomationTriggerTaskInputDto::Script { script } => NewTriggerTask::Script(script.into()),
+            AutomationTriggerTaskInputDto::Asked => NewTriggerTask::Asked,
         }
     }
 }
@@ -4210,8 +4215,8 @@ impl From<AutomationTriggerTaskInputDto> for amenbo_core::ops::automation::NewTr
 /// [`amenbo_core::ops::automation_run::TriggerTried`]: `condition` where its condition does not hold,
 /// `program_said_no` where the program it asks first said not to file one, `said_nothing` where it
 /// could say nothing that can be filed (`why` in core's sentence), and `files` with the title, notes and
-/// data (JSON, `null` for none) it would hand on, and the names the files it hands on would be attached
-/// by.
+/// data (JSON, `null` for none) it would hand on, the key its program wrote (`null` for none), and the
+/// names the files it hands on would be attached by.
 #[derive(Debug, PartialEq, Eq, Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -4219,7 +4224,7 @@ pub enum AutomationTriggerTriedDto {
     Condition,
     ProgramSaidNo,
     SaidNothing { why: String },
-    Files { title: String, notes: String, data: Option<String>, files: Vec<String> },
+    Files { title: String, notes: String, data: Option<String>, key: Option<String>, files: Vec<String> },
 }
 
 impl From<amenbo_core::ops::automation_run::TriggerTried> for AutomationTriggerTriedDto {
@@ -4229,8 +4234,8 @@ impl From<amenbo_core::ops::automation_run::TriggerTried> for AutomationTriggerT
             TriggerTried::Condition => AutomationTriggerTriedDto::Condition,
             TriggerTried::ProgramSaidNo => AutomationTriggerTriedDto::ProgramSaidNo,
             TriggerTried::SaidNothing { why } => AutomationTriggerTriedDto::SaidNothing { why },
-            TriggerTried::Files { title, notes, data, files } => {
-                AutomationTriggerTriedDto::Files { title, notes, data, files }
+            TriggerTried::Files { title, notes, data, key, files } => {
+                AutomationTriggerTriedDto::Files { title, notes, data, key, files }
             }
         }
     }

@@ -1483,6 +1483,8 @@ pub enum NewTriggerTask {
     File { path: String },
     /// [`TriggerTask::Script`].
     Script(NewScript),
+    /// [`TriggerTask::Asked`] — only on a trigger that asks a script ([`NewTrigger::script`]).
+    Asked,
 }
 
 /// **Have an automation's triggers be the one given** (`Some`), **or none** (`None`) — what files a task
@@ -1504,9 +1506,11 @@ pub enum NewTriggerTask {
 /// with no condition is refused. A script is refused as a script step's is ([`checked_script`]), and a
 /// `script` with none is refused; it is not run here. What the task says is refused the same way: a
 /// file not named by its full path, and a program that writes it as a script is; neither is read or
-/// run here, so one missing now is only found out when the task is filed. A role that is not this
-/// automation's own is refused, whether the task is to be worked under it or the condition counts the
-/// tasks worked under it. Taking triggers away from an automation that has none writes nothing.
+/// run here, so one missing now is only found out when the task is filed. Handing on what the trigger's
+/// own script writes ([`NewTriggerTask::Asked`]) is refused on a trigger that asks no script. A role
+/// that is not this automation's own is refused, whether the task is to be worked under it or the
+/// condition counts the tasks worked under it. Taking triggers away from an automation that has none
+/// writes nothing.
 pub fn trigger_set(tx: &WriteTx<'_>, id: i64, trigger: Option<NewTrigger>) -> Result<Automation> {
     let before = live_automation(tx, id)?;
     if before.triggers.is_empty() && trigger.is_none() {
@@ -1695,6 +1699,12 @@ fn checked_trigger(
             TriggerTask::File { path }
         }
         NewTriggerTask::Script(script) => TriggerTask::Script { script: checked_script(script)? },
+        NewTriggerTask::Asked if script.is_none() => {
+            return Err(Error::invalid(
+                "a trigger hands on what its script writes only where it asks a script whether to start",
+            ));
+        }
+        NewTriggerTask::Asked => TriggerTask::Asked,
     };
     Ok(AutomationTrigger {
         id: read::next_id(conn, "automation_trigger")?,
@@ -4981,11 +4991,18 @@ mod tests {
                 NewTriggerTask::File { path: "trigger-task.md".into() },
                 NewTriggerTask::Script(NewScript { program: "write-task".into(), args: Vec::new(), timeout_minutes: None }),
                 NewTriggerTask::Script(NewScript { program: judge.clone(), args: Vec::new(), timeout_minutes: Some(0) }),
+                // What its script writes, on a trigger that asks none.
+                NewTriggerTask::Asked,
             ] {
                 let wrong = NewTrigger { task, ..hourly("") };
                 let refused = trigger_set(tx, automation.id, Some(wrong.clone()));
                 assert!(matches!(refused, Err(Error::Invalid(_))), "{wrong:?} is refused");
             }
+            let asking = NewTrigger { script: program(&judge, None), task: NewTriggerTask::Asked, ..hourly("") };
+            let set = trigger_set(tx, automation.id, Some(asking)).expect("what the script it asks writes");
+            let read_back = only(live_automation(tx, automation.id).expect("read")).expect("kept");
+            assert_eq!(read_back.task, TriggerTask::Asked);
+            assert_eq!(only(set), Some(read_back));
 
             let off = trigger_set(tx, automation.id, None).expect("take it away");
             assert!(off.triggers.is_empty());

@@ -1943,9 +1943,11 @@ pub enum AutomationCmd {
         #[arg(long, value_name = "ROLE_ID", requires = "if_tasks")]
         if_tasks_role: Option<i64>,
         /// file a task only once this program, by its full path, says so: it writes
-        /// {"version":1,"file":true} (or false) to the file named in AMENBO_OUTPUT, and its exit code says
-        /// only whether it ran to the end. On its own, with no --every, --when-idle or --if-tasks, it is
-        /// asked whenever there is room for a run, a minute after it last filed one at the soonest
+        /// {"version":1,"file":true} (or false) to the file named in AMENBO_OUTPUT — or
+        /// {"version":2,"start":true,…} (or false) with a title, notes, data and key beside it, and files
+        /// in out/ next to that file — and its exit code says only whether it ran to the end. On its own,
+        /// with no --every, --when-idle or --if-tasks, it is asked whenever there is room for a run, a
+        /// minute after it last filed one at the soonest
         #[arg(long, value_name = "PATH")]
         if_script: Option<String>,
         /// one argument handed to the --if-script program as it is, with no shell in between — repeat it
@@ -1970,7 +1972,8 @@ pub enum AutomationCmd {
         task_from_file: Option<String>,
         /// instead of --title, have this program, by its full path, write the task each time it files
         /// one: it writes {"version":1,"title":"…","notes":"…"} to the file named in AMENBO_OUTPUT (the
-        /// notes may be left out), and its exit code says only whether it ran to the end
+        /// notes may be left out) — or {"version":2,"title":"…","notes":"…","data":{…},"key":"…"}, with
+        /// files in out/ next to that file — and its exit code says only whether it ran to the end
         #[arg(long, value_name = "PATH")]
         task_from_script: Option<String>,
         /// one argument handed to the --task-from-script program as it is, with no shell in between —

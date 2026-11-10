@@ -603,7 +603,9 @@ pub fn automation_trigger(t: &AutomationTrigger) -> Record {
             },
         ),
         TriggerTask::File { path } => (Value::Null, Value::Null, tv(path), Value::Null, Value::Null),
-        TriggerTask::Script { .. } => (Value::Null, Value::Null, Value::Null, Value::Null, Value::Null),
+        TriggerTask::Script { .. } | TriggerTask::Asked => {
+            (Value::Null, Value::Null, Value::Null, Value::Null, Value::Null)
+        }
     };
     Record::new(
         "automation_trigger",

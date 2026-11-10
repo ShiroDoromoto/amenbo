@@ -1005,6 +1005,7 @@ export const hi: Translation = {
     "auto.trigger.taskFixed": "तय पाठ",
     "auto.trigger.taskFile": "फ़ाइल",
     "auto.trigger.taskScript": "स्क्रिप्ट का आउटपुट",
+    "auto.trigger.taskAsked": "निर्णय करने वाली स्क्रिप्ट का आउटपुट",
     "auto.trigger.taskTitle": "शीर्षक",
     "auto.trigger.taskNotes": "नोट्स",
     "auto.trigger.taskPath": "फ़ाइल का पथ",

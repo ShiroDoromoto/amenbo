@@ -1006,6 +1006,7 @@ export const th: Translation = {
     "auto.trigger.taskFixed": "ข้อความตายตัว",
     "auto.trigger.taskFile": "ไฟล์",
     "auto.trigger.taskScript": "ผลลัพธ์ของสคริปต์",
+    "auto.trigger.taskAsked": "ผลลัพธ์ของสคริปต์ที่ตัดสิน",
     "auto.trigger.taskTitle": "ชื่อเรื่อง",
     "auto.trigger.taskNotes": "บันทึก",
     "auto.trigger.taskPath": "พาธของไฟล์",

@@ -1304,9 +1304,10 @@ datasets! {
         script_timeout_minutes: col(INT_OPT),
         // What it hands on: `fixed` is the title, notes, data and files written here; `file` is what the
         // file at `task_path` says when it starts a run; `script` is what the program in `task_script_*`
-        // writes then, as a script step's is written. Each leaves the others' columns NULL (the program's
-        // arguments '').
-        task_kind: enum_col("fixed", "file", "script"),
+        // writes then, as a script step's is written; `asked` is what the program in `script_*` writes
+        // beside its say that a run is to start, so it needs no column of its own. Each leaves the others'
+        // columns NULL (the program's arguments '').
+        task_kind: enum_col("fixed", "file", "script", "asked"),
         task_title: col(OPT),
         task_notes: col(OPT),
         task_path: col(OPT),

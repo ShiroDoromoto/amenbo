@@ -1852,12 +1852,14 @@ impl Store {
     /// ([`crate::ops::automation_run::ask_trigger`]); `None` for a trigger with no script. A trigger
     /// taken away since it was found due files nothing.
     ///
-    /// The file the trigger's task is read from, then the files the trigger hands on, are read from
-    /// their paths first, outside the transaction (`AMB-D-1134`,
-    /// [`crate::ops::automation_run::read_trigger_file`]) — the files held to the per-file limit of an
-    /// attachment and put in the blob store, as an attachment's bytes always are
-    /// ([`crate::ops::automation_run::read_trigger_files`]). One not there, or not read, is an error, and
-    /// nothing is started (`AMB-D-1135`).
+    /// The file the trigger's task is read from, then the files the trigger hands on, are taken in first,
+    /// outside the transaction (`AMB-D-1134`, [`crate::ops::automation_run::read_trigger_file`]) — the
+    /// files held to the per-file limit of an attachment and put in the blob store, as an attachment's
+    /// bytes always are: those it names by their paths are read from there
+    /// ([`crate::ops::automation_run::read_trigger_files`]), and those its program left in `out/` are
+    /// taken in as a script step's are ([`crate::ops::automation_run::take_in_program_files`],
+    /// [`Self::automation_script_ran`]). One not there, or not taken in, is an error, and nothing is
+    /// started (`AMB-D-1135`).
     pub fn automation_trigger_fire(
         &mut self,
         trigger_id: i64,
@@ -1869,11 +1871,19 @@ impl Store {
         };
         let from_file = crate::ops::automation_run::read_trigger_file(&trigger.task)
             .map_err(crate::error::Error::invalid)?;
-        let files = crate::ops::automation_run::read_trigger_files(
+        let blobs = self.blobs();
+        let mut files = crate::ops::automation_run::read_trigger_files(
             crate::ops::automation_run::trigger_files(&trigger.task, from_file.as_ref()),
             &self.config.attachment_limits,
-            &self.blobs(),
+            &blobs,
         )?;
+        if let Some(wrote) = said.and_then(|said| said.handed(&trigger.task)) {
+            files.extend(crate::ops::automation_run::take_in_program_files(
+                &wrote.files,
+                &self.config.attachment_limits,
+                &blobs,
+            )?);
+        }
         let automation_id = trigger.automation_id;
         let agent = self.automation_default_agent(automation_id)?;
         let by = crate::ops::automation_run::Launcher { default_agent: agent.as_deref(), ..*by };

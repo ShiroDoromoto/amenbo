@@ -170,12 +170,16 @@ pub fn preamble(cmd: &str) -> String {
          built to be handed none of the three.\n\
          \n\
          Each step of a run is opened in a session of its own, so what the steps before you did reaches \
-         you only where it is written down. Two blocks below carry it, each left out when it is empty:\n\
+         you only where it is written down. Three blocks below carry it, each left out when it is empty:\n\
          \n\
          - **What has happened so far** — one line per step of this run that has already reported, \
          oldest first, where this step was built to be shown them. A line is the first line of that \
          step's report; the whole of what each one said is kept on the run, which \
          `{cmd} automation run-show <run>` prints and `{cmd} automation run-list --task <task>` names.\n\
+         - **What the trigger that started this run handed on** — at the step a run started by a \
+         trigger starts at, the title, notes, data (JSON) and files it handed on, each under a heading \
+         of its own. A file arrives as `AMB-ATT-<n>`, as above. No later step is shown it: it travels \
+         on only as this step hands it on.\n\
          - **What you have been handed** — what earlier steps put down, under the names this step's \
          inputs were declared with. A file arrives as `AMB-ATT-<n>`, which `{cmd} attach show` reads \
          and `{cmd} attach save` writes out; a task arrives as `AMB-T-<n>`.\n\

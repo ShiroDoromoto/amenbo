@@ -12,8 +12,13 @@
 //!
 //! Each run gets a folder of its own under the OS's temporary folder:
 //!
-//! - `input.json` — `{"version":1,"ins":{…}}`, one entry per input, its path handed in `AMENBO_INPUT`;
+//! - `input.json` — `{"version":1,"ins":{…}}`, one entry per input, its path handed in `AMENBO_INPUT`.
+//!   At the step a run started by a trigger starts at, it also carries `start` — what the trigger handed
+//!   on ([`Start`]): `{"title":…,"notes":…,"data":…,"files":[…]}`, each key left out where nothing was
+//!   handed, `data` as the JSON value itself and `files` as the paths to them. Where nothing was handed,
+//!   there is no `start`;
 //! - `in/<n>/<name>` — a file input, written out so its entry in `ins` can be the path to it;
+//! - `in/start/<name>` — a file the trigger handed on, written out so `start.files` can list the path to it;
 //! - `out/output.json` — where the program writes, its path handed in `AMENBO_OUTPUT`. A file output is
 //!   put beside it in `out/`.
 //!
@@ -72,6 +77,24 @@ pub enum Given {
     File { name: String, bytes: Vec<u8> },
 }
 
+/// **What the trigger that started the run handed on** (`AMB-D-1133`), as the step the run starts at
+/// is handed it in `input.json`'s `start`. Each part is `None` (or empty) where none was handed.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Start {
+    pub title: Option<String>,
+    pub notes: Option<String>,
+    /// The data, as the JSON text the run keeps.
+    pub data: Option<String>,
+    /// The files, each by its name and its bytes.
+    pub files: Vec<(String, Vec<u8>)>,
+}
+
+impl Start {
+    fn is_empty(&self) -> bool {
+        self.title.is_none() && self.notes.is_none() && self.data.is_none() && self.files.is_empty()
+    }
+}
+
 /// What one run of a program came to.
 #[derive(Debug)]
 pub struct Ran {
@@ -108,7 +131,7 @@ pub enum Ended {
 /// **Run `script` once** with its output on pipes, handing it `given`, and stop it at its timeout or as
 /// soon as `stop` answers `true` — asked every [`STOP_EVERY`] while it runs.
 pub fn run(script: &StepScript, given: &[(String, Given)], stop: impl FnMut() -> bool) -> Ran {
-    match prepare(script, given, None) {
+    match prepare(script, given, None, None) {
         Ok(prepared) => run_prepared(prepared, stop),
         Err(why) => not_started(why),
     }
@@ -143,11 +166,15 @@ pub struct Prepared {
 /// **Write the folder for one run of `script`**, handing it `given`, and answer what to start the program
 /// with — or why it cannot be, in the OS's words.
 ///
+/// `start` is what the trigger that started the run handed on, for the step the run starts at, or `None`
+/// for any other step and for a program started for no step.
+///
 /// `step` is the run and the step execution the program is started for, as `(run, run_step)`, or `None`
 /// for a program started for no step.
 pub fn prepare(
     script: &StepScript,
     given: &[(String, Given)],
+    start: Option<&Start>,
     step: Option<(i64, i64)>,
 ) -> Result<Prepared, String> {
     let dir = folder().map_err(|e| e.to_string())?;
@@ -162,7 +189,7 @@ pub fn prepare(
         env_remove: vec![crate::session::STEP_VAR],
         timeout: Duration::from_secs(minutes * 60),
     };
-    let input = write_input(&prepared.dir, given).map_err(|e| e.to_string())?;
+    let input = write_input(&prepared.dir, given, start).map_err(|e| e.to_string())?;
     std::fs::create_dir(&prepared.out).map_err(|e| e.to_string())?;
     prepared.env.push((INPUT_VAR, input.into_os_string()));
     prepared.env.push((OUTPUT_VAR, prepared.output.clone().into_os_string()));
@@ -284,26 +311,56 @@ fn run_prepared(prepared: Prepared, stop: impl FnMut() -> bool) -> Ran {
 }
 
 /// Write `input.json`, and each file input beside it, and answer the path to `input.json`.
-fn write_input(dir: &Path, given: &[(String, Given)]) -> std::io::Result<PathBuf> {
+fn write_input(dir: &Path, given: &[(String, Given)], start: Option<&Start>) -> std::io::Result<PathBuf> {
     let mut ins = serde_json::Map::new();
     for (n, (name, given)) in given.iter().enumerate() {
         let value = match given {
             Given::Text(text) => text.clone(),
-            Given::File { name: file, bytes } => {
-                let at = dir.join("in").join(n.to_string());
-                std::fs::create_dir_all(&at)?;
-                let file = Path::new(file).file_name().map(PathBuf::from).unwrap_or_else(|| "file".into());
-                let path = at.join(file);
-                std::fs::write(&path, bytes)?;
-                path.to_string_lossy().into_owned()
-            }
+            Given::File { name: file, bytes } => write_file(&dir.join("in").join(n.to_string()), file, bytes)?,
         };
         ins.insert(name.clone(), serde_json::Value::String(value));
     }
-    let input = serde_json::json!({ "version": INPUT_VERSION, "ins": ins });
+    let mut input = serde_json::json!({ "version": INPUT_VERSION, "ins": ins });
+    if let Some(start) = start.filter(|s| !s.is_empty()) {
+        input["start"] = start_json(dir, start)?;
+    }
     let path = dir.join("input.json");
     std::fs::write(&path, serde_json::to_vec(&input).expect("a JSON value serializes"))?;
     Ok(path)
+}
+
+/// Write one file out under `at`, named by the last part of `name`, and answer the path to it.
+fn write_file(at: &Path, name: &str, bytes: &[u8]) -> std::io::Result<String> {
+    std::fs::create_dir_all(at)?;
+    let file = Path::new(name).file_name().map(PathBuf::from).unwrap_or_else(|| "file".into());
+    let path = at.join(file);
+    std::fs::write(&path, bytes)?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+/// **`input.json`'s `start`**, its files written out under `in/start/`. The data goes in as the JSON
+/// value it is, so the program does not parse it twice; data that is not JSON goes in as its text.
+fn start_json(dir: &Path, start: &Start) -> std::io::Result<serde_json::Value> {
+    let mut out = serde_json::Map::new();
+    if let Some(title) = &start.title {
+        out.insert("title".into(), serde_json::Value::String(title.clone()));
+    }
+    if let Some(notes) = &start.notes {
+        out.insert("notes".into(), serde_json::Value::String(notes.clone()));
+    }
+    if let Some(data) = &start.data {
+        let value = serde_json::from_str(data).unwrap_or_else(|_| serde_json::Value::String(data.clone()));
+        out.insert("data".into(), value);
+    }
+    if !start.files.is_empty() {
+        let at = dir.join("in").join("start");
+        let mut paths = Vec::new();
+        for (name, bytes) in &start.files {
+            paths.push(serde_json::Value::String(write_file(&at, name, bytes)?));
+        }
+        out.insert("files".into(), serde_json::Value::Array(paths));
+    }
+    Ok(serde_json::Value::Object(out))
 }
 
 /// Read `output.json` and the files left beside it.
@@ -479,6 +536,45 @@ mod tests {
         assert_eq!(kept, format!("{}あ", "x".repeat(TAIL_BYTES - "あ".len())));
     }
 
+    fn input_written(start: Option<&Start>) -> (PathBuf, serde_json::Value) {
+        let dir = amenbo_scratch::scratch("script-start");
+        let path = write_input(&dir, &[("n".to_string(), Given::Text("1".to_string()))], start).expect("written");
+        let input = serde_json::from_slice(&std::fs::read(path).expect("read")).expect("JSON");
+        (dir, input)
+    }
+
+    /// What the trigger handed on reaches the program under `start`, its data as JSON and its files
+    /// written out under `in/start/`, beside the inputs as they always were.
+    #[test]
+    fn what_the_trigger_handed_on_is_written_under_start() {
+        let start = Start {
+            title: Some("issue #123".to_string()),
+            notes: Some("直す".to_string()),
+            data: Some(r#"{"issue":123}"#.to_string()),
+            files: vec![("log.txt".to_string(), b"the log".to_vec())],
+        };
+        let (dir, input) = input_written(Some(&start));
+        assert_eq!(input["version"], 1);
+        assert_eq!(input["ins"]["n"], "1");
+        assert_eq!(input["start"]["title"], "issue #123");
+        assert_eq!(input["start"]["notes"], "直す");
+        assert_eq!(input["start"]["data"]["issue"], 123);
+        let file = input["start"]["files"][0].as_str().expect("a path");
+        assert_eq!(PathBuf::from(file), dir.join("in").join("start").join("log.txt"));
+        assert_eq!(std::fs::read(file).expect("written out"), b"the log");
+    }
+
+    /// Only what was handed is written, and a program handed nothing reads no `start` at all.
+    #[test]
+    fn nothing_handed_writes_no_start() {
+        let (_, input) = input_written(Some(&Start { title: Some("t".to_string()), ..Start::default() }));
+        assert_eq!(input["start"], serde_json::json!({ "title": "t" }));
+        let (_, input) = input_written(Some(&Start::default()));
+        assert!(input.get("start").is_none(), "{input}");
+        let (_, input) = input_written(None);
+        assert!(input.get("start").is_none(), "{input}");
+    }
+
     #[cfg(unix)]
     mod unix {
         use super::*;
@@ -553,15 +649,15 @@ mod tests {
         #[test]
         fn a_steps_program_is_handed_its_run_and_its_step() {
             let body = sh(r#"echo "${AMENBO_RUN-none} ${AMENBO_RUN_STEP-none} ${AMENBO_AUTOMATION_STEP-none}""#);
-            let prepared = prepare(&body, &[], Some((7, 42))).expect("the folder is written");
+            let prepared = prepare(&body, &[], None, Some((7, 42))).expect("the folder is written");
             assert_eq!(run_prepared(prepared, || false).output_tail, "7 42 none\n");
-            let prepared = prepare(&body, &[], None).expect("the folder is written");
+            let prepared = prepare(&body, &[], None, None).expect("the folder is written");
             assert_eq!(run_prepared(prepared, || false).output_tail, "none none none\n");
         }
 
         /// [`run`] with a timeout of `timeout` in place of the script's.
         fn run_for(script: &StepScript, timeout: Duration, stop: impl FnMut() -> bool) -> Ran {
-            let mut prepared = prepare(script, &[], None).expect("the folder is written");
+            let mut prepared = prepare(script, &[], None, None).expect("the folder is written");
             prepared.timeout = timeout;
             run_prepared(prepared, stop)
         }

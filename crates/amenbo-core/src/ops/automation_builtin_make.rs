@@ -1786,6 +1786,69 @@ mod tests {
         });
     }
 
+    /// **A trigger that cannot file its task keeps why** (`AMB-D-1136`) — here its project came to
+    /// require an axis after it was written, and it names no value of it, which its start refuses before
+    /// it files the task (`invalid_trigger_axis_empty`). The write that would have started the run takes
+    /// everything with it, and what it was refused with, kept in a write of its own
+    /// ([`crate::ops::automation_run::refused`]), names the axis; nothing else of the trigger moves.
+    #[test]
+    fn a_trigger_that_cannot_file_its_task_keeps_why() {
+        use crate::model::TriggerWhen;
+        use crate::ops::automation_run::{fire, refused};
+        with_tx(|tx| {
+            let (automation, _, _) = entry(tx);
+            let trigger = automation::NewTrigger {
+                name: "毎朝".into(),
+                role_id: None,
+                when: TriggerWhen::Every { minutes: 60 },
+                condition: None,
+                script: None,
+                task: automation::NewTriggerTask::Fixed {
+                    title: "受信箱を見る".into(),
+                    notes: String::new(),
+                    data: String::new(),
+                    files: Vec::new(),
+                    key: String::new(),
+                },
+                values: Vec::new(),
+                priority: None,
+            };
+            // Written before the axis is required: a trigger naming no value of a required axis is
+            // refused at its save.
+            let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
+            let axis = crate::ops::dimension::add(
+                tx,
+                automation.project_id,
+                crate::ops::dimension::NewDimension { name: "テーマ".into(), ..Default::default() },
+            )
+            .expect("axis");
+            let screen = crate::ops::dimension::value_add(tx, axis.id, "画面", None).expect("value");
+            crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None, None)
+                .expect("required");
+            // The task a failed round is filed as answers it, or the launch is refused for that instead.
+            crate::ops::automation::update(tx, automation.id, None, None, None, None, Some(&[screen.id][..]))
+                .expect("the failed round's classification");
+            let kept = |tx: &WriteTx<'_>| read::automation_trigger(tx.conn(), trigger_id).expect("read").expect("there");
+            let due = kept(tx).next_at;
+            let claude = ["claude".to_string()];
+            let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
+
+            // The store answers this in a transaction of its own, which goes with the error; here it is
+            // only asked what the error is.
+            let unfiled = fire(tx, trigger_id, &by, due, None, None, &[]).expect_err("a required axis left empty");
+            assert_eq!(unfiled.code(), "invalid_trigger_axis_empty");
+
+            refused(tx, trigger_id, &unfiled, due).expect("kept");
+            let after = kept(tx);
+            let why = after.last_refused.clone().expect("why it could not start");
+            assert_eq!(why.at, due);
+            assert_eq!(why.why.code, "invalid_trigger_axis_empty");
+            assert_eq!(why.why.fields.get("axis").map(String::as_str), Some("テーマ"));
+            assert_eq!(why.why.message, unfiled.message_en());
+            assert_eq!((after.next_at, after.last_filed_at), (due, None), "nothing else moves");
+        });
+    }
+
     /// **Each trigger of an automation is asked on its own** — the one that files a task moves only its
     /// own `next_at` and `last_filed_at`, the other is left where it was, and one not enabled is neither
     /// due nor fired.
@@ -2343,11 +2406,13 @@ mod tests {
     /// first line is the title of the task filed and the rest its notes, or, where it is JSON, its
     /// `title` and `notes`. A file not there says nothing, in a sentence that names it, and starts
     /// nothing (`AMB-D-1135`); what was read from another path starts nothing either; and one that gives
-    /// no title is refused, as the task it files needs one — each leaving `next_at` where it was.
+    /// no title is refused, as the task it files needs one — each leaving `next_at` where it was. What
+    /// it was refused with is kept on the trigger ([`crate::ops::automation_run::refused`],
+    /// `AMB-D-1136`) until a run is started.
     #[test]
     fn a_trigger_files_the_task_its_file_says() {
         use crate::model::TriggerWhen;
-        use crate::ops::automation_run::{fire, read_trigger_file, triggers_due, TriggerFileSaid};
+        use crate::ops::automation_run::{fire, read_trigger_file, refused, triggers_due, TriggerFileSaid};
         with_tx(|tx| {
             let (automation, take, _) = entry(tx);
             let dir = std::env::temp_dir().join(format!("amenbo-trigger-file-{}", std::process::id()));
@@ -2374,24 +2439,35 @@ mod tests {
 
             assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![trigger_id], "nothing to run first");
             let missing = read_trigger_file(&kept(tx).task).expect_err("no file there to read");
-            assert!(missing.contains(&format!("the file '{shown}' is not there")), "{missing}");
+            assert!(missing.to_string().contains(&format!("the file '{shown}' is not there")), "{missing}");
+            assert_eq!(missing.code(), "invalid_trigger_file_missing");
+            assert_eq!(missing.fields().expect("its path").iter().collect::<Vec<_>>(), vec![("path", shown.as_str())]);
             assert!(fire(tx, trigger_id, &by, due, None, None, &[]).expect("fire").is_none(), "nothing read, nothing started");
 
             std::fs::write(&path, r#"{"version":2,"notes":"本文だけ","key":"x"}"#).expect("write");
             let untitled = read_trigger_file(&kept(tx).task).expect("read").expect("a file");
-            let refused = fire(tx, trigger_id, &by, due, None, Some(&untitled), &[]).expect_err("no title");
-            assert!(refused.to_string().contains("needs a title"), "{refused}");
+            let no_title = fire(tx, trigger_id, &by, due, None, Some(&untitled), &[]).expect_err("no title");
+            assert!(no_title.to_string().contains("needs a title"), "{no_title}");
+            assert_eq!(no_title.code(), "invalid_trigger_file_untitled");
             assert_eq!(kept(tx).next_at, due, "and nothing moves on");
             assert!(read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read").is_empty());
+
+            refused(tx, trigger_id, &no_title, due).expect("kept");
+            let why = kept(tx).last_refused.expect("why it could not start");
+            assert_eq!((why.at, why.why.code.as_str()), (due, "invalid_trigger_file_untitled"));
+            assert_eq!(why.why.fields.get("path"), Some(&shown));
+            assert_eq!((kept(tx).next_at, kept(tx).last_filed_at), (due, None), "nothing else moves");
 
             std::fs::write(&path, "ファイルで起こす\n\n本文").expect("write");
             let read = read_trigger_file(&kept(tx).task).expect("read").expect("a file");
             let elsewhere = TriggerFileSaid { path: "/elsewhere/task.md".into(), ..read.clone() };
             assert!(fire(tx, trigger_id, &by, due, None, Some(&elsewhere), &[]).expect("fire").is_none(), "read from another path");
+            assert!(kept(tx).last_refused.is_some(), "starting nothing clears nothing");
             let run = fire(tx, trigger_id, &by, due, None, Some(&read), &[]).expect("fire").expect("a run");
             let filed = taken_first(tx, &run, &take);
             assert_eq!(filed.title, "ファイルで起こす");
             assert_eq!(filed.notes, "本文");
+            assert_eq!((kept(tx).last_refused, kept(tx).last_filed_at), (None, Some(due)), "a run started clears it");
             std::fs::remove_dir_all(&dir).ok();
         });
     }

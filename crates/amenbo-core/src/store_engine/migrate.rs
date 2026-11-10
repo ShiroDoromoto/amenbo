@@ -1601,6 +1601,13 @@ pub const STEPS: &[Step] = &[
         // roles' headcounts come to, as before. No task is touched.
         apply: Apply::Custom(add_the_run_limit),
     },
+    Step {
+        to: 145,
+        name: "add automation_trigger.refused_at and refused_why, when a trigger last could not start a run and why",
+        // **Unseeded.** A trigger that could not start a run left only a line in the log, so every
+        // trigger reads as having no such time. No task is touched.
+        apply: Apply::Custom(let_a_trigger_keep_why_it_could_not_start),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -2286,6 +2293,27 @@ fn add_the_run_limit(ctx: &Ctx<'_>) -> Result<()> {
         if !column_names(tx, table)?.iter().any(|c| c == "run_limit") {
             tx.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN run_limit BIGINT;"))?;
         }
+    }
+    Ok(())
+}
+
+/// v145: `automation_trigger.refused_at` and `refused_why`, when a trigger last could not start a run
+/// and why (`AMB-D-1136`). Both NULL on every row already there.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. Both are nullable with no default
+/// but NULL, so `ALTER TABLE` adds them as they stand; the `CHECK` is the one every timestamp column
+/// carries, frozen here as text.
+fn let_a_trigger_keep_why_it_could_not_start(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let there = column_names(tx, "automation_trigger")?;
+    if !there.iter().any(|c| c == "refused_at") {
+        tx.execute_batch(
+            "ALTER TABLE automation_trigger ADD COLUMN refused_at TEXT CHECK(refused_at GLOB \
+             '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');",
+        )?;
+    }
+    if !there.iter().any(|c| c == "refused_why") {
+        tx.execute_batch("ALTER TABLE automation_trigger ADD COLUMN refused_why TEXT;")?;
     }
     Ok(())
 }
@@ -14457,8 +14485,8 @@ mod tests {
         run(&engine, &dir, steps_through(139), &mut crate::progress::ignore).unwrap();
 
         assert_eq!(engine.format_version().unwrap(), 139);
-        // Both are read by their columns rather than through the registry, which names v140's and
-        // v142's too.
+        // Both are read by their columns rather than through the registry, which names the
+        // columns of v140 and later steps too.
         type Handing = (String, Option<String>, Option<String>, Option<String>, Option<String>);
         let trigger: Handing = engine
             .conn()
@@ -14552,7 +14580,7 @@ mod tests {
 
         assert_eq!(engine.format_version().unwrap(), 141);
         engine.conn().execute_batch(&asked).unwrap();
-        // Read by its columns rather than through the registry, which names v142's too.
+        // Read by its columns rather than through the registry, which names later steps' columns too.
         let read = |id: i64| -> (String, Option<String>) {
             engine
                 .conn()
@@ -14657,6 +14685,9 @@ mod tests {
         run(&engine, &dir, steps_through(143), &mut crate::progress::ignore).unwrap();
 
         assert_eq!(engine.format_version().unwrap(), 143);
+        // Read through the registry once the store is raised to the latest, as the registry names the
+        // later steps' columns too.
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
         let conn = engine.conn();
         let read = || crate::store_engine::read::automation_trigger(conn, 1).unwrap().expect("the trigger");
         assert_eq!((read().priority, read().values), (None, Vec::new()), "nothing is guessed");
@@ -14671,6 +14702,48 @@ mod tests {
         assert!(
             conn.execute("UPDATE automation_trigger SET task_priority = 'urgent' WHERE id = 1", []).is_err(),
             "a priority is one of the three",
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v145: a trigger written at v144 has no time it could not start a run, and one written then keeps
+    /// one, read back through the registry.
+    #[test]
+    fn a_trigger_written_before_v145_could_not_start_no_time() {
+        let dir = scratch("trigger-refused");
+        let engine = store_at(&dir, 144);
+        let at = "2026-11-10T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, created_at, updated_at) VALUES (1, 1, 'auto', '{at}', '{at}');
+                 INSERT INTO automation_trigger (id, automation_id, enabled, name, when_kind, every_minutes, task_kind,
+                                                 task_path, next_at, order_key, created_at, updated_at)
+                 VALUES (1, 1, 1, '毎朝', 'every', 60, 'file', '/tmp/next.md', '{at}', 'm', '{at}', '{at}');"#
+            ))
+            .unwrap();
+
+        run(&engine, &dir, steps_through(145), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 145);
+        let read = || crate::store_engine::read::automation_trigger(engine.conn(), 1).unwrap().expect("the trigger");
+        let before = read();
+        assert_eq!(before.last_refused, None, "no trigger kept a time it could not start before");
+        engine
+            .conn()
+            .execute(
+                "UPDATE automation_trigger SET refused_at = ?1, refused_why = ?2 WHERE id = 1",
+                [at, r#"{"code":"invalid_trigger_file_missing","message":"the file '/tmp/next.md' is not there","fields":{"path":"/tmp/next.md"}}"#],
+            )
+            .unwrap();
+        let refused = read().last_refused.expect("kept");
+        assert_eq!(refused.at.to_rfc3339_z(), at);
+        assert_eq!(refused.why.code, "invalid_trigger_file_missing");
+        assert_eq!(refused.why.fields.get("path").map(String::as_str), Some("/tmp/next.md"));
+        assert!(
+            engine.conn().execute("UPDATE automation_trigger SET refused_at = 'yesterday' WHERE id = 1", []).is_err(),
+            "an instant, as every time is",
         );
         std::fs::remove_dir_all(&dir).ok();
     }

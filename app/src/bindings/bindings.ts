@@ -1751,13 +1751,66 @@ nextAt: string,
  * When it last filed a task, as an RFC3339 instant. Absent where it has filed none since it was
  * written.
  */
-lastFiledAt?: string, };
+lastFiledAt?: string, 
+/**
+ * The last time it was to start a run and could not, and why (`AMB-D-1136`). Absent where it has
+ * not failed since it last started one.
+ */
+lastRefused?: AutomationTriggerRefusedDto, };
 
 /**
  * **A trigger as a screen writes it** ([`amenbo_core::ops::automation::NewTrigger`]) —
  * [`AutomationTriggerDto`] without `nextAt`, which is counted from the write.
  */
 export type AutomationTriggerInputDto = { name: string, roleId?: number, when: AutomationTriggerWhenDto, condition?: AutomationTriggerConditionDto, script?: AutomationScriptInputDto, task: AutomationTriggerTaskInputDto, };
+
+/**
+ * **When a trigger last could not start a run, and why** ([`amenbo_core::model::TriggerRefusal`]) —
+ * the why in the shape a refusal travels in (`CmdError`): the code naming the sentence, the English it
+ * falls back to, the values it is built from and the sentences it is composed of, so the screen writes
+ * it from the same dictionary (`AMB-D-413`).
+ *
+ * `message_en` keeps its snake spelling for the reason [`AutomationLaunchBlockDto`] gives.
+ */
+export type AutomationTriggerRefusedDto = { 
+/**
+ * When, as an RFC3339 instant.
+ */
+at: string, 
+/**
+ * The code naming the sentence.
+ */
+code: string, 
+/**
+ * The English sentence, for a code the front end holds no template for.
+ */
+message_en: string, 
+/**
+ * The values the sentence is built from, under the names its template interpolates them by.
+ */
+fields: { [key in string]: string }, 
+/**
+ * The sentences it is composed of, in reading order. Empty for nearly every refusal.
+ */
+parts: Array<AutomationTriggerRefusedPartDto>, };
+
+/**
+ * **One of the sentences why a trigger could not start a run is composed of** — a refusal's part
+ * (`CmdErrorPart`).
+ */
+export type AutomationTriggerRefusedPartDto = { 
+/**
+ * The code naming the sentence, `error` where it names none.
+ */
+code: string, 
+/**
+ * The English sentence.
+ */
+message_en: string, 
+/**
+ * The values the sentence is built from.
+ */
+fields: { [key in string]: string }, };
 
 /**
  * **What a trigger hands on** — the wire form of [`amenbo_core::model::TriggerTask`]: `fixed` with its

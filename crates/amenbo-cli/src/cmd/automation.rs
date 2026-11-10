@@ -1725,8 +1725,8 @@ fn render_automation(
 /// One of an automation's triggers: its id, whether it is on, what it is called and does, the tasks it
 /// looks at and the program it asks first, the task it files (or the file or program that says it) and
 /// the role it files it under, when it is next asked (for an `idle`, a `tasks` or a `script`, the
-/// soonest it may be — and nothing, for one that is off, as it is asked no more), and when it last
-/// filed a task.
+/// soonest it may be — and nothing, for one that is off, as it is asked no more), when it last
+/// filed a task, and when it last could not start one and why, where it has not started one since.
 fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
     use amenbo_core::model::{TriggerTask, TriggerWhen};
     let fewer = trigger.condition.as_ref().map(|c| {
@@ -1768,8 +1768,12 @@ fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
         Some(at) => format!("last filed one at {}", at.to_rfc3339_z()),
         None => "has filed none yet".to_string(),
     };
+    let refused = match &trigger.last_refused {
+        Some(r) => format!("; could not start one at {}: {}", r.at.to_rfc3339_z(), r.why.message),
+        None => String::new(),
+    };
     format!(
-        "trigger {} {state}: starts a run on its own{called} {when}, filing {task}{under} — {next}; {last}",
+        "trigger {} {state}: starts a run on its own{called} {when}, filing {task}{under} — {next}; {last}{refused}",
         trigger.id
     )
 }
@@ -2552,5 +2556,49 @@ mod tests {
         );
         assert!(tail_lines("").is_empty());
         assert!(tail_lines("\n  \n").is_empty());
+    }
+
+    /// A trigger that could not start a run says when and why at the end of its line, in English; one
+    /// that has not failed since it last started one says nothing of it.
+    #[test]
+    fn a_trigger_that_could_not_start_says_when_and_why() {
+        use amenbo_core::model::{AutomationTrigger, Refused, TriggerRefusal, TriggerTask, TriggerWhen};
+        use amenbo_core::time::Timestamp;
+        let at = Timestamp::now();
+        let trigger = AutomationTrigger {
+            id: 3,
+            automation_id: 1,
+            enabled: true,
+            name: String::new(),
+            role_id: None,
+            when: TriggerWhen::Every { minutes: 60 },
+            condition: None,
+            script: None,
+            task: TriggerTask::File { path: "/tmp/next.md".into() },
+            values: Vec::new(),
+            priority: None,
+            next_at: at,
+            last_filed_at: None,
+            last_refused: None,
+            order_key: "a0".into(),
+            created_at: at,
+            updated_at: at,
+        };
+        assert!(super::trigger_line(&trigger).ends_with("has filed none yet"));
+        let why = Refused {
+            code: "invalid_trigger_file_missing".into(),
+            message: "the file '/tmp/next.md' is not there".into(),
+            fields: Default::default(),
+            parts: Vec::new(),
+        };
+        let refused = AutomationTrigger { last_refused: Some(TriggerRefusal { at, why }), ..trigger };
+        assert!(
+            super::trigger_line(&refused).ends_with(&format!(
+                "has filed none yet; could not start one at {}: the file '/tmp/next.md' is not there",
+                at.to_rfc3339_z()
+            )),
+            "{}",
+            super::trigger_line(&refused)
+        );
     }
 }

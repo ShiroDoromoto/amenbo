@@ -669,6 +669,14 @@ pub fn automation_trigger(t: &AutomationTrigger) -> Record {
                 ("task_files", task_files),
                 ("task_key", task_key),
                 ("task_priority", t.priority.map(|p| tv(p.as_str())).unwrap_or(Value::Null)),
+                ("refused_at", tsov(&t.last_refused.as_ref().map(|r| r.at))),
+                (
+                    "refused_why",
+                    match &t.last_refused {
+                        Some(r) => tv(&serde_json::to_string(&r.why).expect("a refusal is JSON")),
+                        None => Value::Null,
+                    },
+                ),
             ],
             &t.created_at,
             &t.updated_at,

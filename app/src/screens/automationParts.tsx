@@ -5,11 +5,14 @@
 // it cannot be changed here, a way out, and where a placement is about to go are each drawn once,
 // here, because the same thing said three ways reads as three things. A screen hands a part the
 // facts rather than writing its own words around them, so no screen needs a sentence explaining it.
+import { axesFor } from "../core/appliesTo";
 import { isStatus, statusLabel, t, tn } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
+import { getSnapshot } from "../core/snapshot";
 import { Icon } from "../components/Icon";
 import { ERROR_EXIT } from "./automationLayout";
 import { exitLabel } from "./automationPanel";
+import type { DimensionDto } from "../bindings/bindings";
 
 /**
  * The reach an action sits in, as a chip — the same chip wherever an action is named. A built-in is
@@ -176,5 +179,67 @@ export function FilterChips({ expression }: { expression: string }) {
         <span key={one.key} className="chip chip--block">{one.word}</span>
       ))}
     </span>
+  );
+}
+
+/**
+ * The axes a task Amenbo files on its own can be classified on in this project — a failed round's, or
+ * a trigger's — each with the values that can be chosen: the open ones, and a closed one only where it
+ * is already chosen (`AMB-D-829`). An axis with nothing to press is left out.
+ */
+export function classAxes(projectId: number, chosen: readonly number[]): DimensionDto[] {
+  const dims = getSnapshot().projects.find((p) => p.id === projectId)?.dimensions ?? [];
+  return axesFor("task", dims)
+    .map((dim) => ({ ...dim, values: dim.values.filter((value) => !value.closed || chosen.includes(value.id)) }))
+    .filter((dim) => dim.values.length > 0);
+}
+
+/** The classification with `value` pressed on `axis`: it alone on the axis, or none where it was on. */
+export function pressedValue(chosen: readonly number[], axis: DimensionDto, value: number): number[] {
+  const onAxis = new Set(axis.values.map((one) => one.id));
+  const rest = chosen.filter((one) => !onAxis.has(one));
+  return chosen.includes(value) ? rest : [...rest, value];
+}
+
+/**
+ * **A classification as rows of chips**: a row per axis of {@link classAxes}, its name marked where
+ * the project requires it, its values pressed one an axis. With no axis to classify on, it says so.
+ */
+export function ClassRows({
+  projectId,
+  chosen,
+  onChange,
+}: {
+  projectId: number;
+  chosen: readonly number[];
+  onChange: (chosen: number[]) => void;
+}) {
+  const axes = classAxes(projectId, chosen);
+  if (axes.length === 0) return <span className="autostep__hint">{t("auto.step.noAxes")}</span>;
+  return (
+    <div className="autostep__rows">
+      {axes.map((dim) => (
+        <div key={dim.id} className="autostep__row">
+          <span className="autostep__rowname">
+            {dim.name}
+            {dim.required && <span className="autostep__req">{t("auto.side.required")}</span>}
+          </span>
+          {dim.values.map((one) => {
+            const on = chosen.includes(one.id);
+            return (
+              <button
+                key={one.id}
+                type="button"
+                className={`autostep__chip ${on ? "autostep__chip--on" : ""}`}
+                aria-pressed={on}
+                onClick={() => onChange(pressedValue(chosen, dim, one.id))}
+              >
+                {one.name}
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </div>
   );
 }

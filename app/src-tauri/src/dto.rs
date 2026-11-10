@@ -4126,6 +4126,16 @@ pub struct AutomationTriggerInputDto {
     #[ts(optional)]
     pub(crate) script: Option<AutomationScriptInputDto>,
     pub(crate) task: AutomationTriggerTaskInputDto,
+    /// The classification of the task it files, by value ids, at most one an axis: exactly these, the
+    /// ones it had and no longer names taken off. Left out for none, as one aimed at a role started by
+    /// a trigger sends.
+    #[serde(default)]
+    #[ts(optional, type = "Array<number>")]
+    pub(crate) values: Option<Vec<i64>>,
+    /// The priority of the task it files. Left out for none.
+    #[serde(default)]
+    #[ts(optional, type = "\"high\" | \"medium\" | \"low\"")]
+    pub(crate) priority: Option<amenbo_core::model::Priority>,
 }
 
 impl From<AutomationTriggerInputDto> for amenbo_core::ops::automation::NewTrigger {
@@ -4137,8 +4147,8 @@ impl From<AutomationTriggerInputDto> for amenbo_core::ops::automation::NewTrigge
             condition: t.condition.map(Into::into),
             script: t.script.map(Into::into),
             task: t.task.into(),
-            values: Vec::new(),
-            priority: None,
+            values: t.values.unwrap_or_default(),
+            priority: t.priority,
         }
     }
 }
@@ -4209,9 +4219,9 @@ impl From<AutomationTriggerConditionDto> for amenbo_core::model::TriggerConditio
 }
 
 /// **What a trigger hands on** — the wire form of [`amenbo_core::model::TriggerTask`]: `fixed` with its
-/// title, notes, data (JSON text, absent for none) and the full paths of its files (absent for none),
-/// `file` read from its full path, `script` written by a program, `asked` written by the trigger's own
-/// script beside its say to start.
+/// title, notes, data (JSON text, absent for none), the full paths of its files (absent for none) and
+/// its key (absent for none), `file` read from its full path, `script` written by a program, `asked`
+/// written by the trigger's own script beside its say to start.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(tag = "kind", rename_all = "lowercase")]
@@ -4225,6 +4235,9 @@ pub enum AutomationTriggerTaskDto {
         #[serde(skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         files: Option<Vec<String>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        key: Option<String>,
     },
     File { path: String },
     Script { script: AutomationStepScriptDto },
@@ -4235,9 +4248,13 @@ impl From<amenbo_core::model::TriggerTask> for AutomationTriggerTaskDto {
     fn from(t: amenbo_core::model::TriggerTask) -> Self {
         use amenbo_core::model::TriggerTask;
         match t {
-            TriggerTask::Fixed { title, notes, data, files, .. } => {
-                AutomationTriggerTaskDto::Fixed { title, notes, data, files: (!files.is_empty()).then_some(files) }
-            }
+            TriggerTask::Fixed { title, notes, data, files, key } => AutomationTriggerTaskDto::Fixed {
+                title,
+                notes,
+                data,
+                files: (!files.is_empty()).then_some(files),
+                key,
+            },
             TriggerTask::File { path } => AutomationTriggerTaskDto::File { path },
             TriggerTask::Script { script } => AutomationTriggerTaskDto::Script { script: script.into() },
             TriggerTask::Asked => AutomationTriggerTaskDto::Asked,
@@ -4247,7 +4264,7 @@ impl From<amenbo_core::model::TriggerTask> for AutomationTriggerTaskDto {
 
 /// **What a trigger is written to hand on** ([`amenbo_core::ops::automation::NewTriggerTask`]) —
 /// [`AutomationTriggerTaskDto`] with the program's timeout left out where it is the default, and a
-/// `fixed`'s data and files left out where it has none.
+/// `fixed`'s data, files and key left out where it has none.
 #[derive(Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(tag = "kind", rename_all = "lowercase")]
@@ -4261,6 +4278,9 @@ pub enum AutomationTriggerTaskInputDto {
         #[serde(default)]
         #[ts(optional)]
         files: Option<Vec<String>>,
+        #[serde(default)]
+        #[ts(optional)]
+        key: Option<String>,
     },
     File { path: String },
     Script { script: AutomationScriptInputDto },
@@ -4271,12 +4291,12 @@ impl From<AutomationTriggerTaskInputDto> for amenbo_core::ops::automation::NewTr
     fn from(t: AutomationTriggerTaskInputDto) -> Self {
         use amenbo_core::ops::automation::NewTriggerTask;
         match t {
-            AutomationTriggerTaskInputDto::Fixed { title, notes, data, files } => NewTriggerTask::Fixed {
+            AutomationTriggerTaskInputDto::Fixed { title, notes, data, files, key } => NewTriggerTask::Fixed {
                 title,
                 notes,
                 data: data.unwrap_or_default(),
                 files: files.unwrap_or_default(),
-                key: String::new(),
+                key: key.unwrap_or_default(),
             },
             AutomationTriggerTaskInputDto::File { path } => NewTriggerTask::File { path },
             AutomationTriggerTaskInputDto::Script { script } => NewTriggerTask::Script(script.into()),

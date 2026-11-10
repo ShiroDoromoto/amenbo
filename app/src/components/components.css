@@ -2319,6 +2319,7 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .trigstage__previewtitle { font-size: var(--fs-md); font-weight: var(--fw-bold); }
 .trigstage__previewnotes { white-space: pre-wrap; color: var(--c-text-muted); }
+.trigstage__previewdata { white-space: pre-wrap; font-family: var(--font-mono); color: var(--c-text-muted); }
 .trigcard {
   flex: 1 1 520px; max-width: 640px; display: flex; flex-direction: column; gap: var(--s-4); padding: var(--s-5);
   background: var(--c-surface-pic) var(--c-surface); border: var(--border-w) var(--border-style) var(--c-rule);
@@ -2368,6 +2369,23 @@ button.feed__target:hover { color: var(--c-accent); }
 .trigcard__noicon { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
 .trigcard__form { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; gap: 8px 12px; font-size: var(--fs-md); }
 .trigcard__lbl { font-size: var(--fs-xs); }
+/* "Optional" after a field's name, quieter than "Required" (`.autostep__req`). */
+.trigcard__opt { margin-inline-start: var(--s-1); font-size: var(--fs-xs); color: var(--c-text-muted); }
+/* A line of JSON a hint describes, as it is written. */
+.trigcard__code {
+  display: block; padding: 6px 8px; font-family: var(--font-mono); font-size: var(--fs-xs); white-space: pre-wrap;
+  overflow-wrap: anywhere; background: var(--c-sunken-pic) var(--c-sunken); border-radius: var(--r-sm);
+}
+/* How the role picked starts, after the list: the role screen's own words, as a chip. */
+.trigcard__starts { flex: none; font-size: var(--fs-xs); border-radius: 999px; border-color: transparent; background: var(--c-sunken-pic) var(--c-sunken); }
+.trigcard__starts--trigger { background: var(--c-accent-weak); color: var(--c-accent-text); }
+/* The classification and priority of the task the trigger files, in a sunken box under the role. */
+.trigcard__class {
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); padding: var(--s-3);
+  background: var(--c-sunken-pic) var(--c-sunken); border-radius: var(--r-md);
+}
+.trigcard__class > .autostep__rows, .trigcard__class > .autoside__why { align-self: stretch; }
+.trigcard__classname { font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-text-muted); }
 .trigcard__mach {
   display: flex; align-items: flex-start; gap: 8px; padding: var(--s-2) var(--s-3); font-size: var(--fs-xs); color: var(--c-text-muted);
   background: var(--c-sunken-pic) var(--c-sunken); border-radius: var(--r-md);
@@ -2384,17 +2402,17 @@ button.feed__target:hover { color: var(--c-accent); }
 .autorole__start { display: flex; flex-direction: column; gap: var(--s-1); }
 .autorole__startline { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-3); font-size: var(--fs-md); }
 .autorole__startlabel { font-size: var(--fs-xs); color: var(--c-text-muted); }
-.autorole__seg {
+.autorole__seg, .trigcard__seg {
   display: inline-flex; flex-wrap: wrap; max-width: 100%; overflow: hidden;
   border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-sm);
 }
-.autorole__seg > button {
+.autorole__seg > button, .trigcard__seg > button {
   font: inherit; font-size: var(--fs-xs); padding: 3px 10px; cursor: pointer;
   border: 0; background: var(--c-surface-pic) var(--c-surface); color: var(--c-text);
 }
-.autorole__seg > button + button { border-inline-start: var(--border-w) var(--border-style) var(--c-edge); }
-.autorole__seg > button[aria-pressed="true"] { background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-medium); }
-.autorole__seg > button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.autorole__seg > button + button, .trigcard__seg > button + button { border-inline-start: var(--border-w) var(--border-style) var(--c-edge); }
+.autorole__seg > button[aria-pressed="true"], .trigcard__seg > button[aria-pressed="true"] { background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-medium); }
+.autorole__seg > button:focus-visible, .trigcard__seg > button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 .autorole__triggers { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); }
 .autorole__trigger {
   font: inherit; font-size: var(--fs-xs); padding: 0; border: 0; background: none; cursor: pointer;

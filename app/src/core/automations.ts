@@ -238,6 +238,30 @@ export function useTriggerCount(
 }
 
 /**
+ * **The axes the task a trigger would file carries no value on, which its project requires** — with
+ * `values`, its classification as it is typed, before it is saved — by name, in the project's order.
+ * Core counts them as the save does, the time axis given where today has a value on it. Outside the
+ * app there are none.
+ */
+export async function fetchTriggerAxesEmpty(automationId: number, values: readonly number[]): Promise<string[]> {
+  if (!inTauri()) return [];
+  return invoke<string[]>("automation_trigger_axes_empty", { automationId, values });
+}
+
+/**
+ * Subscribing read of {@link fetchTriggerAxesEmpty} — read again whenever what is pressed changes, and
+ * whenever the project's axes or the automation change under it (`core/query`'s
+ * `automationTriggerAxesEmpty`). Empty until an answer lands.
+ */
+export function useTriggerAxesEmpty(automationId: number, values: readonly number[]): string[] {
+  const { data } = useQuery<string[]>(
+    ["automationTriggerAxesEmpty", automationId, [...values].sort((a, b) => a - b).join(",")],
+    () => fetchTriggerAxesEmpty(automationId, values),
+  );
+  return data ?? [];
+}
+
+/**
  * **Try a trigger as it is typed, before it is saved** — whether its condition holds now, what the
  * program it asks first says, and what the task it would file says. Nothing is written. `tag` names
  * this try for {@link stopTriggerTry}. Its programs may run for a long time, so the answer may be slow.

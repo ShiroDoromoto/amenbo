@@ -1914,6 +1914,10 @@ export const tr: Translation = {
       "Bu eylem hâlâ şemalarda duruyor — toplam {count}. Silmeden önce oradan çıkar.",
     invalid_automation_has_runs:
       "Bu otomasyondan {count} çalıştırma başlatıldı ve kayıtları ona bağlı, bu yüzden silinemez. Bunun yerine arşivle.",
+    invalid_automation_role_last:
+      "“{role}” bu otomasyonun son rolü ve bir otomasyonda her zaman en az bir rol kalır, bu yüzden kaldırılamaz. Bunun yerine rolü değiştir — ya da otomasyona artık gerek yoksa önce arşivle, sonra sil.",
+    invalid_automation_export_only:
+      "“{automation}” otomasyonların rolleri olmadan önce oluşturuldu ve yalnızca dışa aktarılmak için tutuluyor, bu yüzden değiştirilemez. Dışa aktar, yeniden kur ve yeni bir otomasyon olarak içe aktar — ya da artık gerek yoksa önce arşivle, sonra sil.",
     invalid_action_placed_elsewhere:
       "Bu eylem başka projelerin otomasyonlarına yerleştirilmiş ({automations}). “{project}” projesine taşımadan önce oradan çıkar.",
     invalid_automation_archived: "“{automation}” arşivlenmiş. Başlatmadan önce geri getir.",

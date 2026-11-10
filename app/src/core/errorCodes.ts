@@ -149,6 +149,11 @@ export const CORE_SENTENCE_ERROR_CODES = [
   // Deleting an automation runs were launched from — refused for the runs filed under it, with how many.
   // Archiving is the way it goes out of sight instead, and the CLI's hint names it.
   "invalid_automation_has_runs",
+  // Taking out an automation's last role (`role`), and rewriting the definition of one kept from before
+  // roles (`automation`). Both name another way: rewrite the role, or rebuild it from an export — or
+  // archive the automation and delete it.
+  "invalid_automation_role_last",
+  "invalid_automation_export_only",
   "invalid_action_placed_elsewhere",
   "not_ready_automation",
   "not_ready_automation_no_steps",

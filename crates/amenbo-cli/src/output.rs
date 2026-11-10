@@ -564,6 +564,16 @@ impl From<amenbo_core::Error> for CliError {
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidAutomationHasRuns) => Some(format!(
                 "Archive it first: `{cmd} automation update <id> --archived true` keeps it, and its runs, out of the way; `{cmd} automation rm <id>` then deletes it with its runs."
             )),
+            // An automation always keeps one role, so the last one is rewritten rather than taken out — or
+            // the automation goes with it, which archiving opens the way to.
+            E::Invalid(m) if m.code() == Some(ErrorCode::InvalidAutomationRoleLast) => Some(format!(
+                "Rewrite the role instead: `{cmd} automation role-update <role-id>` changes its name and the rest. Or, if the automation is no longer wanted, archive it with `{cmd} automation update <id> --archived true` and delete it with `{cmd} automation rm <id>`."
+            )),
+            // An automation from before roles is not rewritten in place: it is rebuilt from what it writes
+            // out, or, when nobody wants it any more, archived and deleted — both stay open to it.
+            E::Invalid(m) if m.code() == Some(ErrorCode::InvalidAutomationExportOnly) => Some(format!(
+                "Rebuild it as a new automation: `{cmd} automation export <id> --out <file>`, rebuild the file, then `{cmd} automation import <file>`. Or, if it is no longer wanted, archive it with `{cmd} automation update <id> --archived true` and delete it with `{cmd} automation rm <id>`."
+            )),
             // The counterpart to `already_reserved`. That one means someone else holds it (→ move on to
             // the next task); this one means a premise you declared is unmet (→ resolve the premise).
             // The two point in opposite directions, so keep them apart.

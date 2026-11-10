@@ -1932,6 +1932,10 @@ export const ptBR: Translation = {
       "Esta ação ainda está em diagramas — {count} no total. Tire-a deles antes de excluí-la.",
     invalid_automation_has_runs:
       "{count} execuções foram iniciadas a partir desta automação e estão registradas nela, então ela não pode ser excluída. Arquive-a em vez disso.",
+    invalid_automation_role_last:
+      "“{role}” é o último papel desta automação, e uma automação sempre mantém pelo menos um, então ele não pode ser removido. Altere o papel em vez disso — ou, se a automação não for mais necessária, arquive-a e depois exclua-a.",
+    invalid_automation_export_only:
+      "“{automation}” foi criada antes de as automações terem papéis e é mantida só para ser exportada, então não pode ser alterada. Exporte-a, reconstrua-a e importe-a como uma nova automação — ou, se não for mais necessária, arquive-a e depois exclua-a.",
     invalid_action_placed_elsewhere:
       "Esta ação está colocada em automações de outros projetos ({automations}). Tire-a delas antes de movê-la para “{project}”.",
     invalid_automation_archived: "“{automation}” está arquivada. Recupere-a antes de iniciá-la.",

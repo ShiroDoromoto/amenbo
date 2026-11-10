@@ -1914,6 +1914,10 @@ export const vi: Translation = {
       "Hành động này vẫn nằm trên sơ đồ — tổng cộng {count}. Gỡ nó ra trước khi xóa.",
     invalid_automation_has_runs:
       "Đã có {count} lần chạy được khởi động từ tự động hoá này và chúng được ghi dưới nó, nên không thể xoá. Hãy lưu trữ nó thay vào đó.",
+    invalid_automation_role_last:
+      "“{role}” là vai trò cuối cùng của tự động hoá này, và một tự động hoá luôn giữ ít nhất một vai trò, nên không thể xoá. Hãy sửa vai trò thay vào đó — hoặc nếu không cần tự động hoá này nữa, hãy lưu trữ rồi xoá nó.",
+    invalid_automation_export_only:
+      "“{automation}” được tạo trước khi tự động hoá có vai trò và chỉ được giữ lại để xuất, nên không thể sửa. Hãy xuất ra, dựng lại và nhập vào như một tự động hoá mới — hoặc nếu không cần nữa, hãy lưu trữ rồi xoá nó.",
     invalid_action_placed_elsewhere:
       "Hành động này đang được đặt trong tự động hóa của dự án khác ({automations}). Gỡ nó ra trước khi chuyển sang “{project}”.",
     invalid_automation_archived: "“{automation}” đã lưu trữ. Đưa nó trở lại trước khi chạy.",

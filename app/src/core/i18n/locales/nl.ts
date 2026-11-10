@@ -1914,6 +1914,10 @@ export const nl: Translation = {
       "Deze actie staat nog in schema’s — {count} in totaal. Haal haar daar weg voordat je haar verwijdert.",
     invalid_automation_has_runs:
       "Vanuit deze automatisering zijn {count} runs gestart en die staan eronder geregistreerd, dus ze kan niet worden verwijderd. Archiveer haar in plaats daarvan.",
+    invalid_automation_role_last:
+      "“{role}” is de laatste rol van deze automatisering, en een automatisering houdt altijd minstens één rol, dus deze kan niet worden verwijderd. Wijzig de rol in plaats daarvan — of, als de automatisering niet meer nodig is, archiveer haar en verwijder haar daarna.",
+    invalid_automation_export_only:
+      "“{automation}” is gemaakt voordat automatiseringen rollen hadden en wordt alleen bewaard om te exporteren, dus ze kan niet worden gewijzigd. Exporteer haar, bouw haar opnieuw op en importeer haar als nieuwe automatisering — of, als ze niet meer nodig is, archiveer haar en verwijder haar daarna.",
     invalid_action_placed_elsewhere:
       "Deze actie staat in automatiseringen van andere projecten ({automations}). Haal haar daar weg voordat je haar naar “{project}” verplaatst.",
     invalid_automation_archived: "“{automation}” is gearchiveerd. Haal het terug voordat je het start.",

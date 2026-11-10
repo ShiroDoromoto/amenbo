@@ -1929,6 +1929,10 @@ export const ja: Translation = {
       "このアクションは図面に置かれています（全部で {count} か所）。図面から外してから消してください。",
     invalid_automation_has_runs:
       "このオートメーションからは {count} 件の実行が起動されていて、その記録がここに紐づいています。消せないので、代わりにアーカイブしてください。",
+    invalid_automation_role_last:
+      "「{role}」はこのオートメーションの最後の役割です。オートメーションには役割が1つは要るので、削除できません。代わりに役割を書き換えてください。オートメーションごと要らないなら、アーカイブしてから削除してください。",
+    invalid_automation_export_only:
+      "「{automation}」は役割ができる前の古い形式で、書き出し（export）のためだけに残しているので、書き換えられません。書き出して組み直し、新しいオートメーションとして取り込んでください。もう要らないなら、アーカイブしてから削除してください。",
     invalid_action_placed_elsewhere:
       "このアクションは、ほかのプロジェクトのオートメーション（{automations}）に置かれています。そこから外してから「{project}」へ移してください。",
     invalid_automation_archived: "「{automation}」はアーカイブ済みです。戻してから起動してください。",

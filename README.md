@@ -404,6 +404,7 @@ amenbo automation role-update 8 --name Implement --entry 31 --agent claude-code 
 amenbo automation role-add 3 --name Intake --starts-by trigger   # 9: a role a trigger starts with no task filed; its --entry is anything but take_task, and failed rounds cannot be filed to it
 amenbo automation update 3 --failures-to 8           # where a failed round is filed: a role of it started by a task (8, from role-list) or `human`; the save and the start are refused until one is named
 amenbo automation update 3 --failure-dim "Category=bug" # the classification a failed round's task is filed with, one axis at a time (the others keep theirs; --no-failure-dim takes all off); the save and the start are refused while an axis the project requires has none
+amenbo automation update 3 --run-limit 4               # the most runs that go at once, all its roles together (1 to 100); written on the draft, the next launch takes it up once saved; --no-run-limit: as many as the headcounts come to
 amenbo automation place-add 3 --builtin fold_worktree  # 34: leaves by its way out for unmerged while the branch is not in
 amenbo automation place-add 3 --builtin close_task     # 35: done, with the commit handed to it recorded
 amenbo automation edge-add --from 32: --to 33         # what happens after each way out (--max-times caps a way back)
@@ -453,9 +454,11 @@ amenbo automation pause 7 --before-next-task           # ...or where it would ta
 amenbo automation cancel 7                             # a paused run ends canceled, handing the task back to todo and to the person
 amenbo automation cancel 7 --force                     # ...or one still going, now: the step under way is cut off where it stands
 amenbo automation acknowledge 7                        # a failed run has been seen: off the running tab, onto the history (whoever says it is kept)
-amenbo automation launch-show 4                        # each role of launch 4 (run-show names a run's launch): the definition's headcount, this launch's, the runs under way, the seats still to go, and whether it is stopped — and under it, how many of its tasks wait to be taken, the first three, and what keeps them waiting on a person where none is ready
+amenbo automation launch-show 4                        # launch 4 (run-show names a run's launch): the most runs at once beside the definition's, then each role: the definition's headcount, this launch's, the runs under way, the seats still to go, and whether it is stopped — and under it, how many of its tasks wait to be taken, the first three, and what keeps them waiting on a person where none is ready
 amenbo automation launch-headcount-set 4 --role 2 --headcount 3  # 1 to 10, for this launch alone: raised, it takes tasks at once; lowered, a seat goes once its run finishes the task it is on
 amenbo automation launch-headcount-reset 4 --role 2    # ...back at the definition's headcount
+amenbo automation launch-limit-set 4 --limit 3         # the most runs that go at once in this launch alone (--no-limit for none): raised, runs start at once; lowered, a run past it ends once it finishes the task it is on
+amenbo automation launch-limit-reset 4                 # ...back at the definition's most runs at once
 amenbo automation launch-role-hold 4 --role 2          # stop the role once its task is done: its runs take no new task, its headcount stays
 amenbo automation launch-role-release 4 --role 2       # ...take it up again, up to the headcount it had
 # Inside a step's own terminal, the agent carrying it out reports through two more: `automation

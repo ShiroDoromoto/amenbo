@@ -32,7 +32,7 @@ use amenbo_core::model::{AutomationFailureValue, AutomationRole, ClassifiedSide,
 use amenbo_core::ops::automation::{lines_back, EdgeTarget, NewAutomation, NewRole, NewScript, NewStep, RoleChange};
 use amenbo_core::ops::automation_report::{Next, Produced};
 use amenbo_core::ops::automation_run::{
-    Carrier, ChosenAt, ForRoom, HandedAtLaunch, LaunchRoleState, Launcher, ReadsFrom, RoleHeadcount, Started,
+    Carrier, ChosenAt, ForRoom, HandedAtLaunch, LaunchLimit, LaunchRoleState, Launcher, ReadsFrom, RoleHeadcount, Started,
 };
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
 use amenbo_core::ops::automation_view::{
@@ -491,6 +491,8 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             no_failures_to,
             failure_dim,
             no_failure_dim,
+            run_limit,
+            no_run_limit,
         } => {
             let notes = body_arg_opt(notes)?;
             let failures_to = match (no_failures_to, failures_to.as_deref()) {
@@ -505,16 +507,28 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             } else {
                 Some(failure_values_arg(store, id, &failure_dim)?)
             };
-            let a = store
-                .automation_update(
-                    id,
-                    name.as_deref(),
-                    notes.as_deref(),
-                    archived,
-                    failures_to,
-                    failure_values.as_deref(),
-                )
-                .map_err(CliError::from)?;
+            let run_limit = if no_run_limit { Some(None) } else { run_limit.map(Some) };
+            // The most runs is the draft's, written by an operation of its own; it goes first, so a limit
+            // out of range is refused before anything else is written.
+            let limited = run_limit.map(|limit| store.automation_run_limit_set(id, limit)).transpose().map_err(CliError::from)?;
+            let others = name.is_some()
+                || notes.is_some()
+                || archived.is_some()
+                || failures_to.is_some()
+                || failure_values.is_some();
+            let a = match limited {
+                Some(a) if !others => a,
+                _ => store
+                    .automation_update(
+                        id,
+                        name.as_deref(),
+                        notes.as_deref(),
+                        archived,
+                        failures_to,
+                        failure_values.as_deref(),
+                    )
+                    .map_err(CliError::from)?,
+            };
             write_envelope(flags, "automation.update", "automation", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated automation: {} ({})", a.name, a.id));
         }
         AutomationCmd::Trigger { args } => {
@@ -1431,6 +1445,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
 
         AutomationCmd::LaunchShow { launch } => {
             let state = store.automation_launch_state(launch).map_err(CliError::from)?;
+            let limit = store.automation_launch_limit(launch).map_err(CliError::from)?;
             if flags.json {
                 // Each role's headcount fields at the top of it, beside what it waits for.
                 let roles: Vec<Value> = state
@@ -1447,11 +1462,13 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     .collect();
                 print_json(&json!({
                     "launch_id": launch,
+                    "run_limit": limit.limit,
+                    "defined_run_limit": limit.defined,
                     "count": roles.len(),
                     "roles": roles,
                 }));
             } else {
-                human(flags, format!("Launch {launch} — {} role(s)", state.roles.len()));
+                human(flags, format!("Launch {launch} — {} role(s)  {}", state.roles.len(), launch_limit_words(limit)));
                 for role in &state.roles {
                     human(flags, format!("  {}", one_launch_role(&role.headcount)));
                     for line in launch_role_waits(role) {
@@ -1478,6 +1495,17 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let row = store.automation_launch_headcount_reset(launch, role).map_err(CliError::from)?;
             let line = format!("✓ Role {} is back at its definition's {} in launch {}", row.role_id, row.headcount, row.launch_id);
             write_envelope(flags, "automation.launch-headcount-reset", "automation_launch_role", serde_json::to_value(&row).unwrap(), None, false, line);
+        }
+        AutomationCmd::LaunchLimitSet { launch, limit, no_limit } => {
+            let limit = if no_limit { None } else { limit };
+            let row = store.automation_launch_limit_set(launch, limit).map_err(CliError::from)?;
+            let line = format!("✓ Launch {} runs {} — the definition is left as it is", row.id, run_limit_words(row.run_limit));
+            write_envelope(flags, "automation.launch-limit-set", "automation_launch", serde_json::to_value(&row).unwrap(), None, false, line);
+        }
+        AutomationCmd::LaunchLimitReset { launch } => {
+            let row = store.automation_launch_limit_reset(launch).map_err(CliError::from)?;
+            let line = format!("✓ Launch {} is back at its definition: {}", row.id, run_limit_words(row.run_limit));
+            write_envelope(flags, "automation.launch-limit-reset", "automation_launch", serde_json::to_value(&row).unwrap(), None, false, line);
         }
         AutomationCmd::LaunchRoleHold { launch, role } => {
             // The role's own stop, apart from a run's `pause --before-next-task` (`AMB-D-1019`). It is not
@@ -1955,6 +1983,23 @@ fn one_role(role: &AutomationRole) -> String {
         (None, _) => line.push_str("  no agent"),
     }
     line
+}
+
+/// **The most runs that go at once, in words** — a number, or no limit where none is set.
+fn run_limit_words(limit: Option<u32>) -> String {
+    match limit {
+        Some(n) => format!("at most {n} at once"),
+        None => "no limit on runs at once".to_string(),
+    }
+}
+
+/// **A launch's most runs at once beside its definition's**, for the first line of `launch-show`.
+fn launch_limit_words(limit: LaunchLimit) -> String {
+    let defined = match limit.defined {
+        Some(n) => n.to_string(),
+        None => "no limit".to_string(),
+    };
+    format!("{}  (defined: {defined})", run_limit_words(limit.limit))
 }
 
 /// One role of a launch: the headcount its definition gives it beside the one this launch holds, the

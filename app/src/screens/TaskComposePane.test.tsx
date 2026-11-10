@@ -146,7 +146,7 @@ describe("who a new task is handed to", () => {
 
 describe("the role a new task is worked under", () => {
   const role = (id: number, name: string): TaskRoleDto =>
-    ({ id, name, icon: null, automationId: 1, automationName: "開発" });
+    ({ id, name, icon: null, automationId: 1, automationName: "開発", automationArchived: false });
 
   it("is asked for once the task is handed to the AI, and a create without it says why under the field", async () => {
     hoisted.roles = [role(11, "実装係"), role(12, "レビュー係")];
@@ -182,6 +182,18 @@ describe("the role a new task is worked under", () => {
     expect(container.querySelector(".rolepart__h")!.textContent)
       .toContain(tf("detail.roleFrom", { name: listLabel(["開発", "保守"]) }));
     expect(roleChoices().map((c) => c.name)).toEqual(["開発 · 実装係", "保守 · 実装係", t("detail.roleNone")]);
+  });
+
+  // Archiving an automation leaves its roles where they were defined; a new task is not offered them.
+  it("does not offer an archived automation's roles", async () => {
+    hoisted.roles = [
+      { ...role(11, "実装係"), automationId: 2, automationName: "旧開発", automationArchived: true },
+      role(21, "実装係"),
+    ];
+    await open();
+    await act(async () => { owner("ai").click(); });
+    expect(roleChoices().map((c) => c.name)).toEqual(["実装係", t("detail.roleNone")]);
+    expect(container.querySelector(".rolepart__h")!.textContent).toContain(tf("detail.roleFrom", { name: "開発" }));
   });
 
   it("takes no role as a choice of its own", async () => {

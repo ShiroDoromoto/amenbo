@@ -26,7 +26,7 @@ import type { DimensionDto } from "../bindings/bindings";
 import type { Actor, ActivityItem, Facet, Placement, Priority, TaskCard } from "../mock/types";
 import { ErrorNote } from "../components/ErrorNote";
 import { RoleField, ROLE_NONE } from "../components/RoleField";
-import { useProjectRoles } from "../core/projectRoles";
+import { taskRoleChoices, useProjectRoles } from "../core/projectRoles";
 import { Icon } from "../components/Icon";
 import { useRunOfIncident } from "../core/automations";
 import { showTerminalOf } from "../shell/runFaces";
@@ -171,8 +171,12 @@ export function TaskDetailPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editCommentAt?.nonce]);
   const roster = dataAdapter.listRoster();
-  // The roles of the task's project, for the role field drawn while the task is the AI's.
-  const roles = useProjectRoles(task ? (placementOf(task)?.project.id ?? task.projectId ?? null) : null);
+  // The roles of the task's project, for the role field drawn while the task is the AI's. An archived
+  // automation's are left out, but for the one the task already has.
+  const roles = taskRoleChoices(
+    useProjectRoles(task ? (placementOf(task)?.project.id ?? task.projectId ?? null) : null),
+    task?.roleId ?? null,
+  );
   // The automations the roles come from, named in the role field's heading.
   const roleSources = [...new Set(roles.map((r) => r.automationName))];
   // A task handed to the AI from a person (or from nobody) in a project that defines a role is not

@@ -3875,8 +3875,10 @@ pub fn task_set_role(id: i64, role_id: Option<i64>) -> Result<WriteAck, CmdError
 
 /// **The roles a task of this project can be worked under**: every role defined in the project's
 /// automations, automation by automation in the order they were placed in, each in the order it is
-/// defined in. An archived automation's roles come too, as they are still ones a task can name. Empty
-/// for a project with no role, which is what keeps the task editor's role field off.
+/// defined in. An archived automation's roles come too, marked as such: a run's picture still names
+/// them, and a task already filed with one still shows it, but the task editor offers none of them as a
+/// new choice (`taskRoleChoices`). Empty for a project with no role, which is what keeps the task
+/// editor's role field off.
 #[tauri::command]
 pub fn project_roles(project_id: i64) -> Result<Vec<TaskRoleDto>, CmdError> {
     let store = open_store_read()?;
@@ -3891,6 +3893,7 @@ pub fn project_roles(project_id: i64) -> Result<Vec<TaskRoleDto>, CmdError> {
                 icon: role.icon,
                 automation_id,
                 automation_name: automation.name.clone(),
+                automation_archived: automation.archived,
             });
         }
     }
@@ -7791,6 +7794,12 @@ pub(crate) mod tests {
             task_add(Some(bare), "よその役割".into(), None, None, None, None, None, Some(first)).is_err(),
             "a role of another project's automation is refused"
         );
+
+        assert!(roles.iter().all(|r| !r.automation_archived), "none is archived yet");
+        Store::open().unwrap().automation_update(roles[0].automation_id, None, None, Some(true), None, None).unwrap();
+        let archived = project_roles(project_id).unwrap();
+        assert_eq!(archived.len(), roles.len(), "an archived automation's roles are still read");
+        assert!(archived.iter().all(|r| r.automation_archived), "and each is marked archived");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

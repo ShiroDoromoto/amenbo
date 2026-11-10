@@ -126,7 +126,7 @@ const failedRound = (
 });
 
 const role = (id: number, name: string, automationId = 3, icon: string | null = null): TaskRoleDto => ({
-  id, name, icon, automationId, automationName: "Nightly",
+  id, name, icon, automationId, automationName: "Nightly", automationArchived: false,
 });
 
 /** A run that failed at its second step, as a pane come back with the app is handed it. */

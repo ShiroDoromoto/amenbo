@@ -4625,7 +4625,8 @@ export type TaskRefDto = { id: number, name: string, };
 /**
  * One role a task of a project can be worked under: a role defined in one of the project's
  * automations. The task editor lists these, automation by automation and each in the order it is
- * defined in, as the choices of its role field.
+ * defined in, as the choices of its role field — leaving out an archived automation's, except the one
+ * a task already has.
  */
 export type TaskRoleDto = { id: number, name: string, 
 /**
@@ -4635,7 +4636,11 @@ icon: string | null, automationId: number,
 /**
  * The name of the automation it is defined in, to tell apart two roles of the same name.
  */
-automationName: string, };
+automationName: string, 
+/**
+ * Whether the automation it is defined in is archived. Such a role is not offered as a new choice.
+ */
+automationArchived: boolean, };
 
 /**
  * The **update available** state, for the GUI. Takes the store's `version_status` and raises

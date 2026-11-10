@@ -41,7 +41,7 @@ import type { Facet } from "../mock/types";
 let container: HTMLDivElement;
 let root: Root;
 
-const role = (id: number, name: string): TaskRoleDto => ({ id, name, icon: null, automationId: 1, automationName: "開発" });
+const role = (id: number, name: string): TaskRoleDto => ({ id, name, icon: null, automationId: 1, automationName: "開発", automationArchived: false });
 const roleField = () => container.querySelector<HTMLElement>(`[role="radiogroup"][aria-label="${t("detail.role")}"]`);
 /** The field's choices, each as its value and whether it is checked. */
 const choices = () =>
@@ -104,6 +104,14 @@ describe("TaskDetailPane role field", () => {
       roleField()!.querySelector<HTMLInputElement>('input[value="12"]')!.click();
     });
     expect(hoisted.asked).toEqual([`${id}:12`]);
+  });
+
+  // The one a task already has stays offered (`taskRoleChoices`); this task has none.
+  it("does not offer an archived automation's roles to a task without one", async () => {
+    hoisted.roles = [role(11, "実装係"), { ...role(31, "旧係"), automationId: 2, automationName: "旧開発", automationArchived: true }];
+    await open("ai");
+    expect(choices().map((c) => c.value)).toEqual(["11", "none"]);
+    expect(container.querySelector(".rolepart__hint")!.textContent).toBe(tf("detail.roleFrom", { name: "開発" }));
   });
 
   it("is not drawn for a task a person holds", async () => {

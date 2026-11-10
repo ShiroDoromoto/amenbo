@@ -18,7 +18,7 @@ vi.mock("./mutations", () => ({
   },
 }));
 
-import { useProjectRoles } from "./projectRoles";
+import { taskRoleChoices, useProjectRoles } from "./projectRoles";
 import { invalidateScopes } from "./query";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -88,5 +88,19 @@ describe("the roles a project's tasks can be worked under", () => {
 
     expect(hoisted.asked).toEqual([]);
     expect(seen).toEqual([]);
+  });
+});
+
+describe("the roles a task's role field offers", () => {
+  const of = (id: number, automationArchived: boolean) =>
+    ({ id, name: `r${id}`, icon: null, automationId: automationArchived ? 2 : 1, automationName: "a", automationArchived }) as TaskRoleDto;
+
+  it("leaves out an archived automation's roles from a task with none of them", () => {
+    expect(taskRoleChoices([of(1, false), of(2, true), of(3, false)], null).map((r) => r.id)).toEqual([1, 3]);
+    expect(taskRoleChoices([of(1, false), of(2, true)], 1).map((r) => r.id)).toEqual([1]);
+  });
+
+  it("keeps the archived role a task already has, and no other archived one", () => {
+    expect(taskRoleChoices([of(1, false), of(2, true), of(4, true)], 2).map((r) => r.id)).toEqual([1, 2]);
   });
 });

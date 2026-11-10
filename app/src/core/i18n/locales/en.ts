@@ -1271,6 +1271,8 @@ const ui = {
   "auto.trigger.disabled": "Off",
   "auto.trigger.lastFiled": "Last filed: {at}",
   "auto.trigger.neverFiled": "Not filed yet",
+  "auto.trigger.refusedFiling": "Could not file ({at}): {why}",
+  "auto.trigger.refusedStarting": "Could not start ({at}): {why}",
   "auto.trigger.list": "This automation's triggers",
   "auto.trigger.whenPick": "How to decide whether to file",
   "auto.trigger.taskPick": "Where the task's words come from",

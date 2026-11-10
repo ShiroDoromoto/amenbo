@@ -1038,6 +1038,8 @@ export const ja: Translation = {
     "auto.trigger.disabled": "止めています",
     "auto.trigger.lastFiled": "最後に起票：{at}",
     "auto.trigger.neverFiled": "まだ起票していません",
+    "auto.trigger.refusedFiling": "起票できませんでした（{at}）：{why}",
+    "auto.trigger.refusedStarting": "始められませんでした（{at}）：{why}",
     "auto.trigger.list": "このオートメーションのきっかけ",
     "auto.trigger.whenPick": "起票するかの決め方",
     "auto.trigger.taskPick": "タスクの中身の出どころ",

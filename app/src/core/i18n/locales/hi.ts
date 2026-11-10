@@ -1032,6 +1032,8 @@ export const hi: Translation = {
     "auto.trigger.disabled": "रुका हुआ",
     "auto.trigger.lastFiled": "आख़िरी टास्क बना: {at}",
     "auto.trigger.neverFiled": "अभी तक कोई टास्क नहीं बना",
+    "auto.trigger.refusedFiling": "टास्क नहीं बना सके ({at}): {why}",
+    "auto.trigger.refusedStarting": "शुरू नहीं कर सके ({at}): {why}",
     "auto.trigger.list": "इस ऑटोमेशन के ट्रिगर",
     "auto.trigger.whenPick": "टास्क बनाना है या नहीं, कैसे तय हो",
     "auto.trigger.taskPick": "टास्क की सामग्री कहाँ से आए",

@@ -1033,6 +1033,8 @@ export const vi: Translation = {
     "auto.trigger.disabled": "Đã dừng",
     "auto.trigger.lastFiled": "Tạo lần cuối: {at}",
     "auto.trigger.neverFiled": "Chưa tạo công việc nào",
+    "auto.trigger.refusedFiling": "Không tạo được ({at}): {why}",
+    "auto.trigger.refusedStarting": "Không bắt đầu được ({at}): {why}",
     "auto.trigger.list": "Các trình kích hoạt của tự động hóa này",
     "auto.trigger.whenPick": "Cách quyết định có tạo công việc không",
     "auto.trigger.taskPick": "Nguồn nội dung công việc",

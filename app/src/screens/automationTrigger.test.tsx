@@ -9,12 +9,13 @@
 // unchanged**, rewritten under its id, the others left alone; **"while fewer than N tasks match"
 // always carries its condition, and "when a script says so" its script**, while with the other kinds
 // each is sent only when asked for; **the note, the list and the preview say what will be filed** —
-// its title, role, who works it and the trigger's name; **a refusal is drawn and the card stays
-// open**; **"Remove trigger" takes that one away by its id**; and **the condition is picked as a
-// status, a role and a count**, a filter the boxes cannot show kept as it was written, with how many
-// tasks match now and what the next look does said under it; and **"Try it now" tries what is typed,
-// unsaved**, what it says standing in the preview until something is typed again, the button held
-// while it runs and the try stopped when the card closes.
+// its title, role, who works it and the trigger's name, **a trigger that last could not start a run
+// saying under its line when and why**, as could not file or could not start by the role it is toward;
+// **a refusal is drawn and the card stays open**; **"Remove trigger" takes that one away by its id**;
+// and **the condition is picked as a status, a role and a count**, a filter the boxes cannot show
+// kept as it was written, with how many tasks match now and what the next look does said under it;
+// and **"Try it now" tries what is typed, unsaved**, what it says standing in the preview until
+// something is typed again, the button held while it runs and the try stopped when the card closes.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -546,6 +547,54 @@ describe("the card", () => {
     expect(line).toContain(
       tf("auto.side.belowOf", { what: `${filterValueLabel("status", "todo")} Alice`, below: 3 }),
     );
+  });
+
+  it("says under a trigger that could not file when and why, in red, the rest of its line kept", async () => {
+    const lastRefused = {
+      at: "2026-11-10T08:30:00Z",
+      code: "invalid_trigger_file_missing",
+      message_en: "There is no file at /Users/alice/next.md",
+      fields: { path: "/Users/alice/next.md" },
+      parts: [],
+    };
+    await draw(detail({ ...written, lastRefused }));
+    const line = page().querySelector("[data-list=triggers] li")!;
+    expect(line.classList.contains("is-refused")).toBe(true);
+    expect([...line.children].map((one) => one.tagName)).toEqual(["B", "SPAN", "SPAN"]);
+    expect(line.children[1].textContent).toContain(tf("auto.side.triggerRole", { role: "Bob" }));
+    expect(line.querySelector(".trigstage__refused")?.textContent).toBe(
+      tf("auto.trigger.refusedFiling", {
+        at: dueLabel({ kind: "at", at: "2026-11-10T08:30:00Z" }),
+        why: errText(lastRefused),
+      }),
+    );
+    expect(errText(lastRefused)).toContain("/Users/alice/next.md");
+  });
+
+  it("says a trigger toward a role started by a trigger could not start, not file", async () => {
+    const lastRefused = {
+      at: "2026-11-10T09:00:00Z",
+      code: "invalid_trigger_file_missing",
+      message_en: "There is no file at /Users/alice/next.md",
+      fields: { path: "/Users/alice/next.md" },
+      parts: [],
+    };
+    const automation = detail({ ...written, roleId: 1, lastRefused });
+    automation.roles[0] = { ...automation.roles[0], startsBy: "trigger" };
+    await draw(automation);
+    expect(page().querySelector("[data-list=triggers] .trigstage__refused")?.textContent).toBe(
+      tf("auto.trigger.refusedStarting", {
+        at: dueLabel({ kind: "at", at: "2026-11-10T09:00:00Z" }),
+        why: errText(lastRefused),
+      }),
+    );
+  });
+
+  it("says nothing under a trigger that has not failed since it last started one", async () => {
+    await draw(detail(written));
+    const line = page().querySelector("[data-list=triggers] li")!;
+    expect(line.classList.contains("is-refused")).toBe(false);
+    expect(line.querySelector(".trigstage__refused")).toBeNull();
   });
 
   it("draws what core refused and stays open with what was typed", async () => {

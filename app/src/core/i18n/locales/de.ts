@@ -1036,6 +1036,8 @@ export const de: Translation = {
     "auto.trigger.disabled": "Angehalten",
     "auto.trigger.lastFiled": "Zuletzt angelegt: {at}",
     "auto.trigger.neverFiled": "Noch nichts angelegt",
+    "auto.trigger.refusedFiling": "Konnte nicht angelegt werden ({at}): {why}",
+    "auto.trigger.refusedStarting": "Konnte nicht starten ({at}): {why}",
     "auto.trigger.list": "Auslöser dieser Automatisierung",
     "auto.trigger.whenPick": "Wie entschieden wird, ob eine Aufgabe angelegt wird",
     "auto.trigger.taskPick": "Woher der Inhalt der Aufgabe kommt",

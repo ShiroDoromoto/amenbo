@@ -63,12 +63,12 @@ use amenbo_core::store_engine::read;
 
 use crate::commands::{open_store_read, with_store_mut};
 use crate::dto::{
-    AutomationActionCardDto, AutomationActionDetailDto, AutomationBuiltinDto,
+    AutomationActionCardDto, AutomationActionDetailDto, AutomationAwaitsPersonDto, AutomationBuiltinDto,
     AutomationBuiltinExitDto, AutomationBuiltinRunDto, AutomationCardDto, AutomationCfgDto,
     AutomationDetailDto, AutomationEdgeDto, AutomationExitDto, AutomationFailuresToDto, AutomationHeldBackDto,
     AutomationHeldByRecordDto, AutomationHeldByValueDto, AutomationHistoryDto, AutomationLaunchAsksDto,
     AutomationCarrierDto, AutomationLaunchBlockDto,
-    AutomationLaunchAttentionDto, AutomationLaunchCheckDto, AutomationLaunchFailedDto, AutomationLaunchIncidentDto, AutomationLaunchRoleStateDto,
+    AutomationLaunchAttentionDto, AutomationLaunchCheckDto, AutomationLaunchIncidentDto, AutomationLaunchRoleStateDto,
     AutomationLaunchStateDto,
     AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRoleDto, AutomationRolePassDto, AutomationRunCardDto,
@@ -2263,6 +2263,13 @@ pub fn automation_launch_state(launch_id: i64) -> Result<AutomationLaunchStateDt
                 })
                 .collect(),
             held_back: role.held_back.map(|held| held_back_dto(state.launch.project_id, held)),
+            awaits_person: role.awaits_person.map(|awaits| AutomationAwaitsPersonDto {
+                project: state.launch.project_id,
+                tasks: awaits.tasks,
+                dimension: awaits.dimension_id,
+                decision: awaits.decision_id,
+                task: awaits.task_id,
+            }),
         });
     }
     Ok(AutomationLaunchStateDto {
@@ -2273,7 +2280,6 @@ pub fn automation_launch_state(launch_id: i64) -> Result<AutomationLaunchStateDt
         status: state.launch.status.as_str(),
         max_headcount: amenbo_core::model::MAX_ROLE_HEADCOUNT,
         roles,
-        failed: failed_in_launch(&store, launch_id)?,
         attention: state.attention.into_iter().map(attention_dto).collect(),
     })
 }
@@ -2296,24 +2302,6 @@ fn attention_dto(line: automation_run::LaunchAttention) -> AutomationLaunchAtten
         step_name: line.step_name,
         since: line.since.map(|at| at.to_rfc3339_z()),
     }
-}
-
-/// **The failed rounds of one launch**, newest first ([`automation_run::failed_rounds_in_launch`]) —
-/// one line each under the launch's pane. A round whose filed task has since been deleted is left out.
-fn failed_in_launch(store: &amenbo_core::Store, launch_id: i64) -> Result<Vec<AutomationLaunchFailedDto>, CmdError> {
-    let conn = store.read_model().conn();
-    let mut out = Vec::new();
-    for round in automation_run::failed_rounds_in_launch(conn, launch_id)? {
-        let Some(incident) = filed_as(store, round.incident_task_id, round.failed_at, round.seat)? else {
-            continue;
-        };
-        let task = match round.task_id {
-            Some(id) => read::task(conn, id)?.map(|_| amenbo_core::idref::task(id)),
-            None => None,
-        };
-        out.push(AutomationLaunchFailedDto { run: round.run_id, role: round.role_id, task, incident });
-    }
-    Ok(out)
 }
 
 /// **What a run's last step left to be read** — what a script printed, once its program has ended
@@ -3783,6 +3771,8 @@ mod tests {
             not_started: 1,
             first_start: chrono::NaiveDate::from_ymd_opt(2026, 12, 1).map(amenbo_core::model::Schedule::Day),
             drafts: 0,
+            awaits_person: 2,
+            first_draft: None,
         };
         assert_eq!(
             serde_json::to_value(held_back_dto(2, held)).expect("json"),
@@ -3824,6 +3814,7 @@ mod tests {
                 waiting: 0,
                 first_waiting: Vec::new(),
                 held_back,
+                awaits_person: None,
             };
             serde_json::to_value(dto).expect("json")
         };

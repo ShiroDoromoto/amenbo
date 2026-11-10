@@ -4844,9 +4844,6 @@ pub struct AutomationLaunchStateDto {
     /// Every role the newest saved version holds, in the order they are defined in — those with no task
     /// under way or waiting among them.
     pub(crate) roles: Vec<AutomationLaunchRoleStateDto>,
-    /// **The launch's failed rounds that were filed as a task**, newest first, up to the newest
-    /// [`amenbo_core::ops::automation_run::FAILED_NAMED`] — one line each under the pane.
-    pub(crate) failed: Vec<AutomationLaunchFailedDto>,
     /// **What needs a person's hand now** — the stopped tasks first, then the runs waiting for a
     /// person. Drawn under the launch's heading, and not at all where it is empty.
     pub(crate) attention: Vec<AutomationLaunchAttentionDto>,
@@ -4905,29 +4902,6 @@ pub struct AutomationLaunchAttentionDto {
     pub(crate) since: Option<String>,
 }
 
-/// **One failed round of a launch** ([`amenbo_core::ops::automation_run::LaunchFailedRound`]): whose
-/// round it was, the task it was on, and the task it was filed as.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/bindings/bindings.ts")]
-#[serde(rename_all = "camelCase")]
-pub struct AutomationLaunchFailedDto {
-    /// The run whose round failed.
-    #[ts(type = "number")]
-    pub(crate) run: i64,
-    /// The round's role, by its id. Absent where the round had none, and where it has since been taken
-    /// out.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional, type = "number")]
-    pub(crate) role: Option<i64>,
-    /// The reference of the task the round was on. Absent where it had taken none, and where the task
-    /// has since been deleted.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub(crate) task: Option<String>,
-    /// The task it was filed as, when it failed and the seat it failed in.
-    pub(crate) incident: AutomationRunIncidentDto,
-}
-
 /// **One role of a launch** ([`amenbo_core::ops::automation_run::LaunchRoleState`]): what it is, how many
 /// are in it, the runs in its seats, and the tasks waiting for it to take.
 #[derive(Serialize, TS)]
@@ -4968,6 +4942,39 @@ pub struct AutomationLaunchRoleStateDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) held_back: Option<AutomationHeldBackDto>,
+    /// **How many of its tasks wait for a person's hand** (`AMB-D-1144`), read whether or not one is
+    /// waiting to be taken. Absent where none does.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) awaits_person: Option<AutomationAwaitsPersonDto>,
+}
+
+/// **A role's tasks that move only once a person has done something**
+/// ([`amenbo_core::ops::automation_run::AwaitsPerson`]) — a value to close, a decision to settle, a task
+/// to finish creating — and the one place a person goes first. Exactly one of `dimension`, `decision`
+/// and `task` is given.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationAwaitsPersonDto {
+    /// The project the launch is in — where the value is closed.
+    #[ts(type = "number")]
+    pub(crate) project: i64,
+    /// How many tasks, each counted once.
+    #[ts(type = "number")]
+    pub(crate) tasks: usize,
+    /// The axis of the value to close, by its id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) dimension: Option<i64>,
+    /// The decision to settle, by its id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) decision: Option<i64>,
+    /// The task to finish creating, by its id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) task: Option<i64>,
 }
 
 /// **One task waiting for a role to take it** ([`amenbo_core::ops::automation_run::WaitingTask`]).

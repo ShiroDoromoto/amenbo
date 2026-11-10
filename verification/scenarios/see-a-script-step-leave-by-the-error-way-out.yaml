@@ -18,7 +18,7 @@ description: >
   writes one that is not JSON, names a way out nobody declared, leaves out the value its way out
   requires, and runs past its one-minute timeout. Each step's error way out leads to the next, and
   the last one's out of the action to closing the task, while every other way out stops the run.
-  With nothing typed, the run's pane ends up saying the run completed.
+  With nothing typed, the run ends up completed, gone from its seat in the pane.
 given:
   # The program every step starts, and a second copy of it for the step that cannot be started — the
   # one the step before it takes away once the launch check has seen it there.

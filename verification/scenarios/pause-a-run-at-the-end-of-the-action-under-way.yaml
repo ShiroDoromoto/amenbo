@@ -16,9 +16,9 @@ id: pause-a-run-at-the-end-of-the-action-under-way
 title: A pause asked for during an action's first step lets its second step run, and settles when the action ends
 description: >
   Start a run on an action of two steps, and pause it from its row on the running tab while the
-  first step is open. Report the first step: the run is not paused — the pane stands on the second
-  step, still saying the pause is on its way. Report the second: the run leaves the action and is
-  paused. Cancel it from the same row, and the pane says it was canceled.
+  first step is open. Report the first step: the run is not paused — its seat in the pane is on the
+  second step, still saying the pause is on its way. Report the second: the run leaves the action and
+  is paused. Cancel it from the same row, and the run leaves its seat in the pane.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
   # The task the built-in takes, so the run goes on to the action after it.
@@ -101,8 +101,8 @@ steps_gui:
       action: work
       state: running
 
-  # Paused while the first step is open, from the run's own row: the pane says the pause is on its
-  # way.
+  # Paused while the first step is open, from the run's own row: its seat in the pane says the pause
+  # is on its way.
   - type: action
     domain: workspace
     op: show-face

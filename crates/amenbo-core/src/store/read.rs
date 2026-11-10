@@ -1001,6 +1001,12 @@ impl Store {
         crate::ops::automation_run::launch_state(self.engine.conn(), launch_id)
     }
 
+    /// **The most runs that go at once in one launch, beside its definition**
+    /// ([`crate::ops::automation_run::launch_limit`]).
+    pub fn automation_launch_limit(&self, launch_id: i64) -> Result<crate::ops::automation_run::LaunchLimit> {
+        crate::ops::automation_run::launch_limit(self.engine.conn(), launch_id)
+    }
+
     /// **Whether a run is waiting for room** before an action that takes one run at a time, and whom it
     /// waits behind ([`crate::ops::automation_run::waits_for_room`]). `None` for a run standing before a
     /// built-in that would wait for a task, which ends there rather than wait.

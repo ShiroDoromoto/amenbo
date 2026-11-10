@@ -1879,8 +1879,9 @@ pub enum AutomationCmd {
         #[arg(long)]
         project: Option<String>,
     },
-    /// Change an automation's name, notes, whether it is archived, where a failed round is filed, or the
-    /// classification its task is filed with (only the given fields change)
+    /// Change an automation's name, notes, whether it is archived, where a failed round is filed, the
+    /// classification its task is filed with, or the most runs that go at once (only the given fields
+    /// change). The most runs is written on the draft and taken up by the next launch once saved
     Update {
         /// automation id
         id: i64,
@@ -1908,6 +1909,13 @@ pub enum AutomationCmd {
         /// refused while the project requires an axis
         #[arg(long, conflicts_with = "failure_dim")]
         no_failure_dim: bool,
+        /// the most runs that go at once, all its roles together; written on the draft, so it holds
+        /// from the next launch once saved
+        #[arg(long, value_name = "N")]
+        run_limit: Option<u32>,
+        /// no limit again: as many go at once as the roles' headcounts come to
+        #[arg(long, conflicts_with = "run_limit")]
+        no_run_limit: bool,
     },
     /// Add a trigger to an automation, after the ones it has: every so many minutes, whenever no seat
     /// of its role is taken, whenever few enough tasks match a filter, or whenever a program says so,
@@ -2610,10 +2618,11 @@ pub enum AutomationCmd {
         run: i64,
     },
 
-    /// How many are in each role for one launch, beside its definition: the headcount the definition
-    /// gives it, the one this launch holds, the runs under way, the seats still to go after it was
-    /// lowered, and whether it is stopped once its task is done — and under each role, the tasks waiting
-    /// for it to take and what waits on a person where none is. A run names its launch (`run-show`)
+    /// How many go in one launch, beside its definition: the most runs that go at once, all its roles
+    /// together, and for each role the headcount the definition gives it, the one this launch holds, the
+    /// runs under way, the seats still to go after it was lowered, and whether it is stopped once its
+    /// task is done — and under each role, the tasks waiting for it to take and what waits on a person
+    /// where none is. A run names its launch (`run-show`)
     LaunchShow {
         /// launch id
         launch: i64,
@@ -2641,6 +2650,26 @@ pub enum AutomationCmd {
         /// role id
         #[arg(long)]
         role: i64,
+    },
+    /// Change the most runs that go at once in this launch alone, all its roles together — the
+    /// definition is left as it is, and the next launch copies it again. Raised, the app starts runs into
+    /// the room at once; lowered, no task under way is stopped: a run past it ends as it comes to take
+    /// its next task
+    LaunchLimitSet {
+        /// launch id
+        launch: i64,
+        /// the most runs that go at once in this launch
+        #[arg(long, required_unless_present = "no_limit")]
+        limit: Option<u32>,
+        /// no limit for this launch: as many go at once as the roles' headcounts come to
+        #[arg(long, conflicts_with = "limit")]
+        no_limit: bool,
+    },
+    /// Put this launch back at its definition's most runs that go at once — what `launch-limit-set` set
+    /// is let go, as lowering or raising it would be
+    LaunchLimitReset {
+        /// launch id
+        launch: i64,
     },
     /// Stop one role of this launch once its task is done: each run of it finishes the task it is on
     /// and takes no new one, and its seats stay empty until `launch-role-release`. The headcount stays as

@@ -1681,6 +1681,80 @@ fn a_launch_holds_its_own_headcount_and_a_role_of_it_is_stopped_and_taken_up_aga
     }
 }
 
+/// **The most runs that go at once is set on the automation and changed on the launch alone**
+/// (`AMB-D-1145`): `update --run-limit` writes it on the draft, which the launch copies once saved, and
+/// `--no-run-limit` takes it off. The launch holds its own beside the definition: changed, set to none and
+/// put back, the definition stays as it was saved. Out of 1 to 100 is refused with nothing changed, and a
+/// launch that does not exist is not_found (`AMB-D-986`).
+#[test]
+fn the_most_runs_at_once_is_set_on_the_automation_and_changed_on_the_launch_alone() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, _, _) = a_saved_launchable(&cli);
+
+    let set = cli.json(&["automation", "update", &a, "--run-limit", "2", "--json"]);
+    assert_eq!(set["automation"]["run_limit"].as_u64(), Some(2), "{set}");
+    let cap = amenbo_core::model::MAX_RUN_LIMIT;
+    for out_of_range in ["0".to_string(), (cap + 1).to_string()] {
+        let (refused, code) = cli.run_err(&["automation", "update", &a, "--run-limit", &out_of_range, "--json"]);
+        assert_ne!(code, 0, "{refused}");
+        assert!(refused.contains("invalid"), "{refused}");
+    }
+    let (refused, code) = cli.run_err(&["automation", "update", &a, "--run-limit", "2", "--no-run-limit", "--json"]);
+    assert_ne!(code, 0, "the two are not given together: {refused}");
+    let shown = cli.json(&["automation", "show", &a, "--json"]);
+    assert_eq!(shown["automation"]["run_limit"].as_u64(), Some(2), "a refusal changes nothing: {shown}");
+    saved(&cli, &a);
+
+    let first = cli.json(&["automation", "start", &a, "--json"]);
+    let launch = id_str(&first["automation_run"]["launch_id"]);
+    let run = id_of(&first, "automation_run");
+    let shown = cli.json(&["automation", "launch-show", &launch, "--json"]);
+    assert_eq!(shown["run_limit"].as_u64(), Some(2), "the launch copies the saved version's: {shown}");
+    assert_eq!(shown["defined_run_limit"].as_u64(), Some(2), "{shown}");
+
+    let set = cli.json(&["automation", "launch-limit-set", &launch, "--limit", "1", "--json"]);
+    assert_eq!(set["automation_launch"]["run_limit"].as_u64(), Some(1), "{set}");
+    let shown = cli.json(&["automation", "launch-show", &launch, "--json"]);
+    assert_eq!(shown["run_limit"].as_u64(), Some(1), "{shown}");
+    assert_eq!(shown["defined_run_limit"].as_u64(), Some(2), "the definition is left as it is: {shown}");
+    let (text, _) = cli.run(&["automation", "launch-show", &launch]);
+    assert!(text.contains("at most 1 at once  (defined: 2)"), "{text}");
+
+    for out_of_range in ["0".to_string(), (cap + 1).to_string()] {
+        let (refused, code) = cli.run_err(&["automation", "launch-limit-set", &launch, "--limit", &out_of_range, "--json"]);
+        assert_ne!(code, 0, "{refused}");
+        assert!(refused.contains("invalid"), "{refused}");
+    }
+    let (refused, code) = cli.run_err(&["automation", "launch-limit-set", &launch, "--json"]);
+    assert_ne!(code, 0, "a limit or none is named: {refused}");
+    let shown = cli.json(&["automation", "launch-show", &launch, "--json"]);
+    assert_eq!(shown["run_limit"].as_u64(), Some(1), "a refusal changes nothing: {shown}");
+
+    let none = cli.json(&["automation", "launch-limit-set", &launch, "--no-limit", "--json"]);
+    assert!(none["automation_launch"]["run_limit"].is_null(), "{none}");
+    let (text, _) = cli.run(&["automation", "launch-show", &launch]);
+    assert!(text.contains("no limit on runs at once  (defined: 2)"), "{text}");
+
+    let reset = cli.json(&["automation", "launch-limit-reset", &launch, "--json"]);
+    assert_eq!(reset["automation_launch"]["run_limit"].as_u64(), Some(2), "back at the definition: {reset}");
+
+    let off = cli.json(&["automation", "update", &a, "--no-run-limit", "--json"]);
+    assert!(off["automation"]["run_limit"].is_null(), "{off}");
+    let shown = cli.json(&["automation", "launch-show", &launch, "--json"]);
+    assert_eq!(shown["run_limit"].as_u64(), Some(2), "the launch keeps its own until the next: {shown}");
+    assert_eq!(shown["defined_run_limit"].as_u64(), Some(2), "the draft is not saved yet: {shown}");
+
+    let (err, code) = cli.run_err(&["automation", "launch-limit-set", "999999", "--limit", "2", "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("not_found"), "{err}");
+    let (err, code) = cli.run_err(&["automation", "launch-limit-reset", "999999", "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("not_found"), "{err}");
+
+    cli.run(&["automation", "cancel", &run, "--force", "--json"]);
+}
+
 /// **A step does not pause or force-cancel its own run** (`AMB-D-1020`): typed in a step's terminal, both
 /// are refused, naming why and that a person can stop the run from its pane. Aimed at another run, they
 /// go through as they would outside a step.

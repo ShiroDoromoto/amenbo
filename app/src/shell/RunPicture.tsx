@@ -41,6 +41,11 @@
 // the role is stopped. That this launch has a headcount other than the default is said in the role's
 // menu alone, beside the default: "2 / 3 working" already says how many there are.
 //
+// **Beside it, quietly, a line where the role waits for the run limit** (`AMB-D-1145`): a task waits for
+// it and a seat of it is free, but the launch has as many runs under way as the limit lets go at once.
+// One line with the limit, not a list of who waits; the limit is changed in the launch's own menu
+// (`./LaunchHead`).
+//
 // A seat whose round failed, is paused or waits holds its place but is not counted as at work, and its
 // square is not filled as one at work.
 //
@@ -213,6 +218,9 @@ export type Desk = {
   readonly stopped: readonly Stopped[];
   /** Its tasks waiting for a person's hand (`AMB-D-1144`); null where none is. */
   readonly awaits: AutomationAwaitsPersonDto | null;
+  /** **The run limit it waits for** (`AMB-D-1145`): a task waits for it and a seat of it is free, but the
+   *  launch has as many runs under way as the limit lets go at once. Null where it does not wait for it. */
+  readonly atLimit: number | null;
   /** What its menu works on; null where there is nothing to work on — a run kept from before launches,
    *  or a launch that has ended. */
   readonly control: DeskControl | null;
@@ -294,6 +302,7 @@ export function desksOf(launch: AutomationLaunchStateDto, front: Say | null): { 
       })),
       stopped,
       awaits,
+      atLimit: role.atRunLimit ? launch.runLimit ?? null : null,
       control: launch.status === "ended" ? null : {
         launch: launch.launch,
         defined: role.defined,
@@ -331,7 +340,8 @@ export function runDesks(run: Say, roles: readonly TaskRoleDto[]): { desks: Desk
     pausing: status === "running" && run.state?.pauseRequested === true,
   };
   const deskOf = (role: number | null, name: string, icon: string | null): Desk => ({
-    role, name, icon, headcount: 1, held: false, heldAlone: false, seats: [seat], waiting: 0, first: [], stopped: [], awaits: null, control: null,
+    role, name, icon, headcount: 1, held: false, heldAlone: false, seats: [seat], waiting: 0, first: [], stopped: [], awaits: null,
+    atLimit: null, control: null,
   });
   const idleOf = (role: TaskRoleDto): IdleRole => ({ role: role.id, name: role.name, icon: role.icon, headcount: null, awaits: null });
   if (at === null) {
@@ -628,8 +638,8 @@ function squareOf(seat: Seat | undefined, silence: Silence | undefined): "on" | 
   return (silence?.stage ?? 0) > 0 ? "stall" : "on";
 }
 
-/** The "⋯" at the end of a desk's head: three dots, drawn. */
-function Dots() {
+/** The "⋯" at the end of a desk's head, and of a launch's header (`./LaunchHead`): three dots, drawn. */
+export function Dots() {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true">
       <circle cx="3.5" cy="8" r="1.4" fill="currentColor" />
@@ -666,6 +676,14 @@ export function deskLetGo(desk: Desk): string | null {
   const control = desk.control;
   if (control === null || control.toLetGo === 0 || desk.held) return null;
   return tf("auto.run.roles.letGo", { u: control.underWay, n: desk.headcount, k: control.toLetGo });
+}
+
+/**
+ * **What the line under a desk's head says of the run limit** (`AMB-D-1145`): that the role waits for
+ * it, with the limit. Null where it does not wait for it.
+ */
+export function deskAtLimit(desk: Desk): string | null {
+  return desk.atLimit === null ? null : tf("auto.run.roles.atRunLimit", { n: desk.atLimit });
 }
 
 /**
@@ -753,7 +771,7 @@ function DeskMenu({ desk, role, control, at, from, onClose }: {
 
 /** Where a menu hung under the right end of the button `button` stands: its top right corner, a little
  *  below the button. */
-function underEnd(button: HTMLElement): { x: number; y: number } {
+export function underEnd(button: HTMLElement): { x: number; y: number } {
   const box = button.getBoundingClientRect();
   return { x: box.right, y: box.bottom + 6 };
 }
@@ -769,6 +787,7 @@ function DeskView({ desk, front, now, silenceAt, onOpen, menuAt, onMenu }: {
 }) {
   const more = useRef<HTMLButtonElement>(null);
   const letGo = deskLetGo(desk);
+  const atLimit = deskAtLimit(desk);
   const silences = desk.seats.map(silenceAt);
   const asks = desk.seats.some((seat) => seat.state === "asks");
   const stalled = silences.some((one) => one.stage > 0);
@@ -827,9 +846,10 @@ function DeskView({ desk, front, now, silenceAt, onOpen, menuAt, onMenu }: {
           />
         )}
       </div>
-      {letGo !== null && (
+      {(letGo !== null || atLimit !== null) && (
         <div className="runroles__notes">
-          <span className="runroles__letgo">{letGo}</span>
+          {letGo !== null && <span className="runroles__letgo">{letGo}</span>}
+          {atLimit !== null && <span className="runroles__atlimit" role="status">{atLimit}</span>}
         </div>
       )}
       {desk.seats.length > 0 && (

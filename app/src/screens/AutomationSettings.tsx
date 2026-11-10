@@ -12,6 +12,12 @@
 // the foot of the box saves or discards the draft with the head's own presses — the whole draft, not
 // the headcounts alone.
 //
+// **Under the roles, the most runs that go at once across them** (`AMB-D-1145`): "No limit" by default,
+// where as many go as the headcounts come to. Set, it is stepped from 1 to the cap core sets, and taken
+// back to no limit with a press. Like a headcount it is part of the draft, and says what the saved
+// version holds where the two differ. The sum under it is the smaller of the limit and the headcounts
+// added up; a limit at or over that sum is said to have no effect.
+//
 // **Every press here writes at once**, the way the "Edit" panel's fields do (`./AutomationAboutPanel`).
 // The headcounts are part of the saved versions, so the head's "Save" and "Discard changes" keep and
 // undo them. A trigger is a setting kept apart from the saved versions (`AMB-D-1119`), and so are who
@@ -37,7 +43,7 @@
 // "+ Add a trigger", asks the build screen to open that trigger's card in its middle
 // (`./AutomationTrigger`), to change it or take it away, or to write a new one.
 import { useState } from "react";
-import { editAutomation, editAutomationRole } from "../core/automations";
+import { editAutomation, editAutomationRole, setAutomationRunLimit } from "../core/automations";
 import { builtinWord } from "../core/builtinWords";
 import { errText, t, tf } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
@@ -122,6 +128,69 @@ function FailureExample() {
 /** The fewest a role can have. The most is core's (`AutomationDetailDto.maxHeadcount`). */
 const MIN_HEADCOUNT = 1;
 
+/** The fewest runs a limit lets go at once. The most is core's (`AutomationDetailDto.maxRunLimit`). */
+const MIN_RUN_LIMIT = 1;
+
+/** What the saved version holds for the run limit, said where it differs from the draft's; null where
+ *  it does not, or nobody has saved. */
+function savedLimitLine(automation: AutomationDetailDto): string | null {
+  if (automation.saved === undefined || automation.savedRunLimit === automation.runLimit) return null;
+  return automation.savedRunLimit === undefined
+    ? t("auto.side.runLimitSavedNone")
+    : tf("auto.side.runLimitSaved", { n: automation.savedRunLimit });
+}
+
+/**
+ * **The most runs that go at once across the roles**, as a row under them: "No limit" with a press to
+ * set one, or a stepper with a press to take it back to no limit. A limit is first set at the headcounts
+ * added up, the most that go at once without one, within the cap.
+ */
+function RunLimitRow({ automation, total, write }: {
+  automation: AutomationDetailDto;
+  total: number;
+  write: (limit: number | null) => void;
+}) {
+  const limit = automation.runLimit;
+  const saved = savedLimitLine(automation);
+  return (
+    <div className="autoside__limit">
+      <div className="autoside__rolebody">
+        <span className="autoside__rolename">{t("auto.side.runLimit")}</span>
+        <span className="autoside__acts">
+          {limit === undefined && <span>{t("auto.side.runLimitNone")}</span>}
+          {limit === undefined && saved !== null && " · "}
+          {saved !== null && <span className="autostep__hint">{saved}</span>}
+        </span>
+      </div>
+      {limit === undefined ? (
+        <button
+          type="button"
+          className="btn"
+          onClick={() => write(Math.min(Math.max(total, MIN_RUN_LIMIT), automation.maxRunLimit))}
+        >
+          {t("auto.side.runLimitSet")}
+        </button>
+      ) : (
+        <span className="autoside__limitset">
+          <Stepper
+            value={limit}
+            min={MIN_RUN_LIMIT}
+            max={automation.maxRunLimit}
+            label={t("auto.side.runLimit")}
+            valueText={tf("auto.side.runLimitValue", { n: limit })}
+            lessLabel={t("auto.side.headcountLess")}
+            moreLabel={t("auto.side.headcountMore")}
+            onStep={write}
+          />
+          <button type="button" className="autoside__limitclear" onClick={() => write(null)}>
+            {t("auto.side.runLimitClear")}
+          </button>
+        </span>
+      )}
+    </div>
+  );
+}
+
 /**
  * **The head's "Save" and "Discard changes"**, handed down so the foot of the headcount box presses
  * the same two, held back on the same terms.
@@ -170,7 +239,14 @@ export function AutomationSettings({
     setRefused(null);
     editAutomationRole(roleId, { headcount }).catch((e: unknown) => setRefused(errText(e)));
   };
-  const total = automation.roles.reduce((sum, role) => sum + role.headcount, 0);
+  const writeRunLimit = (limit: number | null) => {
+    setRefused(null);
+    setAutomationRunLimit(automation.id, limit).catch((e: unknown) => setRefused(errText(e)));
+  };
+  const headcounts = automation.roles.reduce((sum, role) => sum + role.headcount, 0);
+  const limit = automation.runLimit;
+  // The most under way at once: the headcounts added up, or the limit where it is fewer.
+  const total = limit === undefined ? headcounts : Math.min(limit, headcounts);
 
   return (
     <div className="autoside">
@@ -274,10 +350,17 @@ export function AutomationSettings({
             );
           })}
         </ul>
+        <RunLimitRow automation={automation} total={headcounts} write={writeRunLimit} />
         <div className="autoside__total">
           <TotalLine total={total} />
+          {limit !== undefined && limit >= headcounts && (
+            <span className="autostep__hint">{tf("auto.side.runLimitIdle", { n: limit, total: headcounts })}</span>
+          )}
           <span className="autostep__hint">
             {tf("auto.side.headcountRange", { min: MIN_HEADCOUNT, max: automation.maxHeadcount })}
+          </span>
+          <span className="autostep__hint">
+            {tf("auto.side.runLimitRange", { min: MIN_RUN_LIMIT, max: automation.maxRunLimit })}
           </span>
         </div>
         <div className="autoside__draft">

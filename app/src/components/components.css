@@ -2265,6 +2265,16 @@ button.feed__target:hover { color: var(--c-accent); }
   display: inline-block; margin: 3px 4px 0 0; padding: 0 6px; line-height: 18px; border-radius: var(--r-sm);
   background: var(--c-sunken-pic) var(--c-sunken); color: var(--c-text-muted);
 }
+/* The run limit, a row under the roles (`AMB-D-1145`): what it is on the left, its press on the right. */
+.autoside__limit {
+  display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-2); align-items: center; justify-content: space-between;
+  padding: var(--s-2) var(--s-3); border-block-end: var(--border-w) var(--border-style) var(--c-rule);
+}
+.autoside__limitset { display: inline-flex; flex-wrap: wrap; gap: var(--s-1) var(--s-2); align-items: center; }
+.autoside__limitclear {
+  font: inherit; font-size: var(--fs-xs); padding: 0; border: 0; background: none; color: var(--c-text-muted);
+  text-decoration: underline; cursor: pointer;
+}
 .autoside__total {
   display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); align-items: center; padding: var(--s-2) var(--s-3);
   background: var(--c-sunken-pic) var(--c-sunken); font-size: var(--fs-xs);
@@ -2895,6 +2905,9 @@ button.feed__target:hover { color: var(--c-accent); }
 .runroles__more:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 /* The line in the heed colour under a desk's head: a cut still letting seats go. */
 .runroles__notes { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--fs-xs); color: var(--c-heed); }
+/* A role waiting for the run limit (`AMB-D-1145`): it goes on by itself once a run of the launch ends, so
+   it is said quietly rather than in the heed colour. */
+.runroles__atlimit { color: var(--c-text-muted); }
 /* The dot on a seat at work: the one thing in the pane that moves. It stays lit, still, where the
    reader asks for less motion. */
 .runroles__pulse {

@@ -3,11 +3,14 @@
 // press and pulldown runs for real.
 //
 // What these guard: **the column holds three boxes — who failures are filed to, the triggers, and how
-// many each role has — and no count of runs at once for the automation as a whole**; **every role
+// many each role has**; **every role
 // has a row, in order, with the actions placed for it and a stepper held between 1 and the cap, which
 // writes the role's headcount; the sum is the most tasks at once; a row whose draft differs from the
 // saved version says what the version holds; and the foot saves or discards the draft with the head's
-// presses, or says it is the saved version**; **who failures are filed to is required, offers the automation's roles
+// presses, or says it is the saved version**; **under the roles, the run limit is "no limit" until one is
+// set, stepped between 1 and the cap and taken back to no limit; the sum is the smaller of it and the
+// headcounts, with a limit at or over the headcounts said to have no effect; and what the saved version
+// holds is said where it differs**; **who failures are filed to is required, offers the automation's roles
 // a task starts and the person, and writes the one picked**; **the failure task's classification has a row
 // per task axis, writes the whole classification one value an axis, and says each required axis core
 // finds empty; an example of the body opens under the hint**; **every trigger is listed in order — when, what it
@@ -37,6 +40,10 @@ vi.mock("../core/automations", () => ({
   },
   editAutomationRole: (id: number, patch: unknown) => {
     hoisted.edits.push({ role: id, ...(patch as object) });
+    return hoisted.refuse === null ? Promise.resolve() : Promise.reject(new Error(hoisted.refuse));
+  },
+  setAutomationRunLimit: (_id: number, limit: number | null) => {
+    hoisted.edits.push({ runLimit: limit });
     return hoisted.refuse === null ? Promise.resolve() : Promise.reject(new Error(hoisted.refuse));
   },
   addAutomationTrigger: () => Promise.resolve(),
@@ -72,6 +79,7 @@ const automation: AutomationDetailDto = {
   edges: [],
   wires: [],
   maxHeadcount: 10,
+  maxRunLimit: 100,
   failureValues: [],
   heldBy: [],
   unsaved: false,
@@ -145,7 +153,7 @@ describe("the column", () => {
     expect(boxes[0]!.querySelector("select")).not.toBeNull();
     expect(boxes[1]!.textContent).toContain(t("auto.side.trigger"));
     expect(boxes[2]!.textContent).toContain(t("auto.side.headcount"));
-    // A number stepped is a role's alone: there is no count for the automation as a whole.
+    // With no limit, a number stepped is a role's alone.
     expect(container.querySelectorAll("output")).toHaveLength(automation.roles.length);
   });
 });
@@ -242,6 +250,71 @@ describe("the headcounts", () => {
     await render();
     await press(stepButton("Alice", t("auto.side.headcountMore")));
     expect(container.textContent).toContain("how many are in a role is from 1 to 10, not 11");
+  });
+});
+
+const limitRow = () => container.querySelector<HTMLElement>(".autoside__limit")!;
+const limitStepper = () =>
+  limitRow().querySelector<HTMLElement>(`[role="group"][aria-label="${t("auto.side.runLimit")}"]`);
+const limitButton = (label: string) =>
+  Array.from(limitRow().querySelectorAll("button")).find(
+    (b) => b.getAttribute("aria-label") === label || (b.textContent ?? "") === label,
+  )!;
+const totalLine = () => container.querySelector(".autoside__total")!;
+
+describe("the run limit", () => {
+  it("is no limit by default, and is set at the headcounts added up", async () => {
+    await render();
+    expect(limitRow().textContent).toContain(t("auto.side.runLimit"));
+    expect(limitRow().textContent).toContain(t("auto.side.runLimitNone"));
+    expect(limitStepper()).toBeNull();
+    expect(totalLine().querySelector(".autoside__num")!.textContent).toBe("2");
+    expect(container.textContent).toContain(tf("auto.side.runLimitRange", { min: 1, max: 100 }));
+    await press(limitButton(t("auto.side.runLimitSet")));
+    expect(hoisted.edits).toEqual([{ runLimit: 2 }]);
+  });
+
+  it("steps between 1 and the cap, and goes back to no limit", async () => {
+    await render({ ...automation, runLimit: 1 });
+    expect(limitStepper()!.querySelector("output")!.textContent).toBe(tf("auto.side.runLimitValue", { n: 1 }));
+    expect(limitButton(t("auto.side.headcountLess")).disabled).toBe(true);
+    await press(limitButton(t("auto.side.headcountMore")));
+    await press(limitButton(t("auto.side.runLimitClear")));
+    expect(hoisted.edits).toEqual([{ runLimit: 2 }, { runLimit: null }]);
+
+    await render({ ...automation, runLimit: 100 });
+    expect(limitButton(t("auto.side.headcountMore")).disabled).toBe(true);
+  });
+
+  it("brings the most at once down to it where it is fewer than the headcounts", async () => {
+    await render({
+      ...automation,
+      runLimit: 2,
+      roles: [
+        { id: 1, name: "Alice", headcount: 3, startsBy: "task", passes: [] },
+        { id: 2, name: "Bob", headcount: 2, startsBy: "task", passes: [] },
+      ],
+    });
+    expect(totalLine().querySelector(".autoside__num")!.textContent).toBe("2");
+    expect(totalLine().textContent).not.toContain(tf("auto.side.runLimitIdle", { n: 2, total: 5 }));
+  });
+
+  it("says it has no effect where it is at or over the headcounts", async () => {
+    await render({ ...automation, runLimit: 2 });
+    expect(totalLine().querySelector(".autoside__num")!.textContent).toBe("2");
+    expect(totalLine().textContent).toContain(tf("auto.side.runLimitIdle", { n: 2, total: 2 }));
+  });
+
+  it("says what the saved version holds where the draft differs from it", async () => {
+    const saved = { version: 3, savedAt: "2026-11-07T00:00:00Z" } as AutomationDetailDto["saved"];
+    await render({ ...automation, saved, unsaved: true, runLimit: 2, savedRunLimit: 3 });
+    expect(limitRow().textContent).toContain(tf("auto.side.runLimitSaved", { n: 3 }));
+    await render({ ...automation, saved, unsaved: true, runLimit: 2 });
+    expect(limitRow().textContent).toContain(t("auto.side.runLimitSavedNone"));
+    await render({ ...automation, saved, runLimit: 2, savedRunLimit: 2 });
+    expect(limitRow().querySelector(".autostep__hint")).toBeNull();
+    await render({ ...automation, runLimit: 2 });
+    expect(limitRow().querySelector(".autostep__hint")).toBeNull();
   });
 });
 

@@ -19,14 +19,22 @@
 //
 // Neither move is drawn once the launch has ended.
 //
+// **At the header's end, "⋯" opens the launch's menu**, built as a role's menu is (`./RunPicture`): the
+// most runs that go at once in this launch alone, across its roles (`AMB-D-1145`). "No limit" with a
+// press to set one, or a stepper from 1 to the cap core sets with a press to take it off; beside it the
+// default — the definition's — which the launch goes back to when it ends, and a press back to it where
+// the two differ. It is not drawn once the launch has ended either.
+//
 // **Under the header, what needs a person's hand now** (`LaunchAttention`): a task stopped until the
 // task its round's failure was filed as closes, and a seat on a step that waits for a person — one line
 // each, the stopped tasks first. Nothing is drawn where there is none.
-import { useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 import {
   launchPause,
   pauseLaunchBeforeNextTask,
+  resetLaunchLimit,
   resumeLaunch,
+  setLaunchLimit,
   stopLaunch,
   useLaunchState,
 } from "../core/automations";
@@ -34,6 +42,109 @@ import { confirmDialog } from "../core/dialog";
 import { errText, t, tf } from "../core/i18n";
 import { pushNotice } from "../core/notice";
 import { useRefNav } from "../core/refNav";
+import { Menu } from "../components/Menu";
+import { Stepper } from "../components/Stepper";
+import { Dots, underEnd } from "./RunPicture";
+import type { AutomationLaunchStateDto } from "../bindings/bindings";
+
+/** The fewest runs a limit lets go at once. The most is core's (`AutomationLaunchStateDto.maxRunLimit`). */
+const MIN_RUN_LIMIT = 1;
+
+/** "Default: N", or "Default: no limit", for the run limit the definition gives. */
+function definedLimit(limit: number | undefined): string {
+  return limit === undefined ? t("auto.run.limit.definedNone") : tf("auto.run.limit.defined", { n: limit });
+}
+
+/**
+ * **The launch's menu**, hung under the right end of its "⋯" at `at`: the run limit for this launch
+ * alone. One press at a time, as a role's menu: a second landing while the first is on its way would be
+ * answered off a launch that has already moved. A refusal is said on the toast.
+ */
+function LaunchMenu({ state, at, from, onClose }: {
+  state: AutomationLaunchStateDto; at: { x: number; y: number };
+  from: RefObject<HTMLButtonElement | null>; onClose: () => void;
+}) {
+  const [pressing, setPressing] = useState(false);
+  const press = async (act: () => Promise<void>) => {
+    setPressing(true);
+    try {
+      await act();
+    } catch (e) {
+      pushNotice(errText(e));
+    } finally {
+      setPressing(false);
+    }
+  };
+  const write = (limit: number | null) => {
+    if (!pressing) void press(() => setLaunchLimit(state.launch, limit));
+  };
+  const limit = state.runLimit;
+  // A limit is first set at the headcounts added up, the most that go at once without one, within the cap.
+  const headcounts = state.roles.reduce((sum, role) => sum + role.headcount, 0);
+  return (
+    <Menu
+      at={at}
+      align="end"
+      kind="dialog"
+      label={t("auto.run.limit.menu")}
+      from={from}
+      className="menu--panel runmenu"
+      onClose={onClose}
+    >
+      <div className="menu__head">
+        <span>{state.automationName}</span>
+      </div>
+      <div className="menu__sec">
+        <span className="menu__label">{t("auto.run.limit.title")}</span>
+        <div className="menu__row">
+          {limit === undefined ? (
+            <>
+              <span>{t("auto.run.limit.none")}</span>
+              <button
+                type="button"
+                className="btn"
+                disabled={pressing}
+                onClick={() => write(Math.min(Math.max(headcounts, MIN_RUN_LIMIT), state.maxRunLimit))}
+              >
+                {t("auto.run.limit.set")}
+              </button>
+            </>
+          ) : (
+            <Stepper
+              small
+              value={limit}
+              min={MIN_RUN_LIMIT}
+              max={state.maxRunLimit}
+              label={t("auto.run.limit.of")}
+              valueText={tf("auto.run.limit.value", { n: limit })}
+              lessLabel={t("auto.side.headcountLess")}
+              moreLabel={t("auto.side.headcountMore")}
+              onStep={write}
+            />
+          )}
+          <span className="menu__hint">{definedLimit(state.definedRunLimit)}</span>
+        </div>
+        <span className="menu__hint">{tf("auto.run.limit.underWay", { n: state.underWay })}</span>
+        <p className="menu__help">{t("auto.run.limit.help")}</p>
+        {limit !== undefined && (
+          <button type="button" className="menu__reset" disabled={pressing} onClick={() => write(null)}>
+            {t("auto.run.limit.clear")}
+          </button>
+        )}
+        {limit !== state.definedRunLimit && (
+          <button
+            type="button"
+            className="menu__reset"
+            disabled={pressing}
+            onClick={() => void press(() => resetLaunchLimit(state.launch))}
+          >
+            {t("auto.run.limit.reset")}
+          </button>
+        )}
+      </div>
+    </Menu>
+  );
+}
 
 export function LaunchHead({ launch, project }: { launch: number; project: number }) {
   const state = useLaunchState(launch);
@@ -41,6 +152,9 @@ export function LaunchHead({ launch, project }: { launch: number; project: numbe
   // One move at a time: a second press landing while the first is still on its way would be answered
   // off a launch that has already moved.
   const [pressing, setPressing] = useState(false);
+  // Where the launch's menu is open, or null where it is not.
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const more = useRef<HTMLButtonElement>(null);
   if (state === null) return null;
 
   const press = async (act: () => Promise<unknown>) => {
@@ -96,6 +210,27 @@ export function LaunchHead({ launch, project }: { launch: number; project: numbe
         <button type="button" className="btn btn--danger" disabled={pressing} onClick={() => void press(stop)}>
           {t("auto.launch.stop")}
         </button>
+      )}
+      {going && (
+        <button
+          type="button"
+          className="runroles__more"
+          ref={more}
+          aria-haspopup="dialog"
+          aria-expanded={menuAt !== null}
+          aria-label={t("auto.run.limit.menu")}
+          onClick={(e) => {
+            // Focused by hand, as a press does not focus a button in every web view: the menu gives the
+            // focus back to what held it when it opened.
+            e.currentTarget.focus();
+            setMenuAt(menuAt === null ? underEnd(e.currentTarget) : null);
+          }}
+        >
+          <Dots />
+        </button>
+      )}
+      {going && menuAt !== null && (
+        <LaunchMenu state={state} at={menuAt} from={more} onClose={() => setMenuAt(null)} />
       )}
     </div>
   );

@@ -4014,6 +4014,62 @@ pub struct AutomationTriggerDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) last_filed_at: Option<String>,
+    /// The last time it was to start a run and could not, and why (`AMB-D-1136`). Absent where it has
+    /// not failed since it last started one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) last_refused: Option<AutomationTriggerRefusedDto>,
+}
+
+/// **When a trigger last could not start a run, and why** ([`amenbo_core::model::TriggerRefusal`]) —
+/// the why in the shape a refusal travels in (`CmdError`): the code naming the sentence, the English it
+/// falls back to, the values it is built from and the sentences it is composed of, so the screen writes
+/// it from the same dictionary (`AMB-D-413`).
+///
+/// `message_en` keeps its snake spelling for the reason [`AutomationLaunchBlockDto`] gives.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+pub struct AutomationTriggerRefusedDto {
+    /// When, as an RFC3339 instant.
+    pub(crate) at: String,
+    /// The code naming the sentence.
+    pub(crate) code: String,
+    /// The English sentence, for a code the front end holds no template for.
+    pub(crate) message_en: String,
+    /// The values the sentence is built from, under the names its template interpolates them by.
+    pub(crate) fields: std::collections::BTreeMap<String, String>,
+    /// The sentences it is composed of, in reading order. Empty for nearly every refusal.
+    pub(crate) parts: Vec<AutomationTriggerRefusedPartDto>,
+}
+
+/// **One of the sentences why a trigger could not start a run is composed of** — a refusal's part
+/// (`CmdErrorPart`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+pub struct AutomationTriggerRefusedPartDto {
+    /// The code naming the sentence, `error` where it names none.
+    pub(crate) code: String,
+    /// The English sentence.
+    pub(crate) message_en: String,
+    /// The values the sentence is built from.
+    pub(crate) fields: std::collections::BTreeMap<String, String>,
+}
+
+impl From<amenbo_core::model::TriggerRefusal> for AutomationTriggerRefusedDto {
+    fn from(r: amenbo_core::model::TriggerRefusal) -> Self {
+        AutomationTriggerRefusedDto {
+            at: r.at.to_rfc3339_z(),
+            code: r.why.code,
+            message_en: r.why.message,
+            fields: r.why.fields,
+            parts: r
+                .why
+                .parts
+                .into_iter()
+                .map(|p| AutomationTriggerRefusedPartDto { code: p.code, message_en: p.message, fields: p.fields })
+                .collect(),
+        }
+    }
 }
 
 impl From<amenbo_core::model::AutomationTrigger> for AutomationTriggerDto {
@@ -4029,6 +4085,7 @@ impl From<amenbo_core::model::AutomationTrigger> for AutomationTriggerDto {
             task: t.task.into(),
             next_at: t.next_at.to_rfc3339_z(),
             last_filed_at: t.last_filed_at.map(|at| at.to_rfc3339_z()),
+            last_refused: t.last_refused.map(Into::into),
         }
     }
 }

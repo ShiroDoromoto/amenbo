@@ -1967,7 +1967,8 @@ pub enum AutomationCmd {
         /// instead of --title, read the task it files from this file, by its full path, each time it
         /// files one: a JSON object says {"version":2,"title":"…","notes":"…","data":{…},"files":["/full/path",…]}
         /// (each key may be left out); any other file's first line that is not blank is the title, and
-        /// the rest the notes. A file not there then starts nothing
+        /// the rest the notes. A file not there then starts nothing, and the trigger keeps when and why
+        /// (`automation show`)
         #[arg(long, value_name = "PATH", conflicts_with = "task_from_script")]
         task_from_file: Option<String>,
         /// instead of --title, have this program, by its full path, write the task each time it files

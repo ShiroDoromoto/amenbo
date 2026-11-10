@@ -2512,8 +2512,8 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 /// look asks again. A launch refused by its checks is an error, and the transaction it is written in
 /// takes nothing with it either. Only a run started moves this trigger's `next_at` on, counted from
 /// `now` rather than from when it was due, so an app that was closed for a day files one task when it
-/// comes back rather than a day's worth, and sets its `last_filed_at` to `now`. The automation's other
-/// triggers are left as they were.
+/// comes back rather than a day's worth, sets its `last_filed_at` to `now`, and clears the last time
+/// it could not start one ([`refused`]). The automation's other triggers are left as they were.
 pub fn fire(
     tx: &WriteTx<'_>,
     trigger_id: i64,
@@ -2556,7 +2556,7 @@ pub fn fire(
         },
     };
     if files_a_task(&pic, &trigger) && title.trim().is_empty() {
-        return Err(Error::invalid(untitled(&trigger.task)));
+        return Err(untitled(&trigger.task));
     }
     let run = match trigger.role_id.filter(|&role| started_by_trigger(&pic, Some(role))) {
         Some(role) => {
@@ -2591,11 +2591,27 @@ pub fn fire(
     let after = crate::model::AutomationTrigger {
         next_at: trigger.when.after(now),
         last_filed_at: Some(now),
+        last_refused: None,
         updated_at: now,
         ..trigger.clone()
     };
     crate::ops::emit_update(tx, record::automation_trigger(&trigger), record::automation_trigger(&after))?;
     Ok(Some(run))
+}
+
+/// **Keep on trigger `trigger_id` that it was to start a run at `now` and could not, and why**
+/// (`AMB-D-1136`) — what `why` says ([`crate::model::Refused::of`]), in place of the last time it could
+/// not. Written in a write of its own, as the one that would have started the run takes everything it
+/// wrote with it. Nothing else of the trigger moves: its `next_at` stays where it was, so it is asked
+/// again. A trigger taken away since writes nothing.
+pub fn refused(tx: &WriteTx<'_>, trigger_id: i64, why: &Error, now: Timestamp) -> Result<()> {
+    let Some(trigger) = read::automation_trigger(tx.conn(), trigger_id)? else { return Ok(()) };
+    let after = crate::model::AutomationTrigger {
+        last_refused: Some(crate::model::TriggerRefusal { at: now, why: crate::model::Refused::of(why) }),
+        updated_at: now,
+        ..trigger.clone()
+    };
+    crate::ops::emit_update(tx, record::automation_trigger(&trigger), record::automation_trigger(&after))
 }
 
 /// **What a trigger handed on to the run it started** ([`fire`]) — its name, and the title, notes, data
@@ -3575,7 +3591,7 @@ fn tried(
         return TriggerTried::SaidNothing { why: why.to_string() };
     }
     if files_a_task && said.title.trim().is_empty() {
-        return TriggerTried::SaidNothing { why: untitled(&trigger.task) };
+        return TriggerTried::SaidNothing { why: untitled(&trigger.task).to_string() };
     }
     let files = said.files.iter().map(|path| attached_name(path)).chain(left).collect();
     TriggerTried::Files {
@@ -3893,9 +3909,7 @@ pub fn read_trigger_files(
             let filename = attached_name(path);
             let mime = crate::blob::mime_from_filename(&filename);
             limits.check_per_file(mime, meta.len())?;
-            let blob = blobs
-                .ingest_path(at)
-                .map_err(|e| Error::invalid(format!("the file '{path}' could not be read: {e}")))?;
+            let blob = blobs.ingest_path(at).map_err(|e| unreadable(path, &e))?;
             Ok(TriggerFileRead { path: Some(path.clone()), filename, mime: mime.map(str::to_string), blob })
         })
         .collect()
@@ -3905,13 +3919,30 @@ pub fn read_trigger_files(
 /// at `path`, and otherwise why not, in a sentence that names it ([`read_trigger_files`], [`tried`]).
 fn trigger_file_there(path: &str) -> Result<std::fs::Metadata> {
     let meta = std::fs::metadata(path).map_err(|e| match e.kind() {
-        std::io::ErrorKind::NotFound => Error::invalid(format!("the file '{path}' is not there")),
-        _ => Error::invalid(format!("the file '{path}' could not be read: {e}")),
+        std::io::ErrorKind::NotFound => Error::Invalid(
+            Msg::new(format!("the file '{path}' is not there"))
+                .coded(ErrorCode::InvalidTriggerFileMissing)
+                .with("path", path),
+        ),
+        _ => unreadable(path, &e),
     })?;
     if !meta.is_file() {
-        return Err(Error::invalid(format!("'{path}' is not a regular file")));
+        return Err(Error::Invalid(
+            Msg::new(format!("'{path}' is not a regular file"))
+                .coded(ErrorCode::InvalidTriggerFileNotRegular)
+                .with("path", path),
+        ));
     }
     Ok(meta)
+}
+
+/// **Why a file a trigger reads or hands on could not be read**, in a sentence that names it.
+fn unreadable(path: &str, e: &dyn std::fmt::Display) -> Error {
+    Error::Invalid(
+        Msg::new(format!("the file '{path}' could not be read: {e}"))
+            .coded(ErrorCode::InvalidTriggerFileUnreadable)
+            .with("path", path),
+    )
 }
 
 /// **What a trigger hands on, as it said it this time** — the title, notes, data as JSON and the full
@@ -3939,11 +3970,13 @@ pub struct TriggerFileSaid {
 
 /// **Read the file a trigger's task is read from, as it stands now** (`AMB-D-1134`) — `None` for a task
 /// not read from a file. Run outside any write, as [`read_trigger_files`] is, and handed to [`fire`].
-/// `Err` is why it says nothing, in a sentence ([`task_from_file`]); the trigger starts nothing then.
-pub fn read_trigger_file(task: &crate::model::TriggerTask) -> std::result::Result<Option<TriggerFileSaid>, String> {
+/// `Err` is why it says nothing ([`task_from_file`]) — one not there named by its own code
+/// (`AMB-D-1135`); the trigger starts nothing then.
+pub fn read_trigger_file(task: &crate::model::TriggerTask) -> Result<Option<TriggerFileSaid>> {
     match task {
         crate::model::TriggerTask::File { path } => {
-            Ok(Some(TriggerFileSaid { path: path.clone(), said: task_from_file(path)? }))
+            trigger_file_there(path)?;
+            Ok(Some(TriggerFileSaid { path: path.clone(), said: task_from_file(path).map_err(Error::invalid)? }))
         }
         crate::model::TriggerTask::Fixed { .. }
         | crate::model::TriggerTask::Script { .. }
@@ -4021,12 +4054,24 @@ fn said_in_lines(text: &str) -> TriggerSaid {
 
 /// **Why a trigger that files a task starts nothing with a blank title** (`AMB-D-1133`) — one aimed at a
 /// role started by a task, or at no role, files a task, and the task needs one ([`fire`], [`tried`]).
-fn untitled(task: &crate::model::TriggerTask) -> String {
+fn untitled(task: &crate::model::TriggerTask) -> Error {
     let why = "a trigger aimed at a role started by a task, or at no role, files a task, and the task needs a title";
-    match task {
-        crate::model::TriggerTask::File { path } => format!("{why}, which the file '{path}' does not give"),
-        _ => why.to_string(),
-    }
+    Error::Invalid(match task {
+        crate::model::TriggerTask::File { path } => Msg::new(format!("{why}, which the file '{path}' does not give"))
+            .coded(ErrorCode::InvalidTriggerFileUntitled)
+            .with("path", path),
+        _ => Msg::new(why).coded(ErrorCode::InvalidTriggerUntitled),
+    })
+}
+
+/// **Why a trigger whose programs gave no answer starts nothing** — `why` is what [`ask_trigger`] said,
+/// or that the answer was lost before it came. Kept on the trigger ([`refused`]) by whoever ran them.
+pub fn unanswered(why: &str) -> Error {
+    Error::Invalid(
+        Msg::new(format!("the trigger's script gave no answer: {why}"))
+            .coded(ErrorCode::InvalidTriggerScriptUnanswered)
+            .with("why", why),
+    )
 }
 
 /// **Whether `trigger` files a task when it starts a run** — aimed at no role, or at one not started by

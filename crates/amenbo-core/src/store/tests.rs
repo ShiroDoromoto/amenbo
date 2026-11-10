@@ -1800,3 +1800,53 @@ fn an_import_leaves_nothing_when_refused_and_the_device_library_is_a_humans() {
     assert_eq!(global, 1, "the action goes to the device's library");
     fs::remove_dir_all(&dir).ok();
 }
+
+/// **A trigger that could not start a run keeps when and why** (`AMB-D-1136`): a file it reads its task
+/// from that is not there is refused (`AMB-D-1135`), starts nothing, and the trigger keeps the time and
+/// the refusal's code and path, its `next_at` where it was. A store merely held is not kept as a reason.
+#[test]
+fn a_trigger_that_could_not_start_keeps_when_and_why() {
+    use crate::model::TriggerWhen;
+    use crate::ops::automation::{NewAutomation, NewTrigger, NewTriggerTask};
+    use crate::ops::automation_run::{nothing_asked, Launcher};
+
+    let (mut s, dir) = fresh_store("trigger-refused");
+    let p = s.project_add(project("PJ")).unwrap();
+    let automation = s
+        .automation_add(p.id, NewAutomation { name: "回す".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
+        .unwrap();
+    let path = dir.join("next.md").to_string_lossy().into_owned();
+    let trigger = s
+        .automation_trigger_add(
+            automation.id,
+            NewTrigger {
+                name: "毎朝".into(),
+                role_id: None,
+                when: TriggerWhen::Every { minutes: 60 },
+                condition: None,
+                script: None,
+                task: NewTriggerTask::File { path: path.clone() },
+            },
+        )
+        .unwrap();
+    assert_eq!(trigger.last_refused, None, "nothing refused yet");
+
+    let by = Launcher { default_agent: None, startable: None, models: nothing_asked(), workspace_open: None, by: None };
+    let before = crate::time::Timestamp::now();
+    let refused = s.automation_trigger_fire(trigger.id, &by, None).expect_err("no file there");
+    assert_eq!(refused.code(), "invalid_trigger_file_missing");
+
+    let kept = crate::store_engine::read::automation_trigger(s.engine.conn(), trigger.id).unwrap().expect("there");
+    let why = kept.last_refused.clone().expect("kept on the trigger");
+    assert!(why.at >= before, "when it could not");
+    assert_eq!(why.why.code, "invalid_trigger_file_missing");
+    assert_eq!(why.why.fields.get("path"), Some(&path));
+    assert_eq!(why.why.message, refused.message_en());
+    assert_eq!((kept.next_at, kept.last_filed_at), (trigger.next_at, None), "nothing moves on");
+    assert!(crate::store_engine::read::automation_run_ids_under_way(s.engine.conn(), automation.id).unwrap().is_empty());
+
+    s.automation_trigger_refused(trigger.id, &crate::error::Error::store_busy("held")).unwrap();
+    let still = crate::store_engine::read::automation_trigger(s.engine.conn(), trigger.id).unwrap().expect("there");
+    assert_eq!(still.last_refused, Some(why), "a store held is not the trigger's failure");
+    fs::remove_dir_all(&dir).ok();
+}

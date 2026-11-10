@@ -1329,6 +1329,11 @@ datasets! {
         // for none, and always NULL for a `file` or a `script`.
         task_data: col(OPT),
         task_files: col(OPT),
+        // The last time it was to start a run and could not (`AMB-D-1136`), and why, as JSON — the code
+        // naming the sentence, the English, the values and the parts (`model::Refused`). Both NULL where
+        // it has not failed since it last started one; a run started clears both.
+        refused_at: ts_opt,
+        refused_why: col(OPT),
     }
 
     // **The classification a failed round's task is filed with**: one value per axis, each one of the

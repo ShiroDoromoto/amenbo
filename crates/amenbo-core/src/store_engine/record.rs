@@ -642,6 +642,14 @@ pub fn automation_trigger(t: &AutomationTrigger) -> Record {
                 ("condition_role_id", kv_opt(&t.condition.as_ref().and_then(|c| c.role_id))),
                 ("task_data", task_data),
                 ("task_files", task_files),
+                ("refused_at", tsov(&t.last_refused.as_ref().map(|r| r.at))),
+                (
+                    "refused_why",
+                    match &t.last_refused {
+                        Some(r) => tv(&serde_json::to_string(&r.why).expect("a refusal is JSON")),
+                        None => Value::Null,
+                    },
+                ),
             ],
             &t.created_at,
             &t.updated_at,

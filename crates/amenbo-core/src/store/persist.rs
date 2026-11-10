@@ -1847,8 +1847,8 @@ impl Store {
     /// **Fire one trigger of an automation** — start a run, filing its task first where the trigger is
     /// aimed at a role started by a task, or decide not to (one operation = one transaction) —
     /// [`crate::ops::automation_run::fire`]. A launch its checks
-    /// refuse takes the whole transaction with it, so nothing of that time is left. `said` is what the
-    /// trigger's scripts said to file one, run before this write
+    /// refuse takes the whole transaction with it, so nothing of that time is left but why (below).
+    /// `said` is what the trigger's scripts said to file one, run before this write
     /// ([`crate::ops::automation_run::ask_trigger`]); `None` for a trigger with no script. A trigger
     /// taken away since it was found due files nothing.
     ///
@@ -1860,7 +1860,45 @@ impl Store {
     /// taken in as a script step's are ([`crate::ops::automation_run::take_in_program_files`],
     /// [`Self::automation_script_ran`]). One not there, or not taken in, is an error, and nothing is
     /// started (`AMB-D-1135`).
+    ///
+    /// **An error is kept on the trigger** before it is answered ([`Self::automation_trigger_refused`]),
+    /// so its screen says why it did not start (`AMB-D-1136`) — whether it came from reading its files
+    /// or from the write that would have started the run.
     pub fn automation_trigger_fire(
+        &mut self,
+        trigger_id: i64,
+        by: &crate::ops::automation_run::Launcher<'_>,
+        said: Option<&crate::ops::automation_run::ScriptsSaid>,
+    ) -> Result<Option<crate::model::AutomationRun>> {
+        let fired = self.fire_trigger(trigger_id, by, said);
+        if let Err(why) = &fired {
+            // Kept as well as it can be: a store that cannot take this write either has already said
+            // why in the error answered.
+            let _ = self.automation_trigger_refused(trigger_id, why);
+        }
+        fired
+    }
+
+    /// **Keep on a trigger that it was to start a run now and could not, and why** (`AMB-D-1136`) —
+    /// [`crate::ops::automation_run::refused`], in a write of its own. For an error raised where the
+    /// run would have been started ([`Self::automation_trigger_fire`]) or before it, where the
+    /// trigger's programs gave no answer. A store merely held by another writer is not the trigger's
+    /// failure, and is not kept.
+    pub fn automation_trigger_refused(&mut self, trigger_id: i64, why: &crate::error::Error) -> Result<()> {
+        if matches!(why, crate::error::Error::StoreBusy(_)) {
+            return Ok(());
+        }
+        let Some(trigger) = crate::store_engine::read::automation_trigger(self.engine.conn(), trigger_id)? else {
+            return Ok(());
+        };
+        self.write_one(
+            &[WriteTarget::AutomationPart(AutomationPart::Automation, trigger.automation_id)],
+            |tx| crate::ops::automation_run::refused(tx, trigger_id, why, crate::time::Timestamp::now()),
+        )
+    }
+
+    /// [`Self::automation_trigger_fire`], before what it answers is kept.
+    fn fire_trigger(
         &mut self,
         trigger_id: i64,
         by: &crate::ops::automation_run::Launcher<'_>,
@@ -1869,8 +1907,7 @@ impl Store {
         let Some(trigger) = crate::store_engine::read::automation_trigger(self.engine.conn(), trigger_id)? else {
             return Ok(None);
         };
-        let from_file = crate::ops::automation_run::read_trigger_file(&trigger.task)
-            .map_err(crate::error::Error::invalid)?;
+        let from_file = crate::ops::automation_run::read_trigger_file(&trigger.task)?;
         let blobs = self.blobs();
         let mut files = crate::ops::automation_run::read_trigger_files(
             crate::ops::automation_run::trigger_files(&trigger.task, from_file.as_ref()),

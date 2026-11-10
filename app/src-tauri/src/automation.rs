@@ -4163,8 +4163,8 @@ mod tests {
 
     /// **A trigger goes out as bare values** (`AMB-D-396`): its `id` and `enabled`, each kind of `when`
     /// and `task` by its `kind`, with its own fields, the script and condition where it has them, and
-    /// `nextAt` and `lastFiledAt` as RFC3339 instants. What is absent is left out rather than sent as
-    /// `null`.
+    /// `nextAt` and `lastFiledAt` as RFC3339 instants, and `lastRefused` as its time and the refusal
+    /// in the shape a `CmdError` travels in. What is absent is left out rather than sent as `null`.
     #[test]
     fn a_trigger_goes_out_as_its_kinds_and_values() {
         use amenbo_core::model::{AutomationTrigger, StepScript, TriggerCondition, TriggerTask, TriggerWhen};
@@ -4182,6 +4182,7 @@ mod tests {
             task: TriggerTask::Fixed { title: "見る".into(), notes: "メモ".into(), data: None, files: Vec::new() },
             next_at,
             last_filed_at: None,
+            last_refused: None,
             order_key: "a0".into(),
             created_at: next_at,
             updated_at: next_at,
@@ -4212,6 +4213,27 @@ mod tests {
         let filed = json(AutomationTrigger { enabled: false, last_filed_at: Some(filed_at), ..base.clone() });
         assert_eq!(filed["enabled"], false);
         assert_eq!(filed["lastFiledAt"], filed_at.to_rfc3339_z());
+        let refused_at = amenbo_core::time::Timestamp::now();
+        let why = amenbo_core::model::Refused {
+            code: "invalid_trigger_file_missing".into(),
+            message: "the file '/tmp/next.md' is not there".into(),
+            fields: [("path".to_string(), "/tmp/next.md".to_string())].into(),
+            parts: Vec::new(),
+        };
+        let refused = json(AutomationTrigger {
+            last_refused: Some(amenbo_core::model::TriggerRefusal { at: refused_at, why }),
+            ..base.clone()
+        });
+        assert_eq!(
+            refused["lastRefused"],
+            serde_json::json!({
+                "at": refused_at.to_rfc3339_z(),
+                "code": "invalid_trigger_file_missing",
+                "message_en": "the file '/tmp/next.md' is not there",
+                "fields": { "path": "/tmp/next.md" },
+                "parts": [],
+            }),
+        );
         assert_eq!(full["when"], serde_json::json!({ "kind": "tasks" }));
         assert_eq!(full["condition"], serde_json::json!({ "filter": "status:todo", "below": 3 }));
         let program = serde_json::json!({ "program": "/bin/check", "args": ["-q"], "timeoutMinutes": 5 });
@@ -4482,6 +4504,7 @@ mod tests {
         assert_eq!(read_back[1]["name"], "点検");
         assert_eq!(read_back[0]["enabled"], true);
         assert!(read_back[0].get("lastFiledAt").is_none(), "none filed yet");
+        assert!(read_back[0].get("lastRefused").is_none(), "none refused yet");
         assert_eq!(read_back[0]["when"], serde_json::json!({ "kind": "every", "minutes": 60 }));
         assert_eq!(read_back[0]["task"], serde_json::json!({ "kind": "fixed", "title": "受信箱を見る", "notes": "メモ" }));
         let next_at = read_back[0]["nextAt"].as_str().expect("an instant");

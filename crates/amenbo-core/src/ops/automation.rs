@@ -1554,7 +1554,8 @@ pub fn trigger_add(tx: &WriteTx<'_>, automation_id: i64, new: NewTrigger) -> Res
 
 /// **Write one trigger afresh** — what it is called, its role, when it files a task, what it looks at
 /// and asks first, and what the task says — checked as [`trigger_set`] says. It keeps its id, its place
-/// among the automation's triggers, whether it is enabled and when it last filed a task. When it is next
+/// among the automation's triggers, whether it is enabled, when it last filed a task and when it last
+/// could not start one, and why ([`AutomationTrigger::last_refused`]). When it is next
 /// asked is counted afresh from now, as writing it again with [`trigger_set`] does.
 pub fn trigger_update(tx: &WriteTx<'_>, id: i64, new: NewTrigger) -> Result<AutomationTrigger> {
     let before = live_trigger(tx, id)?;
@@ -1566,6 +1567,7 @@ pub fn trigger_update(tx: &WriteTx<'_>, id: i64, new: NewTrigger) -> Result<Auto
         id: before.id,
         enabled: before.enabled,
         last_filed_at: before.last_filed_at,
+        last_refused: before.last_refused.clone(),
         order_key: before.order_key.clone(),
         created_at: before.created_at,
         ..written
@@ -1723,6 +1725,7 @@ fn checked_trigger(
         task,
         next_at: when.after(now),
         last_filed_at: None,
+        last_refused: None,
         order_key: place(sibs, &Position::Bottom)?,
         created_at: now,
         updated_at: now,

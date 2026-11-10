@@ -480,6 +480,16 @@ pub enum ErrorCode {
     InvalidAutomationOutputTaken,
     InvalidAutomationCfgNotACount,
     InvalidAutomationLimitBelowOne,
+
+    // Why a trigger could not start a run, kept on the trigger for its screen to show (`AMB-D-1136`):
+    // a file it reads or hands on not there, not a regular file, or not readable (`AMB-D-1135`); a task
+    // it would file with no title; its programs giving no answer.
+    InvalidTriggerFileMissing,
+    InvalidTriggerFileNotRegular,
+    InvalidTriggerFileUnreadable,
+    InvalidTriggerUntitled,
+    InvalidTriggerFileUntitled,
+    InvalidTriggerScriptUnanswered,
 }
 
 impl ErrorCode {
@@ -617,6 +627,12 @@ impl ErrorCode {
             ErrorCode::InvalidAutomationOutputTaken => "invalid_automation_output_taken",
             ErrorCode::InvalidAutomationCfgNotACount => "invalid_automation_cfg_not_a_count",
             ErrorCode::InvalidAutomationLimitBelowOne => "invalid_automation_limit_below_one",
+            ErrorCode::InvalidTriggerFileMissing => "invalid_trigger_file_missing",
+            ErrorCode::InvalidTriggerFileNotRegular => "invalid_trigger_file_not_regular",
+            ErrorCode::InvalidTriggerFileUnreadable => "invalid_trigger_file_unreadable",
+            ErrorCode::InvalidTriggerUntitled => "invalid_trigger_untitled",
+            ErrorCode::InvalidTriggerFileUntitled => "invalid_trigger_file_untitled",
+            ErrorCode::InvalidTriggerScriptUnanswered => "invalid_trigger_script_unanswered",
         }
     }
 
@@ -751,6 +767,12 @@ impl ErrorCode {
         ErrorCode::InvalidAutomationOutputTaken,
         ErrorCode::InvalidAutomationCfgNotACount,
         ErrorCode::InvalidAutomationLimitBelowOne,
+        ErrorCode::InvalidTriggerFileMissing,
+        ErrorCode::InvalidTriggerFileNotRegular,
+        ErrorCode::InvalidTriggerFileUnreadable,
+        ErrorCode::InvalidTriggerUntitled,
+        ErrorCode::InvalidTriggerFileUntitled,
+        ErrorCode::InvalidTriggerScriptUnanswered,
     ];
 }
 
@@ -1016,6 +1038,12 @@ mod tests {
             "invalid_automation_output_taken",
             "invalid_automation_cfg_not_a_count",
             "invalid_automation_limit_below_one",
+            "invalid_trigger_file_missing",
+            "invalid_trigger_file_not_regular",
+            "invalid_trigger_file_unreadable",
+            "invalid_trigger_untitled",
+            "invalid_trigger_file_untitled",
+            "invalid_trigger_script_unanswered",
         ]
         .into_iter()
         .collect();

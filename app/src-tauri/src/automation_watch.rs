@@ -270,14 +270,14 @@ fn advance(
 ///
 /// A trigger whose launch was refused — its automation not saved, its entry not the built-in that files
 /// a task, the file its task is read from not there — goes into `held` and is not asked again until
-/// `WHILE_WAITING` has passed, rather than every second with a warning each time. Nothing of that time
-/// is left in the store.
+/// `WHILE_WAITING` has passed, rather than every second with a warning each time. Why is kept on the
+/// trigger (`AMB-D-1136`), by the store as it answers.
 ///
 /// A trigger due but for its scripts (`ask`) has its programs started on a thread of their own
 /// ([`amenbo_core::ops::automation_run::ask_trigger`]), which wakes the look when they end; the look that
 /// finds the answer fires it, handing it what they said. Whatever they said, they are not asked again
-/// for `SCRIPT_ASKED_AGAIN`. One that said nothing — a program that fell over — is warned about, and
-/// files nothing.
+/// for `SCRIPT_ASKED_AGAIN`. One that said nothing — a program that fell over — is warned about, files
+/// nothing, and keeps why on the trigger ([`keep_unanswered`]).
 fn fire_triggers(
     held: &mut HashMap<i64, Instant>,
     asking: &mut HashMap<i64, Asking>,
@@ -314,8 +314,14 @@ fn fire_triggers(
         match said {
             Some(Ok(Some(said))) => due.push((*trigger, Some(said))),
             Some(Ok(None)) => {}
-            Some(Err(why)) => log::warn!("trigger {trigger} had no answer from its script: {why}"),
-            None => log::warn!("trigger {trigger} lost its script before it answered"),
+            Some(Err(why)) => {
+                log::warn!("trigger {trigger} had no answer from its script: {why}");
+                keep_unanswered(*trigger, &why);
+            }
+            None => {
+                log::warn!("trigger {trigger} lost its script before it answered");
+                keep_unanswered(*trigger, "it was lost before it answered");
+            }
         }
     }
     if !due.is_empty() {
@@ -347,6 +353,16 @@ fn fire_triggers(
         Asking::Running(_) => None,
     });
     Ok(next_at.into_iter().chain(answered).min())
+}
+
+/// **Keep on a trigger that its programs gave no answer, and why** (`AMB-D-1136`,
+/// [`amenbo_core::ops::automation_run::unanswered`]). A store that cannot take it is warned about.
+fn keep_unanswered(trigger: i64, why: &str) {
+    let why = amenbo_core::ops::automation_run::unanswered(why);
+    let kept = crate::commands::with_store_mut(|store| Ok(store.automation_trigger_refused(trigger, &why)?));
+    if let Err(e) = kept {
+        log::warn!("trigger {trigger} could not keep why it started nothing: {}", e.message_en);
+    }
 }
 
 /// **Start a trigger's scripts** on a thread of their own, and wake the look once they have answered.

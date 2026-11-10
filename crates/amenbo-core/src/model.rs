@@ -2048,10 +2048,10 @@ pub const MIN_TRIGGER_EVERY_MINUTES: u32 = 1;
 /// third is a run like any other.
 ///
 /// A time it answers no leaves nothing behind — no task, no run, no record — so the only things it
-/// keeps are `next_at` and `last_filed_at`, which move on only when a task is filed. A time it files one
-/// leaves a line in that task's timeline naming it by `name`
-/// ([`crate::activity_log::event::task_filed_by_trigger`]). Each trigger of an automation keeps its own:
-/// one filing a task moves no other one's on.
+/// keeps are `next_at` and `last_filed_at`, which move on only when a task is filed, and `last_refused`,
+/// written only when it was to start one and could not. A time it files one leaves a line in that
+/// task's timeline naming it by `name` ([`crate::activity_log::event::task_filed_by_trigger`]). Each
+/// trigger of an automation keeps its own: one filing a task moves no other one's on.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AutomationTrigger {
     pub id: i64,
@@ -2086,10 +2086,67 @@ pub struct AutomationTrigger {
     /// When it last filed a task, or `None` where it has filed none since it was written.
     #[serde(default)]
     pub last_filed_at: Option<Timestamp>,
+    /// **The last time it was to start a run and could not, and why** (`AMB-D-1136`) — a file it reads
+    /// or hands on not there (`AMB-D-1135`), a task it could not file, its programs giving no answer.
+    /// `None` where it has not failed since it last started one: a run started clears it. A time it
+    /// decides no, or waits for a seat, writes nothing here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_refused: Option<TriggerRefusal>,
     /// The order the automation's triggers are written in.
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
+}
+
+/// **When a trigger last could not start a run, and why** ([`AutomationTrigger::last_refused`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TriggerRefusal {
+    pub at: Timestamp,
+    pub why: Refused,
+}
+
+/// **Why something was refused, kept as the error said it** — the code naming its sentence, the English
+/// sentence, the values the sentence is built from and the sentences it is composed of, so a screen
+/// writes it in its reader's language from its dictionary as it writes a refusal it is answered with
+/// (`AMB-D-413`). A part keeps no parts of its own.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Refused {
+    /// The code naming the sentence ([`crate::error::ErrorCode`]) — the error's family code where it
+    /// names none, and `error` for a part that names none.
+    pub code: String,
+    /// The sentence, in English.
+    pub message: String,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub fields: std::collections::BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parts: Vec<Refused>,
+}
+
+impl Refused {
+    /// What `error` says, kept.
+    pub fn of(error: &crate::error::Error) -> Self {
+        let fields = error.fields().map(fields_of).unwrap_or_default();
+        Refused {
+            code: error.code().to_string(),
+            message: error.message_en(),
+            fields,
+            parts: error
+                .parts()
+                .iter()
+                .map(|part| Refused {
+                    code: part.code().map_or("error", crate::error::ErrorCode::as_str).to_string(),
+                    message: part.en().to_string(),
+                    fields: fields_of(part.fields()),
+                    parts: Vec::new(),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// The values a sentence is built from, as [`Refused::fields`] keeps them.
+fn fields_of(fields: &crate::error::Fields) -> std::collections::BTreeMap<String, String> {
+    fields.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
 }
 
 /// **Whether a trigger files a task now** — the first part of [`AutomationTrigger`].

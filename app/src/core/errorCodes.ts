@@ -212,6 +212,15 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "invalid_automation_output_taken",
   "invalid_automation_cfg_not_a_count",
   "invalid_automation_limit_below_one",
+  // Why a trigger could not start a run, kept on the trigger and shown on its screen rather than only
+  // in the log: a file it reads or hands on not there, not a regular file or not readable; a task it
+  // would file with no title; its programs giving no answer.
+  "invalid_trigger_file_missing",
+  "invalid_trigger_file_not_regular",
+  "invalid_trigger_file_unreadable",
+  "invalid_trigger_untitled",
+  "invalid_trigger_file_untitled",
+  "invalid_trigger_script_unanswered",
 ] as const;
 
 /** Core codes the webview never receives, because the only door they come through is the CLI. None is

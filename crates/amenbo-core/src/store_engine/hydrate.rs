@@ -647,10 +647,17 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
         failure_values: Vec::new(),
         triggers: Vec::new(),
         stopped: get(r, C.stopped)?,
+        run_limit: run_limit(get(r, C.run_limit)?)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,
     })
+}
+
+/// A run limit as its column holds it ([`Automation::run_limit`]): NULL for none, and a number that does
+/// not fit a `u32` refused as a bad row, as a headcount's is.
+fn run_limit(n: Option<i64>) -> rusqlite::Result<Option<u32>> {
+    n.map(|n| u32::try_from(n).map_err(|_| bad(format!("bad run_limit {n}")))).transpose()
 }
 
 pub(super) fn automation_placement_row(r: &Row) -> rusqlite::Result<AutomationPlacement> {
@@ -859,6 +866,7 @@ pub(super) fn automation_launch_row(r: &Row) -> rusqlite::Result<AutomationLaunc
         status: enum_req(r, C.status, AutomationLaunchStatus::parse)?,
         started_by_kind: enum_opt(r, C.started_by_kind, ActorKind::parse)?,
         ended_at: ts_opt(r, C.ended_at)?,
+        run_limit: run_limit(get(r, C.run_limit)?)?,
         created_at,
         updated_at,
     })
@@ -914,6 +922,7 @@ pub(super) fn automation_version_row(r: &Row) -> rusqlite::Result<AutomationVers
         edges: get(r, C.edges)?,
         wires: get(r, C.wires)?,
         roles: get(r, C.roles)?,
+        run_limit: run_limit(get(r, C.run_limit)?)?,
         created_at,
         updated_at,
     })

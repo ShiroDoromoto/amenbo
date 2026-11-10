@@ -92,6 +92,10 @@ fn kv(n: i64) -> Value {
 fn kv_opt(n: &Option<i64>) -> Value {
     n.map(Value::Integer).unwrap_or(Value::Null)
 }
+/// A run limit ([`crate::model::Automation::run_limit`]): the number, or NULL for none.
+fn run_limit(n: Option<u32>) -> Value {
+    n.map(|n| Value::Integer(i64::from(n))).unwrap_or(Value::Null)
+}
 /// The three columns a script is written to — its program, its arguments as a JSON array, and its
 /// timeout — or NULL, `''` and NULL for a step that is not one.
 fn script_values(script: &Option<StepScript>) -> [Value; 3] {
@@ -563,6 +567,7 @@ pub fn automation(a: &Automation) -> Record {
                 ("failures_to_role_id", kv_opt(&a.failures_to.and_then(|f| f.role_id()))),
                 ("export_only", bv(a.export_only)),
                 ("stopped", bv(a.stopped)),
+                ("run_limit", run_limit(a.run_limit)),
                 ("order_key", tv(&a.order_key)),
             ],
             &a.created_at,
@@ -890,6 +895,7 @@ pub fn automation_launch(l: &AutomationLaunch) -> Record {
                 ("status", tv(l.status.as_str())),
                 ("started_by_kind", kov(&l.started_by_kind)),
                 ("ended_at", tsov(&l.ended_at)),
+                ("run_limit", run_limit(l.run_limit)),
             ],
             &l.created_at,
             &l.updated_at,
@@ -951,6 +957,7 @@ pub fn automation_version(v: &AutomationVersion) -> Record {
                 ("edges", tv(&v.edges)),
                 ("wires", tv(&v.wires)),
                 ("roles", tv(&v.roles)),
+                ("run_limit", run_limit(v.run_limit)),
             ],
             &v.created_at,
             &v.updated_at,

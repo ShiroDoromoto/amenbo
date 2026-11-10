@@ -51,6 +51,11 @@ pub struct AutomationFile {
     /// roles were carried reads as none.
     #[serde(default)]
     pub roles: Vec<RoleFile>,
+    /// The most runs that go at once across the roles ([`crate::model::Automation::run_limit`]), `None`
+    /// for no limit. A file written before run limits were carried reads as no limit; the import checks
+    /// it as any other run limit written.
+    #[serde(default)]
+    pub run_limit: Option<u32>,
 }
 
 /// **One role defined in the automation.** Taken in as a new role, never matched to one already there
@@ -339,6 +344,7 @@ pub fn export(conn: &Connection, automation_id: i64) -> Result<AutomationFile> {
                 model: r.model.clone(),
             })
             .collect(),
+        run_limit: picture.run_limit(),
     })
 }
 

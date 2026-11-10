@@ -1067,8 +1067,8 @@ mod tests {
         );
         let automation = put(
             "INSERT INTO automation \
-                 (project_id, name, notes, archived, order_key, created_at, updated_at) \
-             VALUES (?1, '1件やる', '', 0, 'a0', ?2, ?2)",
+                 (project_id, name, notes, archived, run_limit, order_key, created_at, updated_at) \
+             VALUES (?1, '1件やる', '', 0, 3, 'a0', ?2, ?2)",
             rusqlite::params![project, at],
         );
         let step = put(
@@ -1098,9 +1098,9 @@ mod tests {
         );
         put(
             "INSERT INTO automation_version \
-                 (automation_id, version, placements, cfgs, placement_steps, edges, wires, created_at, \
-                  updated_at) \
-             VALUES (?1, 1, '[]', '[]', '[]', '[]', '[]', ?2, ?2)",
+                 (automation_id, version, placements, cfgs, placement_steps, edges, wires, run_limit, \
+                  created_at, updated_at) \
+             VALUES (?1, 1, '[]', '[]', '[]', '[]', '[]', 3, ?2, ?2)",
             rusqlite::params![automation, at],
         );
         put(
@@ -1183,8 +1183,9 @@ mod tests {
 
         let launch = put(
             "INSERT INTO automation_launch \
-                 (automation_id, project_id, status, started_by_kind, ended_at, created_at, updated_at) \
-             VALUES (?1, ?2, 'ended', 'ai', ?3, ?3, ?3)",
+                 (automation_id, project_id, status, started_by_kind, ended_at, run_limit, created_at, \
+                  updated_at) \
+             VALUES (?1, ?2, 'ended', 'ai', ?3, 2, ?3, ?3)",
             rusqlite::params![automation, project, at],
         );
         put(

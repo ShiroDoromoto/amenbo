@@ -1901,6 +1901,70 @@ mod tests {
         });
     }
 
+    /// **A launch copies the run limit of the newest saved version** (`AMB-D-1145`), and it is changed on
+    /// the launch alone — from 1 to the cap, or to none — and put back at the definition. A limit saved
+    /// waits for the next launch, and once the launch ends it reads as its definition again.
+    #[test]
+    fn a_launch_copies_the_run_limit_and_changes_it_on_itself_alone() {
+        use crate::ops::automation_run::{launch_limit, launch_limit_reset, launch_limit_set, LaunchLimit};
+        use crate::model::MAX_RUN_LIMIT;
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = round_picture(tx, project);
+            automation::run_limit_set(tx, automation.id, Some(3)).expect("a run limit");
+            automation::version_add(tx, automation.id).expect("save it");
+            ours(tx, "a", &automation, None);
+            let launch = launched(tx, &automation).launch_id.expect("a launch");
+            let held = |tx: &WriteTx<'_>| {
+                read::automation_launch(tx.conn(), launch).expect("read").expect("the launch").run_limit
+            };
+            assert_eq!(held(tx), Some(3), "copied as the launch opened");
+            assert_eq!(launch_limit(tx.conn(), launch).expect("read"), LaunchLimit { defined: Some(3), limit: Some(3) });
+
+            for wrong in [0, MAX_RUN_LIMIT + 1] {
+                assert!(
+                    matches!(launch_limit_set(tx, launch, Some(wrong)), Err(crate::error::Error::Invalid(_))),
+                    "a run limit of {wrong}",
+                );
+            }
+            assert_eq!(launch_limit_set(tx, launch, Some(1)).expect("lower it").run_limit, Some(1));
+            assert_eq!(launch_limit_set(tx, launch, None).expect("no limit").run_limit, None);
+            assert_eq!(held(tx), None);
+            assert_eq!(
+                read::automation(tx.conn(), automation.id).expect("read").expect("the automation").run_limit,
+                Some(3),
+                "the definition is left as it is",
+            );
+
+            automation::run_limit_set(tx, automation.id, Some(5)).expect("change the definition");
+            automation::version_add(tx, automation.id).expect("save it");
+            assert_eq!(
+                launch_limit(tx.conn(), launch).expect("read"),
+                LaunchLimit { defined: Some(5), limit: None },
+                "a saved limit waits for the next launch",
+            );
+            assert_eq!(launch_limit_reset(tx, launch).expect("back to the definition").run_limit, Some(5));
+            assert!(
+                matches!(launch_limit_set(tx, launch + 1000, Some(2)), Err(crate::error::Error::NotFound(_))),
+                "a launch that does not exist (`AMB-D-986`)",
+            );
+
+            launch_limit_set(tx, launch, Some(2)).expect("change it again");
+            automation_stop::stop_launch(tx, launch).expect("stop");
+            assert_eq!(
+                launch_limit(tx.conn(), launch).expect("read"),
+                LaunchLimit { defined: Some(5), limit: Some(5) },
+                "back at the definition",
+            );
+            assert!(matches!(launch_limit_set(tx, launch, Some(2)), Err(crate::error::Error::Invalid(_))));
+            assert!(matches!(launch_limit_reset(tx, launch), Err(crate::error::Error::Invalid(_))));
+
+            ours(tx, "b", &automation, None);
+            let next = launched(tx, &automation).launch_id.expect("a launch of its own");
+            assert_eq!(launch_limit(tx.conn(), next).expect("read").limit, Some(5), "copied afresh");
+        });
+    }
+
     /// **A launch with nothing to take is not topped up**, and it stays open past its last run until a
     /// person stops it: a task that turns up later starts a run in it.
     #[test]

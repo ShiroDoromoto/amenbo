@@ -1529,6 +1529,9 @@ export const fr: Translation = {
     "auto.about.archive": "Archivée",
     "auto.about.remove": "Supprimer cette automatisation",
     "auto.about.removeConfirm": "Supprimer cette automatisation ? Ses placements, ce qui suit chacun et les transmissions entre eux disparaissent avec elle. Les actions placées restent dans la bibliothèque. C'est irréversible.",
+    "auto.about.removeConfirmWithRuns": "Supprimer cette automatisation ? Ses {runs} exécution(s) et {rounds} tour(s) disparaissent avec elle, ainsi que ses placements, ce qui suit chacun et les transmissions entre eux. Les actions placées restent dans la bibliothèque. Cette action est irréversible.",
+    "auto.about.removeNotArchived": "Cette automatisation a des exécutions derrière elle, elle ne peut donc pas être supprimée telle quelle. Archivez-la d’abord : elle pourra alors être supprimée avec ses exécutions.",
+    "auto.about.removeRunning": "Une exécution de cette automatisation est en cours ou en pause. Arrêtez-la avant de supprimer l’automatisation.",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

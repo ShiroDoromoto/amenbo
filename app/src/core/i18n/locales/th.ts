@@ -1518,6 +1518,9 @@ export const th: Translation = {
     "auto.about.archive": "เก็บเข้าคลัง",
     "auto.about.remove": "ลบออโตเมชันนี้",
     "auto.about.removeConfirm": "ลบออโตเมชันนี้หรือไม่ การวาง สิ่งที่ทำต่อจากแต่ละการวาง และการส่งต่อระหว่างกันจะหายไปด้วย แอ็กชันที่วางไว้ยังอยู่ในไลบรารี และย้อนกลับไม่ได้",
+    "auto.about.removeConfirmWithRuns": "ลบออโตเมชันนี้หรือไม่ การรัน {runs} ครั้งและรอบ {rounds} รอบจะหายไปด้วย รวมทั้งการวาง สิ่งที่ทำต่อจากแต่ละการวาง และการส่งต่อระหว่างกัน แอ็กชันที่วางไว้ยังอยู่ในไลบรารี และย้อนกลับไม่ได้",
+    "auto.about.removeNotArchived": "ออโตเมชันนี้มีประวัติการรัน จึงลบแบบนี้ไม่ได้ ให้เก็บเข้าคลังก่อน แล้วจะลบพร้อมประวัติการรันได้",
+    "auto.about.removeRunning": "มีการรันของออโตเมชันนี้ที่กำลังทำงานหรือหยุดชั่วคราวอยู่ ให้หยุดก่อนแล้วค่อยลบออโตเมชัน",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

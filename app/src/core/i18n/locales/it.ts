@@ -1529,6 +1529,9 @@ export const it: Translation = {
     "auto.about.archive": "Archiviata",
     "auto.about.remove": "Elimina questa automazione",
     "auto.about.removeConfirm": "Eliminare questa automazione? Le sue collocazioni, ciò che segue ciascuna e le consegne fra loro se ne vanno con lei. Le azioni collocate restano nella libreria. Non si può annullare.",
+    "auto.about.removeConfirmWithRuns": "Eliminare questa automazione? Le sue {runs} esecuzioni e {rounds} giri se ne vanno con lei, come le collocazioni, ciò che segue ciascuna e le consegne fra loro. Le azioni collocate restano nella libreria. Non si può annullare.",
+    "auto.about.removeNotArchived": "Questa automazione ha delle esecuzioni alle spalle, quindi non si può eliminare così com’è. Archiviala prima: potrà poi essere eliminata insieme alle sue esecuzioni.",
+    "auto.about.removeRunning": "Un’esecuzione di questa automazione è in corso o in pausa. Fermala prima di eliminare l’automazione.",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

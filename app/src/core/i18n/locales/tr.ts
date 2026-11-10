@@ -1517,6 +1517,9 @@ export const tr: Translation = {
     "auto.about.archive": "Arşivlenmiş",
     "auto.about.remove": "Bu otomasyonu sil",
     "auto.about.removeConfirm": "Bu otomasyon silinsin mi? Yerleşimleri, her birinden sonra olanlar ve aralarındaki aktarımlar onunla gider. Yerleştirilen eylemler kütüphanede kalır. Bu geri alınamaz.",
+    "auto.about.removeConfirmWithRuns": "Bu otomasyon silinsin mi? {runs} çalıştırması ve {rounds} turu onunla gider; yerleşimleri, her birinden sonra olanlar ve aralarındaki aktarımlar da. Yerleştirilen eylemler kütüphanede kalır. Bu geri alınamaz.",
+    "auto.about.removeNotArchived": "Bu otomasyonun arkasında çalıştırmalar var, bu yüzden olduğu gibi silinemez. Önce arşivleyin; ardından çalıştırmalarıyla birlikte silinebilir.",
+    "auto.about.removeRunning": "Bu otomasyonun bir çalıştırması sürüyor ya da duraklatılmış. Otomasyonu silmeden önce onu durdurun.",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

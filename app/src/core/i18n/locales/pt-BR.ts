@@ -1530,6 +1530,9 @@ export const ptBR: Translation = {
     "auto.about.archive": "Arquivada",
     "auto.about.remove": "Excluir esta automação",
     "auto.about.removeConfirm": "Excluir esta automação? Suas colocações, o que vem depois de cada uma e os repasses entre elas vão junto. As ações colocadas continuam na biblioteca. Não dá para desfazer.",
+    "auto.about.removeConfirmWithRuns": "Excluir esta automação? Suas {runs} execução(ões) e {rounds} rodada(s) vão junto, assim como as colocações, o que vem depois de cada uma e os repasses entre elas. As ações colocadas continuam na biblioteca. Não é possível desfazer.",
+    "auto.about.removeNotArchived": "Esta automação tem execuções por trás, então não pode ser excluída como está. Arquive-a primeiro e ela poderá ser excluída junto com as execuções.",
+    "auto.about.removeRunning": "Uma execução desta automação está em andamento ou pausada. Pare-a antes de excluir a automação.",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

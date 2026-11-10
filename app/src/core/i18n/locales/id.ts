@@ -1518,6 +1518,9 @@ export const id: Translation = {
     "auto.about.archive": "Diarsipkan",
     "auto.about.remove": "Hapus otomasi ini",
     "auto.about.removeConfirm": "Hapus otomasi ini? Penempatannya, apa yang terjadi setelah masing-masing, dan serah terima di antaranya ikut terhapus. Aksi yang ditempatkan tetap ada di pustaka. Ini tidak bisa dibatalkan.",
+    "auto.about.removeConfirmWithRuns": "Hapus otomasi ini? {runs} run dan {rounds} putarannya ikut terhapus, begitu juga penempatannya, apa yang terjadi setelah masing-masing, dan serah terima di antaranya. Aksi yang ditempatkan tetap ada di pustaka. Ini tidak bisa dibatalkan.",
+    "auto.about.removeNotArchived": "Otomasi ini punya run, jadi tidak bisa dihapus begitu saja. Arsipkan dulu, lalu otomasi bisa dihapus bersama run-nya.",
+    "auto.about.removeRunning": "Ada run otomasi ini yang sedang berjalan atau dijeda. Hentikan dulu sebelum menghapus otomasi.",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

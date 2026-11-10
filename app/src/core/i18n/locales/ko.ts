@@ -1514,6 +1514,9 @@ export const ko: Translation = {
     "auto.about.archive": "보관함",
     "auto.about.remove": "이 오토메이션 삭제",
     "auto.about.removeConfirm": "이 오토메이션을 삭제할까요? 안의 배치, 각 배치 다음에 할 일, 그 사이의 전달까지 함께 사라집니다. 배치했던 액션은 라이브러리에 남습니다. 되돌릴 수 없습니다.",
+    "auto.about.removeConfirmWithRuns": "이 오토메이션을 삭제할까요? 실행 {runs}건과 그 회차 {rounds}건의 기록도 함께 사라집니다. 안의 배치, 각 배치 다음에 할 일, 그 사이의 전달도 사라집니다. 배치했던 액션은 라이브러리에 남습니다. 되돌릴 수 없습니다.",
+    "auto.about.removeNotArchived": "실행 기록이 있어서 이대로는 삭제할 수 없습니다. 보관하면 실행 기록과 함께 삭제할 수 있습니다.",
+    "auto.about.removeRunning": "실행 중이거나 일시 정지된 실행이 있습니다. 멈춘 뒤에 삭제하세요.",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

@@ -1517,6 +1517,9 @@ export const nl: Translation = {
     "auto.about.archive": "Gearchiveerd",
     "auto.about.remove": "Deze automatisering verwijderen",
     "auto.about.removeConfirm": "Deze automatisering verwijderen? De plaatsingen, wat na elk volgt en de overdrachten ertussen gaan mee. De geplaatste acties blijven in de bibliotheek. Dit kan niet ongedaan worden gemaakt.",
+    "auto.about.removeConfirmWithRuns": "Deze automatisering verwijderen? Haar {runs} runs en {rounds} rondes gaan mee, net als de plaatsingen, wat na elk volgt en de overdrachten ertussen. De geplaatste acties blijven in de bibliotheek. Dit kan niet ongedaan worden gemaakt.",
+    "auto.about.removeNotArchived": "Achter deze automatisering staan runs, dus zo kan ze niet worden verwijderd. Archiveer haar eerst, dan kan ze samen met haar runs worden verwijderd.",
+    "auto.about.removeRunning": "Een run van deze automatisering loopt of is gepauzeerd. Stop die voordat je de automatisering verwijdert.",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

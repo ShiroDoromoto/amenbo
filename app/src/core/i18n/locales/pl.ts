@@ -1534,6 +1534,9 @@ export const pl: Translation = {
     "auto.about.archive": "Zarchiwizowana",
     "auto.about.remove": "Usuń tę automatyzację",
     "auto.about.removeConfirm": "Usunąć tę automatyzację? Jej umieszczenia, to, co następuje po każdym, i przekazania między nimi znikną razem z nią. Umieszczone akcje zostaną w bibliotece. Tego nie da się cofnąć.",
+    "auto.about.removeConfirmWithRuns": "Usunąć tę automatyzację? Jej uruchomienia ({runs}) i rundy ({rounds}) znikną razem z nią, tak jak umieszczenia, to, co następuje po każdym, i przekazania między nimi. Umieszczone akcje zostaną w bibliotece. Tego nie można cofnąć.",
+    "auto.about.removeNotArchived": "Za tą automatyzacją stoją uruchomienia, więc nie da się jej usunąć w obecnym stanie. Najpierw ją zarchiwizuj — wtedy da się ją usunąć razem z uruchomieniami.",
+    "auto.about.removeRunning": "Uruchomienie tej automatyzacji trwa lub jest wstrzymane. Zatrzymaj je przed usunięciem automatyzacji.",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

@@ -4564,6 +4564,25 @@ pub struct AutomationHeldBackDto {
     pub(crate) drafts: usize,
 }
 
+/// **How many runs, and rounds of them, an automation has behind it** — what deleting it, once
+/// archived, takes away with it ([`amenbo_core::model::AutomationHistory`]). The delete's confirm
+/// names both, read before the delete since afterwards there is nothing left to count.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationHistoryDto {
+    #[ts(type = "number")]
+    pub(crate) runs: usize,
+    #[ts(type = "number")]
+    pub(crate) rounds: usize,
+}
+
+impl From<amenbo_core::model::AutomationHistory> for AutomationHistoryDto {
+    fn from(h: amenbo_core::model::AutomationHistory) -> Self {
+        Self { runs: h.runs, rounds: h.rounds }
+    }
+}
+
 /// One value holding tasks back: the axis's id, which is where closing it is done, and the words.
 #[derive(Serialize, TS, Clone)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]

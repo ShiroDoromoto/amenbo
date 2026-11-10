@@ -1519,6 +1519,9 @@ export const zhHant: Translation = {
     "auto.about.archive": "已封存",
     "auto.about.remove": "刪除此自動化",
     "auto.about.removeConfirm": "要刪除此自動化嗎？其中的放置、每個放置之後要做的事，以及它們之間的傳遞都會一併消失。放置過的動作仍留在庫中。此操作無法復原。",
+    "auto.about.removeConfirmWithRuns": "要刪除此自動化嗎？它的 {runs} 次執行和 {rounds} 輪紀錄會一併消失，其中的放置、每個放置之後要做的事以及它們之間的傳遞也會消失。放置過的動作仍留在庫中。此操作無法復原。",
+    "auto.about.removeNotArchived": "此自動化有執行紀錄，無法直接刪除。先將其封存，即可連同執行紀錄一起刪除。",
+    "auto.about.removeRunning": "此自動化有正在執行或已暫停的執行。請先停止，再刪除自動化。",
 
     // The "running" tab: what is under way, what each run is on, and the three presses that
     // move it (`app/src/screens/RunningTab.tsx`).

@@ -2417,7 +2417,8 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let step = crate::ops::test_support::only_step(tx, &p.first_action);
-            let script = automation::NewScript { program: "/bin/true".into(), args: Vec::new(), timeout_minutes: None };
+            let program = std::env::current_exe().expect("the test binary").to_string_lossy().into_owned();
+            let script = automation::NewScript { program, args: Vec::new(), timeout_minutes: None };
             automation::step_update(tx, step.id, None, None, None, None, None, None, None, None, None, Some(Some(script)), None)
                 .expect("make it a script");
             let run = a_run(tx, &p.automation);

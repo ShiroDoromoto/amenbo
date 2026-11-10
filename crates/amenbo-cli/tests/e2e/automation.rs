@@ -473,6 +473,23 @@ fn an_automation_with_runs_is_deleted_only_once_archived_and_nothing_is_at_work(
     assert!(refused.contains("has not ended"), "{refused}");
 }
 
+/// **The last role is not taken out, and the refusal names the ways round it** (`AMB-D-1143`): rewrite
+/// the role with `role-update`, or archive the automation and delete it with `automation rm`.
+#[test]
+fn taking_out_the_last_role_is_refused_with_the_ways_round_it() {
+    let cli = Cli::new();
+    let (_, a, _, _) = an_automation(&cli);
+    let born = id_str(&cli.json(&["automation", "role-list", &a, "--json"])["roles"][0]["id"]);
+
+    let (refused, code) = cli.run_err(&["automation", "role-rm", &born, "--yes", "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("invalid_automation_role_last"), "{refused}");
+    assert!(refused.contains("automation role-update"), "the hint names rewriting the role: {refused}");
+    assert!(refused.contains("--archived true") && refused.contains("automation rm"), "and archiving, then deleting: {refused}");
+    let listed = cli.json(&["automation", "role-list", &a, "--json"]);
+    assert_eq!(listed["count"].as_u64(), Some(1), "the role stays: {listed}");
+}
+
 /// A run is reached from a record already in hand — the task it worked, or the automation it came
 /// from. Naming neither is the one mistake the flags leave open, and it is refused with both roads
 /// rather than with a listing of every run there has ever been.

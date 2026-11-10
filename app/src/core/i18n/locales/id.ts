@@ -1914,6 +1914,10 @@ export const id: Translation = {
       "Aksi ini masih ada di gambar — total {count}. Keluarkan dulu dari sana sebelum menghapusnya.",
     invalid_automation_has_runs:
       "{count} eksekusi dijalankan dari otomasi ini dan tercatat di bawahnya, jadi otomasi ini tidak bisa dihapus. Arsipkan saja.",
+    invalid_automation_role_last:
+      "“{role}” adalah peran terakhir otomasi ini, dan otomasi selalu menyimpan setidaknya satu peran, jadi peran ini tidak bisa dihapus. Ubah perannya saja — atau, jika otomasinya tidak dibutuhkan lagi, arsipkan lalu hapus.",
+    invalid_automation_export_only:
+      "“{automation}” dibuat sebelum otomasi punya peran dan hanya disimpan untuk diekspor, jadi tidak bisa diubah. Ekspor, susun ulang, lalu impor sebagai otomasi baru — atau, jika tidak dibutuhkan lagi, arsipkan lalu hapus.",
     invalid_action_placed_elsewhere:
       "Aksi ini dipasang di otomatisasi proyek lain ({automations}). Keluarkan dulu dari sana sebelum memindahkannya ke “{project}”.",
     invalid_automation_archived: "“{automation}” sudah diarsipkan. Kembalikan dulu sebelum menjalankannya.",

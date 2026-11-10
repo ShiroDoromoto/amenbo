@@ -1939,6 +1939,10 @@ export const pl: Translation = {
       "Ta akcja nadal stoi na schematach — łącznie {count}. Zdejmij ją z nich, zanim ją usuniesz.",
     invalid_automation_has_runs:
       "Z tej automatyzacji uruchomiono {count} przebiegów i są przy niej zapisane, więc nie można jej usunąć. Zamiast tego ją zarchiwizuj.",
+    invalid_automation_role_last:
+      "„{role}” to ostatnia rola tej automatyzacji, a automatyzacja zawsze ma co najmniej jedną, więc nie można jej usunąć. Zamiast tego zmień rolę — albo, jeśli automatyzacja nie jest już potrzebna, zarchiwizuj ją, a potem usuń.",
+    invalid_automation_export_only:
+      "„{automation}” powstała, zanim automatyzacje miały role, i jest przechowywana tylko do eksportu, więc nie można jej zmienić. Wyeksportuj ją, odbuduj i zaimportuj jako nową automatyzację — albo, jeśli nie jest już potrzebna, zarchiwizuj ją, a potem usuń.",
     invalid_action_placed_elsewhere:
       "Ta akcja stoi w automatyzacjach innych projektów ({automations}). Zdejmij ją z nich, zanim przeniesiesz ją do „{project}”.",
     invalid_automation_archived: "„{automation}” jest zarchiwizowana. Przywróć ją, zanim uruchomisz.",

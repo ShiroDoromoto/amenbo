@@ -1931,6 +1931,10 @@ export const fr: Translation = {
       "Cette action figure encore dans des schémas — {count} au total. Retirez-la avant de la supprimer.",
     invalid_automation_has_runs:
       "{count} exécutions ont été lancées depuis cette automatisation et y sont rattachées : elle ne peut donc pas être supprimée. Archivez-la plutôt.",
+    invalid_automation_role_last:
+      "« {role} » est le dernier rôle de cette automatisation, et une automatisation en garde toujours au moins un : il ne peut donc pas être retiré. Modifiez plutôt le rôle, ou, si l'automatisation n'est plus utile, archivez-la puis supprimez-la.",
+    invalid_automation_export_only:
+      "« {automation} » a été créée avant que les automatisations aient des rôles et n'est conservée que pour être exportée : elle ne peut donc pas être modifiée. Exportez-la, reconstruisez-la et importez-la comme une nouvelle automatisation, ou, si elle n'est plus utile, archivez-la puis supprimez-la.",
     invalid_action_placed_elsewhere:
       "Cette action est placée dans des automatisations d’autres projets ({automations}). Retirez-la avant de la déplacer dans « {project} ».",
     invalid_automation_archived: "« {automation} » est archivée. Sortez-la des archives avant de la lancer.",

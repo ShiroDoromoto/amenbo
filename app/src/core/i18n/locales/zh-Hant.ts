@@ -1914,6 +1914,10 @@ export const zhHant: Translation = {
       "此動作仍放在圖中——共 {count} 處。先從圖中移除再刪除。",
     invalid_automation_has_runs:
       "此自動化已啟動過 {count} 次執行，這些記錄都歸在它名下，因此無法刪除。請改為封存。",
+    invalid_automation_role_last:
+      "「{role}」是此自動化的最後一個角色，而自動化始終至少要保留一個角色，因此無法移除。請改為修改該角色；如果不再需要此自動化，請先封存再刪除。",
+    invalid_automation_export_only:
+      "「{automation}」建立於自動化有角色之前，只保留用於匯出，因此無法修改。請匯出、重新建構，並作為新的自動化匯入；如果不再需要，請先封存再刪除。",
     invalid_action_placed_elsewhere:
       "此動作放在其他專案的自動化中（{automations}）。先從那裡移除，再移到「{project}」。",
     invalid_automation_archived: "「{automation}」已封存。先取回再啟動。",

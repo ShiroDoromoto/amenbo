@@ -2336,7 +2336,7 @@ fn all_commands() -> Value {
                    { "name": "--model <str>", "help": "the model beside the agent (--clear-model for the agent's own default)" },
                    { "name": "--json", "help": "machine-readable output" }]),
             json!(["amenbo automation role-update 5 --agent codex --model gpt-5", "amenbo automation role-update 5 --headcount 3", "amenbo automation role-update 5 --clear-entry"])),
-        cmd("automation role-rm", "Takes a role out of its automation. The placement its round started at stays on the picture. The last role of an automation is refused as invalid — an automation always has at least one; change it with `automation role-update` instead. Confirms unless --yes.",
+        cmd("automation role-rm", "Takes a role out of its automation. The placement its round started at stays on the picture. The last role of an automation is refused as invalid_automation_role_last — an automation always has at least one; rewrite it with `automation role-update` instead, or archive the automation (`automation update <id> --archived true`) and delete it with `automation rm`. An automation written before automations had roles is refused as invalid_automation_export_only, here and by every command that rewrites its definition — export it with `automation export`, rebuild it and import it as a new automation, or archive it and delete it. Confirms unless --yes.",
             json!([{ "name": "<id>", "help": "role id", "required": true },
                    { "name": "--yes/-y", "help": "skip the confirmation" }]),
             json!(["amenbo automation role-rm 5 --yes"])),

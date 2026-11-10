@@ -1909,6 +1909,10 @@ export const ko: Translation = {
       "이 액션은 아직 그림에 놓여 있습니다(모두 {count}곳). 그림에서 뺀 다음 삭제하세요.",
     invalid_automation_has_runs:
       "이 오토메이션에서 {count}개의 실행이 시작되었고 그 기록이 여기에 묶여 있어서 삭제할 수 없습니다. 대신 보관하세요.",
+    invalid_automation_role_last:
+      "“{role}”은(는) 이 오토메이션의 마지막 역할이고, 오토메이션에는 역할이 항상 하나는 있어야 해서 삭제할 수 없습니다. 대신 역할을 수정하세요. 오토메이션이 더 이상 필요 없다면 보관한 다음 삭제하세요.",
+    invalid_automation_export_only:
+      "“{automation}”은(는) 역할이 생기기 전의 예전 형식이라 내보내기용으로만 남겨 두어서 수정할 수 없습니다. 내보낸 뒤 다시 만들어 새 오토메이션으로 가져오세요. 더 이상 필요 없다면 보관한 다음 삭제하세요.",
     invalid_action_placed_elsewhere:
       "이 액션은 다른 프로젝트의 자동화({automations})에 놓여 있습니다. 거기서 뺀 다음 “{project}”(으)로 옮기세요.",
     invalid_automation_archived: "“{automation}”은(는) 보관됨입니다. 되돌린 뒤에 시작하세요.",

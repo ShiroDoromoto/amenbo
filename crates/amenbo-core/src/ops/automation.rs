@@ -165,19 +165,24 @@ enum Def {
 /// **An automation kept only to be written out is not rewritten either**
 /// ([`Automation::export_only`]). Nothing turns it into the present shape, and editing it in place would
 /// leave a picture from before roles looking as though somebody had rebuilt it. It is exported, rebuilt
-/// by hand and imported as a new automation. Its name, notes, archiving and deletion are not its
-/// definition, and stay open ([`update`], [`delete`]).
+/// by hand and imported as a new automation — or, when it is no longer wanted, archived and deleted. Its
+/// name, notes, archiving and deletion are not its definition, and stay open ([`update`], [`delete`]).
+/// The refusal is `invalid_automation_export_only`, carrying the automation's name.
 fn rewritable(tx: &WriteTx<'_>, def: Def) -> Result<()> {
     let refused = match def {
         Def::Automation(id) => {
             let automation = live_automation(tx, id)?;
             if automation.export_only {
-                return Err(Error::invalid(format!(
-                    "automation '{}' was written before automations had roles and is kept only to be \
-                     written out — export it with `automation export`, rebuild it and import it as a new \
-                     automation",
-                    automation.name
-                )));
+                return Err(Error::Invalid(
+                    Msg::new(format!(
+                        "automation '{}' was written before automations had roles and is kept only to be \
+                         written out, so its definition is not rewritten — export it with `automation \
+                         export`, rebuild it and import it as a new automation, or archive it and delete it",
+                        automation.name
+                    ))
+                    .coded(ErrorCode::InvalidAutomationExportOnly)
+                    .with("automation", automation.name.as_str()),
+                ));
             }
             None
         }
@@ -2919,17 +2924,22 @@ pub fn role_move(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<AutomationR
 /// run with no role does ([`crate::ops::automation_run::roles_started`]). Where failed rounds were filed to it, the automation is
 /// left with nobody to file them to, which the launch check refuses until somebody says again.
 ///
-/// **The last role is not taken out**: an automation always has at least one. Its name and the rest can
-/// be changed instead ([`role_update`]).
+/// **The last role is not taken out**: an automation always has at least one
+/// (`invalid_automation_role_last`, carrying the role's name). Its name and the rest can be changed
+/// instead ([`role_update`]), or the automation archived and deleted with it ([`delete`]).
 pub fn role_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let role = live_role(tx, id)?;
     rewritable(tx, Def::Automation(role.automation_id))?;
     if read::automation_role_siblings(tx.conn(), role.automation_id, Some(id))?.is_empty() {
-        return Err(Error::invalid(format!(
-            "role '{}' is the last one of its automation, and an automation always has at least one role \
-             — change it instead of taking it out",
-            role.name
-        )));
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "role '{}' is the last one of its automation, and an automation always has at least one \
+                 role — rewrite it instead of taking it out, or archive the automation and delete it",
+                role.name
+            ))
+            .coded(ErrorCode::InvalidAutomationRoleLast)
+            .with("role", role.name.as_str()),
+        ));
     }
     take_role_off_tasks(tx, id)?;
     stop_filing_failures_to(tx, &role)?;
@@ -4579,6 +4589,11 @@ mod tests {
             kept(role_update(tx, role.id, start).map(|_| ()));
             kept(version_add(tx, automation.id).map(|_| ()));
             assert_eq!(read::automation_placement_ids(tx.conn(), automation.id).expect("read").len(), 2);
+            // It names itself, so the screen and the CLI can say what to do instead.
+            let refused = role_delete(tx, role.id).expect_err("kept");
+            assert_eq!(refused.code(), "invalid_automation_export_only");
+            let fields: Vec<_> = refused.fields().expect("values ride along").iter().collect();
+            assert_eq!(fields, vec![("automation", automation.name.as_str())]);
 
             let renamed = update(tx, automation.id, Some("古い版"), None, Some(true), None, None).expect("rename, archive");
             assert!(renamed.archived && renamed.export_only);
@@ -4641,8 +4656,11 @@ mod tests {
             assert_eq!((born[0].entry_placement_id, born[0].agent.as_deref()), (None, None), "starting nowhere");
             assert!(!unsaved(tx.conn(), automation.id).expect("unsaved"), "nothing to save yet");
 
-            let last = role_delete(tx, born[0].id);
-            assert!(matches!(last, Err(Error::Invalid(_))), "the last role stays");
+            let last = role_delete(tx, born[0].id).expect_err("the last role stays");
+            // The role's head shows the refusal in the reader's language, naming the ways round it.
+            assert_eq!(last.code(), "invalid_automation_role_last");
+            let fields: Vec<_> = last.fields().expect("values ride along").iter().collect();
+            assert_eq!(fields, vec![("role", "1件やりきるの係")]);
             assert_eq!(roles(tx).len(), 1);
 
             let other = role_add(tx, automation.id, NewRole { name: "さくら".into(), ..NewRole::default() })

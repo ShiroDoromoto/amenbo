@@ -2202,6 +2202,10 @@ const err: Partial<Record<ErrorCode, string>> = {
     "This action still stands on pictures — {count} in all. Take it off them before deleting it.",
   invalid_automation_has_runs:
     "{count} run(s) were launched from this automation, and they are filed under it, so it cannot be deleted. Archive it instead.",
+  invalid_automation_role_last:
+    "“{role}” is this automation’s last role, and an automation always keeps one, so it can’t be removed. Change the role instead — or, if the automation is no longer needed, archive it and then delete it.",
+  invalid_automation_export_only:
+    "“{automation}” was made before automations had roles and is kept only to be exported, so it can’t be changed. Export it, rebuild it and import it as a new automation — or, if it is no longer needed, archive it and then delete it.",
   invalid_action_placed_elsewhere:
     "This action is placed on automations in other projects ({automations}). Take it off them before moving it into “{project}”.",
   invalid_automation_archived: "“{automation}” is archived. Bring it back before starting it.",

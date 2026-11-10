@@ -2500,7 +2500,7 @@ pub enum AutomationCmd {
         #[arg(long)]
         clear_model: bool,
     },
-    /// Take a role out of its automation — confirms unless -y. The last role is not taken out
+    /// Take a role out of its automation — confirms unless -y. The last role is not taken out: rewrite it with `role-update`, or archive the automation and delete it
     RoleRm {
         /// role id
         id: i64,

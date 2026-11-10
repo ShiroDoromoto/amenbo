@@ -1776,7 +1776,7 @@ fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
 fn export_only_line(id: i64) -> String {
     format!(
         "written before automations had roles — kept only to be exported: `automation export {id} --out <file>`, \
-         rebuild it and `automation import` it as a new automation"
+         rebuild it and `automation import` it as a new automation, or archive it and `automation rm {id}` it"
     )
 }
 

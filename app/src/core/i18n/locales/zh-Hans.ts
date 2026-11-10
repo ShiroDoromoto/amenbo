@@ -1914,6 +1914,10 @@ export const zhHans: Translation = {
       "此动作仍放在图中——共 {count} 处。先从图中移除再删除。",
     invalid_automation_has_runs:
       "此自动化已启动过 {count} 次执行，这些记录都归在它名下，因此无法删除。请改为归档。",
+    invalid_automation_role_last:
+      "“{role}”是此自动化的最后一个角色，而自动化始终至少要保留一个角色，因此无法移除。请改为修改该角色；如果不再需要此自动化，请先归档再删除。",
+    invalid_automation_export_only:
+      "“{automation}”创建于自动化有角色之前，只保留用于导出，因此无法修改。请导出、重新构建，并作为新的自动化导入；如果不再需要，请先归档再删除。",
     invalid_action_placed_elsewhere:
       "此动作放在其他项目的自动化中（{automations}）。先从那里移除，再移到“{project}”。",
     invalid_automation_archived: "“{automation}”已归档。先取回再启动。",

@@ -403,6 +403,14 @@ pub enum ErrorCode {
     // Archiving is the way it goes out of sight, or is deleted with its runs after, and the CLI names
     // that by this code; it carries how many runs there are.
     InvalidAutomationHasRuns,
+    // Taking out the last role of an automation, which always keeps one. It carries the role's name;
+    // the ways out are to rewrite that role, or to archive the automation and delete it.
+    InvalidAutomationRoleLast,
+    // Rewriting the definition of an automation kept from before roles, which is kept only to be
+    // written out. It carries the automation's name; the ways out are to export it, rebuild it and
+    // import it as a new one, or to archive it and delete it. Not `NotReadyAutomationExportOnly`,
+    // which is the same automation's refusal to launch.
+    InvalidAutomationExportOnly,
     InvalidActionPlacedElsewhere,
     NotReadyAutomation,
     NotReadyAutomationNoSteps,
@@ -553,6 +561,8 @@ impl ErrorCode {
             ErrorCode::InvalidAutomationRunLimit => "invalid_automation_run_limit",
             ErrorCode::InvalidActionStillPlaced => "invalid_action_still_placed",
             ErrorCode::InvalidAutomationHasRuns => "invalid_automation_has_runs",
+            ErrorCode::InvalidAutomationRoleLast => "invalid_automation_role_last",
+            ErrorCode::InvalidAutomationExportOnly => "invalid_automation_export_only",
             ErrorCode::InvalidActionPlacedElsewhere => "invalid_action_placed_elsewhere",
             ErrorCode::NotReadyAutomation => "not_ready_automation",
             ErrorCode::NotReadyAutomationNoSteps => "not_ready_automation_no_steps",
@@ -685,6 +695,8 @@ impl ErrorCode {
         ErrorCode::InvalidAutomationRunLimit,
         ErrorCode::InvalidActionStillPlaced,
         ErrorCode::InvalidAutomationHasRuns,
+        ErrorCode::InvalidAutomationRoleLast,
+        ErrorCode::InvalidAutomationExportOnly,
         ErrorCode::InvalidActionPlacedElsewhere,
         ErrorCode::NotReadyAutomation,
         ErrorCode::NotReadyAutomationNoSteps,
@@ -948,6 +960,8 @@ mod tests {
             "invalid_automation_run_limit",
             "invalid_action_still_placed",
             "invalid_automation_has_runs",
+            "invalid_automation_role_last",
+            "invalid_automation_export_only",
             "invalid_action_placed_elsewhere",
             "not_ready_automation",
             "not_ready_automation_no_steps",

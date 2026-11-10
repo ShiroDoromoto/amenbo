@@ -104,6 +104,7 @@ const liveRun = (run: number, more: Partial<AutomationRunCardDto> = {}): Automat
 /** A role of a launch, with the runs `runs` in its seats. */
 const launchRole = (role: number, name: string, runs: AutomationRunCardDto[], headcount = runs.length): AutomationLaunchRoleStateDto => ({
   role, name, defined: headcount, headcount, underWay: runs.length, toLetGo: 0, held: false, runs, waiting: 0, firstWaiting: [],
+  atRunLimit: false,
 });
 
 /** Three tasks waiting for a person: the value v1, still open before theirs on the dimension 7, first. */
@@ -111,7 +112,8 @@ const AWAITS: AutomationAwaitsPersonDto = { project: 1, tasks: 3, dimension: 7 }
 
 /** The launch 5, with the roles `roles` and what needs a person's hand `attention`. */
 const launchOf = (roles: AutomationLaunchRoleStateDto[], attention: AutomationLaunchAttentionDto[] = []): AutomationLaunchStateDto => ({
-  launch: 5, project: 1, automation: 3, automationName: "Nightly", status: "running", maxHeadcount: 10, roles, attention,
+  launch: 5, project: 1, automation: 3, automationName: "Nightly", status: "running", maxHeadcount: 10, maxRunLimit: 100,
+  underWay: roles.reduce((sum, role) => sum + role.underWay, 0), roles, attention,
 });
 
 /** The task `task` of the role `role`, stopped until the task `incident` closes. */
@@ -695,6 +697,19 @@ describe("a role's menu", () => {
     await again();
     expect(desks()[0]!.querySelector(".runroles__notes"), "a headcount for this launch alone is the menu's to say").toBeNull();
   });
+
+  it("says quietly, in one line with the limit, that a role waits for the run limit", async () => {
+    launched = { ...launchOf([bob({ waiting: 2, atRunLimit: true })]), runLimit: 2 };
+    await pane(FRONT, { launch: 5 });
+    const line = desks()[0]!.querySelector(".runroles__notes .runroles__atlimit")!;
+    expect(line.textContent).toBe(tf("auto.run.roles.atRunLimit", { n: 2 }));
+    expect(line.getAttribute("role")).toBe("status");
+    expect(desks()[0]!.querySelector(".runroles__letgo")).toBeNull();
+
+    launched = { ...launchOf([bob({ waiting: 2 })]), runLimit: 2 };
+    await again();
+    expect(desks()[0]!.querySelector(".runroles__notes"), "a role with room said it waits").toBeNull();
+  });
 });
 
 describe("desksOf", () => {
@@ -738,6 +753,17 @@ describe("desksOf", () => {
     expect(got.desks[0]!.seats[0]!.to).toEqual(["B"]);
   });
 
+  it("carries the run limit onto the desk of a role that waits for it, and nothing onto the rest", () => {
+    const got = desksOf({
+      ...launchOf([
+        { ...launchRole(1, "A", [liveRun(4)], 2), waiting: 1, atRunLimit: true },
+        { ...launchRole(2, "B", [liveRun(5)], 1), waiting: 1 },
+      ]),
+      runLimit: 2,
+    }, FRONT);
+    expect(got.desks.map((one) => [one.role, one.atLimit])).toEqual([[1, 2], [2, null]]);
+  });
+
   it("draws the launch with no seat in front, every role on the bar while none has a task", () => {
     const got = desksOf(launchOf([launchRole(1, "A", [], 2), launchRole(2, "B", [], 1)]), null);
     expect(got.desks).toEqual([]);
@@ -759,8 +785,8 @@ describe("runDesks", () => {
   it("draws the run's role as a desk with the run its one seat, and the rest on the bar, in the order they are defined in", () => {
     const got = runDesks(RUNNING, [role(3, "C"), role(2, "B", 3, "seed"), role(1, "A"), role(9, "Elsewhere", 9)]);
     expect(got.desks).toEqual([{
-      role: 2, name: "B", icon: "seed", headcount: 1, held: false, heldAlone: false, waiting: 0, first: [], stopped: [], awaits: null, control: null,
-      seats: [{ run: 15, task: "AMB-T-7 Fix", step: "check", state: "running", since: 1000, to: [], pausing: false }],
+      role: 2, name: "B", icon: "seed", headcount: 1, held: false, heldAlone: false, waiting: 0, first: [], stopped: [], awaits: null, atLimit: null,
+      control: null, seats: [{ run: 15, task: "AMB-T-7 Fix", step: "check", state: "running", since: 1000, to: [], pausing: false }],
     }]);
     expect(got.idle.map((one) => [one.role, one.headcount])).toEqual([[3, null], [1, null]]);
   });

@@ -166,6 +166,16 @@ export async function editAutomation(
 }
 
 /**
+ * **Write the most runs that go at once across an automation's roles** — `null` for no limit
+ * (`AMB-D-1145`). Like a role's headcount it is part of the draft, and the next launch goes with it once
+ * it is saved. Core refuses a limit outside 1 to the cap, the cap being the detail's `maxRunLimit`.
+ */
+export async function setAutomationRunLimit(id: number, limit: number | null): Promise<void> {
+  if (!inTauri()) return;
+  return ack("automation_run_limit_set", { id, limit });
+}
+
+/**
  * **Add a trigger to an automation**, after the ones it already has and enabled — what files a task
  * on its own and starts a run of this automation with it. When it is next asked is counted from the
  * write, so it is not passed. What core refuses — a wait under a minute, a task with no title, a role
@@ -1646,6 +1656,27 @@ export async function setLaunchHeadcount(launch: number, role: number, headcount
 export async function resetLaunchHeadcount(launch: number, role: number): Promise<void> {
   if (!inTauri()) return;
   return invoke<void>("automation_launch_headcount_reset", { launchId: launch, roleId: role });
+}
+
+/**
+ * **Change the most runs that go at once in this launch alone**, across its roles — `null` for no
+ * limit (`AMB-D-1145`). The definition is left as it is, and the launch goes back to it when it ends. A
+ * raise is taken up at once; a cut lets runs go as their tasks end
+ * (`amenbo_core::ops::automation_run::launch_limit_set`). Core refuses a limit outside 1 to the cap, the
+ * cap being the launch state's `maxRunLimit`.
+ */
+export async function setLaunchLimit(launch: number, limit: number | null): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_launch_limit_set", { launchId: launch, limit });
+}
+
+/**
+ * **Put this launch back at its definition's run limit**
+ * (`amenbo_core::ops::automation_run::launch_limit_reset`). The menu offers it only where the two differ.
+ */
+export async function resetLaunchLimit(launch: number): Promise<void> {
+  if (!inTauri()) return;
+  return invoke<void>("automation_launch_limit_reset", { launchId: launch });
 }
 
 /**

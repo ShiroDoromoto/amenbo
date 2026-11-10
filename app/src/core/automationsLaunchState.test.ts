@@ -19,7 +19,7 @@ beforeEach(() => {
 // One launch is read at once, by its id, for the pane drawn per launch.
 describe("reading one launch", () => {
   it("asks for the launch by its id and hands back what it answers", async () => {
-    const state = { launch: 3, project: 1, automation: 2, automationName: "Alice", status: "running", maxHeadcount: 10, roles: [] };
+    const state = { launch: 3, project: 1, automation: 2, automationName: "Alice", status: "running", maxHeadcount: 10, maxRunLimit: 100, underWay: 0, roles: [] };
     invoke.mockResolvedValue(state);
     expect(await fetchLaunchState(3)).toBe(state);
     expect(invoke).toHaveBeenCalledWith("automation_launch_state", { launchId: 3 });
@@ -37,10 +37,10 @@ describe("counting one launch", () => {
   const run = (over: Partial<AutomationRunCardDto>) => ({ status: "running", waiting: false, ...over }) as unknown as AutomationRunCardDto;
   const role = (headcount: number, runs: AutomationRunCardDto[], held = false) => ({
     role: headcount, name: "Alice", defined: headcount, headcount, underWay: runs.length, toLetGo: 0, held, runs,
-    waiting: 0, firstWaiting: [],
+    waiting: 0, firstWaiting: [], atRunLimit: false,
   });
   const state = (over: Partial<AutomationLaunchStateDto> = {}): AutomationLaunchStateDto => ({
-    launch: 3, project: 1, automation: 2, automationName: "Alice", status: "running", maxHeadcount: 10, attention: [],
+    launch: 3, project: 1, automation: 2, automationName: "Alice", status: "running", maxHeadcount: 10, maxRunLimit: 100, underWay: 0, attention: [],
     roles: [
       role(3, [run({ run: 1 }), run({ run: 2, waiting: true }), run({ run: 3, pauseBeforeNextTask: true })]),
       role(2, [run({ run: 4, status: "paused" })], true),

@@ -2026,6 +2026,37 @@ mod tests {
         });
     }
 
+    /// **A launch read at once names the run limit, and the roles that wait for it** (`AMB-D-1145`): a
+    /// role with a task to take and a seat free waits while the launch has as many runs under way as it
+    /// lets go at once. With the limit lifted, it does not.
+    #[test]
+    fn a_launch_read_at_once_names_the_roles_waiting_for_the_run_limit() {
+        use crate::ops::automation_run::{launch_headcount_set, launch_limit_set, launch_state, LaunchLimit};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = round_picture(tx, project);
+            crate::ops::test_support::room_for(tx, automation.id, 2);
+            for t in ["a", "b", "c", "d"] {
+                ours(tx, t, &automation, None);
+            }
+            let (launch, role, _) = two_at_work(tx, &automation);
+            launch_headcount_set(tx, launch, role, 3).expect("a third seat");
+
+            let state = launch_state(tx.conn(), launch).expect("read");
+            assert_eq!(state.limit, LaunchLimit { defined: None, limit: None });
+            assert_eq!(state.under_way, 2);
+            assert!(!state.roles[0].at_run_limit, "no limit");
+
+            launch_limit_set(tx, launch, Some(2)).expect("two at once");
+            let state = launch_state(tx.conn(), launch).expect("read");
+            assert_eq!(state.limit, LaunchLimit { defined: None, limit: Some(2) });
+            assert!(state.roles[0].at_run_limit, "a seat is free and a task waits, but two is the most");
+
+            launch_limit_set(tx, launch, Some(3)).expect("three at once");
+            assert!(!launch_state(tx.conn(), launch).expect("read").roles[0].at_run_limit, "room again");
+        });
+    }
+
     /// **A launch read at once names what keeps a role's tasks from being taken, role by role**
     /// (`AMB-D-999`): where none of a role's tasks is there to take, the value still open before theirs
     /// and how many it holds back. A role with a task to take counts nothing, and the tasks of one role

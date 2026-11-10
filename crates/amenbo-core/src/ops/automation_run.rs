@@ -3175,6 +3175,11 @@ pub struct LaunchState {
     /// Every role the newest saved version holds, in the order they are defined in — one with no task
     /// under way and none waiting among them.
     pub roles: Vec<LaunchRoleState>,
+    /// **The most runs that go at once in it, beside its definition** ([`launch_limit`], `AMB-D-1145`).
+    pub limit: LaunchLimit,
+    /// **How many runs of its automation are under way**, in every role — the ones the limit counts
+    /// ([`RunTotal`]). 0 once the launch has ended.
+    pub under_way: usize,
     /// **What needs a person's hand now** ([`attention_in_launch`]) — drawn under the launch's heading,
     /// and not at all where it is empty.
     pub attention: Vec<LaunchAttention>,
@@ -3202,6 +3207,10 @@ pub struct LaunchRoleState {
     /// **How many of its tasks wait for a person's hand** (`AMB-D-1144`), read whether or not one is
     /// waiting to be taken. `None` where none does.
     pub awaits_person: Option<AwaitsPerson>,
+    /// **It waits for the run limit** (`AMB-D-1145`): a task is waiting for it to take and a seat of it
+    /// is free, but the launch has as many runs under way as it lets go at once
+    /// ([`LaunchState::limit`]). False for a role stopped taking tasks, and in a launch paused or ended.
+    pub at_run_limit: bool,
 }
 
 /// **A role's tasks that move only once a person has done something** (`AMB-D-1144`) — a value to close,
@@ -3261,6 +3270,16 @@ pub fn launch_state(conn: &Connection, launch_id: i64) -> Result<LaunchState> {
     let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
     let on = roles_on(&pic);
     let mut headcounts = launch_headcounts(conn, launch_id)?.into_iter();
+    let limit = launch_limit(conn, launch_id)?;
+    let total = RunTotal {
+        under_way: match launch.status {
+            AutomationLaunchStatus::Ended => Vec::new(),
+            _ => read::automation_run_ids_under_way(conn, automation.id)?,
+        },
+        limit: limit.limit,
+    };
+    // A paused launch takes no task in any role, so none of them waits for the limit.
+    let at_limit = launch.status == AutomationLaunchStatus::Running && total.at_limit().is_some();
     let mut roles = Vec::with_capacity(pic.roles().len());
     for (i, role) in pic.roles().iter().enumerate() {
         let Some(headcount) = headcounts.next() else { break };
@@ -3312,6 +3331,7 @@ pub fn launch_state(conn: &Connection, launch_id: i64) -> Result<LaunchState> {
             }
             _ => (0, Vec::new(), None, None),
         };
+        let seat_free = !headcount.held && headcount.under_way.len() < headcount.headcount as usize;
         roles.push(LaunchRoleState {
             name: role.name.clone(),
             icon: role.icon.clone(),
@@ -3320,10 +3340,12 @@ pub fn launch_state(conn: &Connection, launch_id: i64) -> Result<LaunchState> {
             first_waiting,
             held_back,
             awaits_person,
+            at_run_limit: at_limit && waiting > 0 && seat_free,
         });
     }
     let attention = attention_in_launch(conn, launch.id)?;
-    Ok(LaunchState { launch, automation_name: automation.name, roles, attention })
+    let under_way = total.under_way.len();
+    Ok(LaunchState { launch, automation_name: automation.name, roles, limit, under_way, attention })
 }
 
 /// **The role a task was last passed on to `role_id` from** ([`WaitingTask::from_role_id`]).

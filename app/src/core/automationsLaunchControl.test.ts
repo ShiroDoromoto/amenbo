@@ -14,8 +14,10 @@ import {
   pauseLaunchBeforeNextTask,
   releaseLaunchRole,
   resetLaunchHeadcount,
+  resetLaunchLimit,
   resumeLaunch,
   setLaunchHeadcount,
+  setLaunchLimit,
   stopLaunch,
 } from "./automations";
 
@@ -56,6 +58,18 @@ describe("acting on one role of a launch", () => {
 
 // The pane's header acts on the whole launch, every role alike.
 describe("acting on a whole launch", () => {
+  it("changes the run limit for this launch, or lifts it", async () => {
+    await setLaunchLimit(4, 3);
+    expect(invoke).toHaveBeenCalledWith("automation_launch_limit_set", { launchId: 4, limit: 3 });
+    await setLaunchLimit(4, null);
+    expect(invoke).toHaveBeenCalledWith("automation_launch_limit_set", { launchId: 4, limit: null });
+  });
+
+  it("puts the run limit back at its definition's", async () => {
+    await resetLaunchLimit(4);
+    expect(invoke).toHaveBeenCalledWith("automation_launch_limit_reset", { launchId: 4 });
+  });
+
   it("pauses it before each run takes its next task", async () => {
     await pauseLaunchBeforeNextTask(4);
     expect(invoke).toHaveBeenCalledWith("automation_launch_pause_before_next_task", { launchId: 4 });

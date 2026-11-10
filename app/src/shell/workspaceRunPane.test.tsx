@@ -105,6 +105,14 @@ vi.mock("../core/automations", async (importOriginal) => ({
     hoisted.launchMoves.push(`stop ${launch}`);
     return Promise.resolve();
   },
+  setLaunchLimit: (launch: number, limit: number | null) => {
+    hoisted.launchMoves.push(`limit ${launch} ${limit}`);
+    return Promise.resolve();
+  },
+  resetLaunchLimit: (launch: number) => {
+    hoisted.launchMoves.push(`limit back ${launch}`);
+    return Promise.resolve();
+  },
   forceCancelRun: (run: number) => {
     hoisted.stopped.push(run);
     return Promise.resolve(true);
@@ -1034,11 +1042,11 @@ describe("the pane a launch is drawn in", () => {
     // Every role waits with nobody at work and no task to take.
     const idle = (id: number, name: string, headcount: number) => ({
       role: id, name, defined: headcount, headcount, underWay: 0, toLetGo: 0, held: false,
-      runs: [], waiting: 0, firstWaiting: [],
+      runs: [], waiting: 0, firstWaiting: [], atRunLimit: false,
     });
     hoisted.launch = {
       launch: 3, project: 1, automation: 3, automationName: "サンプル制作チーム", status: "running",
-      maxHeadcount: 10, attention: [], roles: [idle(1, "エンジニア", 2), idle(2, "レビュアー", 1)],
+      maxHeadcount: 10, maxRunLimit: 100, underWay: 0, attention: [], roles: [idle(1, "エンジニア", 2), idle(2, "レビュアー", 1)],
     };
     await mount();
     await act(async () => {
@@ -1078,14 +1086,14 @@ describe("the pane a launch is drawn in", () => {
 // **The header of a launch's pane** (`./LaunchHead`): the launch and the moves made on the whole of it,
 // and nothing of any one run (`AMB-D-1141`). Its moves are the launch's — pause every seat once its task
 // is over, pick it up again, stop it — and a seat's own moves are not drawn beside them. Under it, what
-// needs a person's hand.
+// needs a person's hand. At its end, "⋯" opens the launch's menu: the run limit for this launch alone.
 describe("the header of a launch's pane", () => {
   /** Launch 3 with two roles: three in the first, one working and one waiting for a task to turn up, and
    *  two in the second, one paused. */
   function launchState(over: Partial<AutomationLaunchStateDto> = {}): AutomationLaunchStateDto {
     const role = (id: number, name: string, headcount: number, runs: AutomationRunCardDto[]) => ({
       role: id, name, defined: headcount, headcount, underWay: runs.length, toLetGo: 0, held: false, runs,
-      waiting: 0, firstWaiting: [],
+      waiting: 0, firstWaiting: [], atRunLimit: false,
     });
     return {
       launch: 3,
@@ -1094,6 +1102,8 @@ describe("the header of a launch's pane", () => {
       automationName: "サンプル制作チーム",
       status: "running",
       maxHeadcount: 10,
+      maxRunLimit: 100,
+      underWay: 0,
       attention: [],
       roles: [
         role(1, "エンジニア", 3, [runCard({ run: 7, launch: 3 }), runCard({ run: 8, launch: 3, waiting: true })]),
@@ -1215,6 +1225,61 @@ describe("the header of a launch's pane", () => {
     expect(head()!.querySelector(".launchhead__name")!.textContent).toBe("サンプル制作チーム");
     expect(head()!.querySelector(".launchhead__hold")).toBeNull();
     expect(head()!.querySelector(".btn--danger")).toBeNull();
+    expect(head()!.querySelector(".runroles__more"), "a menu on a launch that has ended").toBeNull();
+  });
+
+  const panel = () => document.querySelector<HTMLElement>(".runmenu");
+  async function openMenu() {
+    await act(async () => {
+      head()!.querySelector<HTMLButtonElement>(".runroles__more")!.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+  const inMenu = (label: string) =>
+    [...panel()!.querySelectorAll<HTMLButtonElement>("button")].find(
+      (b) => b.getAttribute("aria-label") === label || b.textContent === label,
+    );
+  async function pressIn(label: string) {
+    await act(async () => {
+      inMenu(label)!.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+
+  it("opens the launch's menu from its \"⋯\", with no limit by default, set at the headcounts added up", async () => {
+    hoisted.launch = launchState({ underWay: 3 });
+    await standLaunch();
+    const more = head()!.querySelector<HTMLButtonElement>(".runroles__more")!;
+    expect(more.getAttribute("aria-label")).toBe(t("auto.run.limit.menu"));
+    await openMenu();
+    expect(panel()!.getAttribute("aria-label")).toBe(t("auto.run.limit.menu"));
+    expect(panel()!.querySelector(".menu__label")!.textContent).toBe(t("auto.run.limit.title"));
+    expect(panel()!.textContent).toContain(t("auto.run.limit.none"));
+    expect(panel()!.textContent).toContain(t("auto.run.limit.definedNone"));
+    expect(panel()!.textContent).toContain(tf("auto.run.limit.underWay", { n: 3 }));
+    expect(panel()!.querySelector(".stepper")).toBeNull();
+    expect(inMenu(t("auto.run.limit.reset")), "a way back to where it already is").toBeUndefined();
+    await pressIn(t("auto.run.limit.set"));
+    expect(hoisted.launchMoves).toEqual(["limit 3 5"]);
+  });
+
+  it("steps this launch's limit between 1 and the cap, takes it off, and puts it back at the default", async () => {
+    hoisted.launch = launchState({ runLimit: 2, definedRunLimit: 4 });
+    await standLaunch();
+    await openMenu();
+    const stepper = panel()!.querySelector<HTMLElement>(".stepper")!;
+    expect(stepper.getAttribute("aria-label")).toBe(t("auto.run.limit.of"));
+    expect(stepper.querySelector("output")!.textContent).toBe(tf("auto.run.limit.value", { n: 2 }));
+    expect(panel()!.textContent).toContain(tf("auto.run.limit.defined", { n: 4 }));
+    await pressIn(t("auto.side.headcountMore"));
+    await pressIn(t("auto.run.limit.clear"));
+    await pressIn(t("auto.run.limit.reset"));
+    expect(hoisted.launchMoves).toEqual(["limit 3 3", "limit 3 null", "limit back 3"]);
+
+    await again(launchState({ runLimit: 1, definedRunLimit: 1 }));
+    await openMenu();
+    expect(inMenu(t("auto.side.headcountLess"))!.disabled).toBe(true);
+    expect(inMenu(t("auto.run.limit.reset")), "a way back to where it already is").toBeUndefined();
   });
 
   it("is not drawn on a run's own pane", async () => {

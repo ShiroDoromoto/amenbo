@@ -617,7 +617,22 @@ roles: Array<AutomationRoleDto>,
  * **The most a role can have** ([`amenbo_core::model::MAX_ROLE_HEADCOUNT`], `AMB-D-1124`), so the
  * build screen stops its "+" where core would refuse.
  */
-maxHeadcount: number, placements: Array<AutomationPlacementDto>, edges: Array<AutomationEdgeDto>, wires: Array<AutomationWireDto>, 
+maxHeadcount: number, 
+/**
+ * **The most runs that go at once across its roles** (`AMB-D-1145`), as written here. Absent for no
+ * limit, where as many go as the roles' headcounts come to.
+ */
+runLimit?: number, 
+/**
+ * **The run limit in the newest saved version** — what the next launch goes with. Absent for no
+ * limit, and for an automation nobody has saved.
+ */
+savedRunLimit?: number, 
+/**
+ * **The most the run limit may be set to** ([`amenbo_core::model::MAX_RUN_LIMIT`]), so the build
+ * screen stops its "+" where core would refuse.
+ */
+maxRunLimit: number, placements: Array<AutomationPlacementDto>, edges: Array<AutomationEdgeDto>, wires: Array<AutomationWireDto>, 
 /**
  * **The runs going on this definition** — its own that are running or paused. The definition is
  * written all the same, and each run goes on from its snapshot (`AMB-D-1015`), so the build screen
@@ -960,7 +975,12 @@ heldBack?: AutomationHeldBackDto,
  * **How many of its tasks wait for a person's hand** (`AMB-D-1144`), read whether or not one is
  * waiting to be taken. Absent where none does.
  */
-awaitsPerson?: AutomationAwaitsPersonDto, };
+awaitsPerson?: AutomationAwaitsPersonDto, 
+/**
+ * **It waits for the run limit** (`AMB-D-1145`): a task waits for it and a seat of it is free, but
+ * the launch has as many runs under way as it lets go at once.
+ */
+atRunLimit: boolean, };
 
 /**
  * **One launch as its pane draws it, read at once** ([`amenbo_core::ops::automation_run::launch_state`])
@@ -982,6 +1002,24 @@ status: "running" | "paused" | "ended",
  * The most a role's headcount may be set to for the launch (`AMB-D-1124`).
  */
 maxHeadcount: number, 
+/**
+ * **The most runs that go at once in the launch**, across its roles (`AMB-D-1145`). Absent for no
+ * limit. Back at `defined_run_limit` once the launch has ended.
+ */
+runLimit?: number, 
+/**
+ * The run limit the newest saved version gives — what the next launch copies. Absent for no limit.
+ */
+definedRunLimit?: number, 
+/**
+ * The most the run limit may be set to for the launch ([`amenbo_core::model::MAX_RUN_LIMIT`]).
+ */
+maxRunLimit: number, 
+/**
+ * How many runs of the automation are under way, in every role — the ones the run limit counts.
+ * 0 once the launch has ended.
+ */
+underWay: number, 
 /**
  * Every role the newest saved version holds, in the order they are defined in — those with no task
  * under way or waiting among them.

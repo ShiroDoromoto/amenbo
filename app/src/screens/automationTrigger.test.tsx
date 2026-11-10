@@ -82,6 +82,7 @@ function detail(...triggers: AutomationTriggerDto[]): AutomationDetailDto {
     edges: [],
     wires: [],
     maxHeadcount: 10,
+    maxRunLimit: 100,
     failureValues: [],
     heldBy: [],
     unsaved: false,

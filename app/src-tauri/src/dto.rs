@@ -3568,6 +3568,19 @@ pub struct AutomationDetailDto {
     /// **The most a role can have** ([`amenbo_core::model::MAX_ROLE_HEADCOUNT`], `AMB-D-1124`), so the
     /// build screen stops its "+" where core would refuse.
     pub(crate) max_headcount: u32,
+    /// **The most runs that go at once across its roles** (`AMB-D-1145`), as written here. Absent for no
+    /// limit, where as many go as the roles' headcounts come to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) run_limit: Option<u32>,
+    /// **The run limit in the newest saved version** — what the next launch goes with. Absent for no
+    /// limit, and for an automation nobody has saved.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) saved_run_limit: Option<u32>,
+    /// **The most the run limit may be set to** ([`amenbo_core::model::MAX_RUN_LIMIT`]), so the build
+    /// screen stops its "+" where core would refuse.
+    pub(crate) max_run_limit: u32,
     pub(crate) placements: Vec<AutomationPlacementDto>,
     pub(crate) edges: Vec<AutomationEdgeDto>,
     pub(crate) wires: Vec<AutomationWireDto>,
@@ -4932,6 +4945,21 @@ pub struct AutomationLaunchStateDto {
     pub(crate) status: &'static str,
     /// The most a role's headcount may be set to for the launch (`AMB-D-1124`).
     pub(crate) max_headcount: u32,
+    /// **The most runs that go at once in the launch**, across its roles (`AMB-D-1145`). Absent for no
+    /// limit. Back at `defined_run_limit` once the launch has ended.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) run_limit: Option<u32>,
+    /// The run limit the newest saved version gives — what the next launch copies. Absent for no limit.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) defined_run_limit: Option<u32>,
+    /// The most the run limit may be set to for the launch ([`amenbo_core::model::MAX_RUN_LIMIT`]).
+    pub(crate) max_run_limit: u32,
+    /// How many runs of the automation are under way, in every role — the ones the run limit counts.
+    /// 0 once the launch has ended.
+    #[ts(type = "number")]
+    pub(crate) under_way: usize,
     /// Every role the newest saved version holds, in the order they are defined in — those with no task
     /// under way or waiting among them.
     pub(crate) roles: Vec<AutomationLaunchRoleStateDto>,
@@ -5038,6 +5066,9 @@ pub struct AutomationLaunchRoleStateDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) awaits_person: Option<AutomationAwaitsPersonDto>,
+    /// **It waits for the run limit** (`AMB-D-1145`): a task waits for it and a seat of it is free, but
+    /// the launch has as many runs under way as it lets go at once.
+    pub(crate) at_run_limit: bool,
 }
 
 /// **A role's tasks that move only once a person has done something**

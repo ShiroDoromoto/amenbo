@@ -109,6 +109,10 @@ pub struct AutomationView {
     /// has saved, is missing. A role keeps its id across a save and a discard (`AMB-D-961`), so the
     /// draft's roles are matched to the version's by it.
     pub saved_headcounts: BTreeMap<i64, u32>,
+    /// **The most runs that go at once in the newest saved version** (`AMB-D-1145`) — what the next
+    /// launch goes with, beside the draft's ([`Automation::run_limit`]). `None` for no limit, and for an
+    /// automation nobody has saved ([`AutomationView::saved`]).
+    pub saved_run_limit: Option<u32>,
     /// **The triggers aimed at each role**, by role id, each as its trigger ids in the order they were
     /// written in ([`Automation::triggers_aimed_at`]) — what a role that starts by a trigger is started
     /// by (`AMB-D-1127`). A role no trigger is aimed at is missing. Triggers are the automation's, not
@@ -392,6 +396,7 @@ pub fn detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>> {
         Some(version) => headcounts(&rows(saved_roles(version))?),
         None => BTreeMap::new(),
     };
+    let saved_run_limit = version.as_ref().and_then(|v| v.run_limit);
     let saved = version.map(|v| SavedVersion { version: v.version, saved_at: v.created_at });
     let unsaved = super::automation::unsaved(conn, id)?;
     let role_triggers = triggers_by_role(&automation, &roles);
@@ -405,6 +410,7 @@ pub fn detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>> {
         wires,
         roles,
         saved_headcounts,
+        saved_run_limit,
         role_triggers,
     }))
 }
@@ -454,6 +460,7 @@ pub fn saved_detail(conn: &Connection, id: i64) -> Result<Option<AutomationView>
         edges: rows(&version.edges)?,
         wires: rows(&version.wires)?,
         saved_headcounts: headcounts(&roles),
+        saved_run_limit: version.run_limit,
         roles,
         role_triggers,
     }))
@@ -797,6 +804,31 @@ mod tests {
             version_add(tx, automation.id).unwrap();
             assert_eq!(saved(tx), BTreeMap::from([(role.id, 3), (added.id, 1)]));
             assert_eq!(saved_detail(tx.conn(), automation.id).unwrap().unwrap().saved_headcounts, saved(tx));
+        });
+    }
+
+    /// **A show names the run limit of the newest saved version** (`AMB-D-1145`), beside the draft's:
+    /// none before a save, the one saved while the draft has moved past it, the draft's once it is saved
+    /// again.
+    #[test]
+    fn a_show_names_the_run_limit_of_the_saved_version() {
+        use crate::ops::automation::{run_limit_set, version_add};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation =
+                add(tx, project, NewAutomation { name: "1件やりきる".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() }).unwrap();
+            run_limit_set(tx, automation.id, Some(3)).unwrap();
+            let shown = |tx: &crate::store_engine::WriteTx<'_>| detail(tx.conn(), automation.id).unwrap().unwrap();
+            assert_eq!(shown(tx).saved_run_limit, None, "nobody has saved it");
+
+            version_add(tx, automation.id).unwrap();
+            run_limit_set(tx, automation.id, Some(5)).unwrap();
+            let view = shown(tx);
+            assert_eq!((view.automation.run_limit, view.saved_run_limit), (Some(5), Some(3)));
+
+            version_add(tx, automation.id).unwrap();
+            assert_eq!(shown(tx).saved_run_limit, Some(5));
+            assert_eq!(saved_detail(tx.conn(), automation.id).unwrap().unwrap().saved_run_limit, Some(5));
         });
     }
 

@@ -175,7 +175,8 @@ pub fn automation_import(project_id: i64, src: String) -> Result<WriteAck, CmdEr
 
 /// **Rename an automation, rewrite its notes, put it out of the way, or choose who a failed round is
 /// filed to and what it is classified under.** Only what is `Some` is written. How many of its runs may
-/// be going at once is its roles' headcount ([`automation_role_edit`]), not one of these.
+/// be going at once is its roles' headcount ([`automation_role_edit`]) and its run limit
+/// ([`automation_run_limit_set`]), not one of these.
 ///
 /// `failures_to` chooses a person or a role of this automation; core refuses a role of another one.
 /// There is no taking it back to nobody from here: a launch is refused without one, so the screen only
@@ -213,6 +214,19 @@ pub fn automation_edit(
             failures_to,
             failure_values.as_deref(),
         )?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["automations"]))
+}
+
+/// **Write the most runs that go at once across an automation's roles** — from 1 up to the cap, or
+/// `None` for no limit ([`amenbo_core::ops::automation::run_limit_set`], `AMB-D-1145`). Like a role's
+/// headcount it is part of the draft, and the next launch goes with it once it is saved. Core refuses a
+/// limit outside 1 to the cap.
+#[tauri::command]
+pub fn automation_run_limit_set(id: i64, limit: Option<u32>) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.automation_run_limit_set(id, limit)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["automations"]))
@@ -2242,8 +2256,10 @@ pub fn automation_launch_incidents(launch_id: i64) -> Result<Vec<AutomationLaunc
 /// stands, and for every role, in the order they are defined in, its headcount beside the definition's,
 /// how many are under way and still to go, whether it is held, the runs in its seats, its tasks
 /// waiting to be taken with the first three of them, what keeps them from being taken where none
-/// is (`AMB-D-999`), and what needs a person's hand now — the tasks stopped by a failure and the runs
-/// waiting for a person. The pane draws one launch from this one read, and
+/// is (`AMB-D-999`), whether it waits for the run limit, and what needs a person's hand now — the tasks
+/// stopped by a failure and the runs waiting for a person — beside the run limit for the launch and its
+/// definition, and how many runs are under way (`AMB-D-1145`). The pane draws one launch from this one
+/// read, and
 /// reads it again when the store changes.
 #[tauri::command]
 pub fn automation_launch_state(launch_id: i64) -> Result<AutomationLaunchStateDto, CmdError> {
@@ -2282,6 +2298,7 @@ pub fn automation_launch_state(launch_id: i64) -> Result<AutomationLaunchStateDt
                 decision: awaits.decision_id,
                 task: awaits.task_id,
             }),
+            at_run_limit: role.at_run_limit,
         });
     }
     Ok(AutomationLaunchStateDto {
@@ -2291,6 +2308,10 @@ pub fn automation_launch_state(launch_id: i64) -> Result<AutomationLaunchStateDt
         automation_name: state.automation_name,
         status: state.launch.status.as_str(),
         max_headcount: amenbo_core::model::MAX_ROLE_HEADCOUNT,
+        run_limit: state.limit.limit,
+        defined_run_limit: state.limit.defined,
+        max_run_limit: amenbo_core::model::MAX_RUN_LIMIT,
+        under_way: state.under_way,
         roles,
         attention: state.attention.into_iter().map(attention_dto).collect(),
     })
@@ -3381,6 +3402,29 @@ pub fn automation_launch_headcount_reset(launch_id: i64, role_id: i64) -> Result
     Ok(())
 }
 
+/// **Change the most runs that go at once in this launch alone**, across its roles — `None` for no
+/// limit ([`amenbo_core::ops::automation_run::launch_limit_set`], `AMB-D-1145`). The definition is left
+/// as it is. Core refuses a limit outside 1 to the cap and a launch that has ended. A raise is taken up
+/// by the watch's top-up, so the press wakes it; a cut lets runs go as their tasks end.
+#[tauri::command]
+pub fn automation_launch_limit_set(launch_id: i64, limit: Option<u32>) -> Result<(), CmdError> {
+    let mut store = crate::commands::open_store()?;
+    store.automation_launch_limit_set(launch_id, limit)?;
+    crate::automation_watch::wake();
+    Ok(())
+}
+
+/// **Put this launch back at its definition's run limit**
+/// ([`amenbo_core::ops::automation_run::launch_limit_reset`]). The watch is woken for the room a return
+/// to a larger limit opens.
+#[tauri::command]
+pub fn automation_launch_limit_reset(launch_id: i64) -> Result<(), CmdError> {
+    let mut store = crate::commands::open_store()?;
+    store.automation_launch_limit_reset(launch_id)?;
+    crate::automation_watch::wake();
+    Ok(())
+}
+
 /// **Stop one role of a launch taking tasks once the task under way is done**
 /// ([`amenbo_core::ops::automation_stop::hold_launch_role`]). Its runs waiting to take a task end on the
 /// spot; the watch is woken to settle them. A role is held apart from the whole launch's pause before
@@ -3483,6 +3527,9 @@ fn detail_dto(
         wires,
         roles,
         max_headcount: amenbo_core::model::MAX_ROLE_HEADCOUNT,
+        run_limit: a.run_limit,
+        saved_run_limit: view.saved_run_limit,
+        max_run_limit: amenbo_core::model::MAX_RUN_LIMIT,
         placements: view.placements.into_iter().map(|p| placement_dto(p, &mut who)).collect(),
         held_by,
         saved: view.saved.map(saved_dto),
@@ -3827,6 +3874,7 @@ mod tests {
                 first_waiting: Vec::new(),
                 held_back,
                 awaits_person: None,
+                at_run_limit: false,
             };
             serde_json::to_value(dto).expect("json")
         };

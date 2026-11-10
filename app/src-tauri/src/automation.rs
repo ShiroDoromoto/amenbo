@@ -4180,6 +4180,8 @@ mod tests {
             condition: None,
             script: None,
             task: TriggerTask::Fixed { title: "見る".into(), notes: "メモ".into(), data: None, files: Vec::new(), key: None },
+            values: Vec::new(),
+            priority: None,
             next_at,
             last_filed_at: None,
             order_key: "a0".into(),
@@ -4196,9 +4198,24 @@ mod tests {
                 "name": "受信箱",
                 "when": { "kind": "every", "minutes": 60 },
                 "task": { "kind": "fixed", "title": "見る", "notes": "メモ" },
+                "values": [],
                 "nextAt": next_at.to_rfc3339_z(),
             }),
         );
+        let classified = json(AutomationTrigger {
+            values: vec![amenbo_core::model::AutomationTriggerValue {
+                id: 9,
+                trigger_id: 1,
+                dimension_id: 4,
+                value_id: 12,
+                created_at: next_at,
+                updated_at: next_at,
+            }],
+            priority: Some(amenbo_core::model::Priority::Medium),
+            ..base.clone()
+        });
+        assert_eq!(classified["values"], serde_json::json!([12]), "the classification goes out by value ids");
+        assert_eq!(classified["priority"], "medium");
         let full = json(AutomationTrigger {
             role_id: Some(7),
             when: TriggerWhen::Tasks,
@@ -4348,6 +4365,8 @@ mod tests {
                 condition: None,
                 script: None,
                 task: NewTriggerTask::Fixed { title: "見る".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
+                values: Vec::new(),
+                priority: None,
             },
         );
         let full = read(serde_json::json!({

@@ -1976,6 +1976,7 @@ export const ja: Translation = {
     invalid_make_task_blocker_open: "起票したタスクは {ref} に依存しますが、{ref} が閉じていないので着手できません",
     invalid_make_task_value_closed: "「分類」が指す値「{value}」は閉じています",
     invalid_make_task_required_empty: "このプロジェクトで必須の {axes} に、タスクの値がありません",
+    invalid_trigger_axis_empty: "必須の軸「{axis}」に値がありません",
     invalid_make_task_task_not_a_number: "「依存させる既存のタスク」は1行に1つタスクの番号を書きますが、「{line}」は番号ではありません",
     invalid_make_task_decision_not_a_number: "「リンクする決定」は1行に1つ決定の番号を書きますが、「{line}」は番号ではありません",
     invalid_make_task_task_not_in_project: "「依存させる既存のタスク」が指す {line} は、このプロジェクトのタスクではありません",

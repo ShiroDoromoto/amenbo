@@ -1961,6 +1961,7 @@ export const nl: Translation = {
     invalid_make_task_blocker_open: "De op te pakken taak zou afhangen van {ref}, die niet gesloten is, dus kon hij niet worden opgepakt",
     invalid_make_task_value_closed: "„Classificatie” noemt de waarde „{value}”, die gesloten is",
     invalid_make_task_required_empty: "De taak zou geen waarde hebben op {axes}, wat dit project vereist",
+    invalid_trigger_axis_empty: "De verplichte as «{axis}» heeft geen waarde",
     invalid_make_task_task_not_a_number: "„Bestaande taken waarvan hij afhangt” leest één taaknummer per regel, en „{line}” is er geen",
     invalid_make_task_decision_not_a_number: "„Te koppelen besluiten” leest één besluitnummer per regel, en „{line}” is er geen",
     invalid_make_task_task_not_in_project: "„Bestaande taken waarvan hij afhangt” noemt {line}, dat niet in dit project zit",

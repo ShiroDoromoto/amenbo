@@ -83,6 +83,7 @@ const written: AutomationTriggerDto = {
   when: { kind: "idle" },
   condition: { filter: "status:todo", below: 3 },
   task: { kind: "file", path: "/Users/alice/next.md" },
+  values: [],
   nextAt: "2026-11-07T00:00:00Z",
 };
 

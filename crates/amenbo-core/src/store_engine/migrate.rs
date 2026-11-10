@@ -1585,6 +1585,15 @@ pub const STEPS: &[Step] = &[
         // holds a trigger back. No task is touched.
         apply: Apply::Custom(add_the_key_a_trigger_hands_on),
     },
+    Step {
+        to: 143,
+        name: "add automation_trigger.task_priority and automation_trigger_value, the priority and the classification of the task a trigger files",
+        // **Not seeded: every trigger files its task with no priority and no classification**, as each
+        // did until now. Which value of an axis the task should carry is the person's to say, not
+        // Amenbo's to guess. A trigger in a project with a required axis is refused at its next save and
+        // start until a person says. No task is touched.
+        apply: Apply::Custom(let_a_trigger_classify_its_task),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -2229,6 +2238,33 @@ fn add_the_key_a_trigger_hands_on(ctx: &Ctx<'_>) -> Result<()> {
             tx.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} TEXT;"))?;
         }
     }
+    Ok(())
+}
+
+/// v143: `automation_trigger.task_priority`, the priority of the task a trigger files, and
+/// `automation_trigger_value`, its classification (`AMB-D-1136`).
+///
+/// **No row is written.** The column is NULL on every trigger already there, and no trigger is given a
+/// value. Added only where it is not there yet, v68's guard and for v53's reason.
+fn let_a_trigger_classify_its_task(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_trigger")?.iter().any(|c| c == "task_priority") {
+        tx.execute_batch(
+            "ALTER TABLE automation_trigger ADD COLUMN task_priority TEXT \
+             CHECK(task_priority IN ('high', 'medium', 'low'));",
+        )?;
+    }
+    tx.execute_batch(
+        "CREATE TABLE IF NOT EXISTS automation_trigger_value (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    trigger_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_trigger(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    dimension_id BIGINT NOT NULL DEFAULT 0 REFERENCES dimension(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    value_id BIGINT NOT NULL DEFAULT 0 REFERENCES dimension_value(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    UNIQUE (trigger_id, dimension_id)
+);",
+    )?;
     Ok(())
 }
 
@@ -14547,6 +14583,9 @@ mod tests {
         run(&engine, &dir, steps_through(142), &mut crate::progress::ignore).unwrap();
 
         assert_eq!(engine.format_version().unwrap(), 142);
+        // Read through the registry once the store is raised to the latest, as the registry names the
+        // later steps' columns too.
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
         let trigger = crate::store_engine::read::automation_trigger(engine.conn(), 1).unwrap().expect("the trigger");
         assert_eq!(
             trigger.task,
@@ -14570,6 +14609,64 @@ mod tests {
                  UPDATE automation_run SET start_key = 'issue-123' WHERE id = 1;",
             )
             .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v143: a trigger written at v142 files its task with no priority and no classification, and a
+    /// trigger may then be given both — read back through the registry.
+    #[test]
+    fn a_trigger_files_its_task_unclassified_after_v143() {
+        let dir = scratch("trigger-classify");
+        let engine = store_at(&dir, 142);
+        let at = "2026-11-10T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO dimension (id, project_id, name) VALUES (1, 1, 'テーマ');
+                 INSERT INTO dimension_value (id, dimension_id, name) VALUES (1, 1, '音');
+                 INSERT INTO automation (id, project_id, name, created_at, updated_at) VALUES (1, 1, 'auto', '{at}', '{at}');
+                 INSERT INTO automation_trigger (id, automation_id, enabled, name, when_kind, every_minutes, task_kind,
+                                                 task_title, task_notes, next_at, order_key, created_at, updated_at)
+                 VALUES (1, 1, 1, '毎朝', 'every', 60, 'fixed', '在庫を見る', 'メモ', '{at}', 'm', '{at}', '{at}');"#
+            ))
+            .unwrap();
+
+        run(&engine, &dir, steps_through(143), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 143);
+        let conn = engine.conn();
+        let read = || crate::store_engine::read::automation_trigger(conn, 1).unwrap().expect("the trigger");
+        assert_eq!((read().priority, read().values), (None, Vec::new()), "nothing is guessed");
+        conn.execute_batch(&format!(
+            "UPDATE automation_trigger SET task_priority = 'medium' WHERE id = 1;
+             INSERT INTO automation_trigger_value (trigger_id, dimension_id, value_id, created_at, updated_at)
+             VALUES (1, 1, 1, '{at}', '{at}');"
+        ))
+        .unwrap();
+        assert_eq!(read().priority, Some(crate::model::Priority::Medium));
+        assert_eq!(read().values.iter().map(|v| (v.dimension_id, v.value_id)).collect::<Vec<_>>(), vec![(1, 1)]);
+        assert!(
+            conn.execute("UPDATE automation_trigger SET task_priority = 'urgent' WHERE id = 1", []).is_err(),
+            "a priority is one of the three",
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v143: a store with no automation is raised past it with nothing written.
+    #[test]
+    fn a_store_with_no_automation_is_raised_past_v143_with_nothing_written() {
+        let dir = scratch("trigger-classify-empty");
+        let engine = store_at(&dir, 142);
+
+        run(&engine, &dir, steps_through(143), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 143);
+        let count = |table: &str| -> i64 {
+            engine.conn().query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0)).unwrap()
+        };
+        assert_eq!(count("automation_trigger"), 0);
+        assert_eq!(count("automation_trigger_value"), 0);
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -24,7 +24,8 @@ use crate::model::{
     AutomationEdge, AutomationExit, AutomationPlacement, AutomationPlacementStep, AutomationPort,
     AutomationLaunch, AutomationLaunchRole, AutomationRole, AutomationRun, AutomationRunDef,
     AutomationRunPass, AutomationRunStep, AutomationRunTask, AutomationRunValue,
-    AutomationFailureValue, AutomationStep, AutomationTrigger, AutomationVersion, TriggerTask, TriggerWhen,
+    AutomationFailureValue, AutomationStep, AutomationTrigger, AutomationTriggerValue, AutomationVersion,
+    TriggerTask, TriggerWhen,
     AutomationWire, Database, Decision, DecisionComment, DecisionDimensionValue,
     DecisionEdge, DecisionMadeIn, DecisionTaskLink,
     Dimension, DimensionValue, NotifyTarget,
@@ -587,6 +588,24 @@ pub fn automation_failure_value(v: &AutomationFailureValue) -> Record {
     )
 }
 
+pub fn automation_trigger_value(v: &AutomationTriggerValue) -> Record {
+    Record::new(
+        "automation_trigger_value",
+        v.id,
+        with_audit(
+            vec![
+                ("trigger_id", kv(v.trigger_id)),
+                ("dimension_id", kv(v.dimension_id)),
+                ("value_id", kv(v.value_id)),
+            ],
+            &v.created_at,
+            &v.updated_at,
+        ),
+    )
+}
+
+/// One trigger's own row. The classification of the task it files ([`AutomationTrigger::values`]) is
+/// rows of their own ([`automation_trigger_value`]), so it is not here.
 pub fn automation_trigger(t: &AutomationTrigger) -> Record {
     let [script_program, script_args, script_timeout_minutes] = script_values(&t.script);
     let [task_script_program, task_script_args, task_script_timeout_minutes] =
@@ -644,6 +663,7 @@ pub fn automation_trigger(t: &AutomationTrigger) -> Record {
                 ("task_data", task_data),
                 ("task_files", task_files),
                 ("task_key", task_key),
+                ("task_priority", t.priority.map(|p| tv(p.as_str())).unwrap_or(Value::Null)),
             ],
             &t.created_at,
             &t.updated_at,

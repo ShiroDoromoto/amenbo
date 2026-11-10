@@ -70,7 +70,7 @@ use crate::model::{
     AutomationPortDirection,
     AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunStepStatus, AutomationStep, AutomationStoppedReason, AutomationEdge,
-    RoleStart, RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, StepScript,
+    Priority, RoleStart, RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, StepScript,
     ACTION_BOUNDARY,
     DEFAULT_EXPECTED_MINUTES, ERROR_EXIT, MAX_TRIGGER_DATA_BYTES, TakeOrder,
 };
@@ -593,8 +593,9 @@ pub struct Launcher<'a> {
 /// The run is then started like any other, in a free seat — the seat of that role where it has one free
 /// ([`file_handed`]).
 ///
-/// A trigger hands the title and notes it says, with the role the task is worked under and its own name
-/// for the line the task's timeline gets ([`fire`]). A test run hands the title, the notes and the
+/// A trigger hands the title, notes, data and files it says, with the classification and the priority
+/// written on it, the role the task is worked under and its own name for the line the task's timeline
+/// gets ([`fire`], `AMB-D-1136`). A test run hands the title, the notes and the
 /// classification it was given ([`crate::ops::automation_rehearse::rehearse`]). A person launching a run
 /// hands nothing: they file a task with a role and attach its files to it, and the launch only opens
 /// the run ([`start`]). Anything handed for a task with no title is refused: a task cannot be filed
@@ -607,8 +608,21 @@ pub struct HandedAtLaunch {
     pub title: Option<String>,
     /// Its notes. Blank is the same as none.
     pub notes: Option<String>,
-    /// Its classification, as (axis, value) by name, in the order handed.
+    /// Its classification, as (axis, value) by name, in the order handed — a test run's. Read only where
+    /// no trigger hands it.
     pub classification: Vec<(String, String)>,
+    /// Its classification, as value ids — a trigger's ([`crate::model::AutomationTrigger::values`]),
+    /// checked when it was written. A value closed since is carried all the same, as it is the
+    /// trigger's earlier choice; an axis the project requires with no value is refused
+    /// ([`crate::ops::automation::trigger_axes_empty`]).
+    pub values: Vec<i64>,
+    /// Its priority, `None` for none.
+    pub priority: Option<Priority>,
+    /// Data as JSON, put at the end of its notes in a code block ([`notes_with_data`]). Blank is the same
+    /// as none.
+    pub data: Option<String>,
+    /// The files attached to it, already in the blob store, in order.
+    pub files: Vec<TriggerFileRead>,
     /// The role it is worked under, one of the automation's own — handed by a trigger
     /// ([`crate::model::AutomationTrigger::role_id`]). `None` files it under the automation's first role.
     pub role_id: Option<i64>,
@@ -626,9 +640,20 @@ impl HandedAtLaunch {
         self.notes.as_deref().filter(|t| !t.trim().is_empty())
     }
 
-    /// What was handed for a task to be filed from: a title, notes or a classification.
+    fn data(&self) -> Option<&str> {
+        self.data.as_deref().map(str::trim).filter(|d| !d.is_empty())
+    }
+
+    /// What was handed for a task to be filed from: a title, notes, a classification, a priority, data
+    /// or files.
     fn for_a_task(&self) -> bool {
-        self.title().is_some() || self.notes().is_some() || !self.classification.is_empty()
+        self.title().is_some()
+            || self.notes().is_some()
+            || !self.classification.is_empty()
+            || !self.values.is_empty()
+            || self.priority.is_some()
+            || self.data().is_some()
+            || !self.files.is_empty()
     }
 }
 
@@ -2503,6 +2528,11 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 ///    before the run, waiting under the trigger's role
 ///    to be taken — the automation's first role where the trigger names none — and given to the AI, with
 ///    a line in its timeline naming the trigger ([`crate::activity_log::event::task_filed_by_trigger`]).
+///    It carries what the trigger hands on (`AMB-D-1136`): the data at the end of its notes in a JSON
+///    code block, the files attached to it, and the classification and priority written on the trigger.
+///    An axis the project requires that the classification leaves with no value is an error
+///    ([`crate::ops::automation::trigger_axis_empty`]), and so files nothing; the key its program wrote is
+///    not used (`AMB-D-1142`).
 ///    The run is a launch like any other ([`launch_handing`]), joining the launch standing, of the newest
 ///    saved version, sitting in the seat of the task's role ([`file_handed`]) — or of the trigger's role
 ///    where it is started by a trigger, the run then naming the trigger
@@ -2597,9 +2627,13 @@ pub fn fire(
             let handed = HandedAtLaunch {
                 title: Some(title.clone()),
                 notes: Some(notes.clone()),
+                classification: Vec::new(),
+                values: trigger.values.iter().map(|v| v.value_id).collect(),
+                priority: trigger.priority,
+                data: data.clone(),
+                files: files.to_vec(),
                 role_id: trigger.role_id,
                 trigger: Some(trigger.name.clone()),
-                ..Default::default()
             };
             launch_handing(tx, automation_id, by, &handed, ReadsFrom::Saved)?
         }
@@ -3853,7 +3887,8 @@ fn script_output<'a>(
 /// **A file a trigger hands on, taken in before the write that starts the run** — read from its path
 /// ([`read_trigger_files`]) or left in `out/` by its program ([`take_in_program_files`]) — its bytes
 /// already in the blob store, so [`fire`] attaches it to the run it starts
-/// ([`crate::model::AttachmentTarget::AutomationRun`]) without reading anything itself.
+/// ([`crate::model::AttachmentTarget::AutomationRun`]), and to the task it files where it files one
+/// ([`crate::model::AttachmentTarget::Task`], `AMB-D-1136`), without reading anything itself.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TriggerFileRead {
     /// The full path it was read from, as the trigger names it — `None` for one its program left.
@@ -4325,10 +4360,13 @@ fn launch_asking(
 /// The task is filed in the automation's project, under the role handed — the automation's first role
 /// where none was — and worked in the project's one linked folder where it has exactly one. It is given
 /// to the AI, since it is handed to the automation to be worked, and the built-in that takes a task
-/// looks for the AI's by default. Its classification is checked as the built-in that files a task
-/// checks it ([`crate::ops::automation_builtin_make::launch_values`]). A trigger's name goes on a line
-/// in its timeline ([`crate::activity_log::event::task_filed_by_trigger`]). Its creation is finished
-/// here, so it can be taken at once.
+/// looks for the AI's by default. A classification handed by name is checked as the built-in that files
+/// a task checks it ([`crate::ops::automation_builtin_make::launch_values`]); a trigger's, handed by value
+/// ids, is carried, a value closed since included, after every axis the project requires is found given
+/// ([`trigger_values`]). It takes the priority handed, its notes end with the data handed in
+/// a JSON code block ([`notes_with_data`]), and the files handed are attached to it. A trigger's name
+/// goes on a line in its timeline ([`crate::activity_log::event::task_filed_by_trigger`]). Its creation
+/// is finished here, so it can be taken at once.
 ///
 /// Refused where something was handed for a task with no title.
 fn file_handed(
@@ -4348,7 +4386,13 @@ fn file_handed(
     };
     let conn = tx.conn();
     let project_id = automation.project_id;
-    let values = crate::ops::automation_builtin_make::launch_values(conn, project_id, &handed.classification)?;
+    let (values, carried) = match handed.trigger {
+        Some(_) => (trigger_values(conn, project_id, &handed.values)?, true),
+        None => {
+            let named = crate::ops::automation_builtin_make::launch_values(conn, project_id, &handed.classification)?;
+            (named, false)
+        }
+    };
     let role_id = handed.role_id.or_else(|| pic.roles().first().map(|r| r.id));
     let filed_by = match handed.trigger {
         Some(_) => ActorKind::Ai,
@@ -4361,8 +4405,8 @@ fn file_handed(
             project_id: Some(project_id),
             due: None,
             start: None,
-            priority: None,
-            notes: handed.notes().unwrap_or_default().to_string(),
+            priority: handed.priority,
+            notes: notes_with_data(handed.notes().unwrap_or_default(), handed.data()),
             created_by_kind: Some(filed_by),
             at_binding_id: crate::ops::automation_builtin_make::sole_folder(conn, project_id)?,
             made_in: None,
@@ -4374,11 +4418,68 @@ fn file_handed(
         crate::ops::task::record_filed_by_trigger(tx, &filed, trigger)?;
     }
     for (_, value) in values {
-        crate::ops::dimension::set(tx, filed.id, value)?;
+        match carried {
+            true => crate::ops::dimension::carry_over(tx, filed.id, value)?,
+            false => crate::ops::dimension::set(tx, filed.id, value)?,
+        };
+    }
+    for file in &handed.files {
+        crate::ops::attachment::add_blob(
+            tx,
+            crate::model::AttachmentTarget::Task,
+            filed.id,
+            &file.blob.hash,
+            &file.filename,
+            file.mime.as_deref(),
+            i64::try_from(file.blob.size_bytes).unwrap_or(i64::MAX),
+            filed_by,
+        )?;
     }
     crate::ops::task::set_assignee(tx, filed.id, Some(ActorKind::Ai), filed_by)?;
     crate::ops::task::finish_creating(tx, filed.id, filed_by)?;
     Ok(role_id)
+}
+
+/// **The classification a trigger files its task with** (`values`, value ids, checked when the trigger
+/// was written) as (axis, value), with the time-axis value the task gets without anyone naming it.
+/// Refused where a value is gone or is of another project's axis, or where an axis `project_id` requires
+/// is left with no value ([`crate::ops::automation::trigger_axis_empty`]) — the first such axis named.
+/// A closed value is not refused: it is the trigger's earlier choice.
+fn trigger_values(conn: &Connection, project_id: i64, values: &[i64]) -> Result<Vec<(i64, i64)>> {
+    let mut given: Vec<(i64, i64)> = Vec::new();
+    for &value_id in values {
+        let value = read::dimension_value(conn, value_id)?
+            .ok_or_else(|| crate::ops::dimension::VALUE_NOUN.not_found(value_id.to_string()))?;
+        let axis = read::dimension(conn, value.dimension_id)?
+            .ok_or_else(|| crate::ops::dimension::NOUN.not_found(value.dimension_id.to_string()))?;
+        crate::ops::guard_same_project(
+            Some(project_id),
+            Some(axis.project_id),
+            "the classification of the task a trigger files",
+        )?;
+        given.push((axis.id, value_id));
+    }
+    if let Some(axis) = crate::ops::automation::trigger_axes_empty(conn, project_id, &given)?.into_iter().next() {
+        return Err(crate::ops::automation::trigger_axis_empty(&axis));
+    }
+    let named: Vec<i64> = given.iter().map(|&(axis, _)| axis).collect();
+    given.extend(crate::ops::task::time_axis_default(conn, project_id, crate::time::today(), &named)?);
+    Ok(given)
+}
+
+/// **The notes of a task a trigger files, with the data it hands on at their end** (`AMB-D-1136`) — a
+/// JSON code block after a blank line, or the block alone where there are no notes. Its fence is longer
+/// than any run of backticks inside the data, so the data cannot close it. No data leaves the notes as
+/// they are.
+fn notes_with_data(notes: &str, data: Option<&str>) -> String {
+    let Some(data) = data else { return notes.to_string() };
+    let longest = data.split(|c: char| c != '`').map(str::len).max().unwrap_or(0);
+    let fence = "`".repeat(longest.max(2) + 1);
+    let block = format!("{fence}json\n{data}\n{fence}");
+    match notes.trim_end() {
+        "" => block,
+        notes => format!("{notes}\n\n{block}"),
+    }
 }
 
 /// **Copy every step of `automation` down onto the run** — [`snapshot`] for each step of each
@@ -8387,6 +8488,8 @@ mod tests {
             condition: None,
             script: None,
             task: automation::NewTriggerTask::Fixed { title: "在庫を見る".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
+            values: Vec::new(),
+            priority: None,
         };
         automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers.remove(0)
     }
@@ -8481,6 +8584,8 @@ mod tests {
                         files: Vec::new(),
                         key: key.into(),
                     },
+                    values: Vec::new(),
+                    priority: None,
                 };
                 automation::trigger_set(tx, automation.id, Some(new)).expect("trigger").triggers.remove(0)
             };
@@ -8565,6 +8670,8 @@ mod tests {
                     files: vec![brief.clone()],
                     key: "issue-123".into(),
                 },
+                values: Vec::new(),
+                priority: None,
             };
             let trigger = automation::trigger_set(tx, automation.id, Some(new)).expect("trigger").triggers.remove(0);
             let blobs = crate::blob::BlobStore::at(dir.join("blobs"));
@@ -8634,6 +8741,8 @@ mod tests {
                 condition: None,
                 script: None,
                 task: automation::NewTriggerTask::File { path: task.to_string_lossy().into_owned() },
+                values: Vec::new(),
+                priority: None,
             };
             let trigger = automation::trigger_set(tx, automation.id, Some(new)).expect("trigger").triggers.remove(0);
             let blobs = crate::blob::BlobStore::at(dir.join("blobs"));
@@ -8705,6 +8814,8 @@ mod tests {
                 condition: None,
                 script: Some(watch.clone()),
                 task: automation::NewTriggerTask::Asked,
+                values: Vec::new(),
+                priority: None,
             };
             let startable = claude();
             let by = here(&startable);
@@ -8753,6 +8864,203 @@ mod tests {
         });
     }
 
+    /// **A trigger that files a task hands what it hands on to that task** (`AMB-D-1136`) — aimed at no
+    /// role, and whichever way it is written: what is written on it, what its file says, what the program
+    /// that writes the task writes, and what the script it asks first writes. The data closes the task's
+    /// notes in a JSON code block, the file is attached to the task, and the task carries the
+    /// classification and the priority written on the trigger. The run keeps what it was handed as well
+    /// (`AMB-D-1133`), and the key a program wrote is not used (`AMB-D-1142`).
+    #[test]
+    fn a_trigger_that_files_a_task_hands_it_what_it_hands_on() {
+        use crate::model::{AttachmentTarget, Priority, TriggerWhen};
+        use crate::ops::automation_stop::{stop, Ending};
+        use crate::ops::dimension::{self, NewDimension};
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let project = automation.project_id;
+            let theme = dimension::add(tx, project, NewDimension { name: "テーマ".into(), ..Default::default() })
+                .expect("an axis");
+            let sound = dimension::value_add(tx, theme.id, "音", None).expect("a value");
+            dimension::update(tx, theme.id, None, None, None, None, None, None, Some(true), None, None, None)
+                .expect("required");
+            automation::update(tx, automation.id, None, None, None, None, Some(&[sound.id][..]))
+                .expect("the failed round's classification");
+            let dir = std::env::temp_dir().join(format!("amenbo-trigger-files-a-task-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).expect("dir");
+            let brief = dir.join("brief.md");
+            std::fs::write(&brief, "# 方針\n").expect("written");
+            let brief = brief.to_string_lossy().into_owned();
+            let start = dir.join("start.json");
+            let says = serde_json::json!({
+                "title": "ボス戦の曲",
+                "notes": "テンポを上げる",
+                "data": { "stage": 5 },
+                "files": [&brief],
+            });
+            std::fs::write(&start, says.to_string()).expect("written");
+            let blobs = crate::blob::BlobStore::at(dir.join("blobs"));
+            let limits = crate::blob::CapacityPolicy::default();
+            let program = std::env::temp_dir().join("compose").to_string_lossy().into_owned();
+            let compose = automation::NewScript { program, args: Vec::new(), timeout_minutes: None };
+            let wrote = ScriptWrote {
+                title: "ボス戦の曲".into(),
+                notes: "テンポを上げる".into(),
+                data: Some(r#"{"stage":5}"#.into()),
+                key: Some("boss-5".into()),
+                files: vec![("brief.md".into(), "# 方針\n".as_bytes().to_vec())],
+            };
+            let startable = claude();
+            let by = here(&startable);
+            let kinds = [
+                ("fixed", None, automation::NewTriggerTask::Fixed {
+                    title: "ボス戦の曲".into(),
+                    notes: "テンポを上げる".into(),
+                    data: r#"{"stage":5}"#.into(),
+                    files: vec![brief.clone()],
+                    key: "boss-5".into(),
+                }),
+                ("file", None, automation::NewTriggerTask::File { path: start.to_string_lossy().into_owned() }),
+                ("script", None, automation::NewTriggerTask::Script(compose.clone())),
+                ("asked", Some(compose.clone()), automation::NewTriggerTask::Asked),
+            ];
+            for (kind, script, task) in kinds {
+                let new = automation::NewTrigger {
+                    name: "ボス戦の曲を足す".into(),
+                    role_id: None,
+                    when: TriggerWhen::Every { minutes: 24 * 60 },
+                    condition: None,
+                    script,
+                    task,
+                    values: vec![sound.id],
+                    priority: Some(Priority::Medium),
+                };
+                let trigger = automation::trigger_set(tx, automation.id, Some(new)).expect("trigger").triggers.remove(0);
+                let from_file = read_trigger_file(&trigger.task).expect("read");
+                let said = TriggerScripts::of(&trigger).map(|scripts| match kind {
+                    "asked" => ScriptsSaid { scripts, asked: Some(wrote.clone()), wrote: None },
+                    _ => ScriptsSaid { scripts, asked: None, wrote: Some(wrote.clone()) },
+                });
+                let files = match said.as_ref().and_then(|said| said.handed(&trigger.task)) {
+                    Some(wrote) => take_in_program_files(&wrote.files, &limits, &blobs).expect("taken in"),
+                    None => read_trigger_files(trigger_files(&trigger.task, from_file.as_ref()), &limits, &blobs)
+                        .expect("read"),
+                };
+                let before = read::task_ids_in_project(tx.conn(), project).expect("read");
+
+                let run = fire(tx, trigger.id, &by, trigger.next_at, said.as_ref(), from_file.as_ref(), &files)
+                    .expect("fire")
+                    .expect("a run");
+                let filed: Vec<i64> = read::task_ids_in_project(tx.conn(), project)
+                    .expect("read")
+                    .into_iter()
+                    .filter(|id| !before.contains(id))
+                    .collect();
+                let [filed] = filed[..] else { panic!("{kind}: one task filed, not {filed:?}") };
+                let task = read::task(tx.conn(), filed).expect("read").expect("there");
+                assert_eq!(task.title, "ボス戦の曲", "{kind}");
+                assert_eq!(task.notes, "テンポを上げる\n\n```json\n{\"stage\":5}\n```", "{kind}: the data closes the notes");
+                assert_eq!(task.priority, Some(Priority::Medium), "{kind}");
+                assert!(
+                    read::assignment_id(tx.conn(), filed, sound.id).expect("read").is_some(),
+                    "{kind}: filed under the trigger's classification",
+                );
+                let attached = read::attachments_for_target(tx.conn(), AttachmentTarget::Task, filed).expect("read");
+                assert_eq!(attached.len(), 1, "{kind}: {attached:?}");
+                assert_eq!(attached[0].filename.as_deref(), Some("brief.md"), "{kind}");
+                assert_eq!(attached[0].blob_hash.as_deref(), Some(files[0].blob.hash.as_str()), "{kind}");
+                assert!(!task.notes.contains("boss-5"), "{kind}: the key is not used");
+                let on_run = read::attachments_for_target(tx.conn(), AttachmentTarget::AutomationRun, run.id)
+                    .expect("read");
+                assert_eq!(on_run.len(), 1, "{kind}: the run keeps it too");
+                assert_eq!(run.start_data.as_deref(), Some(r#"{"stage":5}"#), "{kind}");
+                stop(tx, run.id, Ending::Canceled).expect("free the seat");
+            }
+            std::fs::remove_dir_all(&dir).ok();
+        });
+    }
+
+    /// **The data closes a task's notes in a code block its own backticks cannot end**, after a blank
+    /// line, or stands alone where there are no notes; no data leaves the notes as they are.
+    #[test]
+    fn the_data_closes_the_notes_in_a_json_code_block() {
+        assert_eq!(notes_with_data("見て", None), "見て");
+        assert_eq!(notes_with_data("", Some(r#"{"a":1}"#)), "```json\n{\"a\":1}\n```");
+        assert_eq!(notes_with_data("見て\n\n", Some("[]")), "見て\n\n```json\n[]\n```");
+        assert_eq!(
+            notes_with_data("", Some(r#"{"md":"````"}"#)),
+            "`````json\n{\"md\":\"````\"}\n`````",
+            "a fence longer than the backticks inside",
+        );
+    }
+
+    /// **A trigger whose project came to require an axis after it was written files nothing**
+    /// (`AMB-D-1136`) — its start is refused naming the axis, and its `next_at` stays where it was. Its
+    /// save is refused the same way until a value is named; a value it names that closed since is still
+    /// carried, as the trigger's earlier choice.
+    #[test]
+    fn a_trigger_with_a_required_axis_left_empty_files_nothing() {
+        use crate::model::TriggerWhen;
+        use crate::ops::dimension::{self, NewDimension};
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let project = automation.project_id;
+            let new = |values: Vec<i64>| automation::NewTrigger {
+                name: "ボス戦の曲を足す".into(),
+                role_id: None,
+                when: TriggerWhen::Every { minutes: 24 * 60 },
+                condition: None,
+                script: None,
+                task: automation::NewTriggerTask::Fixed {
+                    title: "ボス戦の曲".into(),
+                    notes: String::new(),
+                    data: String::new(),
+                    files: Vec::new(),
+                    key: String::new(),
+                },
+                values,
+                priority: None,
+            };
+            let trigger =
+                automation::trigger_set(tx, automation.id, Some(new(Vec::new()))).expect("trigger").triggers.remove(0);
+            let closable = NewDimension {
+                name: "テーマ".into(),
+                role: crate::model::DimensionRole::Closable,
+                ..Default::default()
+            };
+            let theme = dimension::add(tx, project, closable).expect("an axis");
+            let sound = dimension::value_add(tx, theme.id, "音", None).expect("a value");
+            dimension::value_add(tx, theme.id, "絵", None).expect("a value left open once 音 is closed");
+            dimension::update(tx, theme.id, None, None, None, None, None, None, Some(true), None, None, None)
+                .expect("required");
+            automation::update(tx, automation.id, None, None, None, None, Some(&[sound.id][..]))
+                .expect("the failed round's classification");
+            let startable = claude();
+            let by = here(&startable);
+            let before = read::task_ids_in_project(tx.conn(), project).expect("read");
+            let tasks = |tx: &WriteTx<'_>| -> Vec<i64> {
+                let now = read::task_ids_in_project(tx.conn(), project).expect("read");
+                now.into_iter().filter(|id| !before.contains(id)).collect()
+            };
+
+            let refused = fire(tx, trigger.id, &by, trigger.next_at, None, None, &[]).expect_err("an axis left empty");
+            assert_eq!(refused.error_code(), ErrorCode::InvalidTriggerAxisEmpty, "{refused}");
+            let named: Vec<(&str, &str)> = refused.fields().expect("its values").iter().collect();
+            assert_eq!(named, vec![("axis", "テーマ")]);
+            assert!(tasks(tx).is_empty(), "nothing filed");
+            let kept = read::automation_trigger(tx.conn(), trigger.id).expect("read").expect("there");
+            assert_eq!((kept.next_at, kept.last_filed_at), (trigger.next_at, None), "not moved on");
+
+            let refused = automation::trigger_update(tx, trigger.id, new(Vec::new())).expect_err("its save too");
+            assert_eq!(refused.error_code(), ErrorCode::InvalidTriggerAxisEmpty, "{refused}");
+            let trigger = automation::trigger_update(tx, trigger.id, new(vec![sound.id])).expect("a value named");
+            dimension::value_set_closed(tx, sound.id, true).expect("close it");
+            automation::trigger_update(tx, trigger.id, new(vec![sound.id])).expect("a value it names already stays");
+            fire(tx, trigger.id, &by, trigger.next_at, None, None, &[]).expect("fire").expect("a run");
+            let [filed] = tasks(tx)[..] else { panic!("one task filed") };
+            assert!(read::assignment_id(tx.conn(), filed, sound.id).expect("read").is_some(), "closed since, carried");
+        });
+    }
+
     /// **Trying a trigger shows what its script would hand on** — the title, notes, data, key and the
     /// names of the files it leaves. Where the trigger files a task, the key is left out (`AMB-D-1142`),
     /// and an answer with no title says nothing.
@@ -8773,6 +9081,8 @@ mod tests {
                 condition: None,
                 script: Some(script),
                 task: automation::NewTriggerTask::Asked,
+                values: Vec::new(),
+                priority: None,
             };
             let watch = sh(concat!(
                 r#"printf '# 123' > "$(dirname "$AMENBO_OUTPUT")/issue.md"; "#,

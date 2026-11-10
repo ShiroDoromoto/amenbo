@@ -1712,8 +1712,9 @@ roleId?: number, below: number, };
 
 /**
  * **An automation's trigger** — the wire form of [`amenbo_core::model::AutomationTrigger`]: whether
- * to file a task now (`when`, with its `condition` and `script`), what the task says (`task`), and
- * the role it is worked under. The words for each kind are the GUI's (`AMB-D-396`).
+ * to file a task now (`when`, with its `condition` and `script`), what the task says (`task`), the
+ * role it is worked under, and the classification and priority of the task it files. The words for
+ * each kind are the GUI's (`AMB-D-396`).
  */
 export type AutomationTriggerDto = { 
 /**
@@ -1732,6 +1733,15 @@ roleId?: number, when: AutomationTriggerWhenDto, condition?: AutomationTriggerCo
  * The program asked before filing a task. Absent where none is asked.
  */
 script?: AutomationStepScriptDto, task: AutomationTriggerTaskDto, 
+/**
+ * **The classification of the task it files**, by the ids of its values, at most one an axis
+ * (`AMB-D-1136`). Empty where it gives none, as one aimed at a role started by a trigger does.
+ */
+values: Array<number>, 
+/**
+ * The priority of the task it files. Absent for none.
+ */
+priority?: "high" | "medium" | "low", 
 /**
  * When it is next asked whether to file a task, as an RFC3339 instant. Read only: it is counted
  * from the write.

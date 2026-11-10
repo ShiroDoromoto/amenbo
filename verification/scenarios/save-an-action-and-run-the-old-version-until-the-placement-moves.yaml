@@ -21,6 +21,11 @@ given:
   # machine's own and cannot make a row shorter than two; the step names the first of them either way.
   - { type: action, domain: workspace, op: can-start, with: { count: 2 } }
 
+  # The task the first start takes. A start with no task to take opens no run.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the run on version 1 takes }, as: seed_1 }
+  - { type: action, domain: task, op: assign, with: { target: seed_1, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: seed_1 } }
+
   # Version 1 of the work: one step, out by the action's done way out. It is saved before it is placed,
   # so the placement stands on that version.
   - { type: action, domain: automation, op: action-add, with: { name: work }, as: work }
@@ -32,6 +37,8 @@ given:
   # Take → work → close → take again, and out once there is nothing left to take.
   - { type: action, domain: automation, op: create, with: { name: "SCENARIO SEED — one standing on an older version" }, as: auto }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: take_task, starts: true }, as: at_take }
+  # The task is the born role's, whose round starts there: a run takes only its role's tasks.
+  - { type: action, domain: task, op: update, with: { target: seed_1, role_of: auto } }
   - { type: action, domain: automation, op: place-add, with: { target: auto, action: work }, as: at_work }
   - { type: action, domain: automation, op: place-add, with: { target: auto, builtin: close_task }, as: at_close }
   - { type: action, domain: automation, op: agent-set, with: { target: at_work, step: fix, agent: claude-code } }
@@ -108,6 +115,13 @@ steps_cli:
     domain: automation
     op: placement-read
     with: { target: auto, name: work, saved: true, version: 2, latest: 2, steps: [fix, check] }
+  # The second start takes a task of its own: the stopped run gave its task back to the person, not
+  # to the AI. It is put under the role last and started at once, since the launch stays open after
+  # the stop and the app fills its free seat on its next look once a task is there to take.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task the run on version 2 takes }, as: seed_2 }
+  - { type: action, domain: task, op: assign, with: { target: seed_2, assignee: me-ai } }
+  - { type: action, domain: task, op: finish-creating, with: { target: seed_2 } }
+  - { type: action, domain: task, op: update, with: { target: seed_2, role_of: auto } }
   - { type: action, domain: automation, op: start, with: { target: auto }, as: run_on_2 }
   - { type: assert, domain: automation, op: run, with: { target: run_on_2, status: running } }
   - { type: action, domain: automation, op: stop, with: { target: run_on_2 } }

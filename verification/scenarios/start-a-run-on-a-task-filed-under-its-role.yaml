@@ -1,17 +1,18 @@
 # Work reaches an automation as a task filed under one of its roles, with its files attached to the
-# task, and a start only opens the run. The task is filed with the value the project
-# requires, put under the role whose round starts at the built-in that takes a task, given to the AI,
-# and a file is attached to it. The start then hands the run nothing.
+# task, and a start only opens the run. The task is filed with the value the project requires, and so
+# is the task a failed round would file. It is put under the role whose round starts at the built-in
+# that takes a task, given to the AI, and a file is attached to it. The start then hands the run
+# nothing.
 #
 # A start with no app up on the store is refused, since only the app opens a step. A run started at a
 # terminal opens no step, so what is read is the run it started.
 id: start-a-run-on-a-task-filed-under-its-role
 title: A run starts on a task filed under its role, and the start hands it nothing
 description: >
-  Place the built-in that takes a task where an automation's role starts, then close it. File a task
-  with the value the project requires, put it under that role, give it to the AI and attach a file to
-  it. Start the automation from the terminal with no app up on the store and read it refused; then,
-  with the app up, start it and read the run under way.
+  Place the built-in that takes a task where an automation's role starts, then close it. Give the
+  task a failed round files the value the project requires. File a task with that value, put it under
+  that role, give it to the AI and attach a file to it. Start the automation from the terminal with no
+  app up on the store and read it refused; then, with the app up, start it and read the run under way.
 given:
   # The axis the road requires. Values first: an axis offering none cannot be required.
   - { type: action, domain: dimension, op: create, with: { name: 職種 } }
@@ -27,6 +28,9 @@ given:
 steps_cli:
   # Every task has to carry a value on it from here on.
   - { type: action, domain: dimension, op: required, with: { dimension: 職種, required: true } }
+  # The task a failed round is filed as is one of them, so the automation carries the value too:
+  # without it, the save and the start are both refused.
+  - { type: action, domain: automation, op: update, with: { target: auto, failure_dim: 職種=エンジニア } }
   # A run starts from the newest saved version, so it is saved first.
   - { type: action, domain: automation, op: save, with: { target: auto } }
 

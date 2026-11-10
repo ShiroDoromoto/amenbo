@@ -424,7 +424,13 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 )
                 .map_err(CliError::from)?;
                 let failure_values = failure_values_line(store, &view.automation.failure_values)?;
-                render_automation(flags, &view, &carriers, &failure_values);
+                let triggers = view
+                    .automation
+                    .triggers
+                    .iter()
+                    .map(|t| trigger_line(store, t))
+                    .collect::<Result<Vec<_>, _>>()?;
+                render_automation(flags, &view, &carriers, &failure_values, &triggers);
             }
         }
         AutomationCmd::Export { id, out, force } => {
@@ -511,29 +517,36 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 .map_err(CliError::from)?;
             write_envelope(flags, "automation.update", "automation", serde_json::to_value(&a).unwrap(), None, false, format!("✓ Updated automation: {} ({})", a.name, a.id));
         }
-        AutomationCmd::Trigger {
-            id,
-            trigger: trigger_id,
-            every,
-            when_idle,
-            if_tasks,
-            fewer_than,
-            if_tasks_role,
-            if_script,
-            script_args,
-            script_timeout_minutes,
-            title,
-            notes,
-            task_from_file,
-            task_from_script,
-            task_script_args,
-            task_script_timeout_minutes,
-            name,
-            role,
-            rm,
-            on,
-            off,
-        } => {
+        AutomationCmd::Trigger { args } => {
+            let crate::cli::TriggerArgs {
+                id,
+                trigger: trigger_id,
+                every,
+                when_idle,
+                if_tasks,
+                fewer_than,
+                if_tasks_role,
+                if_script,
+                script_args,
+                script_timeout_minutes,
+                title,
+                notes,
+                task_from_file,
+                task_from_script,
+                task_script_args,
+                task_script_timeout_minutes,
+                task_from_if_script,
+                data,
+                files,
+                key,
+                name,
+                role,
+                dim,
+                priority,
+                rm,
+                on,
+                off,
+            } = *args;
             use amenbo_core::model::{TriggerCondition, TriggerWhen};
             use amenbo_core::ops::automation::{NewTrigger, NewTriggerTask};
             // clap takes the automation or --trigger, never both, and --rm, --on and --off only with
@@ -553,7 +566,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             }
             if on || off {
                 let t = store.automation_trigger_set_enabled(target, on).map_err(CliError::from)?;
-                let line = format!("✓ Switched a trigger of automation {} — {}", t.automation_id, trigger_line(&t));
+                let line = format!("✓ Switched a trigger of automation {} — {}", t.automation_id, trigger_line(store, &t)?);
                 write_envelope(flags, "automation.trigger", "automation_trigger", serde_json::to_value(&t).unwrap(), None, false, line);
                 return Ok(0);
             }
@@ -574,29 +587,52 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 (None, false, None, Some(_)) => TriggerWhen::Script,
                 (None, false, None, None) => unreachable!("clap asks for a when unless --rm, --on or --off"),
             };
-            let task = match (title, task_from_file, task_from_script) {
-                (Some(title), _, _) => NewTriggerTask::Fixed {
-                    title,
-                    notes: body_arg_opt(notes)?.unwrap_or_default(),
-                    data: String::new(),
-                    files: Vec::new(),
-                    key: String::new(),
-                },
-                (None, Some(path), _) => NewTriggerTask::File { path },
-                (None, None, Some(program)) => NewTriggerTask::Script(NewScript {
+            let task = match (task_from_file, task_from_script, task_from_if_script) {
+                (Some(path), _, _) => NewTriggerTask::File { path },
+                (None, Some(program), _) => NewTriggerTask::Script(NewScript {
                     program,
                     args: task_script_args,
                     timeout_minutes: task_script_timeout_minutes,
                 }),
-                (None, None, None) => unreachable!("clap asks for the task unless --rm, --on or --off"),
+                (None, None, true) => NewTriggerTask::Asked,
+                // Whether the title may be left blank turns on the role it is aimed at, which the store
+                // asks (`AMB-D-1133`).
+                (None, None, false) => NewTriggerTask::Fixed {
+                    title: title.unwrap_or_default(),
+                    notes: body_arg_opt(notes)?.unwrap_or_default(),
+                    data: body_arg_opt(data)?.unwrap_or_default(),
+                    files,
+                    key: key.unwrap_or_default(),
+                },
             };
+            let values = if dim.is_empty() {
+                Vec::new()
+            } else {
+                let automation_id = match trigger_id {
+                    Some(trigger_id) => store
+                        .automation_trigger(trigger_id)
+                        .map_err(CliError::from)?
+                        .ok_or_else(|| {
+                            CliError::from(amenbo_core::Error::not_found(format!(
+                                "automation trigger '{trigger_id}' not found"
+                            )))
+                        })?
+                        .automation_id,
+                    None => target,
+                };
+                let view = store.automation_detail(automation_id).map_err(CliError::from)?.ok_or_else(|| {
+                    CliError::from(amenbo_core::Error::not_found(format!("automation '{automation_id}' not found")))
+                })?;
+                resolve_dim_pairs(store, view.automation.project_id, &dim, ClassifiedSide::Task)?
+            };
+            let priority = priority.as_deref().map(crate::cmd::arg::parse_priority).transpose()?;
             let name = name.unwrap_or_default();
-            let new = NewTrigger { name, role_id: role, when, condition, script, task, values: Vec::new(), priority: None };
+            let new = NewTrigger { name, role_id: role, when, condition, script, task, values, priority };
             let (t, done) = match trigger_id {
                 Some(trigger_id) => (store.automation_trigger_update(trigger_id, new).map_err(CliError::from)?, "Rewrote a trigger of"),
                 None => (store.automation_trigger_add(target, new).map_err(CliError::from)?, "Added a trigger to"),
             };
-            let line = format!("✓ {done} automation {} — {}", t.automation_id, trigger_line(&t));
+            let line = format!("✓ {done} automation {} — {}", t.automation_id, trigger_line(store, &t)?);
             write_envelope(flags, "automation.trigger", "automation_trigger", serde_json::to_value(&t).unwrap(), None, false, line);
         }
         AutomationCmd::Stop { id, off } => {
@@ -1681,12 +1717,14 @@ fn next_line(next: &Next) -> String {
 // ───────────────────────── what was built ─────────────────────────
 
 /// One automation in full: the placements on it, and what each runs under. `failure_values` is the line
-/// [`failure_values_line`] wrote, which needs the store to name the axes.
+/// [`failure_values_line`] wrote, and `triggers` the lines [`trigger_line`] wrote, which need the store
+/// to name the axes.
 fn render_automation(
     flags: &Flags,
     view: &AutomationView,
     carriers: &BTreeMap<(i64, i64), Carrier>,
     failure_values: &str,
+    triggers: &[String],
 ) {
     let a = &view.automation;
     human(flags, format!("Automation {}  {}", a.id, a.name));
@@ -1706,8 +1744,8 @@ fn render_automation(
         human(flags, failures_to_line(a.failures_to, &view.roles));
         human(flags, failure_values);
     }
-    for trigger in &a.triggers {
-        human(flags, trigger_line(trigger));
+    for line in triggers {
+        human(flags, line.as_str());
     }
     human(flags, saved_line(view.saved.as_ref(), view.unsaved));
     if let Some(line) = showing_line(view.showing, view.saved.as_ref()) {
@@ -1723,11 +1761,19 @@ fn render_automation(
 }
 
 /// One of an automation's triggers: its id, whether it is on, what it is called and does, the tasks it
-/// looks at and the program it asks first, the task it files (or the file or program that says it) and
-/// the role it files it under, when it is next asked (for an `idle`, a `tasks` or a `script`, the
-/// soonest it may be — and nothing, for one that is off, as it is asked no more), when it last
-/// filed a task, and when it last could not start one and why, where it has not started one since.
-fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
+/// looks at and the program it asks first, the task it files (or the file or program that says it) —
+/// whether it hands on data and files, and its key — the role it files it under, the classification
+/// and priority it files it with (the store names the axes), when it is next asked (for an `idle`, a
+/// `tasks` or a `script`, the soonest it may be — and nothing, for one that is off, as it is asked no
+/// more), when it last filed a task, and when it last could not start one and why, where it has not
+/// started one since.
+fn trigger_line(store: &Store, trigger: &amenbo_core::model::AutomationTrigger) -> Result<String, CliError> {
+    let values: Vec<(i64, i64)> = trigger.values.iter().map(|v| (v.dimension_id, v.value_id)).collect();
+    Ok(trigger_text(trigger, value_pairs(store, &values)?))
+}
+
+/// [`trigger_line`] once the trigger's classification is named, `axis=value` each.
+fn trigger_text(trigger: &amenbo_core::model::AutomationTrigger, mut filed_as: Vec<String>) -> String {
     use amenbo_core::model::{TriggerTask, TriggerWhen};
     let fewer = trigger.condition.as_ref().map(|c| {
         let of_role = c.role_id.map(|role| format!(" under role {role}")).unwrap_or_default();
@@ -1749,7 +1795,26 @@ fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
         (_, first) => format!("{when} while {first}"),
     };
     let task = match &trigger.task {
-        TriggerTask::Fixed { title, .. } => format!("\"{title}\""),
+        TriggerTask::Fixed { title, data, files, key, .. } => {
+            let mut task = match title.as_str() {
+                "" => "an untitled one".to_string(),
+                title => format!("\"{title}\""),
+            };
+            let mut with = Vec::new();
+            if data.is_some() {
+                with.push("data".to_string());
+            }
+            if !files.is_empty() {
+                with.push(format!("{} file(s)", files.len()));
+            }
+            if !with.is_empty() {
+                task.push_str(&format!(" with {}", with.join(" and ")));
+            }
+            if let Some(key) = key {
+                task.push_str(&format!(" keyed \"{key}\""));
+            }
+            task
+        }
         TriggerTask::File { path } => format!("the task \"{path}\" says"),
         TriggerTask::Script { script } => format!("the task \"{}\" writes", script.program),
         TriggerTask::Asked => "what its script writes".to_string(),
@@ -1759,6 +1824,10 @@ fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
         name => format!(" as \"{name}\""),
     };
     let under = trigger.role_id.map(|role| format!(" under role {role}")).unwrap_or_default();
+    if let Some(priority) = trigger.priority {
+        filed_as.push(format!("priority {}", priority.as_str()));
+    }
+    let filed_as = if filed_as.is_empty() { String::new() } else { format!(" as {}", filed_as.join(", ")) };
     let (state, next) = if trigger.enabled {
         ("on", format!("{next} {}", trigger.next_at.to_rfc3339_z()))
     } else {
@@ -1773,7 +1842,7 @@ fn trigger_line(trigger: &amenbo_core::model::AutomationTrigger) -> String {
         None => String::new(),
     };
     format!(
-        "trigger {} {state}: starts a run on its own{called} {when}, filing {task}{under} — {next}; {last}{refused}",
+        "trigger {} {state}: starts a run on its own{called} {when}, filing {task}{under}{filed_as} — {next}; {last}{refused}",
         trigger.id
     )
 }
@@ -1834,15 +1903,22 @@ fn failure_values_line(store: &Store, values: &[AutomationFailureValue]) -> Resu
         return Ok("failed rounds are filed with no classification — give one with `automation update --failure-dim`"
             .to_string());
     }
+    let values: Vec<(i64, i64)> = values.iter().map(|v| (v.dimension_id, v.value_id)).collect();
+    Ok(format!("failed rounds are filed as {}", value_pairs(store, &values)?.join(", ")))
+}
+
+/// A classification as `<axis>=<value>` each, from `(axis id, value id)` in the order given — an axis or
+/// value gone named by its id.
+fn value_pairs(store: &Store, values: &[(i64, i64)]) -> Result<Vec<String>, CliError> {
     let mut pairs = Vec::with_capacity(values.len());
-    for v in values {
-        let axis = store.dimension(v.dimension_id).map_err(CliError::from)?;
-        let value = store.dimension_value(v.value_id).map_err(CliError::from)?;
-        let axis = axis.map_or_else(|| v.dimension_id.to_string(), |d| d.name);
-        let value = value.map_or_else(|| v.value_id.to_string(), |d| d.name);
+    for &(dimension_id, value_id) in values {
+        let axis = store.dimension(dimension_id).map_err(CliError::from)?;
+        let value = store.dimension_value(value_id).map_err(CliError::from)?;
+        let axis = axis.map_or_else(|| dimension_id.to_string(), |d| d.name);
+        let value = value.map_or_else(|| value_id.to_string(), |d| d.name);
         pairs.push(format!("{axis}={value}"));
     }
-    Ok(format!("failed rounds are filed as {}", pairs.join(", ")))
+    Ok(pairs)
 }
 
 /// `--failures-to` as typed: `human` for a person, or a role's id.
@@ -2584,7 +2660,7 @@ mod tests {
             created_at: at,
             updated_at: at,
         };
-        assert!(super::trigger_line(&trigger).ends_with("has filed none yet"));
+        assert!(super::trigger_text(&trigger, Vec::new()).ends_with("has filed none yet"));
         let why = Refused {
             code: "invalid_trigger_file_missing".into(),
             message: "the file '/tmp/next.md' is not there".into(),
@@ -2593,12 +2669,12 @@ mod tests {
         };
         let refused = AutomationTrigger { last_refused: Some(TriggerRefusal { at, why }), ..trigger };
         assert!(
-            super::trigger_line(&refused).ends_with(&format!(
+            super::trigger_text(&refused, Vec::new()).ends_with(&format!(
                 "has filed none yet; could not start one at {}: the file '/tmp/next.md' is not there",
                 at.to_rfc3339_z()
             )),
             "{}",
-            super::trigger_line(&refused)
+            super::trigger_text(&refused, Vec::new())
         );
     }
 }

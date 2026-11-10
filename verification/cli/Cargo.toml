@@ -35,4 +35,4 @@ serde_yaml = "0.9"
 # (`store held-at-a-split`). The same kind of reach `age-blobs` makes on a blob's mtime, and the
 # store is a plain SQLite file (no shipped path keys one). `bundled` so the build carries its own
 # SQLite rather than asking each machine for one.
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }

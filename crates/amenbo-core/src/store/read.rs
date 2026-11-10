@@ -846,6 +846,17 @@ impl Store {
         crate::ops::automation_view::detail(self.engine.conn(), id)
     }
 
+    /// **One automation trigger**, read by its id — what tells which automation it is one of. `None`
+    /// where that id names none.
+    pub fn automation_trigger(&self, id: i64) -> Result<Option<crate::model::AutomationTrigger>> {
+        let Some(trigger) = crate::store_engine::read::automation_trigger(self.engine.conn(), id)? else {
+            return Ok(None);
+        };
+        let automation_id = trigger.automation_id;
+        self.reachable(&format!("automation #{automation_id}"), |c| super::owner::automation(c, automation_id))?;
+        Ok(Some(trigger))
+    }
+
     /// **Does the automation's draft hold anything its newest saved version does not?** —
     /// [`crate::ops::automation::unsaved`].
     pub fn automation_unsaved(&self, id: i64) -> Result<bool> {

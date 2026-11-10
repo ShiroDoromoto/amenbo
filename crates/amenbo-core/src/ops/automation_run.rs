@@ -2472,11 +2472,12 @@ pub struct TriggersDue {
 
 /// **Which triggers are due at `now`** — the first part of each, asked of every enabled trigger of an
 /// automation that may be started by one ([`read::automations_triggered`]), which leaves out a stopped
-/// one. One held back ([`TriggerHeld`]) — by its role stopped, by the runs under way in its role's
-/// seats, or by its condition — is not due: it would decide not to start, so a look need not open a
-/// write to hear it say so. One with a script — one that asks whether to start, or one that writes what
-/// it says — is put in `ask` rather than `due`: its program may run for hours, so it is not run here. It
-/// writes nothing: [`fire`] asks all of it again, in the transaction it writes in.
+/// one. One held back ([`TriggerHeld`]) — by its role stopped, by a failure it filed still open, by the
+/// runs under way in its role's seats, or by its condition — is not due: it would decide not to start,
+/// so a look need not open a write to hear it say so. One with a script — one that asks whether to
+/// start, or one that writes what it says — is put in `ask` rather than `due`: its program may run for
+/// hours, so it is not run here. It writes nothing: [`fire`] asks all of it again, in the transaction it
+/// writes in.
 pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
     let mut found = TriggersDue::default();
     for automation in read::automations_triggered(conn)? {
@@ -2490,11 +2491,13 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
         for trigger in enabled() {
             if let (true, Some((seats, pic))) = (trigger.next_at <= now, &seats) {
                 let room = room_of(seats, trigger_role(pic, trigger));
+                let failure = open_failure(conn, trigger.id)?;
                 // Its tasks are counted only once nothing else holds it back. A condition that no longer
                 // reads (an axis it names gone since) is left for `fire` to refuse, as a launch refused
                 // is, rather than stopping every other trigger on this look.
-                let held_by =
-                    |condition: Option<&ConditionCount>| held(&automation, trigger, room, paused, condition, now);
+                let held_by = |condition: Option<&ConditionCount>| {
+                    held(&automation, trigger, room, paused, failure, condition, now)
+                };
                 if held_by(None).is_none()
                     && condition_count(conn, automation.project_id, trigger)
                         .map_or(true, |condition| held_by(condition.as_ref()).is_none())
@@ -2522,7 +2525,8 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 ///
 /// 1. **Whether to start.** Not while anything holds it back ([`TriggerHeld`]): not before the
 ///    trigger's `next_at`, not while the launch standing is paused, not while its role is stopped
-///    taking tasks for the launch, and not while the seats of its role say no (`AMB-D-1123`,
+///    taking tasks for the launch, not while a failure filed for a run it started is open
+///    (`AMB-D-1128`, [`open_failure`]), and not while the seats of its role say no (`AMB-D-1123`,
 ///    [`room_of`]): an `every` or a `tasks` waits while every seat of the role is
 ///    taken, where a task filed would have no run to go to, and an `idle` waits until none of them is.
 ///    Nor while its condition does not hold. One with a script files one only where
@@ -2545,7 +2549,8 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 ///    a line in its timeline naming the trigger ([`crate::activity_log::event::task_filed_by_trigger`]).
 ///    The run is a launch like any other ([`launch_handing`]), joining the launch standing, of the newest
 ///    saved version, sitting in the seat of the task's role ([`file_handed`]) — or of the trigger's role
-///    where it is started by a trigger. What `by` says is passed on as it stands.
+///    where it is started by a trigger, the run then naming the trigger
+///    ([`AutomationRun::trigger_id`]). What `by` says is passed on as it stands.
 /// 4. **What it handed on, kept on the run** (`AMB-D-1133`, [`keep_what_was_handed`]): the trigger's
 ///    name, the title, notes and data in the run's own columns, and the files attached to the run —
 ///    whichever way the run was started.
@@ -2571,13 +2576,14 @@ pub fn fire(
     let (pic, _) = definition(tx.conn(), &automation, ReadsFrom::Saved)?;
     let room = room_of(&seats_of(tx.conn(), automation_id, &pic)?, trigger_role(&pic, &trigger));
     let paused = launch_paused(tx.conn(), automation_id)?;
-    if held(&automation, &trigger, room, paused, None, now).is_some() {
+    let failure = open_failure(tx.conn(), trigger.id)?;
+    if held(&automation, &trigger, room, paused, failure, None, now).is_some() {
         return Ok(None);
     }
     let condition = condition_count(tx.conn(), automation.project_id, &trigger)?;
     let program_wrote = said.and_then(|said| said.handed(&trigger.task));
     let program_files = program_wrote.into_iter().flat_map(|wrote| wrote.files.iter().map(|(name, _)| name));
-    if held(&automation, &trigger, room, paused, condition.as_ref(), now).is_some()
+    if held(&automation, &trigger, room, paused, failure, condition.as_ref(), now).is_some()
         || TriggerScripts::of(&trigger).is_some_and(|scripts| said.map(|said| &said.scripts) != Some(&scripts))
         || !files.iter().filter_map(|f| f.path.as_ref()).eq(trigger_files(&trigger.task))
         || !files.iter().filter(|f| f.path.is_none()).map(|f| &f.filename).eq(program_files)
@@ -2603,17 +2609,22 @@ pub fn fire(
         )));
     }
     let run = match started_in {
-        Some(role) => launch_asking(
-            tx,
-            automation_id,
-            by,
-            &HandedAtLaunch::default(),
-            ReadsFrom::Saved,
-            Sit::Role(role),
-            false,
-            |_| true,
-        )?
-        .run()?,
+        Some(role) => {
+            let started = launch_asking(
+                tx,
+                automation_id,
+                by,
+                &HandedAtLaunch::default(),
+                ReadsFrom::Saved,
+                Sit::Role(role),
+                false,
+                |_| true,
+            )?
+            .run()?;
+            let named = AutomationRun { trigger_id: Some(trigger.id), ..started.clone() };
+            crate::ops::emit_update(tx, record::automation_run(&started), record::automation_run(&named))?;
+            named
+        }
         None => {
             let handed = HandedAtLaunch {
                 title: Some(title.clone()),
@@ -3322,6 +3333,9 @@ pub enum TriggerHeld {
     /// Its role is stopped taking tasks for the launch standing ([`Seats::held`]): a run started now
     /// would have no seat to sit in.
     RoleHeld,
+    /// A run it started failed, and the task filed for it, `task_id`, is not closed yet
+    /// (`AMB-D-1128`, [`open_failure`]): a run started now would most likely fall the same way.
+    FailureOpen { task_id: i64 },
     /// Its condition does not hold: as many tasks as it says, or more, match.
     Condition,
     /// It is not asked again before `next_at` — a minute after it was written or last filed one, or
@@ -3333,14 +3347,16 @@ pub enum TriggerHeld {
 }
 
 /// **The first thing that holds `trigger` back at `now`** ([`TriggerHeld`]), or `None` where nothing
-/// does — `room` being its role's seats ([`room_of`]), and `paused` whether its launch standing is
-/// paused. Its condition is weighed only where it is handed counted:
+/// does — `room` being its role's seats ([`room_of`]), `paused` whether its launch standing is
+/// paused, and `failure` the task filed for a run it started that is still open ([`open_failure`]). Its
+/// condition is weighed only where it is handed counted:
 /// `None` leaves it out, for a reader that counts the tasks only once nothing cheaper has said no.
 fn held(
     automation: &Automation,
     trigger: &crate::model::AutomationTrigger,
     room: Room,
     paused: bool,
+    failure: Option<i64>,
     condition: Option<&ConditionCount>,
     now: Timestamp,
 ) -> Option<TriggerHeld> {
@@ -3352,6 +3368,8 @@ fn held(
         Some(TriggerHeld::Paused)
     } else if room.held {
         Some(TriggerHeld::RoleHeld)
+    } else if let Some(task_id) = failure {
+        Some(TriggerHeld::FailureOpen { task_id })
     } else if condition.is_some_and(|condition| !condition.holds()) {
         Some(TriggerHeld::Condition)
     } else if now < trigger.next_at {
@@ -3361,6 +3379,18 @@ fn held(
     } else {
         None
     }
+}
+
+/// **The task filed for a failed run of this trigger that is not closed yet** (`AMB-D-1128`) — the newest
+/// such run's, or `None` where none is open. The trigger starts no run while one is: closing it lets the
+/// trigger look at its condition again, and reopening it holds the trigger back again.
+fn open_failure(conn: &Connection, trigger_id: i64) -> Result<Option<i64>> {
+    for task_id in read::automation_trigger_incidents(conn, trigger_id)? {
+        if read::task_status(conn, task_id)?.is_some_and(|status| !status.is_closed()) {
+            return Ok(Some(task_id));
+        }
+    }
+    Ok(None)
 }
 
 /// **Count the tasks a trigger's condition looks at** (`project_id` being its automation's) — `None`
@@ -3425,19 +3455,20 @@ pub struct TriggerCheck {
 
 /// **Ask one trigger whether it would file a task at `now`, writing nothing** — every part [`fire`]
 /// asks but its programs: whether it is enabled, whether its automation starts a run, whether the
-/// launch standing is paused, whether its role is stopped, how many tasks its condition counts, whether
-/// it is due, and whether the seats of its role leave it room. Its programs may run for hours, so they
-/// are left to [`trigger_try`].
+/// launch standing is paused, whether its role is stopped, whether a failure it filed is open, how many
+/// tasks its condition counts, whether it is due, and whether the seats of its role leave it room. Its
+/// programs may run for hours, so they are left to [`trigger_try`].
 pub fn trigger_check(conn: &Connection, trigger_id: i64, now: Timestamp) -> Result<TriggerCheck> {
     let trigger = read::automation_trigger(conn, trigger_id)?.ok_or_else(|| not_found("automation trigger", trigger_id))?;
     let automation =
         read::automation(conn, trigger.automation_id)?.ok_or_else(|| not_found("automation", trigger.automation_id))?;
     let room = trigger_room(conn, &automation, &trigger)?;
     let paused = launch_paused(conn, automation.id)?;
+    let failure = open_failure(conn, trigger.id)?;
     let condition = condition_count(conn, automation.project_id, &trigger)?;
     Ok(TriggerCheck {
         trigger_id,
-        held: held(&automation, &trigger, room, paused, condition.as_ref(), now),
+        held: held(&automation, &trigger, room, paused, failure, condition.as_ref(), now),
         condition,
         runs_programs: TriggerScripts::of(&trigger).is_some(),
         files_a_task: files_a_task(conn, &trigger)?,
@@ -4139,6 +4170,8 @@ fn launch_asking(
         start_title: None,
         start_notes: None,
         start_data: None,
+        trigger_id: None,
+        incident_task_id: None,
         created_at: now,
         updated_at: now,
     };
@@ -8404,6 +8437,55 @@ mod tests {
                 panic!("a task needs a title");
             };
             assert!(why.contains("has no title"), "{why}");
+        });
+    }
+
+    /// **A run a trigger started that fails files a task, and holds its trigger back until it is closed**
+    /// (`AMB-D-1128`) — with no task of its own, the failure is filed in the automation's project to the
+    /// person, naming the run, and the run names it. While it is open the trigger is not due, starts no
+    /// run and says why; closed, the trigger starts one again. A run a person canceled files nothing
+    /// and holds nothing back.
+    #[test]
+    fn a_failed_run_of_a_trigger_files_a_task_and_holds_the_trigger_until_it_is_closed() {
+        use crate::model::TriggerWhen;
+        use crate::ops::automation_stop::{stop, Ending};
+        with_tx(|tx| {
+            let (automation, role, _) = with_a_role_started_by_a_trigger(tx);
+            let trigger = aimed_at(tx, &automation, role.id);
+            let due = trigger.next_at;
+            let startable = claude();
+            let by = here(&startable);
+            let run = fire(tx, trigger.id, &by, due, None, &[]).expect("fire").expect("a run");
+            assert_eq!(run.trigger_id, Some(trigger.id), "the run names the trigger that started it");
+
+            let failed = stop(tx, run.id, Ending::Failed(AutomationStoppedReason::Crashed)).expect("fail").run;
+            let filed = failed.incident_task_id.expect("a failure filed");
+            assert_eq!(read::task_ids_in_project(tx.conn(), automation.project_id).expect("read"), vec![filed]);
+            let task = read::task(tx.conn(), filed).expect("read").expect("there");
+            assert_eq!(task.status, crate::model::TaskStatus::Todo);
+            assert_eq!(task.assignee_kind, Some(ActorKind::Human), "to whoever the automation sends one to");
+            assert!(task.notes.contains(&run.id.to_string()), "naming the run: {}", task.notes);
+            assert!(!task.notes.contains("AMB-T-"), "and no task of the run's own: {}", task.notes);
+            assert!(read::task_dependency_ids(tx.conn(), filed).expect("read").is_empty(), "nothing waits on it");
+
+            let then = TriggerWhen::Every { minutes: 24 * 60 }.after(due);
+            assert_eq!(
+                trigger_check(tx.conn(), trigger.id, then).expect("check").held,
+                Some(TriggerHeld::FailureOpen { task_id: filed }),
+            );
+            assert!(triggers_due(tx.conn(), then).expect("ask").due.is_empty(), "not due while it is open");
+            assert!(fire(tx, trigger.id, &by, then, None, &[]).expect("fire").is_none(), "nor started");
+
+            crate::ops::task::set_status(tx, filed, crate::model::TaskStatus::Done, ActorKind::Human).expect("close");
+            assert_eq!(trigger_check(tx.conn(), trigger.id, then).expect("check").held, None);
+            assert_eq!(triggers_due(tx.conn(), then).expect("ask").due, vec![trigger.id]);
+            let again = fire(tx, trigger.id, &by, then, None, &[]).expect("fire").expect("started again");
+
+            let canceled = stop(tx, again.id, Ending::Canceled).expect("cancel").run;
+            assert_eq!(canceled.incident_task_id, None, "a person stopped it, so nothing is filed");
+            assert_eq!(read::task_ids_in_project(tx.conn(), automation.project_id).expect("read"), vec![filed]);
+            let later = TriggerWhen::Every { minutes: 24 * 60 }.after(then);
+            assert_eq!(trigger_check(tx.conn(), trigger.id, later).expect("check").held, None);
         });
     }
 

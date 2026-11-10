@@ -328,7 +328,7 @@ CREATE TABLE IF NOT EXISTS automation_trigger (
     script_program TEXT,
     script_args TEXT NOT NULL DEFAULT '',
     script_timeout_minutes BIGINT,
-    task_kind TEXT NOT NULL DEFAULT '' CHECK(task_kind IN ('', 'fixed', 'file', 'script', 'asked')),
+    task_kind TEXT NOT NULL DEFAULT '' CHECK(task_kind IN ('', 'fixed', 'file', 'script')),
     task_title TEXT,
     task_notes TEXT,
     task_path TEXT,
@@ -485,6 +485,8 @@ CREATE TABLE IF NOT EXISTS automation_run (
     start_title TEXT,
     start_notes TEXT,
     start_data TEXT,
+    trigger_id BIGINT REFERENCES automation_trigger(id) ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    incident_task_id BIGINT REFERENCES task(id) ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
 );

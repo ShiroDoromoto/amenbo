@@ -1833,7 +1833,8 @@ pub enum AutomationCmd {
         #[arg(long, default_value = "")]
         notes: String,
         /// file a failed round to a person (`human`); a role is chosen once it is defined, with
-        /// `automation update --failures-to`. Left out, it is unsaid and a start is refused
+        /// `automation update --failures-to`. Left out, it is unsaid and the save and the start are
+        /// refused
         #[arg(long, value_name = "human")]
         failures_to: Option<String>,
     },
@@ -1892,10 +1893,10 @@ pub enum AutomationCmd {
         #[arg(long)]
         archived: Option<bool>,
         /// where a failed round is filed: `human` for a person, or the id of one of this automation's
-        /// roles
+        /// roles that starts by a task
         #[arg(long, value_name = "human|ROLE_ID")]
         failures_to: Option<String>,
-        /// leave where a failed round is filed unsaid again; a start is then refused
+        /// leave where a failed round is filed unsaid again; the save and the start are then refused
         #[arg(long, conflicts_with = "failures_to")]
         no_failures_to: bool,
         /// classify the task a failed round is filed as, by name: `<axis>=<value>`, one per axis
@@ -1903,8 +1904,8 @@ pub enum AutomationCmd {
         /// the axes not named keep theirs
         #[arg(long = "failure-dim", value_name = "AXIS=VALUE")]
         failure_dim: Vec<String>,
-        /// take every value off the task a failed round is filed as; a start is then refused while
-        /// the project requires an axis
+        /// take every value off the task a failed round is filed as; the save and the start are then
+        /// refused while the project requires an axis
         #[arg(long, conflicts_with = "failure_dim")]
         no_failure_dim: bool,
     },
@@ -1912,17 +1913,19 @@ pub enum AutomationCmd {
     /// of its role is taken, whenever few enough tasks match a filter, or whenever a program says so,
     /// it files a task under its role — the one written here, the one a file says, or the one a program
     /// writes — and starts a run of the automation in that role's seat to take it, with nobody pressing
-    /// start. With --trigger instead of the automation, write that one trigger afresh, take it
-    /// away with --rm, or switch it on and off with --on and --off. Only the app runs triggers
+    /// start. Aimed at a role started by a trigger, it files no task and starts that role's run
+    /// straight, handing it the title, notes, data and files. With --trigger instead of the automation,
+    /// write that one trigger afresh, take it away with --rm, or switch it on and off with --on and
+    /// --off. Only the app runs triggers
     Trigger {
         #[command(flatten)]
         args: Box<TriggerArgs>,
     },
     /// Stop an automation from starting new rounds, or let it start them again with --off. While it is
     /// stopped, a start is refused and its triggers file nothing, and a run of it finishes the round it
-    /// is on and pauses before it takes its next task — one waiting for room to take one pauses at once,
-    /// and a wait for a task ends. Picking such a run up again (`resume`) is refused until the automation is started
-    /// again
+    /// is on and pauses before it takes its next task — one standing where it takes it, waiting for a
+    /// task to turn up or for room in the action that takes it, pauses at once. Picking such a run up
+    /// again (`resume`) is refused until the automation is started again
     Stop {
         /// automation id
         id: i64,
@@ -2697,19 +2700,20 @@ pub struct TriggerArgs {
     /// --on or --off
     #[arg(long, value_name = "TRIGGER_ID")]
     pub trigger: Option<i64>,
-    /// file a task every this many minutes, counted from now and then from each task filed
+    /// fire every this many minutes, counted from now and then from each time it fired — file a task,
+    /// or start a run straight where it is aimed at a role started by a trigger
     #[arg(long, value_name = "MINUTES", required_unless_present_any = ["rm", "on", "off", "when_idle", "if_tasks", "if_script"], conflicts_with = "when_idle", value_parser = clap::value_parser!(u32).range(i64::from(amenbo_core::model::MIN_TRIGGER_EVERY_MINUTES)..))]
     pub every: Option<u32>,
-    /// file a task whenever none of the automation's runs is running or paused, a minute after it
-    /// last filed one at the soonest
+    /// fire whenever no seat of its role is taken by a run running or paused, a minute after it last
+    /// fired at the soonest
     #[arg(long)]
     pub when_idle: bool,
-    /// file a task only while fewer than --fewer-than tasks of the automation's project match this
-    /// filter (what `task list --filter` takes; no `project:`). On its own, with no --every or
-    /// --when-idle, it files one whenever that holds, a minute after it last filed one at the soonest
+    /// fire only while fewer than --fewer-than tasks of the automation's project match this filter
+    /// (what `task list --filter` takes; no `project:`). On its own, with no --every or --when-idle,
+    /// it fires whenever that holds, a minute after it last fired at the soonest
     #[arg(long, value_name = "FILTER", requires = "fewer_than")]
     pub if_tasks: Option<String>,
-    /// how few tasks matching --if-tasks let it file one (1 or more)
+    /// how few tasks matching --if-tasks let it fire (1 or more)
     #[arg(long, value_name = "N", requires = "if_tasks", value_parser = clap::value_parser!(u32).range(1..))]
     pub fewer_than: Option<u32>,
     /// count only the tasks matching --if-tasks that are worked under this role — the id
@@ -2717,12 +2721,12 @@ pub struct TriggerArgs {
     /// whatever their role
     #[arg(long, value_name = "ROLE_ID", requires = "if_tasks")]
     pub if_tasks_role: Option<i64>,
-    /// file a task only once this program, by its full path, says so: it writes
+    /// fire only once this program, by its full path, says so: it writes
     /// {"version":1,"file":true} (or false) to the file named in AMENBO_OUTPUT — or
     /// {"version":2,"start":true,…} (or false) with a title, notes, data and key beside it, and files
     /// in out/ next to that file — and its exit code says only whether it ran to the end. On its own,
     /// with no --every, --when-idle or --if-tasks, it is asked whenever there is room for a run, a
-    /// minute after it last filed one at the soonest
+    /// minute after it last fired at the soonest
     #[arg(long, value_name = "PATH")]
     pub if_script: Option<String>,
     /// one argument handed to the --if-script program as it is, with no shell in between — repeat it
@@ -2787,8 +2791,9 @@ pub struct TriggerArgs {
     /// what the trigger is called, as the timeline of a task it files names it (blank unless given)
     #[arg(long)]
     pub name: Option<String>,
-    /// the role the task it files is worked under — the id `automation role-list` shows, of one of
-    /// this automation's own roles. Left out, it files the task under the automation's first role
+    /// the role it is aimed at — the id `automation role-list` shows, of one of this automation's own
+    /// roles. A role started by a task works the task it files; a role started by a trigger has a run
+    /// started straight in its seat, with no task filed. Left out, the automation's first role
     #[arg(long, value_name = "ROLE_ID")]
     pub role: Option<i64>,
     /// classify the task it files as `<axis>=<value>`, as `task add --dim` does — repeat it for

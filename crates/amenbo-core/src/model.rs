@@ -1778,6 +1778,13 @@ pub(crate) fn default_role_headcount() -> u32 {
     DEFAULT_ROLE_HEADCOUNT
 }
 
+/// **The most an automation's run limit may be written as** ([`Automation::run_limit`]). Like
+/// [`MAX_ROLE_HEADCOUNT`], it is there to turn away a number that cannot be meant, and it is checked where
+/// the limit is written (`ops::automation`), not by the store, so changing it needs no migration. A limit
+/// is there to bring the sessions going at once below what the roles' headcounts come to, and a hundred
+/// at once is past what one machine is meant to run. No limit is written as `None`, not as a large number.
+pub const MAX_RUN_LIMIT: u32 = 100;
+
 /// **The order a role takes its tasks in** ([`AutomationRole::take_order`]) — which of the tasks not
 /// started under it the built-in that takes a task reserves first. Four orders, and only these: the ops
 /// write a role's order as this type, and a word that is none of the four is refused where a row is
@@ -1978,6 +1985,13 @@ pub struct Automation {
     /// automation's, not part of a saved version.
     #[serde(default)]
     pub stopped: bool,
+    /// **The most runs of this automation that go at once**, across its roles (`AMB-D-1145`), counted
+    /// the way a role's headcount is: running or paused. `None` is no limit — as many as the roles'
+    /// headcounts come to. From 1 up to [`MAX_RUN_LIMIT`]. Unlike `archived`, it is part of a saved
+    /// version, as the headcounts are, and each launch copies it from the newest one
+    /// ([`AutomationLaunch::run_limit`]).
+    #[serde(default)]
+    pub run_limit: Option<u32>,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -2665,6 +2679,10 @@ pub struct AutomationVersion {
     /// existed holds `[]`.
     #[serde(default)]
     pub roles: String,
+    /// [`Automation::run_limit`] as it stood when this version was saved. `None` on a version saved
+    /// before automations had one.
+    #[serde(default)]
+    pub run_limit: Option<u32>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
@@ -2729,6 +2747,12 @@ pub struct AutomationLaunch {
     pub started_by_kind: Option<ActorKind>,
     #[serde(default)]
     pub ended_at: Option<Timestamp>,
+    /// **The most runs that go at once in this launch**, across its roles — the run limit copied from the
+    /// newest saved version when the launch opened ([`Automation::run_limit`]), then changed on the launch
+    /// alone ([`crate::ops::automation_run::launch_limit_set`]), as a role's headcount is
+    /// ([`AutomationLaunchRole`]). `None` is no limit.
+    #[serde(default)]
+    pub run_limit: Option<u32>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

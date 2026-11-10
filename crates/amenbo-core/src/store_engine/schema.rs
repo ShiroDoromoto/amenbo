@@ -1148,6 +1148,10 @@ datasets! {
         // it that finishes a round pauses rather than starting the next. Like `archived`, not part of a
         // saved version.
         stopped: bool_col,
+        // The most runs of the automation that go at once, across its roles (`AMB-D-1145`). NULL is no
+        // limit. Unlike `archived`, part of a saved version, as the roles' headcounts are. Its range is
+        // checked where it is written (`ops::automation`), not here, as the headcount's is.
+        run_limit: col(INT_OPT),
         order_key: col(ORDER_KEY),
     }
 
@@ -1530,6 +1534,9 @@ datasets! {
         wires: col(REQ),
         // `[]` on a version saved before roles existed (v102).
         roles: col(REQ),
+        // `automation.run_limit` as it stood when the version was saved. NULL is no limit, and is what a
+        // version saved before v144 holds.
+        run_limit: col(INT_OPT),
     } => "UNIQUE (automation_id, version)"
 
     // ───────────────────────── automation: what ran ─────────────────────────
@@ -1566,6 +1573,11 @@ datasets! {
         status: enum_col("running", "paused", "ended"),
         started_by_kind: actor_kind,
         ended_at: ts_opt,
+        // The most runs that go at once in this launch, across its roles — copied from the newest saved
+        // version when the launch opened, and changed on the launch alone from then on, as
+        // `automation_launch_role.headcount` is. NULL is no limit. Its range is checked where it is
+        // written, not here.
+        run_limit: col(INT_OPT),
     }
 
     // **How many are in one role for one launch** — the role's headcount copied from the newest saved

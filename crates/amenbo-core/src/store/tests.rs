@@ -1775,6 +1775,7 @@ fn an_import_leaves_nothing_when_refused_and_the_device_library_is_a_humans() {
             wires: vec![],
         }],
         roles: vec![],
+        run_limit: None,
     };
     let rows = |s: &Store, table: &str| -> i64 {
         s.engine.conn().query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0)).unwrap()

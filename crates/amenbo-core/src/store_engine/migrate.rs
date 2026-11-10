@@ -1596,6 +1596,13 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 144,
+        name: "add automation.run_limit, automation_version.run_limit and automation_launch.run_limit, the most runs that go at once",
+        // **Every automation, saved version and launch has no limit** — as many runs go at once as the
+        // roles' headcounts come to, as before. No task is touched.
+        apply: Apply::Custom(add_the_run_limit),
+    },
+    Step {
+        to: 145,
         name: "add automation_trigger.refused_at and refused_why, when a trigger last could not start a run and why",
         // **Unseeded.** A trigger that could not start a run left only a line in the log, so every
         // trigger reads as having no such time. No task is touched.
@@ -2275,7 +2282,22 @@ fn let_a_trigger_classify_its_task(ctx: &Ctx<'_>) -> Result<()> {
     Ok(())
 }
 
-/// v144: `automation_trigger.refused_at` and `refused_why`, when a trigger last could not start a run
+/// v144: `run_limit`, the most runs of an automation that go at once across its roles (`AMB-D-1145`), on
+/// the draft (`automation`), on each saved version (`automation_version`) and on each launch
+/// (`automation_launch`). NULL on every row already there: no limit, so as many runs go at once as the
+/// roles' headcounts come to, as before. Added only where they are not there yet, v68's guard and for
+/// v53's reason.
+fn add_the_run_limit(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    for table in ["automation", "automation_version", "automation_launch"] {
+        if !column_names(tx, table)?.iter().any(|c| c == "run_limit") {
+            tx.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN run_limit BIGINT;"))?;
+        }
+    }
+    Ok(())
+}
+
+/// v145: `automation_trigger.refused_at` and `refused_why`, when a trigger last could not start a run
 /// and why (`AMB-D-1136`). Both NULL on every row already there.
 ///
 /// **Appended only where missing**, v68's guard and for v53's reason. Both are nullable with no default
@@ -14684,12 +14706,12 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v144: a trigger written at v143 has no time it could not start a run, and one written then keeps
+    /// v145: a trigger written at v144 has no time it could not start a run, and one written then keeps
     /// one, read back through the registry.
     #[test]
-    fn a_trigger_written_before_v144_could_not_start_no_time() {
+    fn a_trigger_written_before_v145_could_not_start_no_time() {
         let dir = scratch("trigger-refused");
-        let engine = store_at(&dir, 143);
+        let engine = store_at(&dir, 144);
         let at = "2026-11-10T00:00:00Z";
         engine
             .conn()
@@ -14702,9 +14724,9 @@ mod tests {
             ))
             .unwrap();
 
-        run(&engine, &dir, steps_through(144), &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(145), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), 144);
+        assert_eq!(engine.format_version().unwrap(), 145);
         let read = || crate::store_engine::read::automation_trigger(engine.conn(), 1).unwrap().expect("the trigger");
         let before = read();
         assert_eq!(before.last_refused, None, "no trigger kept a time it could not start before");
@@ -14740,6 +14762,55 @@ mod tests {
         };
         assert_eq!(count("automation_trigger"), 0);
         assert_eq!(count("automation_trigger_value"), 0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v144: an automation, a saved version and a launch written at v143 are kept as they were, each with
+    /// no run limit — read back through the registry — and each may then carry one.
+    #[test]
+    fn an_automation_a_version_and_a_launch_have_no_run_limit_until_given_one_at_v144() {
+        let dir = scratch("run-limit");
+        let engine = store_at(&dir, 143);
+        let at = "2026-11-10T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, notes, order_key, created_at, updated_at)
+                 VALUES (1, 1, 'auto', 'メモ', 'a0', '{at}', '{at}');
+                 INSERT INTO automation_version (id, automation_id, version, placements, cfgs, placement_steps,
+                                                 edges, wires, roles, created_at, updated_at)
+                 VALUES (1, 1, 1, '[]', '[]', '[]', '[]', '[]', '[]', '{at}', '{at}');
+                 INSERT INTO automation_launch (id, automation_id, project_id, status, started_by_kind,
+                                                created_at, updated_at)
+                 VALUES (1, 1, 1, 'running', 'human', '{at}', '{at}');"#
+            ))
+            .unwrap();
+
+        run(&engine, &dir, steps_through(144), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 144);
+        let automation = crate::store_engine::read::automation(engine.conn(), 1).unwrap().expect("the automation");
+        assert_eq!((automation.name.as_str(), automation.notes.as_str(), automation.run_limit), ("auto", "メモ", None));
+        let version = crate::store_engine::read::automation_version_latest(engine.conn(), 1)
+            .unwrap()
+            .expect("the version");
+        assert_eq!((version.version, version.roles.as_str(), version.run_limit), (1, "[]", None));
+        let launch = crate::store_engine::read::automation_launch(engine.conn(), 1).unwrap().expect("the launch");
+        assert_eq!(
+            (launch.status, launch.started_by_kind, launch.run_limit),
+            (crate::model::AutomationLaunchStatus::Running, Some(crate::model::ActorKind::Human), None),
+        );
+        engine
+            .conn()
+            .execute_batch(
+                "UPDATE automation SET run_limit = 3 WHERE id = 1;
+                 UPDATE automation_version SET run_limit = 3 WHERE id = 1;
+                 UPDATE automation_launch SET run_limit = 2 WHERE id = 1;",
+            )
+            .unwrap();
+        let launch = crate::store_engine::read::automation_launch(engine.conn(), 1).unwrap().expect("the launch");
+        assert_eq!(launch.run_limit, Some(2));
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -1364,6 +1364,14 @@ impl Store {
         })
     }
 
+    /// Have the most runs of an automation that go at once be `limit`, or no limit (one operation = one
+    /// transaction) — [`crate::ops::automation::run_limit_set`].
+    pub fn automation_run_limit_set(&mut self, id: i64, limit: Option<u32>) -> Result<crate::model::Automation> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Automation, id)], |tx| {
+            crate::ops::automation::run_limit_set(tx, id, limit)
+        })
+    }
+
     /// Have an automation's triggers be the one given, or none (one operation = one transaction) —
     /// [`crate::ops::automation::trigger_set`].
     pub fn automation_trigger_set(
@@ -2178,6 +2186,26 @@ impl Store {
     ) -> Result<crate::model::AutomationLaunchRole> {
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Launch, launch_id)], |tx| {
             crate::ops::automation_run::launch_headcount_reset(tx, launch_id, role_id)
+        })
+    }
+
+    /// **Change the most runs that go at once in this launch alone**
+    /// ([`crate::ops::automation_run::launch_limit_set`]).
+    pub fn automation_launch_limit_set(
+        &mut self,
+        launch_id: i64,
+        limit: Option<u32>,
+    ) -> Result<crate::model::AutomationLaunch> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Launch, launch_id)], |tx| {
+            crate::ops::automation_run::launch_limit_set(tx, launch_id, limit)
+        })
+    }
+
+    /// **Put this launch back at its definition's run limit**
+    /// ([`crate::ops::automation_run::launch_limit_reset`]).
+    pub fn automation_launch_limit_reset(&mut self, launch_id: i64) -> Result<crate::model::AutomationLaunch> {
+        self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Launch, launch_id)], |tx| {
+            crate::ops::automation_run::launch_limit_reset(tx, launch_id)
         })
     }
 

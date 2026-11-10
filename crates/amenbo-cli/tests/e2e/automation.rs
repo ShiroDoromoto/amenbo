@@ -934,6 +934,114 @@ fn a_trigger_is_named_and_files_under_a_role_of_its_own() {
     }
 }
 
+/// **A trigger hands on data, files and a key, and classifies and ranks the task it files**: `--data`,
+/// `--file` (repeated), `--key`, `--dim` and `--priority` are read back by `--json` and `show`. Where it
+/// files a task, an axis the project requires must be given a value, and `--trigger` rewrites the
+/// classification as given. Aimed at a role started by a trigger, the title may be left out, and `--dim`
+/// and `--priority` are refused. `--task-from-if-script` hands on what the `--if-script` program writes,
+/// and is refused with no `--if-script` or beside `--title`. Data that is not JSON, a file not named by its
+/// full path, an unknown priority, and any of them beside `--rm`, `--on`, `--off` or another way of
+/// writing the task are refused.
+#[test]
+fn a_trigger_hands_on_data_files_and_a_key_and_classifies_the_task_it_files() {
+    let cli = Cli::new();
+    let (p, a, _, _) = an_automation(&cli);
+    cli.json(&["dimension", "add", "--project", &p, "--name", "Area", "--json"]);
+    cli.json(&["dimension", "value-add", "Area", "--name", "core", "--json"]);
+    cli.json(&["dimension", "update", "Area", "--required", "true", "--json"]);
+    cli.json(&["dimension", "add", "--project", &p, "--name", "Kind", "--json"]);
+    cli.json(&["dimension", "value-add", "Kind", "--name", "bug", "--json"]);
+    let (one, two) = if cfg!(windows) {
+        (r"C:\amenbo\a.log", r"C:\amenbo\b.log")
+    } else {
+        ("/tmp/amenbo/a.log", "/tmp/amenbo/b.log")
+    };
+
+    let set = cli.json(&[
+        "automation", "trigger", &a, "--every", "60", "--title", "Look at the issue", "--data", r#"{"issue":123}"#,
+        "--file", one, "--file", two, "--key", "issue-123", "--dim", "Area=core", "--priority", "high", "--json",
+    ]);
+    let trigger = &set["automation_trigger"];
+    assert_eq!(
+        trigger["task"],
+        serde_json::json!({
+            "kind": "fixed", "title": "Look at the issue", "notes": "", "data": r#"{"issue":123}"#,
+            "files": [one, two], "key": "issue-123",
+        }),
+        "{set}"
+    );
+    assert_eq!(trigger["values"].as_array().map(Vec::len), Some(1), "{set}");
+    assert_eq!(trigger["priority"].as_str(), Some("high"), "{set}");
+    let filed = id_of(&set, "automation_trigger");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(
+        text.contains("filing \"Look at the issue\" with data and 2 file(s) keyed \"issue-123\" as Area=core, priority high — next at"),
+        "{text}"
+    );
+
+    let (err, code) = cli.run_err(&["automation", "trigger", &a, "--every", "60", "--title", "x", "--json"]);
+    assert_ne!(code, 0, "a required axis with no value is refused: {err}");
+    assert!(err.contains("Area"), "{err}");
+    let (_, code) = cli.run_err(&["automation", "trigger", "--trigger", &filed, "--every", "60", "--title", "x", "--dim", "Kind=bug"]);
+    assert_ne!(code, 0, "written afresh, the required axis left out is taken off and refused");
+    let both = cli.json(&[
+        "automation", "trigger", "--trigger", &filed, "--every", "60", "--title", "x", "--dim", "Area=core", "--dim", "Kind=bug", "--json",
+    ]);
+    assert_eq!(both["automation_trigger"]["values"].as_array().map(Vec::len), Some(2), "{both}");
+    assert!(both["automation_trigger"].get("priority").is_none(), "written afresh, the priority left out is none: {both}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains("filing \"x\" as Area=core, Kind=bug — next at"), "{text}");
+
+    let started = id_of(
+        &cli.json(&["automation", "role-add", &a, "--name", "Bob", "--starts-by", "trigger", "--json"]),
+        "automation_role",
+    );
+    let direct = cli.json(&["automation", "trigger", &a, "--every", "60", "--role", &started, "--key", "inbox", "--json"]);
+    assert_eq!(
+        direct["automation_trigger"]["task"],
+        serde_json::json!({ "kind": "fixed", "title": "", "notes": "", "key": "inbox" }),
+        "a trigger aimed at a role started by a trigger needs no title: {direct}"
+    );
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains(&format!("filing an untitled one keyed \"inbox\" under role {started} — next at")), "{text}");
+    for wrong in [
+        vec!["automation", "trigger", a.as_str(), "--every", "60", "--role", started.as_str(), "--dim", "Area=core"],
+        vec!["automation", "trigger", a.as_str(), "--every", "60", "--role", started.as_str(), "--priority", "low"],
+    ] {
+        let (err, code) = cli.run_err(&wrong);
+        assert_ne!(code, 0, "{wrong:?} is refused: {err}");
+        assert!(err.contains("files no task"), "{err}");
+    }
+
+    // A program is registered by its full path, and Windows only counts a path with its drive as one.
+    let program = if cfg!(windows) { r"C:\Windows\System32\cmd.exe" } else { "/bin/echo" };
+    let asked = cli.json(&[
+        "automation", "trigger", &a, "--if-script", program, "--task-from-if-script", "--role", &started, "--json",
+    ]);
+    assert_eq!(asked["automation_trigger"]["task"], serde_json::json!({ "kind": "asked" }), "{asked}");
+    let (text, _) = cli.run(&["automation", "show", &a]);
+    assert!(text.contains(&format!("whenever \"{program}\" says so, filing what its script writes under role {started}")), "{text}");
+
+    for wrong in [
+        vec!["automation", "trigger", a.as_str(), "--every", "60", "--task-from-if-script", "--dim", "Area=core"],
+        vec!["automation", "trigger", a.as_str(), "--if-script", program, "--task-from-if-script", "--title", "x", "--dim", "Area=core"],
+        vec!["automation", "trigger", a.as_str(), "--if-script", program, "--task-from-if-script", "--data", "{}", "--dim", "Area=core"],
+        vec!["automation", "trigger", a.as_str(), "--every", "60", "--title", "x", "--data", "not json", "--dim", "Area=core"],
+        vec!["automation", "trigger", a.as_str(), "--every", "60", "--title", "x", "--file", "a.log", "--dim", "Area=core"],
+        vec!["automation", "trigger", a.as_str(), "--every", "60", "--title", "x", "--priority", "urgent", "--dim", "Area=core"],
+        vec!["automation", "trigger", a.as_str(), "--every", "60", "--title", "x", "--dim", "Area", "--dim", "Kind=bug"],
+        vec!["automation", "trigger", a.as_str(), "--every", "60", "--task-from-file", one, "--data", "{}", "--dim", "Area=core"],
+        vec!["automation", "trigger", a.as_str(), "--every", "60", "--task-from-script", program, "--key", "k", "--dim", "Area=core"],
+        vec!["automation", "trigger", "--trigger", filed.as_str(), "--rm", "--key", "k"],
+        vec!["automation", "trigger", "--trigger", filed.as_str(), "--on", "--dim", "Area=core"],
+        vec!["automation", "trigger", "--trigger", filed.as_str(), "--off", "--priority", "high"],
+        vec!["automation", "trigger", "--trigger", filed.as_str(), "--off", "--file", one],
+    ] {
+        let (_, code) = cli.run_err(&wrong);
+        assert_ne!(code, 0, "{wrong:?} is refused");
+    }
+}
+
 /// The library answers as the one list an automation could place, and `--global` narrows it to the
 /// device's shelf rather than opening a second place to look.
 #[test]

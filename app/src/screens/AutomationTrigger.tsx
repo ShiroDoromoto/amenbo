@@ -534,25 +534,48 @@ function roleLine(automation: AutomationDetailDto, roleId: number | undefined): 
   return role === undefined ? t("auto.side.triggerRoleNone") : tf("auto.side.triggerRole", { role: role.name });
 }
 
-/** The automation's triggers, a line each: its name, when it files, what, and under which role. */
+/**
+ * When and why a trigger last could not start a run, as one line (`AMB-D-1136`), or `null` where it has
+ * not failed since it last started one. A trigger toward a role started by a task, or toward none, files a
+ * task, so it says it could not file one; one toward a role started by a trigger says it could not start.
+ */
+function refusedLine(automation: AutomationDetailDto, trigger: AutomationTriggerDto): string | null {
+  const refused = trigger.lastRefused;
+  if (refused === undefined) return null;
+  const role = trigger.roleId === undefined ? undefined : automation.roles.find((one) => one.id === trigger.roleId);
+  return tf(role?.startsBy === "trigger" ? "auto.trigger.refusedStarting" : "auto.trigger.refusedFiling", {
+    at: dueLabel({ kind: "at", at: refused.at }),
+    why: errText(refused),
+  });
+}
+
+/**
+ * The automation's triggers, a framed line each: its name, then when it files, what, and under which role
+ * — and, under a trigger that last could not start a run, when and why, its frame turned red.
+ */
 function TriggerList({ automation }: { automation: AutomationDetailDto }) {
   if (automation.triggers.length === 0) return null;
   return (
     <>
       <h3>{t("auto.trigger.list")}</h3>
       <ul className="trigstage__list" data-list="triggers">
-        {automation.triggers.map((one) => (
-          <li key={one.id}>
-            <b>{one.name.trim() || whenLine(one, automation.roles)}</b>{" "}
-            {[
-              one.name.trim() === "" ? null : whenLine(one, automation.roles),
-              taskLine(one),
-              roleLine(automation, one.roleId),
-            ]
-              .filter((part) => part !== null && part !== "")
-              .join(" ・ ")}
-          </li>
-        ))}
+        {automation.triggers.map((one) => {
+          const refused = refusedLine(automation, one);
+          const detail = [
+            one.name.trim() === "" ? null : whenLine(one, automation.roles),
+            taskLine(one),
+            roleLine(automation, one.roleId),
+          ]
+            .filter((part) => part !== null && part !== "")
+            .join(" ・ ");
+          return (
+            <li key={one.id} className={refused === null ? undefined : "is-refused"}>
+              <b>{one.name.trim() || whenLine(one, automation.roles)}</b>
+              {detail !== "" && <span>{detail}</span>}
+              {refused !== null && <span className="trigstage__refused">{refused}</span>}
+            </li>
+          );
+        })}
       </ul>
     </>
   );

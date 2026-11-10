@@ -1045,6 +1045,8 @@ export const ptBR: Translation = {
     "auto.trigger.disabled": "Parado",
     "auto.trigger.lastFiled": "Última criada: {at}",
     "auto.trigger.neverFiled": "Ainda não criou nenhuma",
+    "auto.trigger.refusedFiling": "Não foi possível criar ({at}): {why}",
+    "auto.trigger.refusedStarting": "Não foi possível iniciar ({at}): {why}",
     "auto.trigger.list": "Gatilhos desta automação",
     "auto.trigger.whenPick": "Como decidir se cria uma tarefa",
     "auto.trigger.taskPick": "De onde vem o conteúdo da tarefa",

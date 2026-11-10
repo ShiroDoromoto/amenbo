@@ -1032,6 +1032,8 @@ export const tr: Translation = {
     "auto.trigger.disabled": "Durduruldu",
     "auto.trigger.lastFiled": "Son açılan: {at}",
     "auto.trigger.neverFiled": "Henüz görev açmadı",
+    "auto.trigger.refusedFiling": "Açılamadı ({at}): {why}",
+    "auto.trigger.refusedStarting": "Başlatılamadı ({at}): {why}",
     "auto.trigger.list": "Bu otomasyonun tetikleyicileri",
     "auto.trigger.whenPick": "Görev açılıp açılmayacağına nasıl karar verilir",
     "auto.trigger.taskPick": "Görevin içeriği nereden gelir",

@@ -1032,6 +1032,8 @@ export const nl: Translation = {
     "auto.trigger.disabled": "Gestopt",
     "auto.trigger.lastFiled": "Laatst aangemaakt: {at}",
     "auto.trigger.neverFiled": "Nog niets aangemaakt",
+    "auto.trigger.refusedFiling": "Aanmaken lukte niet ({at}): {why}",
+    "auto.trigger.refusedStarting": "Starten lukte niet ({at}): {why}",
     "auto.trigger.list": "Triggers van deze automatisering",
     "auto.trigger.whenPick": "Hoe bepaald wordt of er een taak komt",
     "auto.trigger.taskPick": "Waar de inhoud van de taak vandaan komt",

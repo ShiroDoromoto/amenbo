@@ -1034,6 +1034,8 @@ export const zhHant: Translation = {
     "auto.trigger.disabled": "已停用",
     "auto.trigger.lastFiled": "上次建立：{at}",
     "auto.trigger.neverFiled": "尚未建立任務",
+    "auto.trigger.refusedFiling": "無法建立（{at}）：{why}",
+    "auto.trigger.refusedStarting": "無法開始（{at}）：{why}",
     "auto.trigger.list": "此自動化的觸發器",
     "auto.trigger.whenPick": "如何決定是否建立任務",
     "auto.trigger.taskPick": "任務內容的來源",

@@ -90,10 +90,11 @@ pub enum Opened {
     LeftToWait { run: AutomationRun },
     /// **The step takes a task, and the run's seat is one still to go** — the headcount of its role was
     /// lowered on the launch below the runs under way in it
-    /// ([`super::automation_run::over_headcount`]), or its role is stopped taking tasks for the launch
-    /// ([`super::automation_run::role_held`]). The run ended here, completed with the step never
-    /// opened and no task taken, so the seat goes as its run finishes a task and none under way is
-    /// stopped.
+    /// ([`super::automation_run::over_headcount`]), the most runs that go at once was lowered on the
+    /// launch below the runs of the automation under way ([`super::automation_run::over_run_limit`]), or
+    /// its role is stopped taking tasks for the launch ([`super::automation_run::role_held`]). The run
+    /// ended here, completed with the step never opened and no task taken, so the seat goes as its run
+    /// finishes a task and none under way is stopped.
     LetGo { run: AutomationRun },
     /// **The step is the first of an action that takes one run at a time, and the action is not free**
     /// — another run is inside it, or came to it first and goes in before this one
@@ -328,11 +329,13 @@ fn open_as(
     }
     // **A seat still to go is let go here, before the run takes its next task**, so the seats go in the
     // order their runs finish a task and no task under way is stopped. Nothing is recorded of it: a
-    // headcount raised again before then leaves the run in its seat. **So is a seat of a role stopped
+    // headcount raised again before then leaves the run in its seat. **So is a run past the most that go
+    // at once**, lowered on the launch (`AMB-D-1145`), the same way. **So is a seat of a role stopped
     // taking tasks**: it stays empty until the role is taken up again, and is filled then.
     if !rehearsing
         && round_starts
         && (super::automation_run::over_headcount(conn, &run)?
+            || super::automation_run::over_run_limit(conn, &run)?
             || super::automation_run::role_held(conn, &run)?)
     {
         let ended = super::automation_stop::ended(tx, run, super::automation_stop::Ending::Completed)?;

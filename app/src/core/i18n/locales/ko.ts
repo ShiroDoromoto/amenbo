@@ -1029,6 +1029,8 @@ export const ko: Translation = {
     "auto.trigger.disabled": "멈춤",
     "auto.trigger.lastFiled": "마지막 등록: {at}",
     "auto.trigger.neverFiled": "아직 등록하지 않았습니다",
+    "auto.trigger.refusedFiling": "등록하지 못했습니다 ({at}): {why}",
+    "auto.trigger.refusedStarting": "시작하지 못했습니다 ({at}): {why}",
     "auto.trigger.list": "이 오토메이션의 트리거",
     "auto.trigger.whenPick": "등록할지 정하는 방법",
     "auto.trigger.taskPick": "작업 내용의 출처",

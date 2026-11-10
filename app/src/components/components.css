@@ -2311,8 +2311,19 @@ button.feed__target:hover { color: var(--c-accent); }
 .trigstage__row > * { min-width: 0; max-width: 100%; }
 .trigstage__notes { flex: 1 1 260px; display: flex; flex-direction: column; gap: var(--s-3); font-size: var(--fs-md); }
 .trigstage__notes h3 { margin: 0; font-size: var(--fs-md); font-weight: var(--fw-bold); }
-.trigstage__list { margin: 0; padding-inline-start: 1.2em; display: flex; flex-direction: column; gap: var(--s-2); color: var(--c-text-muted); overflow-wrap: anywhere; }
+.trigstage__list {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px;
+  font-size: var(--fs-xs); color: var(--c-text-muted); overflow-wrap: anywhere;
+}
+/* Each trigger framed alike, its name, its line and any refusal stacked inside. */
+.trigstage__list li {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 6px var(--s-2);
+  border: var(--border-w) solid var(--c-rule); border-radius: 6px; background: var(--c-surface-pic) var(--c-surface);
+}
 .trigstage__list b { color: var(--c-text); font-weight: var(--fw-medium); }
+/* A trigger that last could not start a run: only its frame turns red, with when and why under it. */
+.trigstage__list li.is-refused { border-color: var(--c-stop); }
+.trigstage__refused { color: var(--c-stop); }
 .trigstage__preview {
   display: flex; flex-direction: column; gap: 4px; padding: var(--s-3); font-size: var(--fs-xs); overflow-wrap: anywhere;
   border: var(--border-w) dashed var(--c-edge); border-radius: var(--r-md);

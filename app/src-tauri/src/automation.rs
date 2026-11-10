@@ -280,6 +280,18 @@ pub fn automation_trigger_count(automation_id: i64, condition: AutomationTrigger
     Ok(counted.matched)
 }
 
+/// **The axes the task a trigger would file carries no value on, which its project requires** — with
+/// `values`, its classification as it is typed, before it is saved, so the card can name them under
+/// the classification and hold the save back until each has one
+/// ([`amenbo_core::ops::automation::trigger_axes_empty_of`]). By name, in the project's order of axes;
+/// the time axis counts as given where today has a value on it, as the save counts it. It writes
+/// nothing.
+#[tauri::command]
+pub fn automation_trigger_axes_empty(automation_id: i64, values: Vec<i64>) -> Result<Vec<String>, CmdError> {
+    let store = open_store_read()?;
+    Ok(amenbo_core::ops::automation::trigger_axes_empty_of(store.read_model().conn(), automation_id, &values)?)
+}
+
 /// The tries of a trigger as it is typed that are running ([`automation_trigger_try`]), each by the tag
 /// the card gave it, with what stops it.
 fn trigger_tries() -> std::sync::MutexGuard<'static, HashMap<u64, Arc<AtomicBool>>> {
@@ -4217,6 +4229,28 @@ mod tests {
         });
         assert_eq!(classified["values"], serde_json::json!([12]), "the classification goes out by value ids");
         assert_eq!(classified["priority"], "medium");
+        let handed = json(AutomationTrigger {
+            task: TriggerTask::Fixed {
+                title: String::new(),
+                notes: String::new(),
+                data: Some(r#"{"issue": 123}"#.into()),
+                files: vec!["/tmp/brief.md".into()],
+                key: Some("issue-123".into()),
+            },
+            ..base.clone()
+        });
+        assert_eq!(
+            handed["task"],
+            serde_json::json!({
+                "kind": "fixed",
+                "title": "",
+                "notes": "",
+                "data": "{\"issue\": 123}",
+                "files": ["/tmp/brief.md"],
+                "key": "issue-123",
+            }),
+            "a fixed one's data, files and key go out where it has them",
+        );
         let full = json(AutomationTrigger {
             role_id: Some(7),
             when: TriggerWhen::Tasks,
@@ -4366,9 +4400,83 @@ mod tests {
         assert_eq!(empty_axes(), vec!["テーマ".to_string()]);
     }
 
+    /// **The classification of the task a trigger files is asked about as it is typed, and written with
+    /// it.** A required axis it leaves empty is named, by the axis's name, until a value is pressed on
+    /// it; a value that is not there counts for none. Saving with the axis empty is core's refusal,
+    /// passed on; saving with a value on it writes the classification and the priority, read back on
+    /// the detail.
+    #[test]
+    fn the_classification_of_a_triggers_task_is_asked_about_and_written() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("automation-trigger-values");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        let (automation_id, sound) = {
+            let mut store = amenbo_core::Store::open().unwrap();
+            let project = store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "TriggerValues".into(),
+                    view: amenbo_core::model::View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap();
+            let axis = store
+                .dimension_add(
+                    project.id,
+                    amenbo_core::ops::dimension::NewDimension {
+                        name: "テーマ".into(),
+                        applies_to: amenbo_core::model::DimensionAppliesTo::Task,
+                        ..Default::default()
+                    },
+                )
+                .unwrap()
+                .id;
+            let sound = store.dimension_value_add(axis, "音", None, None).unwrap().id;
+            store.dimension_update(axis, None, None, None, None, None, None, Some(true), None, None, None).unwrap();
+            let id = store.automation_add(project.id, NewAutomation { name: "Dev".into(), ..Default::default() }).unwrap().id;
+            (id, sound)
+        };
+        assert_eq!(automation_trigger_axes_empty(automation_id, vec![]).unwrap(), vec!["テーマ".to_string()]);
+        assert_eq!(
+            automation_trigger_axes_empty(automation_id, vec![sound + 1000]).unwrap(),
+            vec!["テーマ".to_string()],
+            "a value that is not there counts for none",
+        );
+        assert!(automation_trigger_axes_empty(automation_id, vec![sound]).unwrap().is_empty());
+
+        let input = |v: serde_json::Value| serde_json::from_value::<AutomationTriggerInputDto>(v).expect("reads");
+        assert!(
+            automation_trigger_add(
+                automation_id,
+                input(serde_json::json!({
+                    "when": { "kind": "idle" },
+                    "task": { "kind": "fixed", "title": "曲を作る", "notes": "" },
+                })),
+            )
+            .is_err(),
+            "a required axis left empty is core's refusal",
+        );
+        automation_trigger_add(
+            automation_id,
+            input(serde_json::json!({
+                "when": { "kind": "idle" },
+                "task": { "kind": "fixed", "title": "曲を作る", "notes": "" },
+                "values": [sound],
+                "priority": "medium",
+            })),
+        )
+        .unwrap();
+        let trigger = &automation_detail(automation_id).unwrap().expect("the automation").triggers[0];
+        assert_eq!(trigger.values, vec![sound]);
+        assert_eq!(trigger.priority, Some("medium"));
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
     /// **A trigger as a screen writes it reads into core's** ([`amenbo_core::ops::automation::NewTrigger`]):
-    /// every kind of `when` and `task`, and what the screen leaves out — the name, the role, the
-    /// condition, the script, a script's timeout and a fixed one's data and files — read as none.
+    /// every kind of `when` and `task`, the classification and priority of the task it files, and what
+    /// the screen leaves out — the name, the role, the condition, the script, a script's timeout, a
+    /// fixed one's data, files and key, the classification and the priority — read as none.
     #[test]
     fn a_trigger_written_by_a_screen_reads_into_cores() {
         use amenbo_core::model::{TriggerCondition, TriggerWhen};
@@ -4398,8 +4506,12 @@ mod tests {
             "condition": { "filter": "status:todo", "below": 2 },
             "script": { "program": "/bin/ask", "args": ["a b"], "timeoutMinutes": 3 },
             "task": { "kind": "script", "script": { "program": "/bin/write" } },
+            "values": [12, 15],
+            "priority": "high",
         }));
         assert_eq!((full.name.as_str(), full.role_id, full.when), ("整える", Some(4), TriggerWhen::Script));
+        assert_eq!(full.values, vec![12, 15], "the classification is read by value ids");
+        assert_eq!(full.priority, Some(amenbo_core::model::Priority::High));
         assert_eq!(full.condition, Some(TriggerCondition { filter: "status:todo".into(), role_id: None, below: 2 }));
         assert_eq!(
             full.script,
@@ -4419,7 +4531,14 @@ mod tests {
         assert_eq!(
             read(serde_json::json!({
                 "when": { "kind": "idle" },
-                "task": { "kind": "fixed", "title": "", "notes": "", "data": "{\"issue\": 123}", "files": ["/tmp/brief.md"] },
+                "task": {
+                    "kind": "fixed",
+                    "title": "",
+                    "notes": "",
+                    "data": "{\"issue\": 123}",
+                    "files": ["/tmp/brief.md"],
+                    "key": "issue-123",
+                },
             }))
             .task,
             NewTriggerTask::Fixed {
@@ -4427,9 +4546,9 @@ mod tests {
                 notes: String::new(),
                 data: r#"{"issue": 123}"#.into(),
                 files: vec!["/tmp/brief.md".into()],
-                key: String::new(),
+                key: "issue-123".into(),
             },
-            "a fixed one's data and files are read where the screen writes them",
+            "a fixed one's data, files and key are read where the screen writes them",
         );
         assert!(
             serde_json::from_value::<AutomationTriggerInputDto>(serde_json::json!({

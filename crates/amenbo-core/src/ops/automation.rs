@@ -1894,6 +1894,22 @@ pub(crate) fn trigger_axes_empty(conn: &Connection, project_id: i64, given: &[(i
         .collect())
 }
 
+/// **The axes the task a trigger of `automation_id` files would carry no value on, which its project
+/// requires**, with `values` — its classification as a person has it typed, before it is saved — by
+/// name, in the project's order of axes. It is what the save refuses first ([`trigger_axes_empty`]), so
+/// the screen can say it beside the classification and hold the save back. A value that is not there
+/// counts for no axis; the save says why it is refused. It writes nothing.
+pub fn trigger_axes_empty_of(conn: &Connection, automation_id: i64, values: &[i64]) -> Result<Vec<String>> {
+    let automation = read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
+    let mut given: Vec<(i64, i64)> = Vec::new();
+    for &value_id in values {
+        if let Some(value) = read::dimension_value(conn, value_id)? {
+            given.push((value.dimension_id, value_id));
+        }
+    }
+    trigger_axes_empty(conn, automation.project_id, &given)
+}
+
 /// **The task a trigger files would carry no value on `axis`, which its project requires**
 /// (`AMB-D-1136`) — refused at the trigger's save, and at its start where the axis became required
 /// after it was written. Carries the axis's name.

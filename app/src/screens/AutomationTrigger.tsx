@@ -1,21 +1,36 @@
 // **An automation's trigger, written on a card in the build screen's middle** — what files a task
-// without a person and starts a run of this automation with it. The build screen's right column asks
-// for it (`./AutomationSettings`), and the screen draws the card where the picture stands
-// (`./AutomationBuildScreen`); the card itself stands alone, given the automation and the trigger to
-// open, or none for a new one, and told when it is done. Beside it stand the automation's triggers in
-// a line each and the task this one files, so more than one can be read side by side with it.
+// without a person, or starts a run of this automation directly, and what it hands on (`AMB-D-1133`).
+// The build screen's right column asks for it (`./AutomationSettings`), and the screen draws the card
+// where the picture stands (`./AutomationBuildScreen`); the card itself stands alone, given the
+// automation and the trigger to open, or none for a new one, and told when it is done. Beside it stand
+// the automation's triggers in a line each and what this one hands on, so more than one can be read
+// side by side with it.
 //
-// **Its head names the trigger, says whether it is on and when it last filed a task.** The name is
-// written in the head itself, in place. Pressing "On" switches the trigger off at once and back
+// **Its head names the trigger, says whether it is on and when it last filed a task** — or, aimed at a
+// role started by a trigger, when it last started a run (core moves the same instant for both). The
+// name is written in the head itself, in place. Pressing "On" switches the trigger off at once and back
 // (`setAutomationTriggerEnabled`), the way a setting kept apart from the saved versions is written; a
 // new trigger has neither the chip nor the line until it is saved.
 //
-// **It asks three things, each in a numbered part**: 1 whether to file a task now (every so many
-// minutes, when no run of it is going, while fewer than N tasks match a filter, or when a script says
-// so), 2 what the task says (fixed words, a file read from its full path, or what a script writes), and
-// 3 the role the task is worked under, or none, which leaves it to a session — picked from a list, the
-// picked role's icon drawn beside it as the other screens draw it (`RoleIcon`). Neither 1 nor 2 asks an
-// AI: both are decided mechanically, and the AI works only inside the run the task starts.
+// **It asks three things, each in a numbered part**: 1 whether to file a task, or start a run, now
+// (every so many minutes, when no run of it is going, while fewer than N tasks match a filter, or when
+// a script says so), 2 what it hands on (fixed content, a file read from its full path, what a script
+// writes, or — where 1 asks a script — what that script writes beside its say), and 3 the role it is
+// aimed at, or none, which leaves the task to a session — picked from a list, the picked role's icon
+// drawn beside it as the other screens draw it (`RoleIcon`), and how that role starts beside the list.
+// Neither 1 nor 2 asks an AI: both are decided mechanically, and the AI works only inside the run.
+//
+// **How the picked role starts decides what the card says** (`AMB-D-1127`, `AMB-D-1142`). Aimed at a
+// role started by a task, or at none, the trigger files a task: 1 asks whether to file one, 2 is the
+// task's content, its title required, and 3 asks the classification and priority the task is filed
+// with (`AMB-D-1136`) — a row of values per axis, the required axes core finds empty named under them,
+// and the save held back until each has a value. Aimed at a role started by a trigger, it starts a run
+// of that role with no task: 1 asks whether to start one, 2 is what is handed on, every part of it
+// optional and a key besides (`AMB-D-1137`), and 3 says no classification goes with it. What is not
+// asked for the role picked is not sent, so switching the role back finds what was pressed still there.
+//
+// **Fixed content is a title, notes, data and files** (`AMB-D-1133`): the data JSON, the files by full
+// path one to a line, each read afresh whenever the trigger fires (`AMB-D-1134`, `AMB-D-1135`).
 //
 // **It writes the trigger it was opened on**, adding one where it was opened on none, or takes it
 // away. The automation's other triggers are left as they are. It is a setting, not part of the
@@ -35,20 +50,21 @@
 // it counts. Under it stands how many tasks match now, read from core as it is typed and again when the
 // tasks move, and what that means for the next look.
 //
-// **What core refuses** — a wait under a minute, a task with no title, a filter that does not read —
-// comes back as core's own sentence, drawn at the top, and the card stays open with what was typed.
+// **What core refuses** — a wait under a minute, a task with no title, data that is not JSON, a filter
+// that does not read — comes back as core's own sentence, drawn at the top, and the card stays open
+// with what was typed.
 // The form does not check its own boxes (`noValidate`), so core's sentence is the only one drawn.
 //
 // **"Try it now" tries the trigger as it is typed, before it is saved** (`tryAutomationTrigger`), so
-// what it would file can be seen without saving and waiting. Core checks it as the save would, counts
-// its condition, runs the script it asks first and the one that writes the task, or reads the file,
-// and writes nothing: no trigger, no task, no run. What it says stands in the preview on the right — the
-// title and notes of the task it would file, or why it would file none: the condition does not hold,
-// the script said no, or nothing could be read (core's sentence). When it is due and whether a run
-// leaves it room are not part of the try; "Now: N match → …" says those. A script may run long, so the
-// button cannot be pressed again until it answers, and closing the card stops it. What is tried is
-// what was typed then: typing anything after takes the answer away, as it no longer says what the
-// card holds. What core refuses is drawn at the top, as the save's refusal is.
+// what it would hand on can be seen without saving and waiting. Core checks it as the save would,
+// counts its condition, runs the script it asks first and the one that writes the task, or reads the
+// file, and writes nothing: no trigger, no task, no run. What it says stands in the preview on the
+// right — the title, notes, data, files and key it would hand on, or why it would hand on none: the
+// condition does not hold, the script said no, or nothing could be read (core's sentence). When it is
+// due and whether a run leaves it room are not part of the try; "Now: N match → …" says those. A
+// script may run long, so the button cannot be pressed again until it answers, and closing the card
+// stops it. What is tried is what was typed then: typing anything after takes the answer away, as it
+// no longer says what the card holds. What core refuses is drawn at the top, as the save's refusal is.
 //
 // **Only its buttons close it** from within: a stray press or Escape would throw away what was typed.
 // The build screen puts its picture back in the card's place when a role is picked on the left or the
@@ -61,14 +77,15 @@ import {
   stopTriggerTry,
   tryAutomationTrigger,
   updateAutomationTrigger,
+  useTriggerAxesEmpty,
   useTriggerCount,
 } from "../core/automations";
 import { confirmDialog } from "../core/dialog";
-import { dueLabel, errText, t, tf } from "../core/i18n";
+import { dueLabel, errText, priorityLabel, t, tf } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { STATUS_ALL } from "../core/status";
 import { ErrorNote } from "../components/ErrorNote";
-import { filterValueLabel } from "./automationParts";
+import { ClassRows, filterValueLabel } from "./automationParts";
 import { RoleIcon } from "./AutomationRoles";
 import type {
   AutomationDetailDto,
@@ -81,10 +98,12 @@ import type {
   AutomationTriggerTriedDto,
 } from "../bindings/bindings";
 
-/** The four answers to 1 — whether to file a task now. */
+/** The four answers to 1 — whether to file a task, or start a run, now. */
 export type WhenKind = "every" | "idle" | "tasks" | "script";
-/** The answers to 2 — what the task says. `asked` is what the script of 1 writes beside its say. */
+/** The answers to 2 — what is handed on. `asked` is what the script of 1 writes beside its say. */
 export type TaskKind = "fixed" | "file" | "script" | "asked";
+/** The priority of the task a trigger files. */
+export type TriggerPriority = NonNullable<AutomationTriggerInputDto["priority"]>;
 
 const WHENS: { id: WhenKind; label: () => string }[] = [
   { id: "every", label: () => t("auto.trigger.whenEvery") },
@@ -97,7 +116,41 @@ const TASKS: { id: TaskKind; label: () => string }[] = [
   { id: "fixed", label: () => t("auto.trigger.taskFixed") },
   { id: "file", label: () => t("auto.trigger.taskFile") },
   { id: "script", label: () => t("auto.trigger.taskScript") },
+  { id: "asked", label: () => t("auto.trigger.taskAsked") },
 ];
+
+/** The priorities offered, none first. */
+const PRIORITIES: (TriggerPriority | null)[] = [null, "high", "medium", "low"];
+
+/** What the script of 1 writes, in version 2: to start, with what it hands on (`AMB-D-1133`). The
+ *  key is only read on a trigger that starts a run (`AMB-D-1142`). */
+const JUDGE_SAYS = '{"version":2,"start":true,"title":"…","notes":"…","data":{…}}';
+const JUDGE_SAYS_START = '{"version":2,"start":true,"title":"issue #123","notes":"…","data":{"issue":123},"key":"issue-123"}';
+/** What a trigger's file says in JSON. */
+const FILE_SAYS = '{"version":2,"title":"…","notes":"…","data":{…},"files":["/…"]}';
+const FILE_SAYS_START = '{"version":2,"title":"…","notes":"…","data":{…},"files":["/…"],"key":"…"}';
+/** What the script of 2 writes, in version 2. */
+const WRITER_SAYS = '{"version":2,"title":"…","notes":"…","data":{…}}';
+const WRITER_SAYS_START = '{"version":2,"title":"…","notes":"…","data":{…},"key":"…"}';
+
+/**
+ * **Whether the trigger starts a run of the role it is aimed at, with no task** — aimed at a role
+ * started by a trigger (`AMB-D-1127`). Aimed at none, or at a role started by a task or since taken
+ * away, it files a task.
+ */
+export function startsRun(automation: AutomationDetailDto, roleId: number | null): boolean {
+  return automation.roles.find((one) => one.id === roleId)?.startsBy === "trigger";
+}
+
+/** The words a trigger says something in: the one for filing a task, or `Start` added for starting a
+ *  run. */
+function said(key: string, starts: boolean): string {
+  return t(starts ? `${key}Start` : key);
+}
+
+function saidf(key: string, starts: boolean, values: Record<string, string | number>): string {
+  return tf(starts ? `${key}Start` : key, values);
+}
 
 /** A script as its three boxes hold it: the program, its arguments one to a line, and its timeout. */
 type ScriptBoxes = { program: string; args: string; minutes: string };
@@ -123,10 +176,20 @@ export type TriggerForm = {
   task: TaskKind;
   title: string;
   notes: string;
+  /** The data of fixed content, JSON as typed, blank for none. */
+  data: string;
+  /** The files of fixed content, a full path to a line. */
+  files: string;
+  /** The key of fixed content, read only where the trigger starts a run. */
+  key: string;
   path: string;
   writer: ScriptBoxes;
   /** The role picked, or `null` for none. */
   roleId: number | null;
+  /** The classification of the task it files, by value ids, sent only where it files one. */
+  values: number[];
+  /** The priority of the task it files, sent only where it files one. */
+  priority: TriggerPriority | null;
 };
 
 const NO_SCRIPT: ScriptBoxes = { program: "", args: "", minutes: "" };
@@ -178,9 +241,14 @@ export function formOf(trigger: AutomationTriggerDto | undefined): TriggerForm {
     task: trigger?.task.kind ?? "fixed",
     title: trigger?.task.kind === "fixed" ? trigger.task.title : "",
     notes: trigger?.task.kind === "fixed" ? trigger.task.notes : "",
+    data: trigger?.task.kind === "fixed" ? (trigger.task.data ?? "") : "",
+    files: trigger?.task.kind === "fixed" ? (trigger.task.files ?? []).join("\n") : "",
+    key: trigger?.task.kind === "fixed" ? (trigger.task.key ?? "") : "",
     path: trigger?.task.kind === "file" ? trigger.task.path : "",
     writer: boxesOf(trigger?.task.kind === "script" ? trigger.task.script : undefined),
     roleId: trigger?.roleId ?? null,
+    values: trigger?.values ?? [],
+    priority: trigger?.priority ?? null,
   };
 }
 
@@ -194,13 +262,35 @@ function scriptOf(boxes: ScriptBoxes): AutomationScriptInputDto {
   };
 }
 
-/** What the save sends. Whether the numbers are in range is core's to say. */
-export function inputOf(form: TriggerForm): AutomationTriggerInputDto {
+/** The fixed content as it is sent: the data, files and key left out where there are none, and the key
+ *  left out too where the trigger files a task, which reads none (`AMB-D-1142`). */
+function fixedOf(form: TriggerForm, starts: boolean): AutomationTriggerInputDto["task"] {
+  const files = form.files
+    .split(/\r?\n/)
+    .map((one) => one.trim())
+    .filter((one) => one !== "");
+  const key = form.key.trim();
+  return {
+    kind: "fixed",
+    title: form.title.trim(),
+    notes: form.notes,
+    ...(form.data.trim() === "" ? {} : { data: form.data }),
+    ...(files.length === 0 ? {} : { files }),
+    ...(starts && key !== "" ? { key } : {}),
+  };
+}
+
+/**
+ * What the save sends, `starts` saying whether the trigger starts a run of the role it is aimed at
+ * ({@link startsRun}): one that does sends no classification and no priority, as it files no task.
+ * Whether the numbers are in range is core's to say.
+ */
+export function inputOf(form: TriggerForm, starts = false): AutomationTriggerInputDto {
   const when: AutomationTriggerInputDto["when"] =
     form.when === "every" ? { kind: "every", minutes: Number(form.minutes) } : { kind: form.when };
   const task: AutomationTriggerInputDto["task"] =
     form.task === "fixed"
-      ? { kind: "fixed", title: form.title.trim(), notes: form.notes }
+      ? fixedOf(form, starts)
       : form.task === "file"
         ? { kind: "file", path: form.path.trim() }
         : form.task === "asked"
@@ -220,6 +310,8 @@ export function inputOf(form: TriggerForm): AutomationTriggerInputDto {
         : undefined,
     script: form.when === "script" || form.asked ? scriptOf(form.judge) : undefined,
     task,
+    ...(starts || form.values.length === 0 ? {} : { values: form.values }),
+    ...(starts || form.priority === null ? {} : { priority: form.priority }),
   };
 }
 
@@ -281,9 +373,10 @@ function ScriptBoxesField({
 }
 
 /**
- * The role the task is worked under, picked from a list: the automation's roles in their order, then
+ * The role the trigger is aimed at, picked from a list: the automation's roles in their order, then
  * none. The picked role's icon stands before the list; with none picked, an empty space of the same
- * size stands there, so the list does not move. A role since taken away stays picked under its number,
+ * size stands there, so the list does not move. How the picked role starts stands after the list, in
+ * the words the role's own screen names it by. A role since taken away stays picked under its number,
  * so opening and saving the trigger does not change it.
  */
 function RolePick({
@@ -321,6 +414,11 @@ function RolePick({
           </option>
         ))}
       </select>
+      {picked !== undefined && (
+        <span className={`chip trigcard__starts trigcard__starts--${picked.startsBy}`} data-role="starts">
+          {t(picked.startsBy === "trigger" ? "auto.build.roleStartsTrigger" : "auto.build.roleStartsTask")}
+        </span>
+      )}
     </div>
   );
 }
@@ -483,55 +581,97 @@ function TriggerList({ automation }: { automation: AutomationDetailDto }) {
   );
 }
 
-/** What a try said, as the preview's first line: the title of the task it would file, or why none. */
-function triedLine(tried: AutomationTriggerTriedDto): string {
+/** What a try said, as the preview's first line: the title it would hand on, or why it would hand on
+ *  none — in the words for filing a task, or for starting a run. */
+function triedLine(tried: AutomationTriggerTriedDto, starts: boolean): string {
   switch (tried.kind) {
     case "files":
       return tried.title;
     case "condition":
-      return t("auto.trigger.triedCondition");
+      return said("auto.trigger.triedCondition", starts);
     case "program_said_no":
-      return t("auto.trigger.triedSaidNo");
+      return said("auto.trigger.triedSaidNo", starts);
     case "said_nothing":
-      return tf("auto.trigger.triedNothing", { why: tried.why });
+      return saidf("auto.trigger.triedNothing", starts, { why: tried.why });
   }
 }
 
+/** A file's name, the last part of its full path — what it is attached by. */
+function fileName(path: string): string {
+  return path.split(/[\\/]/).filter((one) => one !== "").pop() ?? path;
+}
+
+/** Where the title comes from, where the card holds none of its own: the file, a script, or the
+ *  script of 1. */
+const FROM: Record<Exclude<TaskKind, "fixed">, string> = {
+  file: "auto.trigger.previewFromFile",
+  script: "auto.trigger.previewFromScript",
+  asked: "auto.trigger.previewFromAsked",
+};
+
 /**
- * The task the trigger files, as it will stand: its title, the role, who works it and the trigger.
- * Where the card was tried as it now stands, what the try said takes the title's place — the title
- * and notes the task would be filed with, or why none would be.
+ * What the trigger hands on, as it will stand: the task it files — its title, notes, data, the names
+ * of the files attached to it, the role, who works it and the trigger — or, where it starts a run, the
+ * run it starts, with its key and no one to work it. Where the card was tried as it now stands, what
+ * the try said takes the place of what is typed, or says why nothing would be handed on.
  */
 function Preview({
   automation,
   form,
+  starts,
   tried,
 }: {
   automation: AutomationDetailDto;
   form: TriggerForm;
+  starts: boolean;
   tried: AutomationTriggerTriedDto | null;
 }) {
   const role = automation.roles.find((one) => one.id === form.roleId);
-  const typed =
-    form.task === "fixed"
-      ? form.title.trim()
-      : t(form.task === "file" ? "auto.trigger.previewFromFile" : "auto.trigger.previewFromScript");
-  const title = tried === null ? typed : triedLine(tried);
-  const notes = tried?.kind === "files" ? tried.notes.trim() : "";
+  const fixed = form.task === "fixed";
+  const typed = fixed ? form.title.trim() : t(FROM[form.task as Exclude<TaskKind, "fixed">]);
+  const title = tried === null ? typed : triedLine(tried, starts);
+  const handed =
+    tried === null
+      ? fixed
+        ? {
+            notes: form.notes.trim(),
+            data: form.data.trim(),
+            files: form.files.split(/\r?\n/).map((one) => one.trim()).filter((one) => one !== "").map(fileName),
+            key: form.key.trim(),
+          }
+        : { notes: "", data: "", files: [], key: "" }
+      : tried.kind === "files"
+        ? { notes: tried.notes.trim(), data: tried.data ?? "", files: tried.files, key: tried.key ?? "" }
+        : { notes: "", data: "", files: [], key: "" };
   return (
     <>
-      <h3>{t("auto.trigger.preview")}</h3>
+      <h3>{said("auto.trigger.preview", starts)}</h3>
       <div className="trigstage__preview" data-tried={tried?.kind}>
         <span className="trigstage__previewtitle" data-preview="title">
           {title === "" ? t("auto.trigger.previewNoTitle") : title}
         </span>
-        {notes !== "" && (
+        {handed.notes !== "" && (
           <span className="trigstage__previewnotes" data-preview="notes">
-            {notes}
+            {handed.notes}
+          </span>
+        )}
+        {handed.data !== "" && (
+          <span className="trigstage__previewdata" data-preview="data">
+            {handed.data}
+          </span>
+        )}
+        {handed.files.length > 0 && (
+          <span className="autostep__hint" data-preview="files">
+            {tf("auto.trigger.previewFiles", { files: handed.files.join(", ") })}
+          </span>
+        )}
+        {starts && handed.key !== "" && (
+          <span className="autostep__hint" data-preview="key">
+            {tf("auto.trigger.previewKey", { key: handed.key })}
           </span>
         )}
         <span className="autostep__hint" data-preview="line">
-          {tf("auto.trigger.previewLine", {
+          {saidf("auto.trigger.previewLine", starts, {
             role: role?.name ?? t("auto.trigger.roleNone"),
             trigger: form.name.trim(),
           })}
@@ -543,17 +683,19 @@ function Preview({
 
 /**
  * **Part 1's condition, as one sentence**: "status is [ ], role is [ ], fewer than [ ] tasks → file
- * one". A status or role the boxes do not offer — several statuses, or a role no longer listed — is
- * offered as one more choice, so what was written stays picked; what the filter says besides is named
- * under the sentence, kept as it is.
+ * one", or "→ start one" where the trigger starts a run. A status or role the boxes do not offer —
+ * several statuses, or a role no longer listed — is offered as one more choice, so what was written
+ * stays picked; what the filter says besides is named under the sentence, kept as it is.
  */
 function Condition({
   automation,
   form,
+  starts,
   put,
 }: {
   automation: AutomationDetailDto;
   form: TriggerForm;
+  starts: boolean;
   put: (patch: Partial<TriggerForm>) => void;
 }) {
   const statuses: { value: string; label: string }[] = STATUS_ALL.map((one) => ({
@@ -610,7 +752,7 @@ function Condition({
           value={form.below}
           onChange={(e) => put({ below: e.target.value })}
         />
-        <span>{t("auto.trigger.belowUnit")}</span>
+        <span>{said("auto.trigger.belowUnit", starts)}</span>
       </div>
       {form.filterRest.trim() !== "" && (
         <span className="autostep__hint" data-cond="kept">
@@ -623,16 +765,17 @@ function Condition({
 
 /** What the next look does, given `count` tasks match now — in the order core weighs it: a trigger
  *  switched off files nothing, nor does one whose condition does not hold, and otherwise it files at
- *  the next look its answer to 1 waits for. */
-export function nowThen(form: TriggerForm, enabled: boolean, count: number): string {
+ *  the next look its answer to 1 waits for. Where it starts a run (`starts`), it says so instead of
+ *  filing. */
+export function nowThen(form: TriggerForm, enabled: boolean, count: number, starts = false): string {
   const below = Number(form.below);
-  if (!Number.isInteger(below) || below < 1) return t("auto.trigger.nowNoBelow");
-  if (!enabled) return t("auto.trigger.nowOff");
-  if (count >= below) return tf("auto.trigger.nowFull", { below });
-  if (form.when === "script" || form.asked) return t("auto.trigger.nowScript");
-  if (form.when === "every") return t("auto.trigger.nowEvery");
-  if (form.when === "idle") return t("auto.trigger.nowIdle");
-  return t("auto.trigger.nowTasks");
+  if (!Number.isInteger(below) || below < 1) return said("auto.trigger.nowNoBelow", starts);
+  if (!enabled) return said("auto.trigger.nowOff", starts);
+  if (count >= below) return saidf("auto.trigger.nowFull", starts, { below });
+  if (form.when === "script" || form.asked) return said("auto.trigger.nowScript", starts);
+  if (form.when === "every") return said("auto.trigger.nowEvery", starts);
+  if (form.when === "idle") return said("auto.trigger.nowIdle", starts);
+  return said("auto.trigger.nowTasks", starts);
 }
 
 /** "Now: N match → …" — how many tasks the condition, as typed, counts now, and what follows. */
@@ -640,10 +783,12 @@ function NowLine({
   automation,
   trigger,
   form,
+  starts,
 }: {
   automation: AutomationDetailDto;
   trigger: AutomationTriggerDto | undefined;
   form: TriggerForm;
+  starts: boolean;
 }) {
   const { count, error } = useTriggerCount(
     automation.id,
@@ -655,12 +800,171 @@ function NowLine({
       ? tf("auto.trigger.nowRefused", { why: errText(error) })
       : count === null
         ? null
-        : tf("auto.trigger.now", { count, then: nowThen(form, trigger?.enabled ?? true, count) });
+        : tf("auto.trigger.now", { count, then: nowThen(form, trigger?.enabled ?? true, count, starts) });
   if (line === null) return null;
   return (
     <span className="autostep__hint" data-cond="now">
       {line}
     </span>
+  );
+}
+
+/** "Required" or "optional", after a field's name. */
+function Need({ required }: { required: boolean }) {
+  return required ? (
+    <span className="autostep__req">{t("auto.side.required")}</span>
+  ) : (
+    <span className="trigcard__opt">{t("auto.trigger.optional")}</span>
+  );
+}
+
+/** A line of JSON the hint beside it describes, as it is written. */
+function Code({ children }: { children: string }) {
+  return <code className="trigcard__code">{children}</code>;
+}
+
+/**
+ * **Fixed content, as its boxes hold it** (`AMB-D-1133`, `AMB-D-1142`): a title — required where the
+ * trigger files a task, which needs one — the notes, the data as JSON and the files by full path, one
+ * to a line; and, where the trigger starts a run, a key (`AMB-D-1137`). What becomes of the data and
+ * the files is said beside them, in the words for a task filed or for a run started.
+ */
+function FixedFields({
+  form,
+  starts,
+  put,
+}: {
+  form: TriggerForm;
+  starts: boolean;
+  put: (patch: Partial<TriggerForm>) => void;
+}) {
+  const titleId = useId();
+  const notesId = useId();
+  const dataId = useId();
+  const filesId = useId();
+  const keyId = useId();
+  return (
+    <div className="trigcard__form">
+      <label className="trigcard__lbl" htmlFor={titleId}>
+        {t("auto.trigger.taskTitle")}
+        <Need required={!starts} />
+      </label>
+      <input {...asTyped} id={titleId} value={form.title} onChange={(e) => put({ title: e.target.value })} />
+      <label className="trigcard__lbl" htmlFor={notesId}>
+        {t("auto.trigger.taskNotes")}
+        <Need required={false} />
+      </label>
+      <textarea {...asTyped} id={notesId} rows={3} value={form.notes} onChange={(e) => put({ notes: e.target.value })} />
+      <label className="trigcard__lbl" htmlFor={dataId}>
+        {t("auto.trigger.taskData")}
+        <Need required={false} />
+      </label>
+      <div className="autostep__field">
+        <textarea
+          {...asTyped}
+          id={dataId}
+          className="autostep__mono"
+          rows={2}
+          value={form.data}
+          onChange={(e) => put({ data: e.target.value })}
+        />
+        <span className="autostep__hint">{said("auto.trigger.taskDataHint", starts)}</span>
+      </div>
+      <label className="trigcard__lbl" htmlFor={filesId}>
+        {t("auto.trigger.taskFiles")}
+        <Need required={false} />
+      </label>
+      <div className="autostep__field">
+        <textarea
+          {...asTyped}
+          id={filesId}
+          className="autostep__mono"
+          rows={2}
+          value={form.files}
+          onChange={(e) => put({ files: e.target.value })}
+        />
+        <span className="autostep__hint">{said("auto.trigger.taskFilesHint", starts)}</span>
+      </div>
+      {starts && (
+        <>
+          <label className="trigcard__lbl" htmlFor={keyId}>
+            {t("auto.trigger.taskKey")}
+            <Need required={false} />
+          </label>
+          <div className="autostep__field">
+            <input
+              {...asTyped}
+              id={keyId}
+              className="autostep__mono"
+              value={form.key}
+              onChange={(e) => put({ key: e.target.value })}
+            />
+            <span className="autostep__hint">{t("auto.trigger.taskKeyHint")}</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * **The key, where it comes with what is read or written** — a trigger that starts a run, handing on a
+ * file or what a script writes: the key is the file's or the script's to give (`AMB-D-1137`).
+ */
+function KeyFrom({ task }: { task: Exclude<TaskKind, "fixed"> }) {
+  return (
+    <div className="trigcard__form" data-key="from">
+      <span className="trigcard__lbl">
+        {t("auto.trigger.taskKey")}
+        <Need required={false} />
+      </span>
+      <div className="autostep__field">
+        <span className="autostep__mono">{t(task === "file" ? "auto.trigger.keyFromFile" : "auto.trigger.keyFromScript")}</span>
+        <span className="autostep__hint">{t("auto.trigger.taskKeyHint")}</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * **The classification and priority of the task the trigger files** (`AMB-D-1136`): a row of values
+ * per axis, the required axes core finds empty named under them — the save waits until each has one —
+ * and the priority, one of none, high, medium and low.
+ */
+function TaskClass({
+  automation,
+  form,
+  empty,
+  put,
+}: {
+  automation: AutomationDetailDto;
+  form: TriggerForm;
+  empty: readonly string[];
+  put: (patch: Partial<TriggerForm>) => void;
+}) {
+  return (
+    <div className="trigcard__class" data-part="class">
+      <span className="trigcard__classname">{t("auto.trigger.values")}</span>
+      <ClassRows projectId={automation.projectId} chosen={form.values} onChange={(values) => put({ values })} />
+      {empty.map((axis) => (
+        <div key={axis} className="autoside__why" role="status">
+          {tf("auto.trigger.axisEmpty", { axis })}
+        </div>
+      ))}
+      <span className="trigcard__classname">{t("auto.trigger.priority")}</span>
+      <span className="trigcard__seg" role="group" aria-label={t("auto.trigger.priority")}>
+        {PRIORITIES.map((one) => (
+          <button
+            key={one ?? "none"}
+            type="button"
+            aria-pressed={form.priority === one}
+            onClick={() => put({ priority: one })}
+          >
+            {one === null ? t("detail.priorityNone") : priorityLabel(one)}
+          </button>
+        ))}
+      </span>
+    </div>
   );
 }
 
@@ -689,9 +993,13 @@ export function AutomationTrigger({
   /** The tag of the try running now, or `null`, for closing the card to stop it. */
   const running = useRef<{ tag: number | null }>({ tag: null });
   const put = (patch: Partial<TriggerForm>) => setForm((now) => ({ ...now, ...patch }));
-  const titleId = useId();
-  const notesId = useId();
   const pathId = useId();
+  const starts = startsRun(automation, form.roleId);
+  const empty = useTriggerAxesEmpty(automation.id, form.values);
+  /** Required axes left empty hold the save back, where the trigger files a task (`AMB-D-1136`). */
+  const held = !starts && empty.length > 0;
+  const judging = form.when === "script" || form.asked;
+  const role = automation.roles.find((one) => one.id === form.roleId);
 
   const write = async (input: AutomationTriggerInputDto | null) => {
     setBusy(true);
@@ -714,12 +1022,12 @@ export function AutomationTrigger({
 
   const save = (e: FormEvent) => {
     e.preventDefault();
-    if (!busy) void write(inputOf(form));
+    if (!busy && !held) void write(inputOf(form, starts));
   };
 
   const remove = async () => {
     const name = trigger?.name ?? "";
-    if (await confirmDialog(tf("auto.trigger.removeConfirm", { name }))) void write(null);
+    if (await confirmDialog(saidf("auto.trigger.removeConfirm", starts, { name }))) void write(null);
   };
 
   // Closing the card stops a try still running: what it would say is no longer read.
@@ -737,8 +1045,8 @@ export function AutomationTrigger({
     setTrying(true);
     setRefused(null);
     try {
-      const said = await tryAutomationTrigger(automation.id, inputOf(typed), tag);
-      setTried(said === null ? null : { form: typed, said });
+      const answer = await tryAutomationTrigger(automation.id, inputOf(typed, starts), tag);
+      setTried(answer === null ? null : { form: typed, said: answer });
     } catch (e) {
       setTried(null);
       setRefused(errText(e));
@@ -759,7 +1067,7 @@ export function AutomationTrigger({
       <div className="actbuild__canvashead">
         <span className="actbuild__sec">{t("auto.trigger.title")}</span>
       </div>
-      <span className="autostep__hint">{t("auto.trigger.lead")}</span>
+      <span className="autostep__hint">{said("auto.trigger.lead", starts)}</span>
       <div className="trigstage__row">
         <form className="trigcard" noValidate onSubmit={save}>
           <div className="trigcard__head">
@@ -785,17 +1093,17 @@ export function AutomationTrigger({
             {trigger !== undefined && (
               <span className="autostep__hint trigcard__filed" data-head="filed">
                 {trigger.lastFiledAt === undefined
-                  ? t("auto.trigger.neverFiled")
-                  : tf("auto.trigger.lastFiled", { at: dueLabel({ kind: "at", at: trigger.lastFiledAt }) })}
+                  ? said("auto.trigger.neverFiled", starts)
+                  : saidf("auto.trigger.lastFiled", starts, { at: dueLabel({ kind: "at", at: trigger.lastFiledAt }) })}
               </span>
             )}
           </div>
 
           {refused !== null && <ErrorNote tone="quiet">{refused}</ErrorNote>}
 
-          <Part no={1} title={t("auto.trigger.when")}>
+          <Part no={1} title={said("auto.trigger.when", starts)}>
             <Radios
-              label={t("auto.trigger.whenPick")}
+              label={said("auto.trigger.whenPick", starts)}
               options={WHENS.map((one) => ({ id: one.id, label: one.label() }))}
               picked={form.when}
               onPick={(when) => put({ when })}
@@ -826,8 +1134,8 @@ export function AutomationTrigger({
               )}
               {(form.when === "tasks" || form.counted) && (
                 <>
-                  <Condition automation={automation} form={form} put={put} />
-                  <NowLine automation={automation} trigger={trigger} form={form} />
+                  <Condition automation={automation} form={form} starts={starts} put={put} />
+                  <NowLine automation={automation} trigger={trigger} form={form} starts={starts} />
                 </>
               )}
               {form.when !== "script" && (
@@ -840,40 +1148,32 @@ export function AutomationTrigger({
                   {t("auto.trigger.asked")}
                 </label>
               )}
-              {(form.when === "script" || form.asked) && (
+              {judging && (
                 <>
-                  <span className="autostep__hint">{t("auto.trigger.judgeHint")}</span>
                   <ScriptBoxesField boxes={form.judge} onChange={(judge) => put({ judge })} />
+                  <span className="autostep__hint">{said("auto.trigger.judgeHint", starts)}</span>
+                  <Code>{starts ? JUDGE_SAYS_START : JUDGE_SAYS}</Code>
                 </>
               )}
             </div>
           </Part>
 
-          <Part no={2} title={t("auto.trigger.task")}>
+          <Part no={2} title={said("auto.trigger.task", starts)}>
             <Radios
-              label={t("auto.trigger.taskPick")}
-              options={TASKS.map((one) => ({ id: one.id, label: one.label() }))}
+              label={said("auto.trigger.taskPick", starts)}
+              options={TASKS.filter((one) => one.id !== "asked" || judging || form.task === "asked").map((one) => ({
+                id: one.id,
+                label: one.label(),
+              }))}
               picked={form.task}
               onPick={(task) => put({ task })}
             />
-            {form.task === "fixed" && (
-              <div className="trigcard__form">
-                <label className="trigcard__lbl" htmlFor={titleId}>
-                  {t("auto.trigger.taskTitle")}
-                </label>
-                <input {...asTyped} id={titleId} value={form.title} onChange={(e) => put({ title: e.target.value })} />
-                <label className="trigcard__lbl" htmlFor={notesId}>
-                  {t("auto.trigger.taskNotes")}
-                </label>
-                <textarea
-                  {...asTyped}
-                  id={notesId}
-                  rows={3}
-                  value={form.notes}
-                  onChange={(e) => put({ notes: e.target.value })}
-                />
-              </div>
+            {starts && (
+              <span className="autostep__hint" data-hint="receive">
+                {t("auto.trigger.receiveHint")}
+              </span>
             )}
+            {form.task === "fixed" && <FixedFields form={form} starts={starts} put={put} />}
             {form.task === "file" && (
               <div className="trigcard__form">
                 <label className="trigcard__lbl" htmlFor={pathId}>
@@ -887,25 +1187,40 @@ export function AutomationTrigger({
                     value={form.path}
                     onChange={(e) => put({ path: e.target.value })}
                   />
-                  <span className="autostep__hint">{t("auto.trigger.taskPathHint")}</span>
+                  <span className="autostep__hint">{said("auto.trigger.taskPathHint", starts)}</span>
+                  <Code>{starts ? FILE_SAYS_START : FILE_SAYS}</Code>
                 </div>
               </div>
             )}
             {form.task === "script" && (
               <>
-                <span className="autostep__hint">{t("auto.trigger.writerHint")}</span>
                 <ScriptBoxesField boxes={form.writer} onChange={(writer) => put({ writer })} />
+                <span className="autostep__hint">{said("auto.trigger.writerHint", starts)}</span>
+                <Code>{starts ? WRITER_SAYS_START : WRITER_SAYS}</Code>
               </>
             )}
+            {form.task === "asked" && (
+              <span className="autostep__hint" data-hint="asked">
+                {said("auto.trigger.askedHint", starts)}
+              </span>
+            )}
+            {starts && form.task !== "fixed" && <KeyFrom task={form.task} />}
           </Part>
 
           <Part no={3} title={t("auto.trigger.role")}>
             <RolePick automation={automation} roleId={form.roleId} onPick={(roleId) => put({ roleId })} />
+            {starts ? (
+              <span className="autostep__hint" data-note="starts">
+                {tf("auto.trigger.startsNote", { role: role?.name ?? "" })}
+              </span>
+            ) : (
+              <TaskClass automation={automation} form={form} empty={empty} put={put} />
+            )}
           </Part>
 
           <div className="trigcard__mach">
             <span aria-hidden="true">ⓘ</span>
-            <span data-note="recorded">{tf("auto.trigger.recorded", { name: form.name.trim() })}</span>
+            <span data-note="recorded">{saidf("auto.trigger.recorded", starts, { name: form.name.trim() })}</span>
           </div>
 
           <div className="trigcard__buttons">
@@ -927,14 +1242,19 @@ export function AutomationTrigger({
             >
               {t(trying ? "auto.trigger.trying" : "auto.trigger.try")}
             </button>
-            <button type="submit" className="btn btn--primary" disabled={busy}>
+            <button type="submit" className="btn btn--primary" disabled={busy || held}>
               {t("auto.trigger.save")}
             </button>
           </div>
         </form>
         <div className="trigstage__notes">
           <TriggerList automation={automation} />
-          <Preview automation={automation} form={form} tried={tried?.form === form ? tried.said : null} />
+          <Preview
+            automation={automation}
+            form={form}
+            starts={starts}
+            tried={tried?.form === form ? tried.said : null}
+          />
         </div>
       </div>
     </div>

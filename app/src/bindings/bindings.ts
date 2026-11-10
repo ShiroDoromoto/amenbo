@@ -1762,7 +1762,17 @@ lastRefused?: AutomationTriggerRefusedDto, };
  * **A trigger as a screen writes it** ([`amenbo_core::ops::automation::NewTrigger`]) —
  * [`AutomationTriggerDto`] without `nextAt`, which is counted from the write.
  */
-export type AutomationTriggerInputDto = { name: string, roleId?: number, when: AutomationTriggerWhenDto, condition?: AutomationTriggerConditionDto, script?: AutomationScriptInputDto, task: AutomationTriggerTaskInputDto, };
+export type AutomationTriggerInputDto = { name: string, roleId?: number, when: AutomationTriggerWhenDto, condition?: AutomationTriggerConditionDto, script?: AutomationScriptInputDto, task: AutomationTriggerTaskInputDto, 
+/**
+ * The classification of the task it files, by value ids, at most one an axis: exactly these, the
+ * ones it had and no longer names taken off. Left out for none, as one aimed at a role started by
+ * a trigger sends.
+ */
+values?: Array<number>, 
+/**
+ * The priority of the task it files. Left out for none.
+ */
+priority?: "high" | "medium" | "low", };
 
 /**
  * **When a trigger last could not start a run, and why** ([`amenbo_core::model::TriggerRefusal`]) —
@@ -1814,18 +1824,18 @@ fields: { [key in string]: string }, };
 
 /**
  * **What a trigger hands on** — the wire form of [`amenbo_core::model::TriggerTask`]: `fixed` with its
- * title, notes, data (JSON text, absent for none) and the full paths of its files (absent for none),
- * `file` read from its full path, `script` written by a program, `asked` written by the trigger's own
- * script beside its say to start.
+ * title, notes, data (JSON text, absent for none), the full paths of its files (absent for none) and
+ * its key (absent for none), `file` read from its full path, `script` written by a program, `asked`
+ * written by the trigger's own script beside its say to start.
  */
-export type AutomationTriggerTaskDto = { "kind": "fixed", title: string, notes: string, data?: string, files?: Array<string>, } | { "kind": "file", path: string, } | { "kind": "script", script: AutomationStepScriptDto, } | { "kind": "asked" };
+export type AutomationTriggerTaskDto = { "kind": "fixed", title: string, notes: string, data?: string, files?: Array<string>, key?: string, } | { "kind": "file", path: string, } | { "kind": "script", script: AutomationStepScriptDto, } | { "kind": "asked" };
 
 /**
  * **What a trigger is written to hand on** ([`amenbo_core::ops::automation::NewTriggerTask`]) —
  * [`AutomationTriggerTaskDto`] with the program's timeout left out where it is the default, and a
- * `fixed`'s data and files left out where it has none.
+ * `fixed`'s data, files and key left out where it has none.
  */
-export type AutomationTriggerTaskInputDto = { "kind": "fixed", title: string, notes: string, data?: string, files?: Array<string>, } | { "kind": "file", path: string, } | { "kind": "script", script: AutomationScriptInputDto, } | { "kind": "asked" };
+export type AutomationTriggerTaskInputDto = { "kind": "fixed", title: string, notes: string, data?: string, files?: Array<string>, key?: string, } | { "kind": "file", path: string, } | { "kind": "script", script: AutomationScriptInputDto, } | { "kind": "asked" };
 
 /**
  * **What a trigger's own parts said, tried as it is typed** — the wire form of

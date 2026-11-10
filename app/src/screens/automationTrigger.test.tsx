@@ -15,11 +15,14 @@
 // and **the condition is picked as a status, a role and a count**, a filter the boxes cannot show
 // kept as it was written, with how many tasks match now and what the next look does said under it;
 // and **"Try it now" tries what is typed, unsaved**, what it says standing in the preview until
-// something is typed again, the button held while it runs and the try stopped when the card closes.
+// something is typed again, the button held while it runs and the try stopped when the card closes;
+// **fixed content carries data and files**, and **the role's way of starting decides what is asked** —
+// a task filed gets a classification and a priority, the save held back while a required axis is
+// empty, and a run started gets a key, its own words in every part, and no classification.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AutomationDetailDto, AutomationTriggerDto } from "../bindings/bindings";
+import type { AutomationDetailDto, AutomationTriggerDto, DimensionDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
   add: vi.fn(),
@@ -30,6 +33,9 @@ const hoisted = vi.hoisted(() => ({
   count: vi.fn(),
   try: vi.fn(),
   stop: vi.fn(),
+  axes: vi.fn(),
+  /** The project's axes, as the snapshot holds them. */
+  dimensions: [] as DimensionDto[],
 }));
 
 vi.mock("../core/automations", () => ({
@@ -40,12 +46,18 @@ vi.mock("../core/automations", () => ({
   useTriggerCount: hoisted.count,
   tryAutomationTrigger: hoisted.try,
   stopTriggerTry: hoisted.stop,
+  useTriggerAxesEmpty: hoisted.axes,
 }));
 vi.mock("../core/dialog", () => ({ confirmDialog: hoisted.confirm }));
+vi.mock("../core/snapshot", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../core/snapshot")>()),
+  getSnapshot: () => ({ projects: [{ id: 1, dimensions: hoisted.dimensions }] }),
+}));
 
-import { dueLabel, errText, t, tf } from "../core/i18n";
+import { dueLabel, errText, priorityLabel, t, tf } from "../core/i18n";
+import { en } from "../core/i18n/locales/en";
 import { filterValueLabel } from "./automationParts";
-import { AutomationTrigger, formOf, inputOf, joinFilter, nowThen, splitFilter } from "./AutomationTrigger";
+import { AutomationTrigger, formOf, inputOf, joinFilter, nowThen, splitFilter, startsRun } from "./AutomationTrigger";
 import { RoleIcon } from "./AutomationRoles";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -64,6 +76,7 @@ function detail(...triggers: AutomationTriggerDto[]): AutomationDetailDto {
     roles: [
       { id: 1, name: "Alice", headcount: 1, startsBy: "task", passes: [] },
       { id: 2, name: "Bob", headcount: 1, startsBy: "task", passes: [] },
+      { id: 3, name: "Carol", headcount: 2, startsBy: "trigger", passes: [] },
     ],
     placements: [],
     edges: [],
@@ -113,11 +126,14 @@ async function press(button: HTMLElement | undefined) {
   });
 }
 
-/** The box a label names, by the words on its label or its `aria-label`. */
+/** The box a label names, by the words on its label — before the mark saying whether it is required
+ *  — or its `aria-label`. */
 function box(words: string): HTMLInputElement | HTMLTextAreaElement {
   const named = page().querySelector<HTMLInputElement>(`[aria-label="${words}"]`);
   if (named !== null) return named;
-  const label = [...page().querySelectorAll("label")].find((one) => one.textContent === words);
+  const label = [...page().querySelectorAll("label")].find(
+    (one) => one.textContent === words || (one.firstChild?.nodeType === Node.TEXT_NODE && one.firstChild.textContent === words),
+  );
   const forId = label?.getAttribute("for");
   const inside =
     forId === null || forId === undefined
@@ -179,6 +195,9 @@ beforeEach(() => {
   hoisted.try.mockReset();
   hoisted.stop.mockReset();
   hoisted.stop.mockResolvedValue(undefined);
+  hoisted.axes.mockReset();
+  hoisted.axes.mockReturnValue([]);
+  hoisted.dimensions = [];
 });
 
 afterEach(() => {
@@ -187,7 +206,7 @@ afterEach(() => {
 });
 
 describe("the form and what it sends", () => {
-  it("starts a new trigger as one that files fixed words every hour, with no role", () => {
+  it("starts a new trigger as one that files fixed content every hour, with no role", () => {
     expect(inputOf(formOf(undefined))).toEqual({
       name: "",
       roleId: undefined,
@@ -365,7 +384,7 @@ describe("the card", () => {
     const automation = detail();
     await draw(automation);
     const roles = [...selectNamed(t("auto.trigger.role"))!.options].map((one) => one.textContent);
-    expect(roles).toEqual(["Alice", "Bob", t("auto.trigger.roleNone")]);
+    expect(roles).toEqual(["Alice", "Bob", "Carol", t("auto.trigger.roleNone")]);
     const row = () => selectNamed(t("auto.trigger.role"))!.parentElement!;
     const iconOf = (name: string) => {
       const drawn = document.createElement("div");
@@ -396,7 +415,7 @@ describe("the card", () => {
     const select = selectNamed(t("auto.trigger.role"))!;
     expect(select.value).toBe("9");
     const roles = [...select.options].map((one) => one.textContent);
-    expect(roles).toEqual(["Alice", "Bob", "9", t("auto.trigger.roleNone")]);
+    expect(roles).toEqual(["Alice", "Bob", "Carol", "9", t("auto.trigger.roleNone")]);
     expect(select.parentElement!.querySelector(".identicon")).toBeNull();
   });
 
@@ -429,7 +448,7 @@ describe("the card", () => {
     await press(radio(t("auto.trigger.whenIdle")));
     await press(tick(t("auto.trigger.counted")));
     const roles = [...selectNamed(t("auto.trigger.condRolePick"))!.options].map((one) => one.textContent);
-    expect(roles).toEqual(["Alice", "Bob", t("auto.trigger.anyRole")]);
+    expect(roles).toEqual(["Alice", "Bob", "Carol", t("auto.trigger.anyRole")]);
     const statuses = [...selectNamed(t("auto.trigger.condStatusPick"))!.options].map((one) => one.value);
     expect(statuses).toEqual(["todo", "in_progress", "blocked", "done", "rejected", ""]);
     await pick(t("auto.trigger.condRolePick"), "1");
@@ -692,5 +711,293 @@ describe("trying it as it is typed", () => {
     act(() => root.unmount());
     expect(hoisted.stop).toHaveBeenCalledWith(tag);
     root = createRoot(container);
+  });
+});
+
+describe("fixed content", () => {
+  it("opens and sends back its data and files, and a key only where the trigger starts a run", () => {
+    const fixed: AutomationTriggerDto = {
+      ...written,
+      task: { kind: "fixed", title: "Next boss theme", notes: "", data: '{"stage": 5}', files: ["/Users/alice/brief.md"], key: "stage-5" },
+      values: [11],
+      priority: "medium",
+    };
+    const form = formOf(fixed);
+    expect(form).toMatchObject({ data: '{"stage": 5}', files: "/Users/alice/brief.md", key: "stage-5", values: [11], priority: "medium" });
+    expect(inputOf(form)).toMatchObject({
+      task: { kind: "fixed", title: "Next boss theme", notes: "", data: '{"stage": 5}', files: ["/Users/alice/brief.md"] },
+      values: [11],
+      priority: "medium",
+    });
+    expect(inputOf(form).task).not.toHaveProperty("key");
+    const started = inputOf(form, true);
+    expect(started.task).toMatchObject({ key: "stage-5" });
+    expect(started).not.toHaveProperty("values");
+    expect(started).not.toHaveProperty("priority");
+  });
+
+  it("sends the data as typed and the files one a line, the blank lines left out", async () => {
+    await draw(detail());
+    await type(box(t("auto.trigger.taskTitle")), "Next boss theme");
+    await type(box(t("auto.trigger.taskData")), '{"bpm": 140}');
+    await type(box(t("auto.trigger.taskFiles")), "/Users/alice/brief.md\n\n /Users/alice/notes.md \n");
+    await press(buttonNamed(t("auto.trigger.save")));
+    expect(hoisted.add.mock.calls[0]?.[1].task).toEqual({
+      kind: "fixed",
+      title: "Next boss theme",
+      notes: "",
+      data: '{"bpm": 140}',
+      files: ["/Users/alice/brief.md", "/Users/alice/notes.md"],
+    });
+  });
+
+  it("marks the title required where a task is filed, and every field optional where a run starts", async () => {
+    await draw(detail());
+    const mark = (words: string) =>
+      [...page().querySelectorAll("label")].find((one) => one.firstChild?.textContent === words)?.lastChild?.textContent;
+    expect(mark(t("auto.trigger.taskTitle"))).toBe(t("auto.side.required"));
+    expect(mark(t("auto.trigger.taskNotes"))).toBe(t("auto.trigger.optional"));
+    expect(mark(t("auto.trigger.taskData"))).toBe(t("auto.trigger.optional"));
+    expect(mark(t("auto.trigger.taskFiles"))).toBe(t("auto.trigger.optional"));
+    expect(mark(t("auto.trigger.taskKey"))).toBeUndefined();
+
+    await pick(t("auto.trigger.role"), "3");
+    expect(mark(t("auto.trigger.taskTitle"))).toBe(t("auto.trigger.optional"));
+    expect(mark(t("auto.trigger.taskKey"))).toBe(t("auto.trigger.optional"));
+  });
+
+  it("previews the data and the names of the files attached", async () => {
+    await draw(detail());
+    await type(box(t("auto.trigger.taskTitle")), "Next boss theme");
+    await type(box(t("auto.trigger.taskData")), '{"stage": 5}');
+    await type(box(t("auto.trigger.taskFiles")), "/Users/alice/music/brief.md\n/Users/alice/music/ref.mp3");
+    expect(page().querySelector("[data-preview=data]")?.textContent).toBe('{"stage": 5}');
+    expect(page().querySelector("[data-preview=files]")?.textContent).toBe(
+      tf("auto.trigger.previewFiles", { files: "brief.md, ref.mp3" }),
+    );
+    expect(page().querySelector("[data-preview=key]")).toBeNull();
+  });
+
+  it("previews what a try would hand on: data, files and key", async () => {
+    hoisted.try.mockResolvedValue({ kind: "files", title: "issue #123", notes: "", data: '{"issue":123}', key: "issue-123", files: ["log.txt"] });
+    await draw(detail());
+    await pick(t("auto.trigger.role"), "3");
+    await press(buttonNamed(t("auto.trigger.try")));
+    expect(previewTitle()).toBe("issue #123");
+    expect(page().querySelector("[data-preview=data]")?.textContent).toBe('{"issue":123}');
+    expect(page().querySelector("[data-preview=files]")?.textContent).toBe(tf("auto.trigger.previewFiles", { files: "log.txt" }));
+    expect(page().querySelector("[data-preview=key]")?.textContent).toBe(tf("auto.trigger.previewKey", { key: "issue-123" }));
+  });
+});
+
+describe("what is handed on", () => {
+  const options = () =>
+    [...page().querySelectorAll(`[role=radiogroup][aria-label="${t("auto.trigger.taskPick")}"] label`)].map((one) => one.textContent);
+
+  it("offers the deciding script's output only where a script decides", async () => {
+    await draw(detail());
+    expect(options()).toEqual([t("auto.trigger.taskFixed"), t("auto.trigger.taskFile"), t("auto.trigger.taskScript")]);
+    await press(radio(t("auto.trigger.whenScript")));
+    expect(options()).toContain(t("auto.trigger.taskAsked"));
+    await press(radio(t("auto.trigger.taskAsked")));
+    expect(page().querySelector("[data-hint=asked]")?.textContent).toBe(t("auto.trigger.askedHint"));
+    await type(box(t("auto.step.program")), "/usr/bin/python3");
+    await press(buttonNamed(t("auto.trigger.save")));
+    expect(hoisted.add.mock.calls[0]?.[1]).toMatchObject({ when: { kind: "script" }, task: { kind: "asked" } });
+  });
+
+  it("describes version 2 of what a script and a file write", async () => {
+    await draw(detail());
+    await press(radio(t("auto.trigger.whenScript")));
+    const codes = () => [...page().querySelectorAll(".trigcard__code")].map((one) => one.textContent);
+    expect(codes()).toEqual(['{"version":2,"start":true,"title":"…","notes":"…","data":{…}}']);
+    await pick(t("auto.trigger.role"), "3");
+    expect(codes()[0]).toBe('{"version":2,"start":true,"title":"issue #123","notes":"…","data":{"issue":123},"key":"issue-123"}');
+    await press(radio(t("auto.trigger.taskScript")));
+    expect(codes()[1]).toBe('{"version":2,"title":"…","notes":"…","data":{…},"key":"…"}');
+    await press(radio(t("auto.trigger.taskFile")));
+    expect(codes()[1]).toContain('"files":["/…"]');
+  });
+});
+
+describe("a trigger that files a task: its classification and priority", () => {
+  const axis = (over: Partial<DimensionDto> & Pick<DimensionDto, "id" | "name" | "values">): DimensionDto => ({
+    notes: "",
+    cardinality: "single",
+    role: "none",
+    ordered: false,
+    showOnCard: false,
+    required: false,
+    appliesTo: "both",
+    sequential: false,
+    ...over,
+  });
+  const value = (id: number, name: string, closed = false) => ({ id, name, closed });
+  const frame = () => page().querySelector<HTMLElement>("[data-part=class]");
+  const chip = (label: string) =>
+    [...(frame()?.querySelectorAll<HTMLButtonElement>(".autostep__chip") ?? [])].find((one) => one.textContent === label);
+  const priority = (label: string) =>
+    [...page().querySelectorAll<HTMLButtonElement>(`[aria-label="${t("auto.trigger.priority")}"] button`)].find(
+      (one) => one.textContent === label,
+    );
+  const saveButton = () => buttonNamed(t("auto.trigger.save"));
+
+  beforeEach(() => {
+    hoisted.dimensions = [
+      axis({ id: 3, name: "Product", required: true, values: [value(11, "Game"), value(12, "Site")] }),
+      axis({ id: 4, name: "Kind", required: true, values: [value(21, "Build"), value(22, "Old", true)] }),
+    ];
+  });
+
+  it("asks a row per axis and the priority, under the role, and sends what is pressed", async () => {
+    await draw(detail());
+    expect(frame()?.textContent).toContain(t("auto.trigger.values"));
+    expect(chip("Old")).toBeUndefined();
+    await press(chip("Game"));
+    await press(chip("Build"));
+    expect(chip("Game")?.getAttribute("aria-pressed")).toBe("true");
+    expect(hoisted.axes).toHaveBeenLastCalledWith(7, [11, 21]);
+    expect(priority(t("detail.priorityNone"))?.getAttribute("aria-pressed")).toBe("true");
+    await press(priority(priorityLabel("high")));
+    expect(priority(priorityLabel("high"))?.getAttribute("aria-pressed")).toBe("true");
+    await type(box(t("auto.trigger.taskTitle")), "Next boss theme");
+    await press(saveButton());
+    expect(hoisted.add.mock.calls[0]?.[1]).toMatchObject({ values: [11, 21], priority: "high" });
+  });
+
+  it("names each required axis core finds empty, and holds the save back until it has a value", async () => {
+    hoisted.axes.mockReturnValue(["Kind"]);
+    await draw(detail());
+    expect(frame()?.querySelector("[role=status]")?.textContent).toBe(tf("auto.trigger.axisEmpty", { axis: "Kind" }));
+    expect(saveButton()?.disabled).toBe(true);
+    hoisted.axes.mockReturnValue([]);
+    await press(chip("Build"));
+    expect(frame()?.querySelector("[role=status]")).toBeNull();
+    expect(saveButton()?.disabled).toBe(false);
+  });
+
+  it("keeps a closed value the trigger already names on its row", async () => {
+    await draw(detail({ ...written, values: [22] }), { ...written, values: [22] });
+    expect(chip("Old")?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("files a task aimed at no role as at a role started by a task", async () => {
+    await draw(detail());
+    expect(selectNamed(t("auto.trigger.role"))?.value).toBe("");
+    expect(frame()).not.toBeNull();
+    expect(page().querySelector("[data-role=starts]")).toBeNull();
+    await pick(t("auto.trigger.role"), "1");
+    expect(page().querySelector("[data-role=starts]")?.textContent).toBe(t("auto.build.roleStartsTask"));
+  });
+});
+
+describe("a trigger aimed at a role started by a trigger", () => {
+  const aimed: AutomationTriggerDto = {
+    ...written,
+    roleId: 3,
+    when: { kind: "every", minutes: 60 },
+    condition: undefined,
+    task: { kind: "fixed", title: "", notes: "", key: "issue-123" },
+    lastFiledAt: "2026-11-10T00:12:00Z",
+  };
+
+  it("knows a run is started only for a role started by a trigger", () => {
+    const automation = detail();
+    expect(startsRun(automation, 3)).toBe(true);
+    expect(startsRun(automation, 1)).toBe(false);
+    expect(startsRun(automation, null)).toBe(false);
+    expect(startsRun(automation, 9)).toBe(false);
+  });
+
+  it("says it starts a run in every part, and when it last started one", async () => {
+    await draw(detail(aimed), aimed);
+    expect(page().querySelector(".trigstage > .autostep__hint")?.textContent).toBe(t("auto.trigger.leadStart"));
+    expect(page().querySelector("[data-head=filed]")?.textContent).toBe(
+      tf("auto.trigger.lastFiledStart", { at: dueLabel({ kind: "at", at: "2026-11-10T00:12:00Z" }) }),
+    );
+    const parts = [...container.querySelectorAll(".trigcard__part h3")].map((one) => one.textContent);
+    expect(parts).toEqual([t("auto.trigger.whenStart"), t("auto.trigger.taskStart"), t("auto.trigger.role")]);
+    expect(page().querySelector("[data-role=starts]")?.textContent).toBe(t("auto.build.roleStartsTrigger"));
+    expect(page().querySelector("[data-note=starts]")?.textContent).toBe(tf("auto.trigger.startsNote", { role: "Carol" }));
+    expect(page().querySelector("[data-hint=receive]")?.textContent).toBe(t("auto.trigger.receiveHint"));
+    expect(page().querySelector("[data-note=recorded]")?.textContent).toBe(
+      tf("auto.trigger.recordedStart", { name: "Top up the reviews" }),
+    );
+    expect(page().querySelector("[data-part=class]")).toBeNull();
+  });
+
+  it("says it has started none yet", async () => {
+    const fresh = { ...aimed, lastFiledAt: undefined };
+    await draw(detail(fresh), fresh);
+    expect(page().querySelector("[data-head=filed]")?.textContent).toBe(t("auto.trigger.neverFiledStart"));
+  });
+
+  it("sends its key and no classification, even where one was pressed for another role", async () => {
+    hoisted.dimensions = [
+      {
+        id: 3,
+        name: "Product",
+        notes: "",
+        cardinality: "single",
+        role: "none",
+        ordered: false,
+        showOnCard: false,
+        required: true,
+        appliesTo: "both",
+        sequential: false,
+        values: [{ id: 11, name: "Game", closed: false }],
+      },
+    ];
+    hoisted.axes.mockReturnValue(["Product"]);
+    await draw(detail(aimed), aimed);
+    expect((box(t("auto.trigger.taskKey")) as HTMLInputElement).value).toBe("issue-123");
+    expect(buttonNamed(t("auto.trigger.save"))?.disabled).toBe(false);
+    await pick(t("auto.trigger.role"), "1");
+    expect(buttonNamed(t("auto.trigger.save"))?.disabled).toBe(true);
+    await pick(t("auto.trigger.role"), "3");
+    await press(buttonNamed(t("auto.trigger.save")));
+    const sent = hoisted.update.mock.calls[0]?.[1];
+    expect(sent.task).toEqual({ kind: "fixed", title: "", notes: "", key: "issue-123" });
+    expect(sent).not.toHaveProperty("values");
+    expect(sent).not.toHaveProperty("priority");
+  });
+
+  it("says the key comes from the file or the script where they hand it on", async () => {
+    await draw(detail(aimed), aimed);
+    expect(page().querySelector("[data-key=from]")).toBeNull();
+    await press(radio(t("auto.trigger.taskFile")));
+    expect(page().querySelector("[data-key=from]")?.textContent).toContain(t("auto.trigger.keyFromFile"));
+    await press(radio(t("auto.trigger.taskScript")));
+    expect(page().querySelector("[data-key=from]")?.textContent).toContain(t("auto.trigger.keyFromScript"));
+  });
+
+  it("previews the run it starts, with its key and no one to work it", async () => {
+    await draw(detail(aimed), aimed);
+    expect([...page().querySelectorAll(".trigstage__notes h3")].map((one) => one.textContent)).toContain(
+      t("auto.trigger.previewStart"),
+    );
+    expect(page().querySelector("[data-preview=key]")?.textContent).toBe(tf("auto.trigger.previewKey", { key: "issue-123" }));
+    expect(previewLine()).toBe(tf("auto.trigger.previewLineStart", { role: "Carol", trigger: "Top up the reviews" }));
+  });
+
+  it("says what the next look starts, and why a try would start none", async () => {
+    const form = { ...formOf(aimed), counted: true, below: "3" };
+    expect(nowThen(form, true, 0, true)).toBe(t("auto.trigger.nowEveryStart"));
+    expect(nowThen(form, true, 3, true)).toBe(tf("auto.trigger.nowFullStart", { below: 3 }));
+    hoisted.try.mockResolvedValue({ kind: "program_said_no" });
+    await draw(detail(aimed), aimed);
+    await press(buttonNamed(t("auto.trigger.try")));
+    expect(previewTitle()).toBe(t("auto.trigger.triedSaidNoStart"));
+  });
+
+  it("has a word for starting wherever it has one for filing", () => {
+    const filing = [
+      "lead", "when", "whenPick", "belowUnit", "nowFull", "nowEvery", "nowIdle", "nowTasks", "nowScript", "nowOff",
+      "nowNoBelow", "judgeHint", "task", "taskPick", "taskPathHint", "writerHint", "askedHint", "taskDataHint",
+      "taskFilesHint", "recorded", "preview", "previewLine", "triedCondition", "triedSaidNo", "triedNothing",
+      "removeConfirm", "lastFiled", "neverFiled",
+    ];
+    const missing = filing.filter((key) => !(`auto.trigger.${key}Start` in en.ui) || !(`auto.trigger.${key}` in en.ui));
+    expect(missing).toEqual([]);
   });
 });

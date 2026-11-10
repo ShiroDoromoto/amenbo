@@ -37,20 +37,18 @@
 // "+ Add a trigger", asks the build screen to open that trigger's card in its middle
 // (`./AutomationTrigger`), to change it or take it away, or to write a new one.
 import { useState } from "react";
-import { axesFor } from "../core/appliesTo";
 import { editAutomation, editAutomationRole } from "../core/automations";
 import { builtinWord } from "../core/builtinWords";
 import { errText, t, tf } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
 import { Stepper } from "../components/Stepper";
-import { getSnapshot } from "../core/snapshot";
 import { RoleIcon } from "./AutomationRoles";
+import { ClassRows } from "./automationParts";
 import { taskLine, whenLine } from "./AutomationTrigger";
 import type {
   AutomationDetailDto,
   AutomationFailuresToDto,
   AutomationTriggerDto,
-  DimensionDto,
 } from "../bindings/bindings";
 
 /** The pulldown's value for who failures are filed to: `""` for nobody yet. */
@@ -68,65 +66,21 @@ function failuresOf(value: string): AutomationFailuresToDto | null {
 /** The reason core gives for a required axis the failed round's task would be filed with no value on. */
 const AXIS_EMPTY = "not_ready_automation_failure_axis_empty";
 
-/**
- * The axes a failed round's task can be classified on in this project, each with the values that can
- * be chosen: the open ones, and a closed one only where it is already chosen. An axis with nothing to
- * press is left out.
- */
-function failureAxes(projectId: number, chosen: readonly number[]): DimensionDto[] {
-  const dims = getSnapshot().projects.find((p) => p.id === projectId)?.dimensions ?? [];
-  return axesFor("task", dims)
-    .map((dim) => ({ ...dim, values: dim.values.filter((value) => !value.closed || chosen.includes(value.id)) }))
-    .filter((dim) => dim.values.length > 0);
-}
-
-/** The classification with `value` pressed on `axis`: it alone on the axis, or none where it was on. */
-function pressedValue(chosen: readonly number[], axis: DimensionDto, value: number): number[] {
-  const onAxis = new Set(axis.values.map((one) => one.id));
-  const rest = chosen.filter((one) => !onAxis.has(one));
-  return chosen.includes(value) ? rest : [...rest, value];
-}
-
 /** **What a failed round's task is classified under**: a row of values per axis, and each required
  *  axis core finds empty. */
 function FailureClass({ automation, write }: {
   automation: AutomationDetailDto;
   write: (patch: Parameters<typeof editAutomation>[1]) => void;
 }) {
-  const chosen = automation.failureValues;
-  const axes = failureAxes(automation.projectId, chosen);
   const empty = automation.saveBlocks.filter((block) => block.code === AXIS_EMPTY).map((block) => block.fields.axis ?? "");
   return (
     <div className="autoside__class">
       <span className="autoside__classname">{t("auto.side.failureClass")}</span>
-      {axes.length === 0 ? (
-        <span className="autostep__hint">{t("auto.step.noAxes")}</span>
-      ) : (
-        <div className="autostep__rows">
-          {axes.map((dim) => (
-            <div key={dim.id} className="autostep__row">
-              <span className="autostep__rowname">
-                {dim.name}
-                {dim.required && <span className="autostep__req">{t("auto.side.required")}</span>}
-              </span>
-              {dim.values.map((one) => {
-                const on = chosen.includes(one.id);
-                return (
-                  <button
-                    key={one.id}
-                    type="button"
-                    className={`autostep__chip ${on ? "autostep__chip--on" : ""}`}
-                    aria-pressed={on}
-                    onClick={() => write({ failureValues: pressedValue(chosen, dim, one.id) })}
-                  >
-                    {one.name}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      )}
+      <ClassRows
+        projectId={automation.projectId}
+        chosen={automation.failureValues}
+        onChange={(failureValues) => write({ failureValues })}
+      />
       {empty.map((axis) => (
         <div key={axis} className="autoside__why" role="status">
           {tf("auto.side.failureAxisEmpty", { axis })}

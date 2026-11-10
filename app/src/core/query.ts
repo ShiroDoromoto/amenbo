@@ -182,6 +182,9 @@ export const SCOPE_WATCHERS: Readonly<Record<string, readonly string[]>> = {
   // How many tasks a trigger's condition counts as it is typed: the tasks move it, and so does a
   // role of the automation going away.
   automationTriggerCount: ["tasks", "automations"],
+  // Which required axes a trigger's classification, as it is pressed, leaves empty: an axis made
+  // required or a value added acks with "tasks", and the automation moving with "automations".
+  automationTriggerAxesEmpty: ["tasks", "automations"],
   // What a launch asks for: the entry's settings, and the project's axes and their values.
   automationLaunchAsks: ["automations", "tasks"],
   // The roles a project's tasks can be worked under, read off its automations' roles — every row of

@@ -38,7 +38,7 @@ import { Icon } from "../components/Icon";
 import { PaneModel } from "./PaneModel";
 import { PaneSize } from "./PaneSize";
 import { RunActs } from "./RunActs";
-import { LaunchHead } from "./LaunchHead";
+import { LaunchAttention, LaunchHead } from "./LaunchHead";
 import { BuiltinCard } from "./BuiltinCard";
 import { RunRoles, RunTermBar, useRoundFellLines } from "./RunPicture";
 import { faceOf, keepFace, onTerminalShown, showTerminalOf, type Face } from "./runFaces";
@@ -229,6 +229,16 @@ function Pane({
     if (runId !== null) keepFace(runId, to);
     setFace(to);
     setByStep(false);
+  };
+  /** A seat pressed: the one in front turns this pane to its terminal, and another is put in front in
+   *  this same place, on its terminal (`onGoToRun`). */
+  const openSeat = (other: number) => {
+    if (other === run?.run) {
+      turn("terminal");
+      return;
+    }
+    showTerminalOf(other);
+    on.current.onGoToRun?.(other);
   };
   // A press elsewhere turning this run to its terminal (`./runFaces`): its seat pressed among the roles
   // of its launch's pane, or the task this run's failed round was filed as.
@@ -808,10 +818,6 @@ function Pane({
           both are placed against the slot rather than laid out in it, so the frame's flow never
           sees them and what they cover is still the whole slot. */}
       <div className="slot__frame">
-        {/* **A launch's header** (`./LaunchHead`): the launch and the moves made on the whole of it,
-            over the row of the seat in front. That row then leaves the mark and the name to it
-            (`../talk/nameplate`'s `Plate.headed`), so the pane is headed once. */}
-        {launch !== null && <LaunchHead launch={launch} />}
         {/* What is said about this terminal, and the one control the place has. They share the row
             because the row is what is said about this pane, and removing it is the last thing there is
             to say. The control is drawn whether or not anything is running: a frame kept from the last
@@ -826,6 +832,11 @@ function Pane({
             on.current.onGrab?.(e);
           }}
         >
+          {/* **A launch's header** (`./LaunchHead`), standing in the row: the launch and the moves made
+              on the whole of it, beside the pane's own controls. It says nothing of the seat in front,
+              and the seat's row is not drawn under it (`../talk/nameplate`'s `Plate.headed`): a seat's
+              run is said on its own row in the roles (`AMB-D-1141`). */}
+          {launch !== null && <LaunchHead launch={launch} project={project} />}
           {/* The line above the pane, which is empty until there is a session to say something about
               — and holds the row's width open either way, so the control does not walk across it.
               It stays up while a name is being typed in its place, out of sight rather than out of
@@ -895,7 +906,8 @@ function Pane({
               are gone once it is over, and this stands where they stood. That is the history tab — but
               a failure nobody has acknowledged is still on "running" (`AMB-D-955`), and sent to history
               the reader would not find it there (`AMB-T-5672`). */}
-          {run !== null && over && ledger.openRuns !== undefined && (
+          {/* Not on a launch's pane: its header says where its history is read, whichever seat is in front. */}
+          {run !== null && over && launch === null && ledger.openRuns !== undefined && (
             <button
               type="button"
               className="slot__runlink"
@@ -933,12 +945,20 @@ function Pane({
             <Icon name="close" />
           </button>
         </div>
+        {/* **What needs a person's hand in a launch** (`./LaunchHead`), straight under its header. */}
+        {launch !== null && <LaunchAttention launch={launch} onOpenSeat={openSeat} />}
         {/* **What a failed run is waiting for** (`AMB-T-5529`), on a band of its own under the row. The
             row already says which step, so the band says only why — by the way out it stopped at where
             it stopped at one calling for a person, and in a short phrase otherwise — and holds the
             press that answers it. "Acknowledge" is the "running" tab's, in the pane the reader is
-            already watching; once pressed the band stays to say why, with nothing left to press. */}
-        {run?.state?.status === "failed" && (
+            already watching; once pressed the band stays to say why, with nothing left to press.
+
+            **Not on a launch's pane** (`AMB-D-1141`): no one run stands for the whole of it, and the run
+            in front is only whose terminal the pane turns to — a band off it spoke for one failure of
+            the launch's and stayed after it was seen. A task a failure stopped is under the header
+            (`LaunchAttention`); the failure itself is read on the "running" tab's row and in the
+            history. */}
+        {launch === null && run?.state?.status === "failed" && (
           <div className="slot__band slot__band--fail" role="status">
             {/* The mark rides inside the reason, so a narrow pane that wraps the band never leaves it
                 on a line of its own (`AMB-T-5965`). */}
@@ -1071,16 +1091,7 @@ function Pane({
             run={run}
             project={project}
             launch={launch}
-            // A seat pressed: the one in front turns this pane to its terminal, and another is put in
-            // front in this same place, on its terminal (`onGoToRun`).
-            onOpen={(other) => {
-              if (other === run?.run) {
-                turn("terminal");
-                return;
-              }
-              showTerminalOf(other);
-              on.current.onGoToRun?.(other);
-            }}
+            onOpen={openSeat}
             lastOutput={() => plateRef.current?.lastOutput() ?? null}
             expected={expected}
           />

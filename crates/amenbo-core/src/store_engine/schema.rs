@@ -1302,7 +1302,7 @@ datasets! {
         script_program: col(OPT),
         script_args: col(REQ),
         script_timeout_minutes: col(INT_OPT),
-        // What it hands on: `fixed` is the title, notes, data and files written here; `file` is what the
+        // What it hands on: `fixed` is the title, notes, data, files and key written here; `file` is what the
         // file at `task_path` says when it starts a run; `script` is what the program in `task_script_*`
         // writes then, as a script step's is written; `asked` is what the program in `script_*` writes
         // beside its say that a run is to start, so it needs no column of its own. Each leaves the others'
@@ -1329,6 +1329,10 @@ datasets! {
         // for none, and always NULL for a `file` or a `script`.
         task_data: col(OPT),
         task_files: col(OPT),
+        // The key a `fixed` hands on (`AMB-D-1137`): while a run it started straight into a role started
+        // by a trigger, with the same key, is running or paused, it starts no other there. NULL for none,
+        // and always NULL for a `file` or a `script`.
+        task_key: col(OPT),
         // The priority of the task it files, NULL for none — only where it files a task, aimed at a role
         // started by a task or at no role. Its classification is `automation_trigger_value`.
         task_priority: enum_opt("high", "medium", "low"),
@@ -1627,6 +1631,10 @@ datasets! {
         // The task filed where a run started by a trigger failed (`AMB-D-1128`): the trigger starts no
         // run until it is closed. `SET NULL` for the reason `automation_run_task.task_id` is.
         incident_task_id: fk_opt("task", "SET NULL"),
+        // The key the trigger that started the run handed on (`AMB-D-1137`), kept only where it started
+        // the run straight into a role started by a trigger: while this run is running or paused, no
+        // other run of that role with the same key is started. NULL for none and on every other run.
+        start_key: col(OPT),
     }
 
     // **The step as it was at launch** — one row per step of the automation, written when the run is

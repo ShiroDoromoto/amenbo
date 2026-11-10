@@ -1427,23 +1427,16 @@ export function useLaunchState(launchId: number | null): AutomationLaunchStateDt
 }
 
 /**
- * **How many seats of a launch are working a task now** — the "N" of the pane header's "N / M working".
- * A run in a seat counts while it is `running` and not standing before a built-in waiting for a task to
- * turn up: a paused run holds its seat but works nothing, and a run asked to pause once its task is over
- * is still working it until then. Nothing once the launch has ended.
+ * **How a paused launch's seats stand** (`AMB-D-1019`) — the pane header's "Paused: n / m seats stopped".
+ * A seat is a run in one of its roles that is `running` or `paused`. It is stopped where it works no
+ * task: paused, or standing before a built-in waiting for something to turn up. One still working its
+ * task stops once that task is over. Null for a launch that is not paused.
  */
-export function launchWorking(state: AutomationLaunchStateDto): number {
-  if (state.status === "ended") return 0;
-  return state.roles.reduce(
-    (n, role) => n + role.runs.filter((run) => run.status === "running" && !run.waiting).length,
-    0,
-  );
-}
-
-/** **How many are in a launch** — every role's headcount for it added up, the "M" of the pane header
- *  (`AMB-D-1123`). */
-export function launchHeadcount(state: AutomationLaunchStateDto): number {
-  return state.roles.reduce((n, role) => n + role.headcount, 0);
+export function launchPause(state: AutomationLaunchStateDto): { stopped: number; seats: number } | null {
+  if (state.status !== "paused") return null;
+  const seats = state.roles.flatMap((role) => role.runs.filter((run) => run.status === "running" || run.status === "paused"));
+  const working = seats.filter((run) => run.status === "running" && !run.waiting).length;
+  return { stopped: seats.length - working, seats: seats.length };
 }
 
 /**

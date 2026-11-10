@@ -11,7 +11,7 @@
 id: leave-a-stopped-run-behind-when-the-app-comes-back-up
 title: A run that was stopped is left behind when the app comes back up, and its pane with it
 description: >
-  Start a run and stop it from its pane: the pane stays, saying the run was canceled. Quit the app
+  Start a run and stop it from its pane: the pane stays, with the run gone from its seat. Quit the app
   and read the workspace it comes back up to: the pane opened first is back, and the run's pane
   is not.
 given:

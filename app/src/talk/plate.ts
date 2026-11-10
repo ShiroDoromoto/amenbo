@@ -89,8 +89,8 @@ export function plateName(run: Say | null, names: FrameNames, frame: string, fol
  * takes it partway (`took`), the run ends, or is paused, with its last step's pane still up
  * (`stated`), and a built-in's card says when it started once it has (`timed`).
  *
- * `headed` is that a launch's header stands over this row (`../shell/LaunchHead`): the row then
- * leaves out what the header already says (`./nameplate`'s `Plate.headed`).
+ * `headed` is that a launch's header stands in this row's place (`../shell/LaunchHead`): the row is
+ * then not drawn (`./nameplate`'s `Plate.headed`).
  */
 export function mountPlate(
   host: HTMLElement,

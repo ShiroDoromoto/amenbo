@@ -7485,6 +7485,24 @@ pub fn automation_run_ids_under_way_as(conn: &Connection, automation_id: i64, ro
     select_ids(conn, R.id, Some(&pred))
 }
 
+/// [`automation_run_ids_under_way_as`], of the runs a trigger started there with the key `key`
+/// ([`crate::model::AutomationRun::start_key`], `AMB-D-1137`). A run started with no key is never among
+/// them.
+pub fn automation_run_ids_under_way_with_key(
+    conn: &Connection,
+    automation_id: i64,
+    role_id: i64,
+    key: &str,
+) -> Result<Vec<i64>> {
+    use crate::model::AutomationRunStatus as S;
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    let pred = Pred::eq(R.automation_id, automation_id)
+        .and(Pred::eq(R.role_id, role_id))
+        .and(Pred::eq(R.start_key, key))
+        .and(Pred::is_in(R.status, [S::Running.as_str(), S::Paused.as_str()]));
+    select_ids(conn, R.id, Some(&pred))
+}
+
 /// **The tasks filed where runs this trigger started failed** ([`crate::model::AutomationRun::incident_task_id`]),
 /// the newest run first. A task deleted since names nothing, so it is not among them.
 pub fn automation_trigger_incidents(conn: &Connection, trigger_id: i64) -> Result<Vec<i64>> {
@@ -7899,23 +7917,6 @@ pub fn automation_run_tasks_of(
         T.table,
         &Pred::eq(T.run_id, run_id),
         &[Sort::by(T.seq), Sort::by(T.id)],
-        super::hydrate::automation_run_task_row,
-    )
-}
-
-/// **The failed rounds of these runs** — every stretch filed as a task when it failed
-/// ([`crate::model::AutomationRunTask::incident_task_id`]), newest failure first, the later round first
-/// where two failed in the same second. None for no runs.
-pub fn automation_run_tasks_filed_of(
-    conn: &Connection,
-    run_ids: &[i64],
-) -> Result<Vec<crate::model::AutomationRunTask>> {
-    const T: col::automation_run_task::Cols = col::automation_run_task::ALL;
-    automation_rows(
-        conn,
-        T.table,
-        &Pred::is_in(T.run_id, run_ids.iter().copied()).and(Pred::is_not_null(T.incident_task_id)),
-        &[Sort::by(T.ended_at).desc(), Sort::by(T.id).desc()],
         super::hydrate::automation_run_task_row,
     )
 }

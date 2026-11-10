@@ -821,7 +821,7 @@ mod tests {
                 when: TriggerWhen::Every { minutes: 24 * 60 },
                 condition: None,
                 script: None,
-                task: NewTriggerTask::Fixed { title: "在庫を見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: NewTriggerTask::Fixed { title: "在庫を見る".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
                 values: Vec::new(),
                 priority: None,
             };

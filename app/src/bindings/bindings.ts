@@ -352,6 +352,34 @@ unsaved: boolean,
 saveBlocks: Array<AutomationLaunchBlockDto>, };
 
 /**
+ * **A role's tasks that move only once a person has done something**
+ * ([`amenbo_core::ops::automation_run::AwaitsPerson`]) — a value to close, a decision to settle, a task
+ * to finish creating — and the one place a person goes first. Exactly one of `dimension`, `decision`
+ * and `task` is given.
+ */
+export type AutomationAwaitsPersonDto = { 
+/**
+ * The project the launch is in — where the value is closed.
+ */
+project: number, 
+/**
+ * How many tasks, each counted once.
+ */
+tasks: number, 
+/**
+ * The axis of the value to close, by its id.
+ */
+dimension?: number, 
+/**
+ * The decision to settle, by its id.
+ */
+decision?: number, 
+/**
+ * The task to finish creating, by its id.
+ */
+task?: number, };
+
+/**
  * **One built-in, as Amenbo defines it** (`AMB-D-964`) — what the library draws under its own head,
  * beside the device's actions and the project's, and what opening one reads.
  *
@@ -838,30 +866,6 @@ fields: { [key in string]: string }, };
 export type AutomationLaunchCheckDto = { ready: boolean, blocks: Array<AutomationLaunchBlockDto>, };
 
 /**
- * **One failed round of a launch** ([`amenbo_core::ops::automation_run::LaunchFailedRound`]): whose
- * round it was, the task it was on, and the task it was filed as.
- */
-export type AutomationLaunchFailedDto = { 
-/**
- * The run whose round failed.
- */
-run: number, 
-/**
- * The round's role, by its id. Absent where the round had none, and where it has since been taken
- * out.
- */
-role?: number, 
-/**
- * The reference of the task the round was on. Absent where it had taken none, and where the task
- * has since been deleted.
- */
-task?: string, 
-/**
- * The task it was filed as, when it failed and the seat it failed in.
- */
-incident: AutomationRunIncidentDto, };
-
-/**
  * **One failed round's task waiting in a launch for the role it was filed to**
  * ([`amenbo_core::ops::automation_run::LaunchIncident`]) — what makes that role's card in the run's
  * pane read "an incident has reached it", with or without a round of the role under way. A role's
@@ -951,7 +955,12 @@ firstWaiting: Array<AutomationWaitingTaskDto>,
  * the rest of what stops them, with how many tasks each holds back. Read only where none of its
  * tasks is waiting to be taken; absent there too when nothing is held back.
  */
-heldBack?: AutomationHeldBackDto, };
+heldBack?: AutomationHeldBackDto, 
+/**
+ * **How many of its tasks wait for a person's hand** (`AMB-D-1144`), read whether or not one is
+ * waiting to be taken. Absent where none does.
+ */
+awaitsPerson?: AutomationAwaitsPersonDto, };
 
 /**
  * **One launch as its pane draws it, read at once** ([`amenbo_core::ops::automation_run::launch_state`])
@@ -978,11 +987,6 @@ maxHeadcount: number,
  * under way or waiting among them.
  */
 roles: Array<AutomationLaunchRoleStateDto>, 
-/**
- * **The launch's failed rounds that were filed as a task**, newest first, up to the newest
- * [`amenbo_core::ops::automation_run::FAILED_NAMED`] — one line each under the pane.
- */
-failed: Array<AutomationLaunchFailedDto>, 
 /**
  * **What needs a person's hand now** — the stopped tasks first, then the runs waiting for a
  * person. Drawn under the launch's heading, and not at all where it is empty.

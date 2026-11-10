@@ -10,13 +10,15 @@
 //
 // **A role with a task is a desk, and the rest are on the bar** — the desks in the order the roles are
 // defined in, whatever their seats are doing. A desk's head says the role, how many seats are at work
-// out of its headcount and a square per seat; under it a row per seat at work, the free seats as one
-// row, and the tasks waiting for it. There is no choice between cards and a list.
+// out of its headcount and a square per seat; under it a row per seat at work — its task, its time, the
+// run's number and its step — the tasks waiting for it, its tasks stopped and how many wait for a
+// person. A free seat has no row. The bar is under the desks, in the room they scroll in. There is no
+// choice between cards and a list.
 //
-// **A desk's "⋯" opens the role's menu**, one at a time: the headcount for this launch alone, put back
-// to the definition's where it differs, and the role's own stop — not while the whole launch is paused,
-// and no menu at all once it has ended. A headcount other than the definition's, and a cut still letting
-// seats go, are said under the desk's head.
+// **A desk's "⋯" opens the role's menu**, one at a time: the headcount for this launch alone, beside the
+// default and put back to it where it differs, and the role's own stop — not while the whole launch is
+// paused, and no menu at all once it has ended. A cut still letting seats go is said under the desk's
+// head.
 //
 // **A round that needs a person, out of sight in the room, is named at the room's edge**, and the
 // notice scrolls the room to it when pressed — never by itself. It is read again as the room scrolls.
@@ -30,15 +32,15 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Say } from "../talk/nameplate";
 import type {
-  AutomationHeldBackDto, AutomationLaunchFailedDto, AutomationLaunchRoleStateDto, AutomationLaunchStateDto, AutomationRunCardDto, TaskRoleDto,
+  AutomationAwaitsPersonDto, AutomationLaunchAttentionDto, AutomationLaunchRoleStateDto, AutomationLaunchStateDto, AutomationRunCardDto,
+  TaskRoleDto,
 } from "../bindings/bindings";
 import type { BuiltinRun } from "../talk/automationStep";
 import { TerminalPane } from "./TerminalPane";
 import { t, tf } from "../core/i18n";
-import { formatTimeOfDay } from "../core/i18n/format";
 import { RefNavProvider, type RefNav } from "../core/refNav";
 import {
-  attnOf, desksOf, filedLine, filedLines, minutesOf, noticeOf, runDesks, seatOf, seatStateOf, silenceOf, unseenOf,
+  attnOf, desksOf, minutesOf, noticeOf, runDesks, seatOf, seatStateOf, silenceOf, unseenOf,
 } from "./RunPicture";
 import { showTerminalOf } from "./runFaces";
 
@@ -104,25 +106,17 @@ const launchRole = (role: number, name: string, runs: AutomationRunCardDto[], he
   role, name, defined: headcount, headcount, underWay: runs.length, toLetGo: 0, held: false, runs, waiting: 0, firstWaiting: [],
 });
 
-/** What holds three tasks back: the value v1, still open before theirs on the dimension 7. */
-const HELD: AutomationHeldBackDto = {
-  project: 1, tasks: 3, values: [{ dimensionId: 7, axis: "Release", value: "v1", count: 3 }],
-  blockers: [], decisions: [], notStarted: 0, drafts: 0,
-};
+/** Three tasks waiting for a person: the value v1, still open before theirs on the dimension 7, first. */
+const AWAITS: AutomationAwaitsPersonDto = { project: 1, tasks: 3, dimension: 7 };
 
-/** The launch 5, with the roles `roles` and the failed rounds `failed`, newest first. */
-const launchOf = (roles: AutomationLaunchRoleStateDto[], failed: AutomationLaunchFailedDto[] = []): AutomationLaunchStateDto => ({
-  launch: 5, project: 1, automation: 3, automationName: "Nightly", status: "running", maxHeadcount: 10, roles, failed, attention: [],
+/** The launch 5, with the roles `roles` and what needs a person's hand `attention`. */
+const launchOf = (roles: AutomationLaunchRoleStateDto[], attention: AutomationLaunchAttentionDto[] = []): AutomationLaunchStateDto => ({
+  launch: 5, project: 1, automation: 3, automationName: "Nightly", status: "running", maxHeadcount: 10, roles, attention,
 });
 
-/** A failed round of the run `run`, of the role `role` on the task `task`, filed as the task `id` to the
- *  role `to` — failed at `at` in the seat `seat`. */
-const failedRound = (
-  run: number,
-  { role = 12, task = "AMB-T-149", id = 214, to = 14, at = "2026-11-08T05:05:00Z", seat = 1 }:
-    { role?: number; task?: string; id?: number; to?: number; at?: string; seat?: number } = {},
-): AutomationLaunchFailedDto => ({
-  run, role, task, incident: { id, ref: `AMB-T-${id}`, title: "failed", role: to, person: false, at, seat },
+/** The task `task` of the role `role`, stopped until the task `incident` closes. */
+const stoppedTask = (task: number, title: string, role: number, incident = 214): AutomationLaunchAttentionDto => ({
+  kind: "stopped", task, taskRef: `AMB-T-${task}`, title, role, run: 80, runTask: 90, incident, incidentRef: `AMB-T-${incident}`,
 });
 
 const role = (id: number, name: string, automationId = 3, icon: string | null = null): TaskRoleDto => ({
@@ -309,7 +303,8 @@ describe("the desks of a launch", () => {
   });
 
   /** A launch of four roles: the first with two at work and a seat free, the second with nobody at
-   *  work and tasks waiting, the third with nothing, and the fourth, held, with one at work. */
+   *  work and tasks waiting, the third with nothing, and the fourth, held, with one at work and a seat
+   *  free. */
   const busy = (): AutomationLaunchStateDto => launchOf([
     {
       ...launchRole(12, "Bob", [
@@ -377,7 +372,9 @@ describe("the desks of a launch", () => {
     expect(bob.dataset.state, "a desk with a seat that may wait is not marked").toBe("asks");
     const [first, second] = [...bob.querySelectorAll<HTMLElement>("button.runseat")];
     expect(first!.querySelector(".runseat__task")?.textContent).toBe("AMB-T-7 Fix the search filter");
-    expect(first!.querySelector(".runseat__step")?.textContent).toBe("write the tests");
+    // The run's number and its step are the seat's, under its task: nothing over the pane says them.
+    expect(first!.querySelector(".runseat__step")?.textContent).toBe("#31\u3000write the tests");
+    expect(first!.querySelector(".runseat__run")?.textContent).toBe("#31");
     expect([...first!.querySelectorAll(".runseat__hand")].map((one) => one.textContent), "only this round's passes are said")
       .toEqual([tf("auto.run.roles.handsTo", { role: "Carol" })]);
     expect(first!.querySelector(".runseat__time")?.textContent).toBe(tf("face.elapsed", { time: minutesOf(65_000) }));
@@ -389,9 +386,8 @@ describe("the desks of a launch", () => {
     expect(second!.querySelector(".runseat__time"), "a seat that may wait counted its time").toBeNull();
     expect(second!.querySelector(".runroles__pulse"), "a seat that may wait has the dot").toBeNull();
 
-    const free = bob.querySelector(".runseat--free");
-    expect(free?.tagName).toBe("DIV");
-    expect(free?.textContent).toBe(`1${tf("auto.run.seatsFree", { n: 1 })}`);
+    // A free seat has no row: the squares in the head say it.
+    expect(bob.querySelectorAll(".runroles__seats > li")).toHaveLength(2);
   });
 
   it("counts the tasks waiting for a role, the first three of them and how many more, and says which was passed on", async () => {
@@ -400,7 +396,7 @@ describe("the desks of a launch", () => {
     const carol = desks()[1]!;
     expect(carol.querySelector(".runroles__staff")?.textContent).toBe(tf("auto.run.roles.staff", { n: 0, m: 1 }));
     expect(carol.querySelectorAll("button.runseat")).toHaveLength(0);
-    expect(carol.querySelector(".runseat--free")?.textContent).toBe(`1${tf("auto.run.seatsFree", { n: 1 })}`);
+    expect(carol.querySelector(".runroles__seats"), "a role with no seat at work drew its free seats").toBeNull();
     const head = carol.querySelector(".runroles__stackhead")!;
     expect(head.textContent).toBe(tf("auto.run.roles.waiting", { n: 5 }));
     expect(head.querySelector("b")?.textContent).toBe("5");
@@ -414,35 +410,123 @@ describe("the desks of a launch", () => {
     expect(lines.map((one) => one.dataset.from ?? null)).toEqual(["true", null, null, null]);
   });
 
-  it("says a held role stops after the task, on its head, its seats at work and its free seats", async () => {
+  it("says a held role stops after the task, on its head and its seats at work", async () => {
     launched = busy();
     await pane(FRONT, { launch: 5 });
     const sakura = desks()[2]!;
     expect(sakura.dataset.held).toBe("true");
     expect(sakura.querySelector(".runroles__held")?.textContent).toBe(t("auto.run.roles.held"));
     expect(sakura.querySelector("button.runseat .runseat__last")?.textContent).toBe(t("auto.run.roles.lastTask"));
-    expect(sakura.querySelector(".runseat--free")?.textContent).toBe(`1${tf("auto.run.seatsFreeHeld", { n: 1 })}`);
     expect(desks()[0]!.querySelector(".runseat__last"), "a role taking tasks said it stops").toBeNull();
   });
 
-  it("draws every role as held while the launch is paused", async () => {
+  it("puts no held chip on the desks while the whole launch is paused, but on a role held on its own", async () => {
     launched = { ...busy(), status: "paused" };
     await pane(FRONT, { launch: 5 });
-    expect(desks().map((one) => one.dataset.held)).toEqual(["true", "true", "true"]);
+    expect(desks().map((one) => one.dataset.held ?? null)).toEqual([null, null, "true"]);
+    expect(desks().map((one) => one.querySelector(".runroles__held") !== null)).toEqual([false, false, true]);
+    expect(desks()[0]!.querySelector(".runroles__staff")?.textContent, "the count is said whole")
+      .toBe(tf("auto.run.roles.staff", { n: 2, m: 3 }));
   });
 
-  it("says under a role on the bar the value holding its tasks back and how many, and presses it to the dimension", async () => {
+  it("says beside a role on the bar how many of its tasks wait for a person, and presses it to where the first is done", async () => {
     const went: string[] = [];
-    launched = launchOf([{ ...launchRole(14, "山田", [], 2), heldBack: HELD }, launchRole(15, "さくら", [], 1)]);
-    await pane(null, { launch: 5, nav: { openDimension: (project, dimension) => went.push(`${project}:${dimension}`) } });
-    const [yamada, sakura] = idle();
-    expect(yamada!.querySelector(".slot__held-head")?.textContent).toBe(tf("auto.run.heldBack", { count: 3 }));
-    const value = yamada!.querySelector<HTMLButtonElement>(".slot__held-list button")!;
-    expect(value.textContent?.trim()).toBe("v1 (Release)");
-    expect(value.closest("li")?.querySelector(".slot__held-count")?.textContent).toBe("3");
-    expect(sakura!.querySelector(".slot__held"), "a role nothing holds back says nothing more").toBeNull();
-    act(() => value.click());
-    expect(went).toEqual(["1:7"]);
+    launched = launchOf([
+      { ...launchRole(14, "山田", [], 2), awaitsPerson: AWAITS },
+      { ...launchRole(15, "さくら", [], 1), awaitsPerson: { project: 1, tasks: 1, decision: 40 } },
+      { ...launchRole(16, "Alice", [], 1), awaitsPerson: { project: 1, tasks: 2, task: 41 } },
+      launchRole(17, "Bob", [], 1),
+    ]);
+    await pane(null, {
+      launch: 5,
+      nav: {
+        openDimension: (project, dimension) => went.push(`dimension ${project}:${dimension}`),
+        selectDecision: (id) => went.push(`decision ${id}`),
+        selectTask: (id) => went.push(`task ${id}`),
+      },
+    });
+    const [yamada, sakura, alice, bob] = idle();
+    const link = (one: HTMLElement) => one.querySelector<HTMLButtonElement>(".runroles__awaits");
+    expect(yamada!.textContent).toBe(
+      `山田${tf("auto.run.roles.headcount", { n: 2 })}${tf("auto.run.roles.awaitsPerson", { n: 3 })}`,
+    );
+    expect(link(bob!), "a role nothing waits on a person for said more").toBeNull();
+    // Neither the tasks one by one nor what holds each back is listed.
+    expect(container.querySelector(".slot__held")).toBeNull();
+    act(() => link(yamada!)!.click());
+    act(() => link(sakura!)!.click());
+    act(() => link(alice!)!.click());
+    expect(went).toEqual(["dimension 1:7", "decision 40", "task 41"]);
+  });
+
+  it("keeps the bar under the desks, in the room they scroll in, however many roles it holds", async () => {
+    launched = launchOf([
+      launchRole(12, "Bob", [liveRun(31, { role: 12 })], 2),
+      ...Array.from({ length: 9 }, (_, at) => ({
+        ...launchRole(20 + at, `Role ${at}`, [], 1),
+        ...(at < 3 ? { awaitsPerson: { project: 1, tasks: 15 + at * 5, dimension: 7 } } : {}),
+      })),
+    ]);
+    await pane(FRONT, { launch: 5 });
+    const room = container.querySelector(".runroles__room")!;
+    const bar = container.querySelector(".runroles__idle")!;
+    expect(bar.parentElement, "the bar is in the room the desks scroll in, and takes none of their height").toBe(room);
+    expect(room.firstElementChild?.classList.contains("runroles__desks"), "the desks stand over the bar").toBe(true);
+    expect(idle()).toHaveLength(9);
+    // One line each, its count of tasks waiting for a person on it.
+    expect(idle().slice(0, 3).map((one) => one.querySelectorAll(".runroles__awaits").length)).toEqual([1, 1, 1]);
+  });
+
+  it("counts a role's tasks waiting for a person under its desk too", async () => {
+    launched = launchOf([{ ...launchRole(12, "Bob", [liveRun(31, { role: 12 })], 2), awaitsPerson: AWAITS }]);
+    await pane(FRONT, { launch: 5 });
+    expect(desks()[0]!.querySelector(".runroles__stack .runroles__awaits")?.textContent)
+      .toBe(tf("auto.run.roles.awaitsPerson", { n: 3 }));
+  });
+
+  it("counts a role's tasks stopped under its desk, by reference and title, and frames the desk in the stop colour", async () => {
+    launched = launchOf([
+      { ...launchRole(12, "Bob", [], 2), waiting: 1, firstWaiting: [waiting(152, "Write the boss theme")] },
+      launchRole(13, "Carol", [], 1),
+    ], [stoppedTask(150, "Write the stage 3 theme", 12), stoppedTask(151, "Write the title theme", 13)]);
+    await pane(FRONT, { launch: 5 });
+    // A role whose one task is stopped is a desk, not a role with no task.
+    expect(desks().map((one) => [one.dataset.role, one.dataset.state])).toEqual([["12", "stop"], ["13", "stop"]]);
+    const bob = desks()[0]!;
+    expect([...bob.querySelectorAll(".runroles__stackhead")].map((one) => one.textContent)).toEqual([
+      tf("auto.run.roles.waiting", { n: 1 }),
+      tf("auto.run.roles.stoppedTasks", { n: 1 }),
+    ]);
+    expect([...bob.querySelectorAll(".runroles__waiting")].map((one) => one.textContent)).toEqual([
+      "AMB-T-152 Write the boss theme",
+      "AMB-T-150 Write the stage 3 theme",
+    ]);
+  });
+
+  it("says on a seat of a paused launch whether it has stopped or stops after its task", async () => {
+    launched = {
+      ...launchOf([launchRole(12, "Bob", [
+        liveRun(31, { role: 12, pauseBeforeNextTask: true }),
+        liveRun(32, { role: 12, status: "paused" }),
+        liveRun(33, { role: 12, waiting: true }),
+      ], 3)]),
+      status: "paused",
+    };
+    await pane(FRONT, { launch: 5 });
+    const [working, stopped, idling] = seats();
+    expect(working!.querySelector(".runseat__last")?.textContent).toBe(t("auto.run.roles.lastTask"));
+    expect(stopped!.querySelector(".runseat__chip")?.textContent).toBe(t("auto.run.roles.stopped"));
+    expect(stopped!.querySelector(".runseat__last")).toBeNull();
+    // A seat waiting for something to turn up works no task: it is one the header counts as stopped.
+    expect(idling!.querySelector(".runseat__chip")?.textContent).toBe(t("auto.run.roles.stopped"));
+  });
+
+  it("says on a seat that its run pauses once the action under way ends", async () => {
+    launched = launchOf([launchRole(12, "Bob", [liveRun(31, { role: 12, pauseRequested: true }), liveRun(32, { role: 12 })], 2)]);
+    await pane(FRONT, { launch: 5 });
+    const [pausing, going] = seats();
+    expect(pausing!.querySelector(".runseat__chip")?.textContent).toBe(t("auto.run.pausing"));
+    expect(going!.querySelector(".runseat__chip")).toBeNull();
   });
 
   it("says no role has a task where none has, and nothing while the launch is read", async () => {
@@ -544,12 +628,13 @@ describe("a role's menu", () => {
     expect(stepBy(t("auto.side.headcountLess")).disabled).toBe(true);
   });
 
-  it("offers the definition's headcount back where this launch has another", async () => {
+  it("offers the default headcount back where this launch has another", async () => {
     launched = launchOf([bob({ headcount: 5 })]);
     await pane(FRONT, { launch: 5 });
     await click(more(0)!);
     const reset = panel()!.querySelector<HTMLButtonElement>(".menu__reset")!;
-    expect(reset.textContent).toBe(tf("auto.run.roles.menuReset", { n: 3 }));
+    expect(reset.textContent).toBe(t("auto.run.roles.menuReset"));
+    expect(panel()!.querySelector(".menu__hint")?.textContent).toBe(tf("auto.run.roles.menuDefined", { n: 3 }));
     await click(reset);
     expect(moves.reset).toHaveBeenCalledWith(5, 12);
   });
@@ -592,7 +677,7 @@ describe("a role's menu", () => {
     expect(more(0)).toBeNull();
   });
 
-  it("says in the heed colour a headcount other than the definition's, and a cut still to let seats go", async () => {
+  it("says in the heed colour a cut still to let seats go, and a headcount other than the default nowhere on the desk", async () => {
     launched = launchOf([bob()]);
     await pane(FRONT, { launch: 5 });
     expect(desks()[0]!.querySelector(".runroles__notes"), "an ordinary role said something").toBeNull();
@@ -600,44 +685,47 @@ describe("a role's menu", () => {
     launched = launchOf([bob({ headcount: 1, underWay: 2, toLetGo: 1 })]);
     await again();
     const notes = desks()[0]!.querySelector(".runroles__notes")!;
-    expect(notes.querySelector(".runroles__temp")?.textContent).toBe(tf("auto.run.roles.temp", { n: 1, m: 3 }));
-    expect(notes.querySelector(".runroles__letgo")?.textContent)
-      .toBe(tf("auto.run.roles.letGo", { u: 2, n: 1, k: 1 }));
+    expect(notes.textContent).toBe(tf("auto.run.roles.letGo", { u: 2, n: 1, k: 1 }));
 
     launched = launchOf([bob({ headcount: 1, underWay: 2, toLetGo: 1, held: true })]);
     await again();
-    expect(desks()[0]!.querySelector(".runroles__letgo"), "a stopped role said a cut").toBeNull();
-    expect(desks()[0]!.querySelector(".runroles__temp")).not.toBeNull();
+    expect(desks()[0]!.querySelector(".runroles__notes"), "a stopped role said a cut").toBeNull();
+
+    launched = launchOf([bob({ headcount: 5 })]);
+    await again();
+    expect(desks()[0]!.querySelector(".runroles__notes"), "a headcount for this launch alone is the menu's to say").toBeNull();
   });
 });
 
 describe("desksOf", () => {
   const FRONT: Say = { ...FAILED, run: 5, interactive: true, state: { ...FAILED.state!, status: "running", word: "Running" } };
 
-  it("makes a desk of a role with a run in a seat or a task waiting, and puts the rest on the bar", () => {
+  it("makes a desk of a role with a run in a seat, a task waiting or a task stopped, and puts the rest on the bar", () => {
     const got = desksOf(launchOf([
       launchRole(1, "A", [liveRun(4)], 2),
       launchRole(2, "B", [], 3),
       { ...launchRole(3, "C", [], 1), waiting: 1, firstWaiting: [{ task: 9, taskRef: "AMB-T-9", title: "T", fromRole: 1 }] },
       { ...launchRole(4, "D", [liveRun(6), liveRun(7)], 1), icon: "seed" },
-    ]), FRONT);
-    expect(got.desks.map((one) => [one.role, one.icon, one.seats.map((seat) => seat.run), one.free, one.waiting])).toEqual([
-      [1, null, [4], 1, 0],
-      [3, null, [], 1, 1],
-      [4, "seed", [6, 7], 0, 0],
+      launchRole(5, "E", [], 1),
+    ], [stoppedTask(11, "S", 5), { kind: "awaits_person", task: 12, taskRef: "AMB-T-12", title: "W", role: 1, run: 4 }]), FRONT);
+    expect(got.desks.map((one) => [one.role, one.icon, one.seats.map((seat) => seat.run), one.waiting, one.stopped])).toEqual([
+      [1, null, [4], 0, []],
+      [3, null, [], 1, []],
+      [4, "seed", [6, 7], 0, []],
+      [5, null, [], 0, [{ ref: "AMB-T-11", title: "S" }]],
     ]);
     expect(got.desks[1]!.first).toEqual([{ task: 9, ref: "AMB-T-9", title: "T", from: "A" }]);
-    expect(got.idle).toEqual([{ role: 2, name: "B", icon: null, headcount: 3, heldBack: null }]);
+    expect(got.idle).toEqual([{ role: 2, name: "B", icon: null, headcount: 3, awaits: null }]);
   });
 
-  it("carries what holds a role's tasks back onto the bar, and nothing where none is held", () => {
-    const held = { ...HELD, tasks: 0, values: [] };
+  it("carries a role's tasks waiting for a person onto its desk or the bar, and nothing where none waits", () => {
     const got = desksOf(launchOf([
-      { ...launchRole(1, "A", [], 2), heldBack: HELD },
-      { ...launchRole(2, "B", [], 1), heldBack: held },
+      { ...launchRole(1, "A", [], 2), awaitsPerson: AWAITS },
+      { ...launchRole(2, "B", [liveRun(4)], 1), awaitsPerson: AWAITS },
       launchRole(3, "C", [], 1),
     ]), null);
-    expect(got.idle.map((one) => [one.role, one.heldBack])).toEqual([[1, HELD], [2, null], [3, null]]);
+    expect(got.idle.map((one) => [one.role, one.awaits])).toEqual([[1, AWAITS], [3, null]]);
+    expect(got.desks.map((one) => [one.role, one.awaits])).toEqual([[2, AWAITS]]);
   });
 
   it("names the roles a seat's round passed a task on to once each, leaving out an earlier round's and a role gone", () => {
@@ -671,8 +759,8 @@ describe("runDesks", () => {
   it("draws the run's role as a desk with the run its one seat, and the rest on the bar, in the order they are defined in", () => {
     const got = runDesks(RUNNING, [role(3, "C"), role(2, "B", 3, "seed"), role(1, "A"), role(9, "Elsewhere", 9)]);
     expect(got.desks).toEqual([{
-      role: 2, name: "B", icon: "seed", headcount: 1, held: false, free: 0, waiting: 0, first: [], control: null,
-      seats: [{ run: 15, task: "AMB-T-7 Fix", step: "check", state: "running", since: 1000, to: [] }],
+      role: 2, name: "B", icon: "seed", headcount: 1, held: false, heldAlone: false, waiting: 0, first: [], stopped: [], awaits: null, control: null,
+      seats: [{ run: 15, task: "AMB-T-7 Fix", step: "check", state: "running", since: 1000, to: [], pausing: false }],
     }]);
     expect(got.idle.map((one) => [one.role, one.headcount])).toEqual([[3, null], [1, null]]);
   });
@@ -727,155 +815,6 @@ describe("silenceOf", () => {
   it("does not measure a round that is paused or failed", () => {
     expect(silenceOf("paused", at - 60 * min, at, 10)).toEqual({ stage: 0, for: null });
     expect(silenceOf("failed", at - 60 * min, at, 10)).toEqual({ stage: 0, for: null });
-  });
-});
-
-describe("filedLine", () => {
-  const roles = [role(2, "B"), role(4, "D")];
-  type Filed = { role: number | null; person: boolean; at?: number | null; seat?: number | null };
-  const failed = (incident: Filed | undefined, task: Say["task"] = null): Say => ({
-    ...FAILED,
-    task,
-    round: {
-      role: 2,
-      startedAt: null,
-      ...(incident === undefined ? {} : { incident: { id: 9, ref: "AMB-T-9", at: null, seat: null, ...incident } }),
-    },
-  });
-  /** The sentence the line says, the filed task's reference standing where it is linked. */
-  const words = (line: ReturnType<typeof filedLine>) => line === null ? null : `${line.before}${line.ref}${line.after}`;
-
-  it("names the role the failure was filed to, and links the task it was filed as", () => {
-    const line = filedLine(failed({ role: 4, person: false }), roles);
-    expect(words(line)).toBe(tf("auto.run.roles.filedRole", { who: "B", to: "D", ref: "AMB-T-9" }));
-    expect(line).toMatchObject({ id: 9, ref: "AMB-T-9", at: null });
-  });
-
-  it("says the seat the round failed in, as its record names it, and the task it was on, each where there is one", () => {
-    const task = { ref: "AMB-T-149", title: "Write the theme", seq: 1 };
-    const seated = tf("auto.run.roles.filedSeat", { role: "B", n: 1 });
-    expect(words(filedLine(failed({ role: 4, person: false, seat: 1 }, task), roles))).toBe(
-      tf("auto.run.roles.filedRole", {
-        who: tf("auto.run.roles.filedTask", { who: seated, task: "AMB-T-149" }), to: "D", ref: "AMB-T-9",
-      }),
-    );
-    expect(words(filedLine(failed({ role: 4, person: false, seat: 1 }), roles))).toBe(
-      tf("auto.run.roles.filedRole", { who: seated, to: "D", ref: "AMB-T-9" }),
-    );
-    expect(words(filedLine(failed({ role: 4, person: false }, task), roles))).toBe(
-      tf("auto.run.roles.filedRole", {
-        who: tf("auto.run.roles.filedTask", { who: "B", task: "AMB-T-149" }), to: "D", ref: "AMB-T-9",
-      }),
-    );
-  });
-
-  it("carries when the round failed", () => {
-    const at = Date.parse("2026-11-08T05:05:00Z");
-    expect(filedLine(failed({ role: 4, person: false, at }), roles)?.at).toBe(at);
-  });
-
-  it("says a person where it went to one, and names nobody where the role is gone", () => {
-    expect(words(filedLine(failed({ role: null, person: true }), roles))).toBe(
-      tf("auto.run.roles.filedPerson", { who: "B", ref: "AMB-T-9" }),
-    );
-    expect(words(filedLine(failed({ role: 77, person: false }), roles))).toBe(
-      tf("auto.run.roles.filed", { who: "B", ref: "AMB-T-9" }),
-    );
-  });
-
-  it("has no line where the round filed nothing, or did not fail", () => {
-    expect(filedLine(failed(undefined), roles)).toBeNull();
-    const running: Say = {
-      ...failed({ role: 4, person: false }),
-      state: { ...FAILED.state!, status: "running", word: "Running" },
-    };
-    expect(filedLine(running, roles)).toBeNull();
-  });
-
-  it("names each failed round of a launch, newest first, by its own role, seat and task", () => {
-    const launch = launchOf([], [
-      failedRound(87, { role: 2, task: "AMB-T-387", id: 389, to: 4, seat: 2 }),
-      failedRound(86, { role: 2, task: "AMB-T-386", id: 388, to: 4, seat: 1 }),
-    ]);
-    const lines = filedLines(launch, roles);
-    const said = (n: number, task: string, ref: string) => tf("auto.run.roles.filedRole", {
-      who: tf("auto.run.roles.filedTask", { who: tf("auto.run.roles.filedSeat", { role: "B", n }), task }),
-      to: "D",
-      ref,
-    });
-    expect(lines.map(words)).toEqual([said(2, "AMB-T-387", "AMB-T-389"), said(1, "AMB-T-386", "AMB-T-388")]);
-    expect(lines.map((line) => line.id)).toEqual([389, 388]);
-    expect(lines[0]!.at).toBe(Date.parse("2026-11-08T05:05:00Z"));
-    expect(filedLines(launchOf([]), roles)).toEqual([]);
-  });
-});
-
-describe("the line under the pane for a failed round", () => {
-  const at = Date.parse("2026-11-08T05:05:00Z");
-  const FILED: Say = {
-    ...FAILED,
-    run: 81,
-    task: { ref: "AMB-T-149", title: "Write the theme", seq: 1 },
-    round: { role: 12, startedAt: null, incident: { id: 214, ref: "AMB-T-214", role: 14, person: false, at, seat: 2 } },
-  };
-  const line = () => container.querySelector<HTMLElement>(".runroles__filed");
-  const lines = () => [...container.querySelectorAll<HTMLElement>(".runroles__filed")];
-
-  it("says when the round failed, which seat failed on which task, and opens the filed task when pressed", async () => {
-    roles = [role(12, "Bob"), role(14, "Dave")];
-    // The failed run has left the seats, as a launch read after the failure has it: the seat is the
-    // one its record names.
-    launched = launchOf([launchRole(12, "Bob", [liveRun(80)])], [failedRound(81, { seat: 2 })]);
-    const selectTask = vi.fn();
-    await pane(FILED, { launch: 5, nav: { selectTask } });
-
-    expect(container.querySelector(".runroles__events")?.getAttribute("role")).toBe("status");
-    const time = line()!.querySelector("time")!;
-    expect(time.textContent).toBe(formatTimeOfDay(new Date(at)));
-    expect(time.getAttribute("datetime")).toBe(new Date(at).toISOString());
-    const who = tf("auto.run.roles.filedTask", { who: tf("auto.run.roles.filedSeat", { role: "Bob", n: 2 }), task: "AMB-T-149" });
-    expect(line()!.querySelector(".runroles__filedwords")?.textContent).toBe(
-      tf("auto.run.roles.filedRole", { who, to: "Dave", ref: "AMB-T-214" }),
-    );
-
-    const link = line()!.querySelector<HTMLButtonElement>(".runroles__filedref")!;
-    expect(link.textContent).toBe("AMB-T-214");
-    await act(async () => link.click());
-    expect(selectTask).toHaveBeenCalledWith(214);
-  });
-
-  it("is one line for each failed round of the launch, newest first, the round in front or not", async () => {
-    roles = [role(12, "Bob"), role(14, "Dave")];
-    launched = launchOf([launchRole(12, "Bob", [liveRun(80)])], [
-      failedRound(87, { task: "AMB-T-387", id: 389, seat: 2 }),
-      failedRound(86, { task: "AMB-T-386", id: 388, seat: 1 }),
-      failedRound(84, { task: "AMB-T-384", id: 385, seat: 1, at: "2026-11-08T05:01:00Z" }),
-    ]);
-    await pane({ ...FILED, run: 86 }, { launch: 5 });
-
-    const said = lines().map((one) => one.querySelector(".runroles__filedref")?.textContent);
-    expect(said).toEqual(["AMB-T-389", "AMB-T-388", "AMB-T-385"]);
-    expect(lines()[0]!.querySelector(".runroles__filedwords")?.textContent).toBe(
-      tf("auto.run.roles.filedRole", {
-        who: tf("auto.run.roles.filedTask", { who: tf("auto.run.roles.filedSeat", { role: "Bob", n: 2 }), task: "AMB-T-387" }),
-        to: "Dave",
-        ref: "AMB-T-389",
-      }),
-    );
-  });
-
-  it("has no line in a launch none of whose rounds failed, whatever the run in front says", async () => {
-    roles = [role(12, "Bob"), role(14, "Dave")];
-    launched = launchOf([launchRole(12, "Bob", [liveRun(80)])]);
-    await pane(FILED, { launch: 5 });
-    expect(lines()).toEqual([]);
-  });
-
-  it("cannot be pressed where there is nowhere to open the task, and says no time where none was kept", async () => {
-    roles = [role(12, "Bob"), role(14, "Dave")];
-    await pane({ ...FILED, run: 82, round: { ...FILED.round!, incident: { ...FILED.round!.incident!, at: null } } });
-    expect(line()!.querySelector("time")).toBeNull();
-    expect(line()!.querySelector<HTMLButtonElement>(".runroles__filedref")!.disabled).toBe(true);
   });
 });
 
@@ -1098,10 +1037,8 @@ describe("the terminal of a round", () => {
       tf("auto.run.seatOpen", { role: "Bob", n: 1, task: "AMB-T-7 Fix the search filter" }),
       tf("auto.run.seatOpen", { role: "Bob", n: 2, task: "AMB-T-9 Tidy" }),
     ]);
-    // The seat nobody is in is said, and is not a press.
-    const free = container.querySelector<HTMLElement>(".runseat--free");
-    expect(free?.tagName).toBe("DIV");
-    expect(free?.textContent).toContain(tf("auto.run.seatsFree", { n: 1 }));
+    // The seat nobody is in has no row: the squares say it.
+    expect(desks()[0]!.querySelectorAll(".runroles__seats > li")).toHaveLength(2);
 
     // The seat in front turns this pane to its own terminal.
     await act(async () => seats()[0]!.click());
@@ -1145,7 +1082,6 @@ describe("the terminal of a round", () => {
     await pane({ ...RUNNING, run: 69 });
     expect(desks().map((one) => one.dataset.role)).toEqual(["12"]);
     expect(seats().map((one) => one.dataset.run)).toEqual(["69"]);
-    expect(container.querySelector(".runseat--free")).toBeNull();
   });
 });
 

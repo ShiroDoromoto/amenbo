@@ -14,8 +14,10 @@
 //! **A value travels along a wire and along nothing else.** A later step is handed what an earlier one
 //! put on a way out *that a wire joins to this input* — a name matching by accident is not a
 //! connection, and the specification says so rather than letting a rename quietly re-plumb a run.
-//! Nothing arrives by any other road: work reaches a run as a task filed with a role before the run
-//! starts, and is the task's rather than a step's (`AMB-D-1123`).
+//! Work reaches a run as a task filed with a role before the run starts, and is the task's rather than
+//! a step's (`AMB-D-1123`). The one thing that arrives by no wire is what the trigger that started the
+//! run handed on: the step the run starts at is told it, and from there it travels on the wires like
+//! anything else (`AMB-D-1133`).
 //!
 //! **Where it ends is `Opened`.** A required input with nothing to fill it is not an error to be
 //! reported and forgotten: the run is stopped, in the same transaction, so what the store holds
@@ -122,6 +124,43 @@ pub struct ScriptOpening {
     pub script: StepScript,
     /// Each input that stands ready, under the name its port was declared with.
     pub ins: Vec<(String, ScriptIn)>,
+    /// **What the trigger that started the run handed on**, at the step the run starts at
+    /// (`AMB-D-1133`) — `None` at every other step, and where the run was not started by a trigger or
+    /// was handed nothing. Its files are read by the method of the same name.
+    pub start: Option<StartHanded>,
+}
+
+/// **What the trigger that started a run handed on** (`AMB-D-1133`), as the run keeps it: its title,
+/// notes and data (JSON) on the run ([`AutomationRun::start_title`]), and its files attached to the run.
+#[derive(Clone, Debug)]
+pub struct StartHanded {
+    pub title: Option<String>,
+    pub notes: Option<String>,
+    pub data: Option<String>,
+    pub files: Vec<crate::model::Attachment>,
+}
+
+/// **What the step a run started by a trigger starts at is handed** of what the trigger handed on —
+/// `None` where the run was not started by a trigger, or was handed nothing.
+fn start_handed(conn: &rusqlite::Connection, run: &AutomationRun) -> Result<Option<StartHanded>> {
+    if run.start_trigger.is_none() {
+        return Ok(None);
+    }
+    let mut files = Vec::new();
+    for id in read::live_attachment_ids_for_target(conn, AttachmentTarget::AutomationRun, run.id)? {
+        if let Some(file) = read::attachment(conn, id)? {
+            files.push(file);
+        }
+    }
+    let said = |text: &Option<String>| text.clone().filter(|t| !t.trim().is_empty());
+    let handed = StartHanded {
+        title: said(&run.start_title),
+        notes: said(&run.start_notes),
+        data: said(&run.start_data),
+        files,
+    };
+    let nothing = handed.title.is_none() && handed.notes.is_none() && handed.data.is_none() && handed.files.is_empty();
+    Ok((!nothing).then_some(handed))
 }
 
 /// One input of a script step, as the run holds it. A file is named by its bytes in the blob store,
@@ -149,6 +188,24 @@ impl ScriptOpening {
                 Ok::<_, Error>((name.clone(), given))
             })
             .collect()
+    }
+
+    /// **What the trigger handed on, as the program is handed it** (`input.json`'s `start`), each file's
+    /// bytes read out of `blobs`. A link attached in place of a file has no bytes, and is left out.
+    pub fn start(&self, blobs: &crate::blob::BlobStore) -> Result<Option<super::automation_script::Start>> {
+        let Some(handed) = &self.start else { return Ok(None) };
+        let mut files = Vec::new();
+        for file in &handed.files {
+            let Some(hash) = &file.blob_hash else { continue };
+            let name = file.filename.clone().unwrap_or_else(|| "file".to_string());
+            files.push((name, blobs.read(hash)?));
+        }
+        Ok(Some(super::automation_script::Start {
+            title: handed.title.clone(),
+            notes: handed.notes.clone(),
+            data: handed.data.clone(),
+            files,
+        }))
     }
 }
 
@@ -322,6 +379,13 @@ fn open_as(
         }
     }
 
+    // **The step the run starts at is handed what the trigger that started it handed on**
+    // (`AMB-D-1133`), and no step after it: it is that step's to hand on along a wire.
+    let start = match round_starts {
+        true => start_handed(conn, &run)?,
+        false => None,
+    };
+
     let now = Timestamp::now();
     let stretch = match (opens_a_stretch, &current) {
         (true, _) => Some(new_stretch(tx, run_id, current.as_ref(), now)?),
@@ -337,7 +401,7 @@ fn open_as(
     }
     if let Some(script) = def.script.clone() {
         let ins = script_ins(tx, &handed)?;
-        return Ok(Opened::Script(Box::new(ScriptOpening { run_step, script, ins })));
+        return Ok(Opened::Script(Box::new(ScriptOpening { run_step, script, ins, start })));
     }
     // A built-in that holds its step open is not carried out: it stands under way until the watch
     // ends it (`AMB-D-983`).
@@ -357,7 +421,7 @@ fn open_as(
             super::automation_builtin::carry_out(tx, &run, &run_step, &def, &exits, &ins, task_id, outside)?;
         return Ok(Opened::Carried { run_step_id: run_step.id, next });
     }
-    let text = compose(tx, &def, &exits, &handed, stretch.as_ref())?;
+    let text = compose(tx, &def, &exits, &handed, start.as_ref(), stretch.as_ref())?;
     let folder = match working_folder(&def, &handed)? {
         Some(named) => Some(named),
         None => task_folder(conn, run.project_id, stretch.as_ref())?,
@@ -711,6 +775,7 @@ fn compose(
     def: &AutomationRunDef,
     exits: &[RunDefExit],
     handed: &[Handed],
+    start: Option<&StartHanded>,
     stretch: Option<&AutomationRunTask>,
 ) -> Result<String> {
     let mut out = String::new();
@@ -733,6 +798,9 @@ fn compose(
             push_block(&mut out, &story);
         }
     }
+    if let Some(start) = start {
+        push_block(&mut out, &from_the_trigger(start));
+    }
     if !handed.is_empty() {
         let lines: Vec<String> = handed.iter().map(|h| format!("- {}", one_value(h))).collect();
         push_block(&mut out, &format!("## What you have been handed\n\n{}", lines.join("\n")));
@@ -745,6 +813,38 @@ fn compose(
     push_block(&mut out, &format!("## What to do\n\n{}", def.prompt.as_deref().unwrap_or("").trim()));
     push_block(&mut out, &handing_back(exits, &choices_for(tx, def)?));
     Ok(out)
+}
+
+/// The heading of the block [`from_the_trigger`] writes.
+const START_HEADING: &str = "## What the trigger that started this run handed on";
+
+/// **What the trigger that started the run handed on**, as the block the step the run starts at is told
+/// (`AMB-D-1133`): each part under a heading of its own, left out where none was handed — the data
+/// laid out as JSON, and each file on a line of its own, in the shape `task show` lists attachments in.
+fn from_the_trigger(start: &StartHanded) -> String {
+    let mut out = String::from(START_HEADING);
+    if let Some(title) = &start.title {
+        out.push_str(&format!("\n\n### Title\n\n{}", title.trim()));
+    }
+    if let Some(notes) = &start.notes {
+        out.push_str(&format!("\n\n### Notes\n\n{}", notes.trim()));
+    }
+    if let Some(data) = &start.data {
+        let laid_out = serde_json::from_str::<serde_json::Value>(data)
+            .ok()
+            .and_then(|value| serde_json::to_string_pretty(&value).ok())
+            .unwrap_or_else(|| data.trim().to_string());
+        out.push_str(&format!("\n\n### Data\n\n```json\n{laid_out}\n```"));
+    }
+    if !start.files.is_empty() {
+        let lines: Vec<String> = start
+            .files
+            .iter()
+            .map(|a| format!("- {}", a.listed_as(&idref::render(RefKind::Attachment, a.id))))
+            .collect();
+        out.push_str(&format!("\n\n### Files\n\n{}", lines.join("\n")));
+    }
+    out
 }
 
 /// The lines one output may say, keyed by (way out, output) as the run's copy keys them.
@@ -2228,6 +2328,105 @@ mod tests {
             .collect()
     }
 
+    /// Mark `run` as started by a trigger that handed on a title, notes, data and one file, as the
+    /// trigger's firing keeps them; answers the file.
+    fn handed_by_a_trigger(tx: &WriteTx<'_>, run: &AutomationRun) -> crate::model::Attachment {
+        let handed = AutomationRun {
+            start_trigger: Some("毎朝".into()),
+            start_title: Some("issue #123".into()),
+            start_notes: Some("落ちるテストを直す".into()),
+            start_data: Some(r#"{"issue":123}"#.into()),
+            ..run.clone()
+        };
+        crate::ops::emit_update(tx, record::automation_run(run), record::automation_run(&handed))
+            .expect("hand it what the trigger found");
+        crate::ops::attachment::add_blob(
+            tx,
+            AttachmentTarget::AutomationRun,
+            run.id,
+            &"f".repeat(64),
+            "issue.md",
+            Some("text/markdown"),
+            12,
+            ActorKind::Ai,
+        )
+        .expect("hand it a file")
+    }
+
+    /// **The step the run starts at is told what the trigger handed on** (`AMB-D-1133`) — title, notes,
+    /// data and files — and the step after it is not: that one is handed what travels on a wire.
+    #[test]
+    fn the_step_the_run_starts_at_is_told_what_the_trigger_handed_on_and_the_next_is_not() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let run = a_run(tx, &p.automation);
+            let file = handed_by_a_trigger(tx, &run);
+
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let expected = format!(
+                "## What the trigger that started this run handed on\n\n\
+                 ### Title\n\nissue #123\n\n\
+                 ### Notes\n\n落ちるテストを直す\n\n\
+                 ### Data\n\n```json\n{{\n  \"issue\": 123\n}}\n```\n\n\
+                 ### Files\n\n- AMB-ATT-{}  blob  issue.md  text/markdown  12B",
+                file.id
+            );
+            assert!(first.text.contains(&expected), "{}", first.text);
+
+            let task = crate::ops::test_support::mk_task(tx, "直すもの");
+            crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
+            reported(tx, &first.run_step, "found", "Found one thing.", "the note");
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            assert!(!second.text.contains(START_HEADING), "{}", second.text);
+        });
+    }
+
+    /// A run no trigger started, and one whose trigger handed on nothing, tell the step they start at
+    /// nothing of it.
+    #[test]
+    fn a_run_handed_nothing_by_a_trigger_says_nothing_of_it() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let run = a_run(tx, &p.automation);
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            assert!(!first.text.contains(START_HEADING), "{}", first.text);
+        });
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let run = a_run(tx, &p.automation);
+            let bare = AutomationRun { start_trigger: Some(String::new()), ..run.clone() };
+            crate::ops::emit_update(tx, record::automation_run(&run), record::automation_run(&bare))
+                .expect("started by a trigger");
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            assert!(!first.text.contains(START_HEADING), "{}", first.text);
+        });
+    }
+
+    /// **A script the run starts at is handed what the trigger handed on**, for its `input.json`'s
+    /// `start` (`AMB-D-1133`).
+    #[test]
+    fn a_script_the_run_starts_at_is_handed_what_the_trigger_handed_on() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let step = crate::ops::test_support::only_step(tx, &p.first_action);
+            let script = automation::NewScript { program: "/bin/true".into(), args: Vec::new(), timeout_minutes: None };
+            automation::step_update(tx, step.id, None, None, None, None, None, None, None, None, None, Some(Some(script)), None)
+                .expect("make it a script");
+            let run = a_run(tx, &p.automation);
+            let file = handed_by_a_trigger(tx, &run);
+            let none: Vec<String> = Vec::new();
+            let opening = match open(tx, run.id, def_of(tx, &run, &p.first).id, Some(&none)).expect("open") {
+                Opened::Script(opening) => *opening,
+                other => panic!("a script step opens no terminal, not {other:?}"),
+            };
+            let start = opening.start.expect("handed what the trigger handed on");
+            assert_eq!(start.title.as_deref(), Some("issue #123"));
+            assert_eq!(start.notes.as_deref(), Some("落ちるテストを直す"));
+            assert_eq!(start.data.as_deref(), Some(r#"{"issue":123}"#));
+            assert_eq!(start.files.iter().map(|f| f.id).collect::<Vec<_>>(), vec![file.id]);
+        });
+    }
+
     /// **A script step is opened without a terminal and handed what its wires carry** — and is not
     /// judged on an agent, which it names none of.
     #[test]
@@ -2237,6 +2436,7 @@ mod tests {
             let opening = open_the_script(tx, &p, &run);
             assert_eq!(opening.run_step.status, AutomationRunStepStatus::Running);
             assert_eq!(opening.ins, vec![("note".to_string(), ScriptIn::Text("the note".to_string()))]);
+            assert!(opening.start.is_none(), "a step the run does not start at is handed no start");
             assert_eq!(opening.script.program, std::env::current_exe().expect("exe").to_string_lossy());
             let given = opening.given(&crate::blob::BlobStore::at(std::env::temp_dir())).expect("given");
             assert_eq!(given, vec![("note".to_string(), Given::Text("the note".to_string()))]);

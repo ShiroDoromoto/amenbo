@@ -343,27 +343,25 @@ describe("the row above a run's pane", () => {
     expect(host.querySelector(".plate-peek")?.textContent).toBe("the migration");
   });
 
-  it("leaves the mark and the name to a launch's header, and keeps the rest of the seat's run", () => {
-    // A launch's pane is headed once (`../shell/LaunchHead`): the header says it is automatic and
-    // which automation it is, so the seat's row under it says neither again.
+  it("draws no row under a launch's header, whose seats say their own runs", () => {
+    // A launch's pane is headed by the launch alone (`../shell/LaunchHead`, `AMB-D-1141`): the seat in
+    // front is one of many, and its number, step and time are on its own row in the roles.
     const host = document.createElement("div");
     const draw = mountNameplate(host);
 
     draw({ name: "家計簿の開発ループ", dot: STILL, run: RUN, headed: true });
 
-    expect((host.querySelector(".plate__auto") as HTMLElement).hidden).toBe(true);
-    expect((host.querySelector(".plate__name") as HTMLElement).hidden).toBe(true);
-    expect((host.querySelector(".plate__no") as HTMLElement).hidden).toBe(false);
-    expect(host.querySelector(".plate__no")?.textContent).toBe("#7");
-    expect((host.querySelector(".plate-step") as HTMLElement).hidden).toBe(false);
-    expect((host.querySelector(".plate-run") as HTMLElement).hidden).toBe(false);
-    expect(host.querySelector(".plate-peek__name")?.textContent).toBe("");
-    expect(host.querySelector(".plate-peek__task")?.textContent).toBe("AMB-T-5252 ペインのヘッダを描く");
+    expect((host.querySelector(".plate") as HTMLElement).hidden).toBe(true);
+    expect((host.querySelector(".plate-run") as HTMLElement).hidden).toBe(true);
+    expect((host.querySelector(".plate-step") as HTMLElement).hidden).toBe(true);
+    expect((host.querySelector(".plate-peek") as HTMLElement).hidden).toBe(true);
 
-    // The same row with no header over it says both, as it did.
+    // The same row with no header over it says the run, as it did.
     draw({ name: "家計簿の開発ループ", dot: STILL, run: RUN });
+    expect((host.querySelector(".plate") as HTMLElement).hidden).toBe(false);
     expect((host.querySelector(".plate__auto") as HTMLElement).hidden).toBe(false);
     expect((host.querySelector(".plate__name") as HTMLElement).hidden).toBe(false);
+    expect(host.querySelector(".plate__no")?.textContent).toBe("#7");
   });
 
   it("drops the run's line when the pane goes back to having no row", () => {

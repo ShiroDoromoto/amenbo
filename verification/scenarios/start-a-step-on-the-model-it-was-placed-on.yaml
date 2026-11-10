@@ -13,7 +13,7 @@ title: A step placed on a model has its agent started on that model, in the pane
 description: >
   Place an action on an automation with its one step carried out by Claude Code on a model named
   there, and start a run. In the pane the run is drawn in, the agent the step opened was started
-  with that model's name — the program says so itself, and not just the run's row in the pane.
+  with that model's name — the program says so itself, and not just the run's seat in the pane.
 given:
   # Two agents, each answering with two models it can be started on. The names are the harness's own
   # — a road never writes a real model name — so the one the step is placed on is one this machine

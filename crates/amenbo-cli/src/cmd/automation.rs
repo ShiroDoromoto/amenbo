@@ -580,6 +580,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     notes: body_arg_opt(notes)?.unwrap_or_default(),
                     data: String::new(),
                     files: Vec::new(),
+                    key: String::new(),
                 },
                 (None, Some(path), _) => NewTriggerTask::File { path },
                 (None, None, Some(program)) => NewTriggerTask::Script(NewScript {

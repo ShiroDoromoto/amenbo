@@ -12,8 +12,8 @@ title: A launch is paused after the current task, picked up again and stopped fr
 description: >
   Start a run, then from the header of the pane it is drawn in pause the launch after the current
   task, let the step report, pick the launch up again and stop it, reading the header after each.
-  Paused, the run goes on with the task it has. Once it is stopped the pane is still up, saying the
-  run was canceled, and its header has no move left.
+  Paused, the run goes on with the task it has. Once it is stopped the pane is still up, the run gone
+  from its seat, and its header has no move left.
 given:
   # Two rather than one because the terminal's premise stands its programs up in front of the
   # machine's own and cannot make a row shorter than two; the step names the first of them either way.
@@ -107,7 +107,8 @@ steps_gui:
       state: running
 
   # Paused after the current task while the first step is open. The task under way is not cut off:
-  # the header says the launch is paused, and the run is still working it.
+  # the header says the pause is taking hold with none of its one seat stopped yet, and the run is
+  # still working it.
   - type: action
     domain: automation
     op: press-run
@@ -121,7 +122,9 @@ steps_gui:
     op: launch-head
     with:
       target: run
-      state: paused
+      state: pausing
+      stopped: 0
+      seats: 1
 
   - type: assert
     domain: automation
@@ -174,8 +177,8 @@ steps_gui:
       press: stop
       on: pane
 
-  # The pane is still up, saying how the run ended — the stop was the launch's, not the pane's — and
-  # the header has no move left to make.
+  # The pane is still up — the stop was the launch's, not the pane's — with the run gone from its seat,
+  # and the header has no move left to make.
   - type: assert
     domain: automation
     op: run-pane

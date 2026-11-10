@@ -1743,7 +1743,7 @@ mod tests {
                 when: every,
                 condition: None,
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: "what to do".into(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: "what to do".into(), data: String::new(), files: Vec::new(), key: String::new() },
                 values: Vec::new(),
                 priority: None,
             };
@@ -1802,7 +1802,7 @@ mod tests {
                 when: TriggerWhen::Every { minutes: 60 },
                 condition: None,
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
                 values: Vec::new(),
                 priority: None,
             };
@@ -1866,7 +1866,7 @@ mod tests {
                 when: TriggerWhen::Every { minutes: 60 },
                 condition: None,
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
                 values: Vec::new(),
                 priority: None,
             };
@@ -1930,7 +1930,7 @@ mod tests {
                 when: TriggerWhen::Idle,
                 condition: None,
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "手が空いたら見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "手が空いたら見る".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
                 values: Vec::new(),
                 priority: None,
             };
@@ -1987,7 +1987,7 @@ mod tests {
                 when: TriggerWhen::Tasks,
                 condition: Some(TriggerCondition { filter: "status:todo".into(), role_id: None, below: 2 }),
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "足りなければ起こす".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "足りなければ起こす".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
                 values: Vec::new(),
                 priority: None,
             };
@@ -2070,7 +2070,7 @@ mod tests {
                 when: TriggerWhen::Tasks,
                 condition: Some(TriggerCondition { filter: "status:todo".into(), role_id: counted, below: 2 }),
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
                 values: Vec::new(),
                 priority: None,
             };
@@ -2158,7 +2158,7 @@ mod tests {
                 when: TriggerWhen::Idle,
                 condition: Some(TriggerCondition { filter: "status:todo".into(), role_id: None, below: 2 }),
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: "3 件まで".into(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: "3 件まで".into(), data: String::new(), files: Vec::new(), key: String::new() },
                 values: Vec::new(),
                 priority: None,
             };
@@ -2225,7 +2225,7 @@ mod tests {
                 values: Vec::new(),
                 priority: None,
             };
-            let fixed = || automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: "3 件まで".into(), data: String::new(), files: Vec::new() };
+            let fixed = || automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: "3 件まで".into(), data: String::new(), files: Vec::new(), key: String::new() };
             mk_task_in(tx, "待っている", Some(project));
 
             let draft = trigger_draft(tx.conn(), automation.id, typed(fixed())).expect("ready");
@@ -2279,7 +2279,7 @@ mod tests {
 
             let soon = automation::NewTrigger { when: TriggerWhen::Every { minutes: 0 }, ..typed(fixed()) };
             assert!(matches!(trigger_draft(tx.conn(), automation.id, soon), Err(Error::Invalid(_))), "under a minute");
-            let blank = automation::NewTriggerTask::Fixed { title: " ".into(), notes: String::new(), data: String::new(), files: Vec::new() };
+            let blank = automation::NewTriggerTask::Fixed { title: " ".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() };
             assert!(matches!(trigger_draft(tx.conn(), automation.id, typed(blank)), Err(Error::Invalid(_))), "no title");
             let elsewhere = automation::NewTrigger {
                 condition: Some(TriggerCondition { filter: "project:x".into(), role_id: None, below: 2 }),
@@ -2310,7 +2310,7 @@ mod tests {
                     args: Vec::new(),
                     timeout_minutes: Some(5),
                 }),
-                task: automation::NewTriggerTask::Fixed { title: "判定で起こす".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "判定で起こす".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
                 values: Vec::new(),
                 priority: None,
             };
@@ -2469,7 +2469,7 @@ mod tests {
                 when: TriggerWhen::Every { minutes: 5 },
                 condition: None,
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "見る".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
                 values: Vec::new(),
                 priority: None,
             };
@@ -2512,7 +2512,7 @@ mod tests {
                 when: TriggerWhen::Every { minutes: 5 },
                 condition: None,
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "見る".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
                 values: Vec::new(),
                 priority: None,
             };

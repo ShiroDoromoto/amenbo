@@ -1488,8 +1488,8 @@ pub struct NewTrigger {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NewTriggerTask {
     /// [`TriggerTask::Fixed`]. `data` is JSON, blank for none; `files` are full paths, a blank one left
-    /// out.
-    Fixed { title: String, notes: String, data: String, files: Vec<String> },
+    /// out; `key` is trimmed, blank for none.
+    Fixed { title: String, notes: String, data: String, files: Vec<String>, key: String },
     /// [`TriggerTask::File`].
     File { path: String },
     /// [`TriggerTask::Script`].
@@ -1510,7 +1510,8 @@ pub enum NewTriggerTask {
 /// where the trigger files a task — aimed at a role started by a task, or at no role — and let be blank
 /// where it is aimed at a role started by a trigger, which files none (`AMB-D-1133`, `AMB-D-1142`).
 /// Data that is not JSON or is over [`MAX_TRIGGER_DATA_BYTES`] is refused, as is a file not named by its
-/// full path; the files are not read here, but each time it starts a run (`AMB-D-1134`). An `every` of
+/// full path; the files are not read here, but each time it starts a run (`AMB-D-1134`). A key is kept
+/// trimmed, and kept even where the trigger files a task, which passes it over (`AMB-D-1142`). An `every` of
 /// fewer than [`MIN_TRIGGER_EVERY_MINUTES`] minutes is refused. A condition is
 /// refused where its filter names a `project:` — it counts inside the automation's project — or does
 /// not read, which counting it once here finds out, and where it asks for fewer than none; a `tasks`
@@ -1759,7 +1760,7 @@ fn checked_trigger(
         }
     };
     let task = match task {
-        NewTriggerTask::Fixed { title, notes, data, files } => {
+        NewTriggerTask::Fixed { title, notes, data, files, key } => {
             let title = title.trim();
             if title.is_empty() && files_a_task {
                 return Err(Error::invalid(
@@ -1772,6 +1773,7 @@ fn checked_trigger(
                 notes,
                 data: checked_trigger_data(&data)?,
                 files: checked_trigger_files(files)?,
+                key: checked_trigger_key(&key),
             }
         }
         NewTriggerTask::File { path } => {
@@ -1900,6 +1902,13 @@ pub(crate) fn checked_trigger_data(data: &str) -> Result<Option<String>> {
         return Err(Error::invalid(format!("the data a trigger hands on is not JSON: {e}")));
     }
     Ok(Some(data.to_string()))
+}
+
+/// The key a trigger hands on as it is written ([`NewTriggerTask::Fixed`]), or as its file says it
+/// ([`crate::ops::automation_run::task_from_file`]): trimmed, `None` where it is blank (`AMB-D-1137`).
+pub(crate) fn checked_trigger_key(key: &str) -> Option<String> {
+    let key = key.trim();
+    (!key.is_empty()).then(|| key.to_string())
 }
 
 /// The files a trigger hands on as they are written ([`NewTriggerTask::Fixed`]), or as its file names
@@ -4972,8 +4981,9 @@ mod tests {
     /// **What a fixed trigger hands on is checked as it is written** (`AMB-D-1133`, `AMB-D-1142`): its
     /// data is kept trimmed where it is JSON of at most 64 KiB and refused otherwise, blank data is none,
     /// and its files are kept where each is named by its full path, a blank one left out — none of them
-    /// read. A blank title is let be where the trigger is aimed at a role started by a trigger, and
-    /// refused where it is aimed at a role started by a task or at no role, each of which files a task.
+    /// read. Its key is kept trimmed (`AMB-D-1137`), whichever role it is aimed at. A blank title is let
+    /// be where the trigger is aimed at a role started by a trigger, and refused where it is aimed at a
+    /// role started by a task or at no role, each of which files a task.
     #[test]
     fn what_a_fixed_trigger_hands_on_is_checked_as_it_is_written() {
         let handing = |role_id: Option<i64>, title: &str, data: &str, files: &[&str]| NewTrigger {
@@ -4987,6 +4997,7 @@ mod tests {
                 notes: String::new(),
                 data: data.into(),
                 files: files.iter().map(|f| f.to_string()).collect(),
+                key: " issue-123 ".into(),
             },
             values: Vec::new(),
             priority: None,
@@ -5017,12 +5028,22 @@ mod tests {
                     notes: String::new(),
                     data: Some(r#"{"stage": 5, "bpm": 140}"#.into()),
                     files: vec![brief.clone()],
+                    key: Some("issue-123".into()),
                 },
             );
             assert_eq!(read_back, written);
 
             let blank = trigger_add(tx, automation.id, handing(Some(by_task.id), "見る", "  ", &[])).expect("no data");
-            assert_eq!(blank.task, TriggerTask::Fixed { title: "見る".into(), notes: String::new(), data: None, files: Vec::new() });
+            assert_eq!(
+                blank.task,
+                TriggerTask::Fixed {
+                    title: "見る".into(),
+                    notes: String::new(),
+                    data: None,
+                    files: Vec::new(),
+                    key: Some("issue-123".into()),
+                },
+            );
 
             let over = format!("\"{}\"", "a".repeat(MAX_TRIGGER_DATA_BYTES));
             let at_most = format!("\"{}\"", "a".repeat(MAX_TRIGGER_DATA_BYTES - 2));
@@ -5200,7 +5221,7 @@ mod tests {
             when: TriggerWhen::Every { minutes: 60 },
             condition: None,
             script: None,
-            task: NewTriggerTask::Fixed { title: title.into(), notes: "メモ".into(), data: String::new(), files: Vec::new() },
+            task: NewTriggerTask::Fixed { title: title.into(), notes: "メモ".into(), data: String::new(), files: Vec::new(), key: String::new() },
             values: Vec::new(),
             priority: None,
         };
@@ -5213,7 +5234,7 @@ mod tests {
             let before = Timestamp::now();
             let set = trigger_set(tx, automation.id, Some(hourly("  受信箱を見る "))).expect("write one");
             let trigger = only(live_automation(tx, automation.id).expect("read")).expect("kept");
-            assert_eq!(trigger.task, TriggerTask::Fixed { title: "受信箱を見る".into(), notes: "メモ".into(), data: None, files: Vec::new() });
+            assert_eq!(trigger.task, TriggerTask::Fixed { title: "受信箱を見る".into(), notes: "メモ".into(), data: None, files: Vec::new(), key: None });
             assert_eq!(trigger.when, TriggerWhen::Every { minutes: 60 });
             assert!(trigger.next_at > before, "the first is counted from the write, not due at once");
             assert!(trigger.enabled, "written to be asked");
@@ -5343,7 +5364,7 @@ mod tests {
             when: TriggerWhen::Every { minutes: 60 },
             condition: None,
             script: None,
-            task: NewTriggerTask::Fixed { title: title.into(), notes: String::new(), data: String::new(), files: Vec::new() },
+            task: NewTriggerTask::Fixed { title: title.into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
             values: Vec::new(),
             priority: None,
         }
@@ -5413,7 +5434,7 @@ mod tests {
             assert_eq!(after.created_at, first.created_at);
             assert_eq!(after.name, "朝の点検");
             assert_eq!(after.role_id, Some(role.id));
-            assert_eq!(after.task, TriggerTask::Fixed { title: "毎日の点検".into(), notes: String::new(), data: None, files: Vec::new() });
+            assert_eq!(after.task, TriggerTask::Fixed { title: "毎日の点検".into(), notes: String::new(), data: None, files: Vec::new(), key: None });
             assert!(after.next_at > first.next_at, "counted afresh from the write");
             let triggers = live_automation(tx, automation.id).expect("read").triggers;
             assert_eq!(triggers, vec![after.clone(), second], "the other left as it was");

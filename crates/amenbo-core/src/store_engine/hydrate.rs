@@ -622,6 +622,7 @@ pub(super) fn automation_trigger_row(r: &Row) -> rusqlite::Result<AutomationTrig
             }),
             (at, why) => return Err(bad(format!("bad trigger refusal at {at:?} why {why:?}"))),
         },
+        waiting_since: ts_opt(r, C.waiting_since)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,

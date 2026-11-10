@@ -2391,29 +2391,36 @@ fn about_to_take(conn: &Connection, seats: &Seats) -> Result<bool> {
     Ok(false)
 }
 
-/// **Of these seats, the first with a task to take now** — in the order given, a set with a task of its
-/// role to take where its round starts on `pic` ([`start_builtin`]), and no run of it standing about to
-/// take one ([`about_to_take`]). `None` where none has, or where none of their starts takes a task.
+/// **Of these seats, the one whose tasks have waited longest** (`AMB-D-1145`) — of the sets with a task of
+/// their role to take where their round starts on `pic` ([`start_builtin`]) and no run of them standing
+/// about to take one ([`about_to_take`]), the one whose task has stood takeable since the earliest
+/// ([`crate::ops::automation_builtin::takeable_since`]), with that time. Weighed this way rather than by
+/// the order the roles are defined in, so a role late in a line of work is not left behind the ones
+/// before it. Seats whose tasks came to be takeable at the same time go in the order given. `None` where
+/// none has a task, or where none of their starts takes a task.
 fn with_a_task<'s>(
     conn: &Connection,
     project_id: i64,
     pic: &Picture,
     seats: &[&'s Seats],
-) -> Result<Option<&'s Seats>> {
+) -> Result<Option<(&'s Seats, Timestamp)>> {
+    let mut longest: Option<(&'s Seats, Timestamp)> = None;
     for &s in seats {
         let Some(start) = start_builtin(conn, pic, s.role_id)? else { continue };
-        let there = crate::ops::automation_builtin::there_to_take(
+        let since = crate::ops::automation_builtin::takeable_since(
             conn,
             project_id,
             &s.roles(),
             start.builtin.as_deref(),
             &start.cfg,
         )?;
-        if there == Some(true) && !about_to_take(conn, s)? {
-            return Ok(Some(s));
+        let Some(since) = since else { continue };
+        if longest.is_some_and(|(_, best)| best <= since) || about_to_take(conn, s)? {
+            continue;
         }
+        longest = Some((s, since));
     }
-    Ok(None)
+    Ok(longest)
 }
 
 /// **The picture `reads` names, and the saved version it is** — `None` for the draft.
@@ -2470,8 +2477,9 @@ pub(crate) fn launch_in_seat_past_the_limit(
 }
 
 /// **What the triggers say on one look** ([`triggers_due`]): the triggers due now, the ones due but for
-/// what their scripts say, and when the soonest of the rest is. Each is named by its own id — an
-/// automation may have several, and each is asked and fired on its own.
+/// what their scripts say, since when each of those has waited, the ones held back by the run limit alone,
+/// and when the soonest of the rest is. Each is named by its own id — an automation may have several, and
+/// each is asked and fired on its own.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TriggersDue {
     /// The triggers to [`fire`], oldest automation first and then in their order.
@@ -2480,6 +2488,17 @@ pub struct TriggersDue {
     /// write ([`ask_trigger`]), and [`fire`] the trigger only where they said to file a task, handing it
     /// what they said.
     pub ask: Vec<(i64, TriggerScripts)>,
+    /// **Since when each trigger of `due` and `ask` has waited** (`AMB-D-1145`) — since the run limit
+    /// alone first held it back ([`crate::model::AutomationTrigger::waiting_since`]), or `now` where it did
+    /// not. A look starts the runs of the triggers and of the launches with a task waiting
+    /// ([`TopUpDue::since`]) longest waiting first, so neither always goes before the other.
+    pub since: BTreeMap<i64, Timestamp>,
+    /// **The triggers held back by the run limit alone with no time kept yet** ([`TriggerHeld::AtRunLimit`])
+    /// — keep `now` on them ([`trigger_waits`]), so they are weighed from it once there is room.
+    pub waiting: Vec<i64>,
+    /// **The triggers keeping a time they waited that are waiting no more** — not due, or held back by
+    /// anything else than the run limit: clear it ([`trigger_waits`]).
+    pub waiting_no_more: Vec<i64>,
     /// When the next trigger not yet due is, or `None` where there is none — so a look can sleep no
     /// longer than that.
     pub next_at: Option<Timestamp>,
@@ -2493,8 +2512,14 @@ pub struct TriggersDue {
 /// whether to start, or one that writes what it says — is put in `ask` rather than `due`: its program may run
 /// for hours, so it is not run here. It writes nothing: [`fire`] asks all of it again, in the transaction it
 /// writes in.
+///
+/// **One held back by the run limit alone is waiting** (`AMB-D-1145`): it would start but for the runs of
+/// the whole automation under way. Since when is kept on it ([`TriggersDue::waiting`]), and cleared once it
+/// is waiting so no more ([`TriggersDue::waiting_no_more`]) — whatever automation it is of, a stopped one
+/// among them.
 pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
     let mut found = TriggersDue::default();
+    let mut waits = BTreeSet::new();
     for automation in read::automations_triggered(conn)? {
         let enabled = || automation.triggers.iter().filter(|t| t.enabled);
         let (seats, paused) = if enabled().any(|t| t.next_at <= now) {
@@ -2508,27 +2533,64 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
             if let (true, Some((seats, total, pic))) = (trigger.next_at <= now, &seats) {
                 let room = room_of(seats, total, trigger_role(pic, trigger));
                 let failure = open_failure(conn, trigger.id)?;
-                // Its tasks are counted only once nothing else holds it back. A condition that no longer
-                // reads (an axis it names gone since) is left for `fire` to refuse, as a launch refused
-                // is, rather than stopping every other trigger on this look.
+                // Its tasks are counted only once nothing else holds it back but the run limit, which is
+                // weighed last. A condition that no longer reads (an axis it names gone since) is left for
+                // `fire` to refuse, as a launch refused is, rather than stopping every other trigger on
+                // this look.
                 let held_by = |condition: Option<&ConditionCount>| {
                     held(&automation, trigger, room, paused, failure, condition, now)
                 };
-                if held_by(None).is_none()
-                    && condition_count(conn, automation.project_id, trigger)
-                        .map_or(true, |condition| held_by(condition.as_ref()).is_none())
-                {
-                    match TriggerScripts::of(trigger) {
-                        Some(scripts) => found.ask.push((trigger.id, scripts)),
-                        None => found.due.push(trigger.id),
+                let holds = match held_by(None) {
+                    None | Some(TriggerHeld::AtRunLimit { .. }) => {
+                        match condition_count(conn, automation.project_id, trigger) {
+                            Ok(condition) => held_by(condition.as_ref()),
+                            Err(_) => held_by(None),
+                        }
                     }
+                    other => other,
+                };
+                match holds {
+                    None => {
+                        match TriggerScripts::of(trigger) {
+                            Some(scripts) => found.ask.push((trigger.id, scripts)),
+                            None => found.due.push(trigger.id),
+                        }
+                        found.since.insert(trigger.id, trigger.waiting_since.unwrap_or(now));
+                        waits.insert(trigger.id);
+                    }
+                    Some(TriggerHeld::AtRunLimit { .. }) => {
+                        if trigger.waiting_since.is_none() {
+                            found.waiting.push(trigger.id);
+                        }
+                        waits.insert(trigger.id);
+                    }
+                    Some(_) => {}
                 }
             } else if found.next_at.is_none_or(|soonest| trigger.next_at < soonest) {
                 found.next_at = Some(trigger.next_at);
             }
         }
     }
+    found.waiting_no_more =
+        read::automation_trigger_ids_waiting(conn)?.into_iter().filter(|id| !waits.contains(id)).collect();
     Ok(found)
+}
+
+/// **Keep `now` on the triggers `waiting`, and clear the time kept on the ones `no_more`**
+/// ([`crate::model::AutomationTrigger::waiting_since`], [`TriggersDue`]) — what a look found of the run
+/// limit holding them back. One `waiting` that keeps a time already keeps it, and one taken away since
+/// writes nothing. Nothing else of a trigger moves.
+pub fn trigger_waits(tx: &WriteTx<'_>, waiting: &[i64], no_more: &[i64], now: Timestamp) -> Result<()> {
+    let marks = waiting.iter().map(|&id| (id, Some(now))).chain(no_more.iter().map(|&id| (id, None)));
+    for (id, since) in marks {
+        let Some(trigger) = read::automation_trigger(tx.conn(), id)? else { continue };
+        if since.is_some() == trigger.waiting_since.is_some() {
+            continue;
+        }
+        let after = crate::model::AutomationTrigger { waiting_since: since, ..trigger.clone() };
+        crate::ops::emit_update(tx, record::automation_trigger(&trigger), record::automation_trigger(&after))?;
+    }
+    Ok(())
 }
 
 /// **Fire one trigger of an automation** at `now`: decide whether to start, write what it says, and
@@ -2587,7 +2649,8 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 /// takes nothing with it either. Only a run started moves this trigger's `next_at` on, counted from
 /// `now` rather than from when it was due, so an app that was closed for a day files one task when it
 /// comes back rather than a day's worth, sets its `last_filed_at` to `now`, and clears the last time
-/// it could not start one ([`refused`]). The automation's other triggers are left as they were.
+/// it could not start one ([`refused`]) and since when it waited ([`trigger_waits`]). The automation's
+/// other triggers are left as they were.
 pub fn fire(
     tx: &WriteTx<'_>,
     trigger_id: i64,
@@ -2692,6 +2755,7 @@ pub fn fire(
         next_at: trigger.when.after(now),
         last_filed_at: Some(now),
         last_refused: None,
+        waiting_since: None,
         updated_at: now,
         ..trigger.clone()
     };
@@ -2822,12 +2886,12 @@ fn seat_roles(pic: &Picture) -> Vec<Option<i64>> {
 }
 
 /// **The role a run launched from `pic` sits in** ([`AutomationRun::role_id`]) — of the seats it may
-/// take (`open`, in the order the roles are defined in), the first with a task to take where its round
-/// starts now ([`with_a_task`]), or the first of them where none has one. `None` for the seats of no
-/// role. `open` is never empty.
+/// take (`open`, in the order the roles are defined in), the one whose task to take where its round
+/// starts has waited longest ([`with_a_task`]), or the first of them where none has one. `None` for the
+/// seats of no role. `open` is never empty.
 fn seat(conn: &Connection, project_id: i64, pic: &Picture, open: &[&Seats]) -> Result<Option<i64>> {
     let Some(first) = open.first() else { return Ok(None) };
-    if let Some(s) = with_a_task(conn, project_id, pic, open)? {
+    if let Some((s, _)) = with_a_task(conn, project_id, pic, open)? {
         return Ok(s.role_id);
     }
     Ok(first.role_id)
@@ -2922,40 +2986,59 @@ fn launch_paused(conn: &Connection, automation_id: i64) -> Result<bool> {
         .is_some_and(|launch| launch.status == AutomationLaunchStatus::Paused))
 }
 
-/// **Which of these launches may be given one more run now** ([`top_up`]), in the order asked.
+/// **Which of these launches may be given one more run now** ([`top_ups_due`] without the times), in the
+/// order asked — what the tests ask where the time is not the point.
+#[cfg(test)]
+pub(crate) fn launches_to_top_up(conn: &Connection, launches: &[i64]) -> Result<Vec<i64>> {
+    Ok(top_ups_due(conn, launches)?.into_iter().map(|due| due.launch_id).collect())
+}
+
+/// **A launch that may be given one more run now, and since when its run has waited** ([`top_ups_due`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TopUpDue {
+    pub launch_id: i64,
+    /// Since when the task the run would take has stood takeable — that of the role that has waited
+    /// longest ([`with_a_task`]). What a look weighs it by against the triggers waiting for the same
+    /// room ([`TriggersDue::since`]), longest waiting first (`AMB-D-1145`).
+    pub since: Timestamp,
+}
+
+/// **Which of these launches may be given one more run now** ([`top_up`]), each with since when its run
+/// has waited ([`TopUpDue`]), in the order asked.
 ///
 /// It writes nothing: [`top_up`] asks all of it again, in the transaction it writes in.
-pub fn launches_to_top_up(conn: &Connection, launches: &[i64]) -> Result<Vec<i64>> {
+pub fn top_ups_due(conn: &Connection, launches: &[i64]) -> Result<Vec<TopUpDue>> {
     let mut due = Vec::new();
     for &launch_id in launches {
-        if tops_up(conn, launch_id)? {
-            due.push(launch_id);
+        if let Some(since) = tops_up(conn, launch_id)? {
+            due.push(TopUpDue { launch_id, since });
         }
     }
     Ok(due)
 }
 
-/// **Whether a launch may be given one more run now.** It is running, and its automation is neither
-/// archived, stopped nor kept for export only. And one of the automation's roles has a free seat
-/// ([`seats`]), its round starting, in the newest saved version, at the built-in that takes a task — a
-/// role starting anywhere else is never topped up, its run walking the picture once — a task of its own
-/// to take there, and no run of it standing about to take one, which would take the task found here
-/// ([`with_a_task`]). The seats are as many as the launch holds for each role ([`seats`]), so a
+/// **Whether a launch may be given one more run now, and since when that run has waited.** It is
+/// running, and its automation is neither archived, stopped nor kept for export only. And one of the
+/// automation's roles has a free seat ([`seats`]), its round starting, in the newest saved version, at the
+/// built-in that takes a task — a role starting anywhere else is never topped up, its run walking the
+/// picture once — a task of its own to take there, and no run of it standing about to take one, which
+/// would take the task found here ([`with_a_task`]). Where several have, the one whose task has waited
+/// longest is the one answered. The seats are as many as the launch holds for each role ([`seats`]), so a
 /// headcount raised on the launch takes hold at once ([`launch_headcount_set`]). Nor while the
 /// automation has as many runs under way as the most that go at once (`AMB-D-1145`, [`RunTotal`]),
 /// whatever seats are free: nothing is written of it, and the next look asks again.
-fn tops_up(conn: &Connection, launch_id: i64) -> Result<bool> {
-    let Some(launch) = read::automation_launch(conn, launch_id)? else { return Ok(false) };
+fn tops_up(conn: &Connection, launch_id: i64) -> Result<Option<Timestamp>> {
+    let Some(launch) = read::automation_launch(conn, launch_id)? else { return Ok(None) };
     if launch.status != AutomationLaunchStatus::Running {
-        return Ok(false);
+        return Ok(None);
     }
-    let Some(automation) = read::automation(conn, launch.automation_id)? else { return Ok(false) };
+    let Some(automation) = read::automation(conn, launch.automation_id)? else { return Ok(None) };
     if automation.archived || automation.stopped || automation.export_only {
-        return Ok(false);
+        return Ok(None);
     }
     let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
     if run_total(conn, automation.id, &pic)?.at_limit().is_some() {
-        return Ok(false);
+        return Ok(None);
     }
     let seats = seats_of(conn, automation.id, &pic)?;
     let mut free: Vec<&Seats> = Vec::new();
@@ -2964,7 +3047,7 @@ fn tops_up(conn: &Connection, launch_id: i64) -> Result<bool> {
             free.push(s);
         }
     }
-    Ok(with_a_task(conn, automation.project_id, &pic, &free)?.is_some())
+    Ok(with_a_task(conn, automation.project_id, &pic, &free)?.map(|(_, since)| since))
 }
 
 /// **Start one more run in a running launch**, where a role has a free seat and a task to take
@@ -2977,7 +3060,7 @@ fn tops_up(conn: &Connection, launch_id: i64) -> Result<bool> {
 /// handed to it, joining this launch, and started by whoever opened the launch: it is the same press. A
 /// launch its checks refuse is an error, and the transaction takes nothing with it.
 pub fn top_up(tx: &WriteTx<'_>, launch_id: i64, by: &Launcher<'_>) -> Result<Option<AutomationRun>> {
-    if !tops_up(tx.conn(), launch_id)? {
+    if tops_up(tx.conn(), launch_id)?.is_none() {
         return Ok(None);
     }
     let launch = read::automation_launch(tx.conn(), launch_id)?.ok_or_else(|| not_found("launch", launch_id))?;
@@ -8126,6 +8209,67 @@ mod tests {
 
             launch_limit_reset(tx, launch).expect("back to no limit");
             assert!(fire(tx, trigger.id, &by, then, None, None, &[]).expect("fire").is_some());
+        });
+    }
+
+    /// **A trigger held back by the run limit alone keeps since when** (`AMB-D-1145`): the look that first
+    /// finds it so keeps that time, a later one keeps it as it was, and once there is room the trigger is
+    /// due and weighed from it. The run it starts clears it.
+    #[test]
+    fn a_trigger_held_back_by_the_run_limit_keeps_since_when_until_it_starts_a_run() {
+        with_tx(|tx| {
+            let (automation, role, _) = with_a_role_started_by_a_trigger(tx);
+            let trigger = aimed_at(tx, &automation, role.id);
+            let due = trigger.next_at;
+            let startable = claude();
+            let by = here(&startable);
+            let run = fire(tx, trigger.id, &by, due, None, None, &[]).expect("fire").expect("a run");
+            let launch = run.launch_id.expect("a launch");
+            launch_headcount_set(tx, launch, role.id, 2).expect("a second seat");
+            launch_limit_set(tx, launch, Some(1)).expect("one at once");
+            let then = crate::model::TriggerWhen::Every { minutes: 24 * 60 }.after(due);
+            let later = crate::model::TriggerWhen::Every { minutes: 60 }.after(then);
+            let since = |tx: &WriteTx<'_>| read::automation_trigger(tx.conn(), trigger.id).expect("read").expect("there").waiting_since;
+
+            let found = triggers_due(tx.conn(), then).expect("ask");
+            assert_eq!((found.due.clone(), found.waiting.clone()), (vec![], vec![trigger.id]), "waiting, not due");
+            trigger_waits(tx, &found.waiting, &found.waiting_no_more, then).expect("keep it");
+            assert_eq!(since(tx), Some(then));
+            let found = triggers_due(tx.conn(), later).expect("ask");
+            assert!(found.waiting.is_empty() && found.waiting_no_more.is_empty(), "kept as it was: {found:?}");
+
+            launch_limit_reset(tx, launch).expect("room again");
+            let found = triggers_due(tx.conn(), later).expect("ask");
+            assert_eq!(found.due, vec![trigger.id]);
+            assert_eq!(found.since.get(&trigger.id), Some(&then), "weighed from when it began to wait");
+            assert!(fire(tx, trigger.id, &by, later, None, None, &[]).expect("fire").is_some());
+            assert_eq!(since(tx), None, "the run it started clears it");
+        });
+    }
+
+    /// **A trigger waiting no more has its time cleared** — held back by something else than the run
+    /// limit, or of an automation stopped since, whose triggers are not asked at all.
+    #[test]
+    fn a_trigger_waiting_no_more_is_found_so_whatever_holds_it_back() {
+        with_tx(|tx| {
+            let (automation, role, _) = with_a_role_started_by_a_trigger(tx);
+            let trigger = aimed_at(tx, &automation, role.id);
+            let due = trigger.next_at;
+            let startable = claude();
+            let run = fire(tx, trigger.id, &here(&startable), due, None, None, &[]).expect("fire").expect("a run");
+            let launch = run.launch_id.expect("a launch");
+            launch_headcount_set(tx, launch, role.id, 2).expect("a second seat");
+            launch_limit_set(tx, launch, Some(1)).expect("one at once");
+            let then = crate::model::TriggerWhen::Every { minutes: 24 * 60 }.after(due);
+            trigger_waits(tx, &[trigger.id], &[], then).expect("keep it");
+
+            crate::ops::automation::stop(tx, automation.id, true).expect("stop");
+            let found = triggers_due(tx.conn(), then).expect("ask");
+            assert_eq!(found.waiting_no_more, vec![trigger.id], "a stopped automation's trigger waits no more");
+            trigger_waits(tx, &found.waiting, &found.waiting_no_more, then).expect("clear it");
+            let kept = read::automation_trigger(tx.conn(), trigger.id).expect("read").expect("there");
+            assert_eq!(kept.waiting_since, None);
+            assert_eq!((kept.next_at, kept.last_filed_at), (trigger.when.after(due), Some(due)), "nothing else moves");
         });
     }
 

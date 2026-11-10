@@ -1830,6 +1830,7 @@ fn checked_trigger(
         next_at: when.after(now),
         last_filed_at: None,
         last_refused: None,
+        waiting_since: None,
         order_key: place(sibs, &Position::Bottom)?,
         created_at: now,
         updated_at: now,

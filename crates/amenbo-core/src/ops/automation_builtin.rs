@@ -385,9 +385,9 @@ pub fn waits_now(
 
 /// **Whether there is something for the built-in `key` to take now** in `project_id`, for a run
 /// starting rounds of `roles`, read from the answers `cfg` where it was placed — `None` for a built-in
-/// that has nothing it could wait for. What the watch asks while it waits, and what a launch asks before
-/// starting one more run beside those under way ([`crate::ops::automation_run::top_up`]). One row is
-/// read, however many there are.
+/// that has nothing it could wait for. What the watch asks while it waits; a launch starting one more
+/// run beside those under way asks since when instead ([`takeable_since`]). One row is read, however
+/// many there are.
 pub fn there_to_take(
     conn: &Connection,
     project_id: i64,
@@ -397,6 +397,23 @@ pub fn there_to_take(
 ) -> Result<Option<bool>> {
     match waits(key) {
         true => Ok(Some(crate::ops::automation_builtin_take::turned_up(conn, project_id, roles, cfg)?)),
+        false => Ok(None),
+    }
+}
+
+/// **Since when there has been something for the built-in `key` to take** in `project_id`, for a run
+/// starting rounds of `roles`, read from the answers `cfg` where it was placed — what a role waiting for
+/// a seat is weighed by (`AMB-D-1145`, [`crate::ops::automation_run::top_up`]). `None` where there is
+/// nothing to take now, and for a built-in that has nothing it could wait for.
+pub fn takeable_since(
+    conn: &Connection,
+    project_id: i64,
+    roles: &[i64],
+    key: Option<&str>,
+    cfg: &[RunDefCfg],
+) -> Result<Option<crate::time::Timestamp>> {
+    match waits(key) {
+        true => crate::ops::automation_builtin_take::takeable_since(conn, project_id, roles, cfg),
         false => Ok(None),
     }
 }

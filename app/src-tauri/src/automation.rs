@@ -4185,6 +4185,7 @@ mod tests {
             next_at,
             last_filed_at: None,
             last_refused: None,
+            waiting_since: None,
             order_key: "a0".into(),
             created_at: next_at,
             updated_at: next_at,

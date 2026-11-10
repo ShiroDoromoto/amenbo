@@ -1345,6 +1345,11 @@ datasets! {
         // it has not failed since it last started one; a run started clears both.
         refused_at: ts_opt,
         refused_why: col(OPT),
+        // Since when it has been held back by the most runs of its automation that go at once alone
+        // (`AMB-D-1145`): the first look that found it so. A run it starts clears it, and so does a look
+        // that finds it held back by anything else, or not due. NULL where it is not waiting so. What
+        // the looks weigh it by against the roles waiting for a seat, oldest first.
+        waiting_since: ts_opt,
     }
 
     // **The classification a failed round's task is filed with**: one value per axis, each one of the

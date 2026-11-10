@@ -20,3 +20,12 @@ export function useProjectRoles(projectId: number | null): TaskRoleDto[] {
   );
   return data ?? NONE;
 }
+
+/**
+ * The roles a task's role field offers: an archived automation's roles are left out, as nobody files a
+ * task with one any more — except the one the task already has (`roleId`), which stays so the field
+ * still shows it checked. A new task has none, so it gets no archived role at all.
+ */
+export function taskRoleChoices(roles: readonly TaskRoleDto[], roleId: number | null): TaskRoleDto[] {
+  return roles.filter((r) => !r.automationArchived || r.id === roleId);
+}

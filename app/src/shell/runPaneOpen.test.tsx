@@ -36,8 +36,8 @@ vi.mock("../talk/terminal", async (actual) => ({
 // The project's roles, as the line saying where a failure was filed reads them (`./RunPicture`).
 vi.mock("../core/projectRoles", () => ({
   useProjectRoles: () => [
-    { id: 12, name: "Bob", icon: null, automationId: 3, automationName: "Nightly" },
-    { id: 14, name: "Dave", icon: null, automationId: 3, automationName: "Nightly" },
+    { id: 12, name: "Bob", icon: null, automationId: 3, automationName: "Nightly", automationArchived: false },
+    { id: 14, name: "Dave", icon: null, automationId: 3, automationName: "Nightly", automationArchived: false },
   ],
 }));
 // The row is a live thing of its own; what it draws is not what this is about.

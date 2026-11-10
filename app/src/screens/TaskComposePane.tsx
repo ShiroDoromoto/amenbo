@@ -6,7 +6,7 @@ import { listLabel, t, tf } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { useSingleFlight } from "../core/singleFlight";
 import { useBoundFolders } from "../core/boundFolders";
-import { useProjectRoles } from "../core/projectRoles";
+import { taskRoleChoices, useProjectRoles } from "../core/projectRoles";
 import { RoleField, ROLE_NONE } from "../components/RoleField";
 import { ErrorNote } from "../components/ErrorNote";
 import type { Facet } from "../mock/types";
@@ -47,7 +47,7 @@ export function TaskComposePane({
   // The role, asked of a task handed to the AI in a project that defines one. Nothing is chosen until
   // the person chooses, "no role" included (`AMB-D-531`); creating before that says why under the field
   // rather than greying the button, so the press is answered.
-  const roles = useProjectRoles(projectId);
+  const roles = taskRoleChoices(useProjectRoles(projectId), null);
   const askingRole = assignee === "ai" && roles.length > 0;
   // The automations the roles come from, named in the heading — one as a rule, several run together.
   const roleSources = [...new Set(roles.map((r) => r.automationName))];

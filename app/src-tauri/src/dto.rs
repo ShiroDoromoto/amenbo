@@ -567,7 +567,8 @@ pub struct TaskCardDto {
 
 /// One role a task of a project can be worked under: a role defined in one of the project's
 /// automations. The task editor lists these, automation by automation and each in the order it is
-/// defined in, as the choices of its role field.
+/// defined in, as the choices of its role field — leaving out an archived automation's, except the one
+/// a task already has.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -581,6 +582,8 @@ pub struct TaskRoleDto {
     pub(crate) automation_id: i64,
     /// The name of the automation it is defined in, to tell apart two roles of the same name.
     pub(crate) automation_name: String,
+    /// Whether the automation it is defined in is archived. Such a role is not offered as a new choice.
+    pub(crate) automation_archived: bool,
 }
 
 #[derive(Serialize, TS)]

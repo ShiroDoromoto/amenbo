@@ -1962,6 +1962,7 @@ export const zhHans: Translation = {
     invalid_make_task_blocker_open: "要领取的任务会依赖尚未关闭的 {ref}，因此无法领取",
     invalid_make_task_value_closed: "“分类”指定的值“{value}”已关闭",
     invalid_make_task_required_empty: "任务在此项目必填的 {axes} 上没有值",
+    invalid_trigger_axis_empty: "必填的轴“{axis}”没有值",
     invalid_make_task_task_not_a_number: "“依赖的已有任务”每行读取一个任务编号，而“{line}”不是编号",
     invalid_make_task_decision_not_a_number: "“要关联的决定”每行读取一个决策编号，而“{line}”不是编号",
     invalid_make_task_task_not_in_project: "“依赖的已有任务”指定的 {line} 不属于此项目",

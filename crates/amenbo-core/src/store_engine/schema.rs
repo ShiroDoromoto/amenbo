@@ -1337,6 +1337,9 @@ datasets! {
         // by a trigger, with the same key, is running or paused, it starts no other there. NULL for none,
         // and always NULL for a `file` or a `script`.
         task_key: col(OPT),
+        // The priority of the task it files, NULL for none — only where it files a task, aimed at a role
+        // started by a task or at no role. Its classification is `automation_trigger_value`.
+        task_priority: enum_opt("high", "medium", "low"),
     }
 
     // **The classification a failed round's task is filed with**: one value per axis, each one of the
@@ -1351,6 +1354,19 @@ datasets! {
         dimension_id: fk("dimension", "RESTRICT"),
         value_id: fk("dimension_value", "RESTRICT"),
     } => "UNIQUE (automation_id, dimension_id)"
+
+    // **The classification of the task a trigger files**: one value per axis, each one of the trigger's
+    // automation's project's own, written where the trigger is (`ops::automation::trigger_set`). An axis
+    // the project requires with no row here holds the trigger's save, and its start where the axis became
+    // required after (`ops::automation_run::fire`). Like the trigger, not part of a saved version, nor of
+    // the automation's export. `dimension_id` is denormalised, as `automation_failure_value`'s is, so one
+    // row per axis is held by the constraint below. Removing a value takes its rows with it, or moves them
+    // where the value's tasks move (`ops::dimension::value_delete`).
+    automation_trigger_value {
+        trigger_id: fk("automation_trigger", "RESTRICT"),
+        dimension_id: fk("dimension", "RESTRICT"),
+        value_id: fk("dimension_value", "RESTRICT"),
+    } => "UNIQUE (trigger_id, dimension_id)"
 
     // **A setting, declared by an action and answered where it is placed.** The action's row is the
     // declaration alone, so its `value` is NULL; each placement of that action carries a row of its
@@ -1514,7 +1530,7 @@ datasets! {
         // `[]` on a version saved before roles existed (v102).
         roles: col(REQ),
         // `automation.run_limit` as it stood when the version was saved. NULL is no limit, and is what a
-        // version saved before v143 holds.
+        // version saved before v144 holds.
         run_limit: col(INT_OPT),
     } => "UNIQUE (automation_id, version)"
 

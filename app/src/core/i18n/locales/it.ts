@@ -1979,6 +1979,7 @@ export const it: Translation = {
     invalid_make_task_blocker_open: "L’attività da prendere dipenderebbe da {ref}, che non è chiusa, quindi non è stato possibile prenderla",
     invalid_make_task_value_closed: "«Classificazione» indica il valore «{value}», che è chiuso",
     invalid_make_task_required_empty: "L’attività non avrebbe alcun valore su {axes}, che questo progetto richiede",
+    invalid_trigger_axis_empty: "L’asse obbligatorio «{axis}» non ha un valore",
     invalid_make_task_task_not_a_number: "«Attività esistenti da cui dipende» legge un numero di attività per riga, e «{line}» non lo è",
     invalid_make_task_decision_not_a_number: "«Decisioni da collegare» legge un numero di decisione per riga, e «{line}» non lo è",
     invalid_make_task_task_not_in_project: "«Attività esistenti da cui dipende» indica {line}, che non è in questo progetto",

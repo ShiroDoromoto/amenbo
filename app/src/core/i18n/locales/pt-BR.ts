@@ -1979,6 +1979,7 @@ export const ptBR: Translation = {
     invalid_make_task_blocker_open: "A tarefa a pegar dependeria de {ref}, que não está fechada, então não pôde ser pega",
     invalid_make_task_value_closed: "“Classificação” indica o valor “{value}”, que está fechado",
     invalid_make_task_required_empty: "A tarefa não teria valor em {axes}, que este projeto exige",
+    invalid_trigger_axis_empty: "O eixo obrigatório «{axis}» não tem valor",
     invalid_make_task_task_not_a_number: "“Tarefas existentes de que depende” lê um número de tarefa por linha, e “{line}” não é um",
     invalid_make_task_decision_not_a_number: "“Decisões a vincular” lê um número de decisão por linha, e “{line}” não é um",
     invalid_make_task_task_not_in_project: "“Tarefas existentes de que depende” indica {line}, que não está neste projeto",

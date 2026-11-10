@@ -803,6 +803,7 @@ describe("one role's round, as the build screen draws it", () => {
       roleId: 20,
       when: { kind: "every", minutes: 60 },
       task: { kind: "fixed", title: "Check", notes: "" },
+      values: [],
       nextAt: "2026-11-07T00:00:00Z",
     };
     const automation = rounds({ failuresTo: { kind: "role", roleId: 20 }, triggers: [trigger] });
@@ -918,6 +919,7 @@ describe("one role's round, as the build screen draws it", () => {
     roleId: 40,
     when: { kind: "every", minutes: 1440 },
     task: { kind: "fixed", title: "", notes: "" },
+    values: [],
     nextAt: "2026-11-07T00:00:00Z",
   };
 

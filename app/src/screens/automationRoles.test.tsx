@@ -249,6 +249,7 @@ describe("the picked role's head", () => {
     roleId: 2,
     when: { kind: "every", minutes: 1440 },
     task: { kind: "fixed", title: "", notes: "" },
+    values: [],
     nextAt: "2026-11-07T00:00:00Z",
   };
   const watch: AutomationTriggerDto = { ...daily, id: 6, name: "", when: { kind: "script" } };

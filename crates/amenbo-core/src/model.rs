@@ -2094,6 +2094,17 @@ pub struct AutomationTrigger {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub script: Option<StepScript>,
     pub task: TriggerTask,
+    /// **The classification of the task it files** — one value per axis, each one of the automation's
+    /// project's own, in the order they were written (`AMB-D-1136`). Only a trigger that files a task —
+    /// aimed at a role started by a task, or at no role — has any; one aimed at a role started by a
+    /// trigger files none. An axis the project requires with no value here holds its save, and its start
+    /// where the axis became required after it was written. Kept in rows of their own, read in with it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub values: Vec<AutomationTriggerValue>,
+    /// **The priority of the task it files**, `None` for none (`AMB-D-1136`) — as [`Self::values`], only
+    /// on a trigger that files a task.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority: Option<Priority>,
     /// When it is next asked whether to file a task (for an `idle`, a `tasks` or a `script`, the soonest
     /// it may file one): set when the trigger is written, and moved on each time it files one.
     pub next_at: Timestamp,
@@ -2102,6 +2113,19 @@ pub struct AutomationTrigger {
     pub last_filed_at: Option<Timestamp>,
     /// The order the automation's triggers are written in.
     pub order_key: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **One value of the classification a trigger's task is filed with** ([`AutomationTrigger::values`]) —
+/// the row that says this trigger answers the axis `dimension_id` with `value_id`. `dimension_id` is
+/// denormalised, as [`AutomationFailureValue`]'s is, so one row per axis is held by the table.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AutomationTriggerValue {
+    pub id: i64,
+    pub trigger_id: i64,
+    pub dimension_id: i64,
+    pub value_id: i64,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
@@ -2172,9 +2196,11 @@ pub const MAX_TRIGGER_DATA_BYTES: usize = 64 * 1024;
 
 /// **What a trigger hands on** — the second part of [`AutomationTrigger`]: a title, notes, data as JSON,
 /// files and a key, handed to the run it starts and kept on that run ([`AutomationRun::start_title`] and the
-/// files attached to it as [`AttachmentTarget::AutomationRun`]). Where it is aimed at a role started by a
-/// task, the title and notes are also those of the task it files. A time it cannot say anything — the
-/// file not read, the program not answering — starts nothing, as a time it decides no does
+/// files attached to it as [`AttachmentTarget::AutomationRun`]). Where it files a task — aimed at a role
+/// started by a task, or at no role — the title, notes, data and files are also the task's (`AMB-D-1136`):
+/// the title and notes are its own, the data closes its notes as a JSON code block, and the files are
+/// attached to it; the key is not used there (`AMB-D-1142`). A time it cannot say anything — the file not
+/// read, the program not answering — starts nothing, as a time it decides no does
 /// ([`crate::ops::automation_run::fire`]).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]

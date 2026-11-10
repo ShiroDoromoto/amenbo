@@ -1765,8 +1765,15 @@ fn render_automation(
 /// whether it hands on data and files, and its key — the role it files it under, the classification
 /// and priority it files it with (the store names the axes), when it is next asked (for an `idle`, a
 /// `tasks` or a `script`, the soonest it may be — and nothing, for one that is off, as it is asked no
-/// more), and when it last filed a task.
+/// more), when it last filed a task, and when it last could not start one and why, where it has not
+/// started one since.
 fn trigger_line(store: &Store, trigger: &amenbo_core::model::AutomationTrigger) -> Result<String, CliError> {
+    let values: Vec<(i64, i64)> = trigger.values.iter().map(|v| (v.dimension_id, v.value_id)).collect();
+    Ok(trigger_text(trigger, value_pairs(store, &values)?))
+}
+
+/// [`trigger_line`] once the trigger's classification is named, `axis=value` each.
+fn trigger_text(trigger: &amenbo_core::model::AutomationTrigger, mut filed_as: Vec<String>) -> String {
     use amenbo_core::model::{TriggerTask, TriggerWhen};
     let fewer = trigger.condition.as_ref().map(|c| {
         let of_role = c.role_id.map(|role| format!(" under role {role}")).unwrap_or_default();
@@ -1817,8 +1824,6 @@ fn trigger_line(store: &Store, trigger: &amenbo_core::model::AutomationTrigger) 
         name => format!(" as \"{name}\""),
     };
     let under = trigger.role_id.map(|role| format!(" under role {role}")).unwrap_or_default();
-    let values: Vec<(i64, i64)> = trigger.values.iter().map(|v| (v.dimension_id, v.value_id)).collect();
-    let mut filed_as = value_pairs(store, &values)?;
     if let Some(priority) = trigger.priority {
         filed_as.push(format!("priority {}", priority.as_str()));
     }
@@ -1832,10 +1837,14 @@ fn trigger_line(store: &Store, trigger: &amenbo_core::model::AutomationTrigger) 
         Some(at) => format!("last filed one at {}", at.to_rfc3339_z()),
         None => "has filed none yet".to_string(),
     };
-    Ok(format!(
-        "trigger {} {state}: starts a run on its own{called} {when}, filing {task}{under}{filed_as} — {next}; {last}",
+    let refused = match &trigger.last_refused {
+        Some(r) => format!("; could not start one at {}: {}", r.at.to_rfc3339_z(), r.why.message),
+        None => String::new(),
+    };
+    format!(
+        "trigger {} {state}: starts a run on its own{called} {when}, filing {task}{under}{filed_as} — {next}; {last}{refused}",
         trigger.id
-    ))
+    )
 }
 
 /// An automation from before automations had roles, which is kept only to be written out, and what to
@@ -2623,5 +2632,49 @@ mod tests {
         );
         assert!(tail_lines("").is_empty());
         assert!(tail_lines("\n  \n").is_empty());
+    }
+
+    /// A trigger that could not start a run says when and why at the end of its line, in English; one
+    /// that has not failed since it last started one says nothing of it.
+    #[test]
+    fn a_trigger_that_could_not_start_says_when_and_why() {
+        use amenbo_core::model::{AutomationTrigger, Refused, TriggerRefusal, TriggerTask, TriggerWhen};
+        use amenbo_core::time::Timestamp;
+        let at = Timestamp::now();
+        let trigger = AutomationTrigger {
+            id: 3,
+            automation_id: 1,
+            enabled: true,
+            name: String::new(),
+            role_id: None,
+            when: TriggerWhen::Every { minutes: 60 },
+            condition: None,
+            script: None,
+            task: TriggerTask::File { path: "/tmp/next.md".into() },
+            values: Vec::new(),
+            priority: None,
+            next_at: at,
+            last_filed_at: None,
+            last_refused: None,
+            order_key: "a0".into(),
+            created_at: at,
+            updated_at: at,
+        };
+        assert!(super::trigger_text(&trigger, Vec::new()).ends_with("has filed none yet"));
+        let why = Refused {
+            code: "invalid_trigger_file_missing".into(),
+            message: "the file '/tmp/next.md' is not there".into(),
+            fields: Default::default(),
+            parts: Vec::new(),
+        };
+        let refused = AutomationTrigger { last_refused: Some(TriggerRefusal { at, why }), ..trigger };
+        assert!(
+            super::trigger_text(&refused, Vec::new()).ends_with(&format!(
+                "has filed none yet; could not start one at {}: the file '/tmp/next.md' is not there",
+                at.to_rfc3339_z()
+            )),
+            "{}",
+            super::trigger_text(&refused, Vec::new())
+        );
     }
 }

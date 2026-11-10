@@ -1778,6 +1778,13 @@ pub(crate) fn default_role_headcount() -> u32 {
     DEFAULT_ROLE_HEADCOUNT
 }
 
+/// **The most an automation's run limit may be written as** ([`Automation::run_limit`]). Like
+/// [`MAX_ROLE_HEADCOUNT`], it is there to turn away a number that cannot be meant, and it is checked where
+/// the limit is written (`ops::automation`), not by the store, so changing it needs no migration. A limit
+/// is there to bring the sessions going at once below what the roles' headcounts come to, and a hundred
+/// at once is past what one machine is meant to run. No limit is written as `None`, not as a large number.
+pub const MAX_RUN_LIMIT: u32 = 100;
+
 /// **The order a role takes its tasks in** ([`AutomationRole::take_order`]) — which of the tasks not
 /// started under it the built-in that takes a task reserves first. Four orders, and only these: the ops
 /// write a role's order as this type, and a word that is none of the four is refused where a row is
@@ -1978,6 +1985,13 @@ pub struct Automation {
     /// automation's, not part of a saved version.
     #[serde(default)]
     pub stopped: bool,
+    /// **The most runs of this automation that go at once**, across its roles (`AMB-D-1145`), counted
+    /// the way a role's headcount is: running or paused. `None` is no limit — as many as the roles'
+    /// headcounts come to. From 1 up to [`MAX_RUN_LIMIT`]. Unlike `archived`, it is part of a saved
+    /// version, as the headcounts are, and each launch copies it from the newest one
+    /// ([`AutomationLaunch::run_limit`]).
+    #[serde(default)]
+    pub run_limit: Option<u32>,
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -2048,10 +2062,10 @@ pub const MIN_TRIGGER_EVERY_MINUTES: u32 = 1;
 /// third is a run like any other.
 ///
 /// A time it answers no leaves nothing behind — no task, no run, no record — so the only things it
-/// keeps are `next_at` and `last_filed_at`, which move on only when a task is filed. A time it files one
-/// leaves a line in that task's timeline naming it by `name`
-/// ([`crate::activity_log::event::task_filed_by_trigger`]). Each trigger of an automation keeps its own:
-/// one filing a task moves no other one's on.
+/// keeps are `next_at` and `last_filed_at`, which move on only when a task is filed, and `last_refused`,
+/// written only when it was to start one and could not. A time it files one leaves a line in that
+/// task's timeline naming it by `name` ([`crate::activity_log::event::task_filed_by_trigger`]). Each
+/// trigger of an automation keeps its own: one filing a task moves no other one's on.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AutomationTrigger {
     pub id: i64,
@@ -2097,10 +2111,67 @@ pub struct AutomationTrigger {
     /// When it last filed a task, or `None` where it has filed none since it was written.
     #[serde(default)]
     pub last_filed_at: Option<Timestamp>,
+    /// **The last time it was to start a run and could not, and why** (`AMB-D-1136`) — a file it reads
+    /// or hands on not there (`AMB-D-1135`), a task it could not file, its programs giving no answer.
+    /// `None` where it has not failed since it last started one: a run started clears it. A time it
+    /// decides no, or waits for a seat, writes nothing here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_refused: Option<TriggerRefusal>,
     /// The order the automation's triggers are written in.
     pub order_key: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
+}
+
+/// **When a trigger last could not start a run, and why** ([`AutomationTrigger::last_refused`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TriggerRefusal {
+    pub at: Timestamp,
+    pub why: Refused,
+}
+
+/// **Why something was refused, kept as the error said it** — the code naming its sentence, the English
+/// sentence, the values the sentence is built from and the sentences it is composed of, so a screen
+/// writes it in its reader's language from its dictionary as it writes a refusal it is answered with
+/// (`AMB-D-413`). A part keeps no parts of its own.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Refused {
+    /// The code naming the sentence ([`crate::error::ErrorCode`]) — the error's family code where it
+    /// names none, and `error` for a part that names none.
+    pub code: String,
+    /// The sentence, in English.
+    pub message: String,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub fields: std::collections::BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parts: Vec<Refused>,
+}
+
+impl Refused {
+    /// What `error` says, kept.
+    pub fn of(error: &crate::error::Error) -> Self {
+        let fields = error.fields().map(fields_of).unwrap_or_default();
+        Refused {
+            code: error.code().to_string(),
+            message: error.message_en(),
+            fields,
+            parts: error
+                .parts()
+                .iter()
+                .map(|part| Refused {
+                    code: part.code().map_or("error", crate::error::ErrorCode::as_str).to_string(),
+                    message: part.en().to_string(),
+                    fields: fields_of(part.fields()),
+                    parts: Vec::new(),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// The values a sentence is built from, as [`Refused::fields`] keeps them.
+fn fields_of(fields: &crate::error::Fields) -> std::collections::BTreeMap<String, String> {
+    fields.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
 }
 
 /// **One value of the classification a trigger's task is filed with** ([`AutomationTrigger::values`]) —
@@ -2608,6 +2679,10 @@ pub struct AutomationVersion {
     /// existed holds `[]`.
     #[serde(default)]
     pub roles: String,
+    /// [`Automation::run_limit`] as it stood when this version was saved. `None` on a version saved
+    /// before automations had one.
+    #[serde(default)]
+    pub run_limit: Option<u32>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
@@ -2672,6 +2747,12 @@ pub struct AutomationLaunch {
     pub started_by_kind: Option<ActorKind>,
     #[serde(default)]
     pub ended_at: Option<Timestamp>,
+    /// **The most runs that go at once in this launch**, across its roles — the run limit copied from the
+    /// newest saved version when the launch opened ([`Automation::run_limit`]), then changed on the launch
+    /// alone ([`crate::ops::automation_run::launch_limit_set`]), as a role's headcount is
+    /// ([`AutomationLaunchRole`]). `None` is no limit.
+    #[serde(default)]
+    pub run_limit: Option<u32>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

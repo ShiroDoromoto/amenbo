@@ -2243,8 +2243,8 @@ fn launch_roles(conn: &Connection, launch_id: i64) -> Result<BTreeMap<i64, Autom
 }
 
 /// **The seats of one role of an automation** — as many as its headcount, each held by a run of it under
-/// way (`AMB-D-1123`). How many tasks are under way at once is decided role by role, never for the
-/// automation as a whole.
+/// way (`AMB-D-1123`). How many tasks are under way at once is decided role by role; the most runs that
+/// go at once in the whole automation only lies over the seats, and frees none ([`RunTotal`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Seats {
     /// The role ([`AutomationRun::role_id`]). `None` for an automation none of whose roles names where
@@ -2316,6 +2316,44 @@ fn seats_of(conn: &Connection, automation_id: i64, pic: &Picture) -> Result<Vec<
         });
     }
     Ok(seats)
+}
+
+/// **The runs of an automation under way, all its roles together, beside the most that go at once**
+/// (`AMB-D-1145`, [`run_total`]). It lies over the seats of each role (`AMB-D-1123`): a free seat starts
+/// no run while the automation is at its limit.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct RunTotal {
+    /// The runs `running` or `paused`, in any role or in none, oldest first — counted as a role's seats
+    /// count them. A test run is never kept, so it is never among them.
+    under_way: Vec<i64>,
+    /// The most that go at once. `None` is no limit: as many go as the headcounts come to.
+    limit: Option<u32>,
+}
+
+impl RunTotal {
+    /// **The limit, where no run more may start** — as many are under way as it, or more. `None` where
+    /// there is room, or no limit.
+    fn at_limit(&self) -> Option<u32> {
+        self.limit.filter(|&limit| self.under_way.len() >= limit as usize)
+    }
+
+    /// **How many runs are under way past the limit**, after it was lowered on the launch. Each goes as
+    /// its run comes to take its next task ([`over_run_limit`]); none is recorded, so raising the limit
+    /// again calls the rest off.
+    fn to_let_go(&self) -> usize {
+        self.limit.map_or(0, |limit| self.under_way.len().saturating_sub(limit as usize))
+    }
+}
+
+/// **The runs of an automation under way, beside the most that go at once** ([`RunTotal`]) — the limit
+/// the launch standing holds, changed on it alone ([`launch_limit_set`]), or, where none stands, the one
+/// `pic`, its newest saved version, gives: what a launch opened now would copy ([`join_launch`]).
+fn run_total(conn: &Connection, automation_id: i64, pic: &Picture) -> Result<RunTotal> {
+    let limit = match read::automation_launch_standing(conn, automation_id)? {
+        Some(launch) => launch.run_limit,
+        None => pic.run_limit(),
+    };
+    Ok(RunTotal { under_way: read::automation_run_ids_under_way(conn, automation_id)?, limit })
 }
 
 /// **The seat `run` sits in now**, counted from 1 — its place among the runs of its role under way,
@@ -2449,11 +2487,11 @@ pub struct TriggersDue {
 
 /// **Which triggers are due at `now`** — the first part of each, asked of every enabled trigger of an
 /// automation that may be started by one ([`read::automations_triggered`]), which leaves out a stopped
-/// one. One held back ([`TriggerHeld`]) — by its role stopped, by a failure it filed still open, by the
-/// runs under way in its role's seats, or by its condition — is not due: it would decide not to start,
-/// so a look need not open a write to hear it say so. One with a script — one that asks whether to
-/// start, or one that writes what it says — is put in `ask` rather than `due`: its program may run for
-/// hours, so it is not run here. It writes nothing: [`fire`] asks all of it again, in the transaction it
+/// one. One held back ([`TriggerHeld`]) — by its role stopped, by a failure it filed still open, by the runs
+/// under way in its role's seats or in the whole automation, or by its condition — is not due: it would
+/// decide not to start, so a look need not open a write to hear it say so. One with a script — one that asks
+/// whether to start, or one that writes what it says — is put in `ask` rather than `due`: its program may run
+/// for hours, so it is not run here. It writes nothing: [`fire`] asks all of it again, in the transaction it
 /// writes in.
 pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
     let mut found = TriggersDue::default();
@@ -2461,13 +2499,14 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
         let enabled = || automation.triggers.iter().filter(|t| t.enabled);
         let (seats, paused) = if enabled().any(|t| t.next_at <= now) {
             let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
-            (Some((seats_of(conn, automation.id, &pic)?, pic)), launch_paused(conn, automation.id)?)
+            let total = run_total(conn, automation.id, &pic)?;
+            (Some((seats_of(conn, automation.id, &pic)?, total, pic)), launch_paused(conn, automation.id)?)
         } else {
             (None, false)
         };
         for trigger in enabled() {
-            if let (true, Some((seats, pic))) = (trigger.next_at <= now, &seats) {
-                let room = room_of(seats, trigger_role(pic, trigger));
+            if let (true, Some((seats, total, pic))) = (trigger.next_at <= now, &seats) {
+                let room = room_of(seats, total, trigger_role(pic, trigger));
                 let failure = open_failure(conn, trigger.id)?;
                 // Its tasks are counted only once nothing else holds it back. A condition that no longer
                 // reads (an axis it names gone since) is left for `fire` to refuse, as a launch refused
@@ -2506,11 +2545,12 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 ///    (`AMB-D-1128`, [`open_failure`]), and not while the seats of its role say no (`AMB-D-1123`,
 ///    [`room_of`]): an `every` or a `tasks` waits while every seat of the role is
 ///    taken, where a task filed would have no run to go to, and an `idle` waits until none of them is.
-///    Nor while its condition does not hold. One with a script files one only where
-///    `said` was heard from those very scripts — the ones [`ask_trigger`] ran outside this write — so one
-///    rewritten since they were asked files nothing. A trigger not enabled files none, nor does one of an
-///    archived automation, a stopped one or one kept for export only, nor one taken away since it was
-///    found due.
+///    Nor while the automation has as many runs under way as the most that go at once (`AMB-D-1145`,
+///    [`RunTotal`]), whatever its role's seats. Nor while its condition does not hold. One with a script
+///    files one only where `said` was heard from those very scripts — the ones [`ask_trigger`] ran outside
+///    this write — so one rewritten since they were asked files nothing. A trigger not enabled files none,
+///    nor does one of an archived automation, a stopped one or one kept for export only, nor one taken away
+///    since it was found due.
 ///    One whose file or files were read for another trigger than the one that stands now — `from_file`
 ///    read from another path than it names, `files` naming other paths than it hands on, or other files
 ///    than its program left — starts nothing either. Nor, aimed at a role started by a trigger, while a
@@ -2546,8 +2586,8 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
 /// look asks again. A launch refused by its checks is an error, and the transaction it is written in
 /// takes nothing with it either. Only a run started moves this trigger's `next_at` on, counted from
 /// `now` rather than from when it was due, so an app that was closed for a day files one task when it
-/// comes back rather than a day's worth, and sets its `last_filed_at` to `now`. The automation's other
-/// triggers are left as they were.
+/// comes back rather than a day's worth, sets its `last_filed_at` to `now`, and clears the last time
+/// it could not start one ([`refused`]). The automation's other triggers are left as they were.
 pub fn fire(
     tx: &WriteTx<'_>,
     trigger_id: i64,
@@ -2562,7 +2602,8 @@ pub fn fire(
     let automation =
         read::automation(tx.conn(), automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
     let (pic, _) = definition(tx.conn(), &automation, ReadsFrom::Saved)?;
-    let room = room_of(&seats_of(tx.conn(), automation_id, &pic)?, trigger_role(&pic, &trigger));
+    let total = run_total(tx.conn(), automation_id, &pic)?;
+    let room = room_of(&seats_of(tx.conn(), automation_id, &pic)?, &total, trigger_role(&pic, &trigger));
     let paused = launch_paused(tx.conn(), automation_id)?;
     let failure = open_failure(tx.conn(), trigger.id)?;
     if held(&automation, &trigger, room, paused, failure, None, now).is_some() {
@@ -2595,7 +2636,7 @@ pub fn fire(
         },
     };
     if files_a_task(&pic, &trigger) && title.trim().is_empty() {
-        return Err(Error::invalid(untitled(&trigger.task)));
+        return Err(untitled(&trigger.task));
     }
     let started_into = trigger.role_id.filter(|&role| started_by_trigger(&pic, Some(role)));
     // The key counts only where the run is started straight into the role; one filing a task passes it
@@ -2650,11 +2691,27 @@ pub fn fire(
     let after = crate::model::AutomationTrigger {
         next_at: trigger.when.after(now),
         last_filed_at: Some(now),
+        last_refused: None,
         updated_at: now,
         ..trigger.clone()
     };
     crate::ops::emit_update(tx, record::automation_trigger(&trigger), record::automation_trigger(&after))?;
     Ok(Some(run))
+}
+
+/// **Keep on trigger `trigger_id` that it was to start a run at `now` and could not, and why**
+/// (`AMB-D-1136`) — what `why` says ([`crate::model::Refused::of`]), in place of the last time it could
+/// not. Written in a write of its own, as the one that would have started the run takes everything it
+/// wrote with it. Nothing else of the trigger moves: its `next_at` stays where it was, so it is asked
+/// again. A trigger taken away since writes nothing.
+pub fn refused(tx: &WriteTx<'_>, trigger_id: i64, why: &Error, now: Timestamp) -> Result<()> {
+    let Some(trigger) = read::automation_trigger(tx.conn(), trigger_id)? else { return Ok(()) };
+    let after = crate::model::AutomationTrigger {
+        last_refused: Some(crate::model::TriggerRefusal { at: now, why: crate::model::Refused::of(why) }),
+        updated_at: now,
+        ..trigger.clone()
+    };
+    crate::ops::emit_update(tx, record::automation_trigger(&trigger), record::automation_trigger(&after))
 }
 
 /// **What a trigger handed on to the run it started** ([`fire`]) — its name, and the title, notes, data,
@@ -2811,7 +2868,8 @@ pub(crate) fn end_with_no_task(tx: &WriteTx<'_>, run: AutomationRun) -> Result<A
 /// **The launch a run about to be made is started in** — the one standing for the automation, or a new
 /// one opened by `by` where none is ([`AutomationLaunch`]). A new one copies the headcount of each role
 /// of `pic`, the definition launched ([`crate::model::AutomationLaunchRole`]): from then on its seats
-/// are as many as it holds, changed on it alone ([`launch_headcount_set`]).
+/// are as many as it holds, changed on it alone ([`launch_headcount_set`]). It copies the run limit of
+/// `pic` the same way ([`launch_limit_set`]).
 ///
 /// **A paused launch is refused.** A person paused it, and a run started in it would not be paused.
 fn join_launch(
@@ -2835,6 +2893,7 @@ fn join_launch(
                 status: AutomationLaunchStatus::Running,
                 started_by_kind: by,
                 ended_at: None,
+                run_limit: pic.run_limit(),
                 created_at: now,
                 updated_at: now,
             };
@@ -2882,7 +2941,9 @@ pub fn launches_to_top_up(conn: &Connection, launches: &[i64]) -> Result<Vec<i64
 /// role starting anywhere else is never topped up, its run walking the picture once — a task of its own
 /// to take there, and no run of it standing about to take one, which would take the task found here
 /// ([`with_a_task`]). The seats are as many as the launch holds for each role ([`seats`]), so a
-/// headcount raised on the launch takes hold at once ([`launch_headcount_set`]).
+/// headcount raised on the launch takes hold at once ([`launch_headcount_set`]). Nor while the
+/// automation has as many runs under way as the most that go at once (`AMB-D-1145`, [`RunTotal`]),
+/// whatever seats are free: nothing is written of it, and the next look asks again.
 fn tops_up(conn: &Connection, launch_id: i64) -> Result<bool> {
     let Some(launch) = read::automation_launch(conn, launch_id)? else { return Ok(false) };
     if launch.status != AutomationLaunchStatus::Running {
@@ -2893,6 +2954,9 @@ fn tops_up(conn: &Connection, launch_id: i64) -> Result<bool> {
         return Ok(false);
     }
     let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+    if run_total(conn, automation.id, &pic)?.at_limit().is_some() {
+        return Ok(false);
+    }
     let seats = seats_of(conn, automation.id, &pic)?;
     let mut free: Vec<&Seats> = Vec::new();
     for s in seats.iter().filter(|s| s.free()) {
@@ -2989,6 +3053,30 @@ pub fn launch_headcounts(conn: &Connection, launch_id: i64) -> Result<Vec<RoleHe
         });
     }
     Ok(found)
+}
+
+/// **The most runs that go at once in one launch, beside its definition** ([`launch_limit`]) — read
+/// beside [`launch_headcounts`]. `None` is no limit, where as many go as the headcounts come to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub struct LaunchLimit {
+    /// The run limit the newest saved version gives — what the next launch copies.
+    pub defined: Option<u32>,
+    /// The run limit this launch holds. `defined` once the launch has ended.
+    pub limit: Option<u32>,
+}
+
+/// **The most runs that go at once in one launch, beside its definition** ([`LaunchLimit`]). Once the
+/// launch has ended, it is back at its definition, as each role's headcount is ([`launch_headcounts`]).
+pub fn launch_limit(conn: &Connection, launch_id: i64) -> Result<LaunchLimit> {
+    let launch = read::automation_launch(conn, launch_id)?.ok_or_else(|| not_found("launch", launch_id))?;
+    let automation =
+        read::automation(conn, launch.automation_id)?.ok_or_else(|| not_found("automation", launch.automation_id))?;
+    let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+    let defined = pic.run_limit();
+    Ok(match launch.status {
+        AutomationLaunchStatus::Ended => LaunchLimit { defined, limit: defined },
+        _ => LaunchLimit { defined, limit: launch.run_limit },
+    })
 }
 
 /// **How many of a role's tasks waiting to be taken a launch's pane names** — the rest it counts.
@@ -3240,6 +3328,44 @@ pub fn launch_headcount_reset(tx: &WriteTx<'_>, launch_id: i64, role_id: i64) ->
     launch_headcount_set(tx, launch_id, role_id, role.headcount)
 }
 
+/// **Change the most runs that go at once in this launch alone**, across its roles — from 1 up to
+/// [`crate::model::MAX_RUN_LIMIT`], or `None` for no limit (`AMB-D-1145`). The definition is left as it
+/// is, and once the launch ends the next one copies the definition again, as a headcount changed on a
+/// launch is ([`launch_headcount_set`]).
+///
+/// A limit the launch already holds is answered as it stands, and nothing is written. Refused for a
+/// launch that has ended.
+pub fn launch_limit_set(tx: &WriteTx<'_>, launch_id: i64, limit: Option<u32>) -> Result<AutomationLaunch> {
+    let limit = limit.map(crate::ops::automation::checked_run_limit).transpose()?;
+    let before = launch_under_way(tx.conn(), launch_id)?;
+    if before.run_limit == limit {
+        return Ok(before);
+    }
+    let after = AutomationLaunch { run_limit: limit, updated_at: Timestamp::now(), ..before.clone() };
+    crate::ops::emit_update(tx, record::automation_launch(&before), record::automation_launch(&after))?;
+    Ok(after)
+}
+
+/// **Put this launch back at its definition's run limit** — the one the newest saved version of its
+/// automation gives, as [`launch_limit_set`] would set it, and refused where it is.
+pub fn launch_limit_reset(tx: &WriteTx<'_>, launch_id: i64) -> Result<AutomationLaunch> {
+    let defined = launch_limit(tx.conn(), launch_id)?.defined;
+    launch_limit_set(tx, launch_id, defined)
+}
+
+/// **A launch that has not ended** — what its run limit is changed on. A launch that does not exist is
+/// not_found (`AMB-D-986`).
+fn launch_under_way(conn: &Connection, launch_id: i64) -> Result<AutomationLaunch> {
+    let launch = read::automation_launch(conn, launch_id)?.ok_or_else(|| not_found("launch", launch_id))?;
+    if launch.status == AutomationLaunchStatus::Ended {
+        return Err(Error::invalid(format!(
+            "launch '{launch_id}' has ended — the most runs that go at once is changed on a launch under \
+             way, and the next one copies the definition"
+        )));
+    }
+    Ok(launch)
+}
+
 /// **A launch not ended, and one role of the newest saved version of its automation** — what changing a
 /// headcount on the launch, or stopping the role taking tasks, is asked of. A launch or a role that
 /// does not exist is not_found (`AMB-D-986`).
@@ -3296,6 +3422,21 @@ pub(crate) fn role_held(conn: &Connection, run: &AutomationRun) -> Result<bool> 
     Ok(seats.iter().any(|s| s.under_way.contains(&run.id) && s.held))
 }
 
+/// **Whether a run is one still to go past the most that go at once** — the limit lowered on the launch
+/// below the runs of the automation under way ([`RunTotal::to_let_go`]). Asked as the run comes to the
+/// step that takes its next task, as a seat still to go is ([`over_headcount`]): such a run ends there
+/// without taking one ([`crate::ops::automation_step::Opened::LetGo`]). **Which runs go** is whichever
+/// come to their next task first, of any role, so no task under way is stopped; each one gone counts
+/// one fewer under way, so no more go than were past the limit. Nothing is recorded of it: a limit
+/// raised again before then leaves the rest in their seats.
+pub(crate) fn over_run_limit(conn: &Connection, run: &AutomationRun) -> Result<bool> {
+    let automation =
+        read::automation(conn, run.automation_id)?.ok_or_else(|| not_found("automation", run.automation_id))?;
+    let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+    let total = run_total(conn, automation.id, &pic)?;
+    Ok(total.under_way.contains(&run.id) && total.to_let_go() > 0)
+}
+
 /// **Whether the seats of a trigger's role leave it room to start a run** ([`room_of`]) — `under_way`
 /// being the runs `running` or `paused` in them, and `max` how many there are. An `every`, a `tasks`
 /// or a `script` starts one while a seat is free; an `idle` only once none of them is taken. With no
@@ -3318,21 +3459,30 @@ struct Room {
     max: u32,
     /// The role is stopped taking tasks for the launch standing ([`Seats::held`]).
     held: bool,
+    /// The runs of the whole automation under way, in any role ([`RunTotal::under_way`]).
+    total: usize,
+    /// The most runs of the automation that go at once ([`RunTotal::limit`]). `None` is no limit.
+    limit: Option<u32>,
+}
+
+impl Room {
+    /// The limit, where the automation is at it ([`RunTotal::at_limit`]).
+    fn at_limit(&self) -> Option<u32> {
+        self.limit.filter(|&limit| self.total >= limit as usize)
+    }
 }
 
 /// **The seats a trigger starts a run in** ([`Room`]) — those of `role`, the role it is aimed at
 /// (`AMB-D-1123`, [`trigger_role`]). Where no role names where its round starts, the one set of seats
-/// of the automation ([`seats_of`]); where `role` names none while others do, no seat.
-fn room_of(seats: &[Seats], role: Option<i64>) -> Room {
-    seats
+/// of the automation ([`seats_of`]); where `role` names none while others do, no seat. Beside them, the
+/// runs of the whole automation and the most that go at once (`total`).
+fn room_of(seats: &[Seats], total: &RunTotal, role: Option<i64>) -> Room {
+    let (under_way, max, held) = seats
         .iter()
         .find(|s| s.role_id.is_some() && s.role_id == role)
         .or_else(|| seats.iter().find(|s| s.role_id.is_none()))
-        .map_or(Room { under_way: 0, max: 0, held: false }, |s| Room {
-            under_way: s.under_way.len(),
-            max: s.headcount,
-            held: s.held,
-        })
+        .map_or((0, 0, false), |s| (s.under_way.len(), s.headcount, s.held));
+    Room { under_way, max, held, total: total.under_way.len(), limit: total.limit }
 }
 
 /// **The role a trigger is aimed at** — its own, or the first of `pic` where it names none, as
@@ -3385,13 +3535,16 @@ pub enum TriggerHeld {
     /// The seats of its role leave it no room ([`has_room`]): an `idle` waits until none is taken, the
     /// others while `under_way`, the runs in them, is as many as `max`, how many seats there are.
     NoRoom { under_way: usize, max: u32 },
+    /// The automation has as many runs under way as the most that go at once (`AMB-D-1145`,
+    /// [`RunTotal`]), whatever its role's seats: `under_way`, its runs in every role, is `limit` or more.
+    AtRunLimit { under_way: usize, limit: u32 },
 }
 
 /// **The first thing that holds `trigger` back at `now`** ([`TriggerHeld`]), or `None` where nothing
-/// does — `room` being its role's seats ([`room_of`]), `paused` whether its launch standing is
-/// paused, and `failure` the task filed for a run it started that is still open ([`open_failure`]). Its
-/// condition is weighed only where it is handed counted:
-/// `None` leaves it out, for a reader that counts the tasks only once nothing cheaper has said no.
+/// does — `room` being its role's seats and the automation's runs beside its limit ([`room_of`]), `paused`
+/// whether its launch standing is paused, and `failure` the task filed for a run it started that is still
+/// open ([`open_failure`]). Its condition is weighed only where it is handed counted: `None` leaves it out,
+/// for a reader that counts the tasks only once nothing cheaper has said no.
 fn held(
     automation: &Automation,
     trigger: &crate::model::AutomationTrigger,
@@ -3418,7 +3571,7 @@ fn held(
     } else if !has_room(&trigger.when, room.under_way, room.max) {
         Some(TriggerHeld::NoRoom { under_way: room.under_way, max: room.max })
     } else {
-        None
+        room.at_limit().map(|limit| TriggerHeld::AtRunLimit { under_way: room.total, limit })
     }
 }
 
@@ -3497,14 +3650,16 @@ pub struct TriggerCheck {
 /// **Ask one trigger whether it would file a task at `now`, writing nothing** — every part [`fire`]
 /// asks but its programs: whether it is enabled, whether its automation starts a run, whether the
 /// launch standing is paused, whether its role is stopped, whether a failure it filed is open, how many
-/// tasks its condition counts, whether it is due, and whether the seats of its role leave it room. Its
-/// programs may run for hours, so they are left to [`trigger_try`].
+/// tasks its condition counts, whether it is due, whether the seats of its role leave it room, and
+/// whether the automation is at the most runs that go at once. Its programs may run for hours, so they
+/// are left to [`trigger_try`].
 pub fn trigger_check(conn: &Connection, trigger_id: i64, now: Timestamp) -> Result<TriggerCheck> {
     let trigger = read::automation_trigger(conn, trigger_id)?.ok_or_else(|| not_found("automation trigger", trigger_id))?;
     let automation =
         read::automation(conn, trigger.automation_id)?.ok_or_else(|| not_found("automation", trigger.automation_id))?;
     let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
-    let room = room_of(&seats_of(conn, automation.id, &pic)?, trigger_role(&pic, &trigger));
+    let total = run_total(conn, automation.id, &pic)?;
+    let room = room_of(&seats_of(conn, automation.id, &pic)?, &total, trigger_role(&pic, &trigger));
     let paused = launch_paused(conn, automation.id)?;
     let failure = open_failure(conn, trigger.id)?;
     let condition = condition_count(conn, automation.project_id, &trigger)?;
@@ -3643,7 +3798,7 @@ fn tried(
         return TriggerTried::SaidNothing { why: why.to_string() };
     }
     if files_a_task && said.title.trim().is_empty() {
-        return TriggerTried::SaidNothing { why: untitled(&trigger.task) };
+        return TriggerTried::SaidNothing { why: untitled(&trigger.task).to_string() };
     }
     let files = said.files.iter().map(|path| attached_name(path)).chain(left).collect();
     TriggerTried::Files {
@@ -3962,9 +4117,7 @@ pub fn read_trigger_files(
             let filename = attached_name(path);
             let mime = crate::blob::mime_from_filename(&filename);
             limits.check_per_file(mime, meta.len())?;
-            let blob = blobs
-                .ingest_path(at)
-                .map_err(|e| Error::invalid(format!("the file '{path}' could not be read: {e}")))?;
+            let blob = blobs.ingest_path(at).map_err(|e| unreadable(path, &e))?;
             Ok(TriggerFileRead { path: Some(path.clone()), filename, mime: mime.map(str::to_string), blob })
         })
         .collect()
@@ -3974,13 +4127,30 @@ pub fn read_trigger_files(
 /// at `path`, and otherwise why not, in a sentence that names it ([`read_trigger_files`], [`tried`]).
 fn trigger_file_there(path: &str) -> Result<std::fs::Metadata> {
     let meta = std::fs::metadata(path).map_err(|e| match e.kind() {
-        std::io::ErrorKind::NotFound => Error::invalid(format!("the file '{path}' is not there")),
-        _ => Error::invalid(format!("the file '{path}' could not be read: {e}")),
+        std::io::ErrorKind::NotFound => Error::Invalid(
+            Msg::new(format!("the file '{path}' is not there"))
+                .coded(ErrorCode::InvalidTriggerFileMissing)
+                .with("path", path),
+        ),
+        _ => unreadable(path, &e),
     })?;
     if !meta.is_file() {
-        return Err(Error::invalid(format!("'{path}' is not a regular file")));
+        return Err(Error::Invalid(
+            Msg::new(format!("'{path}' is not a regular file"))
+                .coded(ErrorCode::InvalidTriggerFileNotRegular)
+                .with("path", path),
+        ));
     }
     Ok(meta)
+}
+
+/// **Why a file a trigger reads or hands on could not be read**, in a sentence that names it.
+fn unreadable(path: &str, e: &dyn std::fmt::Display) -> Error {
+    Error::Invalid(
+        Msg::new(format!("the file '{path}' could not be read: {e}"))
+            .coded(ErrorCode::InvalidTriggerFileUnreadable)
+            .with("path", path),
+    )
 }
 
 /// **What a trigger hands on, as it said it this time** — the title, notes, data as JSON, the full
@@ -4011,11 +4181,13 @@ pub struct TriggerFileSaid {
 
 /// **Read the file a trigger's task is read from, as it stands now** (`AMB-D-1134`) — `None` for a task
 /// not read from a file. Run outside any write, as [`read_trigger_files`] is, and handed to [`fire`].
-/// `Err` is why it says nothing, in a sentence ([`task_from_file`]); the trigger starts nothing then.
-pub fn read_trigger_file(task: &crate::model::TriggerTask) -> std::result::Result<Option<TriggerFileSaid>, String> {
+/// `Err` is why it says nothing ([`task_from_file`]) — one not there named by its own code
+/// (`AMB-D-1135`); the trigger starts nothing then.
+pub fn read_trigger_file(task: &crate::model::TriggerTask) -> Result<Option<TriggerFileSaid>> {
     match task {
         crate::model::TriggerTask::File { path } => {
-            Ok(Some(TriggerFileSaid { path: path.clone(), said: task_from_file(path)? }))
+            trigger_file_there(path)?;
+            Ok(Some(TriggerFileSaid { path: path.clone(), said: task_from_file(path).map_err(Error::invalid)? }))
         }
         crate::model::TriggerTask::Fixed { .. }
         | crate::model::TriggerTask::Script { .. }
@@ -4105,12 +4277,24 @@ fn said_in_lines(text: &str) -> TriggerSaid {
 
 /// **Why a trigger that files a task starts nothing with a blank title** (`AMB-D-1133`) — one aimed at a
 /// role started by a task, or at no role, files a task, and the task needs one ([`fire`], [`tried`]).
-fn untitled(task: &crate::model::TriggerTask) -> String {
+fn untitled(task: &crate::model::TriggerTask) -> Error {
     let why = "a trigger aimed at a role started by a task, or at no role, files a task, and the task needs a title";
-    match task {
-        crate::model::TriggerTask::File { path } => format!("{why}, which the file '{path}' does not give"),
-        _ => why.to_string(),
-    }
+    Error::Invalid(match task {
+        crate::model::TriggerTask::File { path } => Msg::new(format!("{why}, which the file '{path}' does not give"))
+            .coded(ErrorCode::InvalidTriggerFileUntitled)
+            .with("path", path),
+        _ => Msg::new(why).coded(ErrorCode::InvalidTriggerUntitled),
+    })
+}
+
+/// **Why a trigger whose programs gave no answer starts nothing** — `why` is what [`ask_trigger`] said,
+/// or that the answer was lost before it came. Kept on the trigger ([`refused`]) by whoever ran them.
+pub fn unanswered(why: &str) -> Error {
+    Error::Invalid(
+        Msg::new(format!("the trigger's script gave no answer: {why}"))
+            .coded(ErrorCode::InvalidTriggerScriptUnanswered)
+            .with("why", why),
+    )
 }
 
 /// **Whether `trigger` files a task when it starts a run** — aimed at no role, or at one not started by
@@ -4197,14 +4381,14 @@ enum Sit {
 /// ([`start`]). Asked last, once nothing refuses the launch: an automation that could not be launched
 /// opens no launch to fill.
 ///
-/// Unless `sit` is a test run's, the run sits in a free seat ([`seats`]) of the roles `sit` names —
-/// refused where none has one — and joins the launch standing for the automation, or opens one
-/// ([`join_launch`]); a paused launch is refused. A launch opened for seats that wait stands with no
-/// run, and the run started in it once a task turns up ([`top_up`]) joins it. **The run sits in the seat
-/// of the role the task handed was filed under** where that seat is free, so it takes that task. A test
-/// run sits in the seat it names, free or not, and joins no launch. **It starts where the round of its
-/// seat's role starts** ([`start_of`], `AMB-D-1123`), and is copied down marking that spot
-/// ([`copy_down`]).
+/// Unless `sit` is a test run's, the run sits in a free seat ([`seats`]) of the roles `sit` names — refused
+/// where none has one, and where the automation already has as many runs under way as the most that go at
+/// once (`AMB-D-1145`, [`RunTotal`]) — and joins the launch standing for the automation, or opens one
+/// ([`join_launch`]); a paused launch is refused. A launch opened for seats that wait stands with no run, and
+/// the run started in it once a task turns up ([`top_up`]) joins it. **The run sits in the seat of the role
+/// the task handed was filed under** where that seat is free, so it takes that task. A test run sits in the
+/// seat it names, free or not, and joins no launch. **It starts where the round of its seat's role starts**
+/// ([`start_of`], `AMB-D-1123`), and is copied down marking that spot ([`copy_down`]).
 #[allow(clippy::too_many_arguments)]
 fn launch_asking(
     tx: &WriteTx<'_>,
@@ -4297,6 +4481,23 @@ fn launch_asking(
             Msg::new(format!(
                 "automation '{}' already has {max} run(s) under way, every seat of its roles taken \
                  ({runs}) — wait for one to end before launching it again",
+                automation.name
+            ))
+            .coded(ErrorCode::InvalidAutomationRunLimit)
+            .with("automation", &automation.name)
+            .with("max", max)
+            .with("runs", runs),
+        ));
+    }
+    // The most that go at once lies over the seats (`AMB-D-1145`): a free seat starts no run while the
+    // automation is at it. A test run is not held to it, as it is not to the seats.
+    let total = run_total(tx.conn(), automation_id, &pic)?;
+    if let Some(max) = total.at_limit().filter(|_| limited) {
+        let runs = total.under_way.iter().map(i64::to_string).collect::<Vec<_>>().join(", ");
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "automation '{}' already has {max} run(s) under way, the most it may have at once ({runs}) — \
+                 wait for one to end before launching it again",
                 automation.name
             ))
             .coded(ErrorCode::InvalidAutomationRunLimit)
@@ -7854,6 +8055,80 @@ mod tests {
         });
     }
 
+    /// **A launch at the most runs that go at once is refused, whatever seats are free** (`AMB-D-1145`) —
+    /// the runs counted in every role, as many as the launch standing holds. A test run is not held to
+    /// it. With the limit lifted, the free seat takes a run again.
+    #[test]
+    fn a_launch_at_the_run_limit_is_refused_whatever_seats_are_free() {
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            crate::ops::test_support::room_for(tx, automation.id, 3);
+            let startable = claude();
+            let first = launch(tx, automation.id, &here(&startable)).expect("the first");
+            let launch_id = first.launch_id.expect("a launch");
+            let second = launch(tx, automation.id, &here(&startable)).expect("no limit yet");
+            launch_limit_set(tx, launch_id, Some(2)).expect("two at once");
+
+            let err =
+                launch(tx, automation.id, &here(&startable)).expect_err("a seat is free, but two is the most");
+            let Error::Invalid(msg) = err else { panic!("a launch at the limit is invalid") };
+            assert_eq!(msg.code(), Some(ErrorCode::InvalidAutomationRunLimit));
+            assert_eq!(
+                msg.fields().iter().collect::<Vec<_>>(),
+                vec![
+                    ("automation", automation.name.as_str()),
+                    ("max", "2"),
+                    ("runs", format!("{}, {}", first.id, second.id).as_str()),
+                ],
+            );
+
+            launch_limit_set(tx, launch_id, None).expect("no limit");
+            launch(tx, automation.id, &here(&startable)).expect("the free seat takes a run");
+
+            launch_limit_set(tx, launch_id, Some(1)).expect("below the runs under way");
+            let role = rehearsal_seats(tx.conn(), automation.id, ReadsFrom::Saved).expect("seats")[0].0;
+            let tried = launch_in_seat_past_the_limit(
+                tx,
+                automation.id,
+                &here(&startable),
+                &HandedAtLaunch::default(),
+                ReadsFrom::Saved,
+                role,
+            )
+            .expect("a test run is not held to it");
+            assert_eq!(tried.launch_id, None, "and joins no launch");
+        });
+    }
+
+    /// **A trigger waits while the automation is at the most runs that go at once** (`AMB-D-1145`),
+    /// a seat of its own role free or not: it is not due, starts no run, and says why.
+    #[test]
+    fn a_trigger_waits_while_its_automation_is_at_the_run_limit() {
+        with_tx(|tx| {
+            let (automation, role, _) = with_a_role_started_by_a_trigger(tx);
+            let trigger = aimed_at(tx, &automation, role.id);
+            let due = trigger.next_at;
+            let startable = claude();
+            let by = here(&startable);
+            let run = fire(tx, trigger.id, &by, due, None, None, &[]).expect("fire").expect("a run");
+            let launch = run.launch_id.expect("a launch");
+            let then = crate::model::TriggerWhen::Every { minutes: 24 * 60 }.after(due);
+            launch_headcount_set(tx, launch, role.id, 2).expect("a second seat");
+            assert_eq!(trigger_check(tx.conn(), trigger.id, then).expect("check").held, None, "a seat is free");
+
+            launch_limit_set(tx, launch, Some(1)).expect("one at once");
+            assert_eq!(
+                trigger_check(tx.conn(), trigger.id, then).expect("check").held,
+                Some(TriggerHeld::AtRunLimit { under_way: 1, limit: 1 }),
+            );
+            assert!(triggers_due(tx.conn(), then).expect("ask").due.is_empty(), "not due at the limit");
+            assert!(fire(tx, trigger.id, &by, then, None, None, &[]).expect("fire").is_none());
+
+            launch_limit_reset(tx, launch).expect("back to no limit");
+            assert!(fire(tx, trigger.id, &by, then, None, None, &[]).expect("fire").is_some());
+        });
+    }
+
     /// **What was handed is refused before the most runs under way is**: a launch handed the wrong
     /// thing would not go through with room to spare either, so that is the refusal it gets.
     #[test]
@@ -8435,7 +8710,9 @@ mod tests {
         let tasks = TriggerWhen::Tasks;
         let idle = TriggerWhen::Idle;
 
-        let room = |under_way, max| Room { under_way, max, held: false };
+        let none = RunTotal { under_way: vec![10, 11, 12], limit: None };
+        let room_of = |seats: &[Seats], role| room_of(seats, &none, role);
+        let room = |under_way, max| Room { under_way, max, held: false, total: 3, limit: None };
         assert_eq!(room_of(&by_role, Some(1)), room(2, 2));
         assert!(!has_room(&tasks, 2, 2), "its own seats are all taken");
         assert_eq!(room_of(&by_role, Some(2)), room(1, 2));

@@ -42,8 +42,8 @@ use crate::model::{
     AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
     AutomationRunPass, AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
     AutomationFailureValue, AutomationStep, AutomationStoppedReason, AutomationTrigger, AutomationTriggerValue,
-    AutomationVersion,
-    AutomationWire, Database, RoleStart, TakeOrder, TriggerCondition, TriggerTask, TriggerWhen,
+    AutomationVersion, AutomationWire, Database, RoleStart, TakeOrder, TriggerCondition, TriggerRefusal, TriggerTask,
+    TriggerWhen,
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
     DecisionMadeIn, DecisionStatus, DecisionTaskLink,
     Dimension, DimensionAppliesTo, DimensionCardinality,
@@ -614,6 +614,14 @@ pub(super) fn automation_trigger_row(r: &Row) -> rusqlite::Result<AutomationTrig
         priority: enum_opt(r, C.task_priority, Priority::parse)?,
         next_at: ts(r, C.next_at)?,
         last_filed_at: ts_opt(r, C.last_filed_at)?,
+        last_refused: match (ts_opt(r, C.refused_at)?, get(r, C.refused_why)?) {
+            (None, None) => None,
+            (Some(at), Some(why)) => Some(TriggerRefusal {
+                at,
+                why: serde_json::from_str(&why).map_err(|e| bad(format!("bad refused_why {why:?}: {e}")))?,
+            }),
+            (at, why) => return Err(bad(format!("bad trigger refusal at {at:?} why {why:?}"))),
+        },
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,
@@ -666,10 +674,17 @@ pub(super) fn automation_row(r: &Row) -> rusqlite::Result<Automation> {
         failure_values: Vec::new(),
         triggers: Vec::new(),
         stopped: get(r, C.stopped)?,
+        run_limit: run_limit(get(r, C.run_limit)?)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,
     })
+}
+
+/// A run limit as its column holds it ([`Automation::run_limit`]): NULL for none, and a number that does
+/// not fit a `u32` refused as a bad row, as a headcount's is.
+fn run_limit(n: Option<i64>) -> rusqlite::Result<Option<u32>> {
+    n.map(|n| u32::try_from(n).map_err(|_| bad(format!("bad run_limit {n}")))).transpose()
 }
 
 pub(super) fn automation_placement_row(r: &Row) -> rusqlite::Result<AutomationPlacement> {
@@ -878,6 +893,7 @@ pub(super) fn automation_launch_row(r: &Row) -> rusqlite::Result<AutomationLaunc
         status: enum_req(r, C.status, AutomationLaunchStatus::parse)?,
         started_by_kind: enum_opt(r, C.started_by_kind, ActorKind::parse)?,
         ended_at: ts_opt(r, C.ended_at)?,
+        run_limit: run_limit(get(r, C.run_limit)?)?,
         created_at,
         updated_at,
     })
@@ -933,6 +949,7 @@ pub(super) fn automation_version_row(r: &Row) -> rusqlite::Result<AutomationVers
         edges: get(r, C.edges)?,
         wires: get(r, C.wires)?,
         roles: get(r, C.roles)?,
+        run_limit: run_limit(get(r, C.run_limit)?)?,
         created_at,
         updated_at,
     })

@@ -4179,7 +4179,7 @@ mod tests {
             when: TriggerWhen::Every { minutes: 60 },
             condition: None,
             script: None,
-            task: TriggerTask::Fixed { title: "見る".into(), notes: "メモ".into(), data: None, files: Vec::new() },
+            task: TriggerTask::Fixed { title: "見る".into(), notes: "メモ".into(), data: None, files: Vec::new(), key: None },
             next_at,
             last_filed_at: None,
             order_key: "a0".into(),
@@ -4233,6 +4233,7 @@ mod tests {
             notes: String::new(),
             data: Some(r#"{"issue": 123}"#.into()),
             files: vec!["/tmp/brief.md".into()],
+            key: None,
         };
         assert_eq!(
             json(AutomationTrigger { task: handing, ..base })["task"],
@@ -4346,7 +4347,7 @@ mod tests {
                 when: TriggerWhen::Every { minutes: 30 },
                 condition: None,
                 script: None,
-                task: NewTriggerTask::Fixed { title: "見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: NewTriggerTask::Fixed { title: "見る".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
             },
         );
         let full = read(serde_json::json!({
@@ -4385,6 +4386,7 @@ mod tests {
                 notes: String::new(),
                 data: r#"{"issue": 123}"#.into(),
                 files: vec!["/tmp/brief.md".into()],
+                key: String::new(),
             },
             "a fixed one's data and files are read where the screen writes them",
         );

@@ -1578,6 +1578,13 @@ pub const STEPS: &[Step] = &[
         // have, so no row is written. No task is touched.
         apply: Apply::Custom(admit_what_the_asking_script_writes),
     },
+    Step {
+        to: 142,
+        name: "add automation_trigger.task_key and automation_run.start_key, the key a trigger hands on and the one a run was started with",
+        // **Every trigger hands on no key, and every run was started with none** — so no run under way
+        // holds a trigger back. No task is touched.
+        apply: Apply::Custom(add_the_key_a_trigger_hands_on),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -2207,6 +2214,20 @@ fn admit_what_the_asking_script_writes(ctx: &Ctx<'_>) -> Result<()> {
     wrote?;
     if column_names(ctx.tx, "automation_trigger")? != before {
         return Err(super::StoreEngineError::UnrecognisedDdl { table: "automation_trigger", expected: NARROW });
+    }
+    Ok(())
+}
+
+/// v142: `automation_trigger.task_key`, the key a trigger written with what it hands on hands on, and
+/// `automation_run.start_key`, the key a trigger started a run with (`AMB-D-1137`). Both NULL on every
+/// row already there: no trigger handed on a key, and no run kept one. Added only where they are not
+/// there yet, v68's guard and for v53's reason.
+fn add_the_key_a_trigger_hands_on(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    for (table, column) in [("automation_trigger", "task_key"), ("automation_run", "start_key")] {
+        if !column_names(tx, table)?.iter().any(|c| c == column) {
+            tx.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} TEXT;"))?;
+        }
     }
     Ok(())
 }
@@ -14356,7 +14377,7 @@ mod tests {
     }
 
     /// v139: a trigger and a run written at v138 are kept as they were, the trigger handing on no data
-    /// and no file, and the run handed nothing by a trigger — read back through the registry.
+    /// and no file, and the run handed nothing by a trigger.
     #[test]
     fn a_trigger_and_a_run_are_kept_as_they_were_at_v139() {
         let dir = scratch("trigger-hands-on");
@@ -14378,17 +14399,22 @@ mod tests {
         run(&engine, &dir, steps_through(139), &mut crate::progress::ignore).unwrap();
 
         assert_eq!(engine.format_version().unwrap(), 139);
-        let trigger = crate::store_engine::read::automation_trigger(engine.conn(), 1).unwrap().expect("the trigger");
+        // Both are read by their columns rather than through the registry, which names v140's and
+        // v142's too.
+        type Handing = (String, Option<String>, Option<String>, Option<String>, Option<String>);
+        let trigger: Handing = engine
+            .conn()
+            .query_row(
+                "SELECT task_kind, task_title, task_notes, task_data, task_files FROM automation_trigger WHERE id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+            )
+            .unwrap();
         assert_eq!(
-            trigger.task,
-            crate::model::TriggerTask::Fixed {
-                title: "在庫を見る".into(),
-                notes: "メモ".into(),
-                data: None,
-                files: Vec::new(),
-            },
+            trigger,
+            ("fixed".into(), Some("在庫を見る".into()), Some("メモ".into()), None, None),
+            "hands on no data and no file",
         );
-        // The run is read by its columns rather than through the registry, which names v140's too.
         type Started = (Option<String>, Option<String>, Option<String>, Option<String>);
         let run: Started = engine
             .conn()
@@ -14441,7 +14467,7 @@ mod tests {
     }
 
     /// v141: a trigger written at v140 keeps its kind, and a trigger may then hand on what its own
-    /// script writes — read back through the registry.
+    /// script writes.
     #[test]
     fn a_trigger_may_hand_on_what_its_script_writes_at_v141() {
         let dir = scratch("trigger-asked");
@@ -14468,17 +14494,17 @@ mod tests {
 
         assert_eq!(engine.format_version().unwrap(), 141);
         engine.conn().execute_batch(&asked).unwrap();
-        let read = |id| crate::store_engine::read::automation_trigger(engine.conn(), id).unwrap().expect("the trigger");
-        assert_eq!(
-            read(1).task,
-            crate::model::TriggerTask::Fixed {
-                title: "在庫を見る".into(),
-                notes: "メモ".into(),
-                data: None,
-                files: Vec::new(),
-            },
-        );
-        assert_eq!(read(2).task, crate::model::TriggerTask::Asked);
+        // Read by its columns rather than through the registry, which names v142's too.
+        let read = |id: i64| -> (String, Option<String>) {
+            engine
+                .conn()
+                .query_row("SELECT task_kind, task_title FROM automation_trigger WHERE id = ?1", [id], |r| {
+                    Ok((r.get(0)?, r.get(1)?))
+                })
+                .unwrap()
+        };
+        assert_eq!(read(1), ("fixed".into(), Some("在庫を見る".into())));
+        assert_eq!(read(2), ("asked".into(), None));
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -14494,6 +14520,56 @@ mod tests {
         let count: i64 =
             engine.conn().query_row("SELECT COUNT(*) FROM automation_trigger", [], |r| r.get(0)).unwrap();
         assert_eq!(count, 0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v142: a trigger and a run written at v141 are kept as they were, the trigger handing on no key
+    /// and the run started with none — read back through the registry — and both may then carry one.
+    #[test]
+    fn a_trigger_and_a_run_carry_no_key_until_given_one_at_v142() {
+        let dir = scratch("trigger-key");
+        let engine = store_at(&dir, 141);
+        let at = "2026-11-10T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, created_at, updated_at) VALUES (1, 1, 'auto', '{at}', '{at}');
+                 INSERT INTO automation_trigger (id, automation_id, enabled, name, when_kind, every_minutes, task_kind,
+                                                 task_title, task_notes, task_data, next_at, order_key, created_at, updated_at)
+                 VALUES (1, 1, 1, '毎朝', 'every', 60, 'fixed', '在庫を見る', 'メモ', '{{"a":1}}', '{at}', 'm', '{at}', '{at}');
+                 INSERT INTO automation_run (id, automation_id, project_id, status, started_at, start_trigger, start_title,
+                                             trigger_id, created_at, updated_at)
+                 VALUES (1, 1, 1, 'running', '{at}', '毎朝', '在庫を見る', 1, '{at}', '{at}');"#
+            ))
+            .unwrap();
+
+        run(&engine, &dir, steps_through(142), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 142);
+        let trigger = crate::store_engine::read::automation_trigger(engine.conn(), 1).unwrap().expect("the trigger");
+        assert_eq!(
+            trigger.task,
+            crate::model::TriggerTask::Fixed {
+                title: "在庫を見る".into(),
+                notes: "メモ".into(),
+                data: Some(r#"{"a":1}"#.into()),
+                files: Vec::new(),
+                key: None,
+            },
+        );
+        let run = crate::store_engine::read::automation_run(engine.conn(), 1).unwrap().expect("the run");
+        assert_eq!(
+            (run.start_trigger.as_deref(), run.start_title.as_deref(), run.trigger_id, run.start_key),
+            (Some("毎朝"), Some("在庫を見る"), Some(1), None),
+        );
+        engine
+            .conn()
+            .execute_batch(
+                "UPDATE automation_trigger SET task_key = 'issue-123' WHERE id = 1;
+                 UPDATE automation_run SET start_key = 'issue-123' WHERE id = 1;",
+            )
+            .unwrap();
         std::fs::remove_dir_all(&dir).ok();
     }
 

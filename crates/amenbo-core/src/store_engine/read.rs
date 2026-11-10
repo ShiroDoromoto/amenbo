@@ -7444,6 +7444,24 @@ pub fn automation_run_ids_under_way_as(conn: &Connection, automation_id: i64, ro
     select_ids(conn, R.id, Some(&pred))
 }
 
+/// [`automation_run_ids_under_way_as`], of the runs a trigger started there with the key `key`
+/// ([`crate::model::AutomationRun::start_key`], `AMB-D-1137`). A run started with no key is never among
+/// them.
+pub fn automation_run_ids_under_way_with_key(
+    conn: &Connection,
+    automation_id: i64,
+    role_id: i64,
+    key: &str,
+) -> Result<Vec<i64>> {
+    use crate::model::AutomationRunStatus as S;
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    let pred = Pred::eq(R.automation_id, automation_id)
+        .and(Pred::eq(R.role_id, role_id))
+        .and(Pred::eq(R.start_key, key))
+        .and(Pred::is_in(R.status, [S::Running.as_str(), S::Paused.as_str()]));
+    select_ids(conn, R.id, Some(&pred))
+}
+
 /// **The tasks filed where runs this trigger started failed** ([`crate::model::AutomationRun::incident_task_id`]),
 /// the newest run first. A task deleted since names nothing, so it is not among them.
 pub fn automation_trigger_incidents(conn: &Connection, trigger_id: i64) -> Result<Vec<i64>> {

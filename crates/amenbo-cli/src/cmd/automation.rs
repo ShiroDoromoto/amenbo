@@ -642,7 +642,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 (false, _) => format!("✓ Automation {} ({}) starts new rounds again", a.name, a.id),
                 (true, true) => format!("✓ Stopped automation {} ({}) — it starts no new round", a.name, a.id),
                 (true, false) => format!(
-                    "✓ Stopped automation {} ({}) — it starts no new round; paused run(s) waiting for room to take a task: {}",
+                    "✓ Stopped automation {} ({}) — it starts no new round; paused run(s) waiting to take a task: {}",
                     a.name,
                     a.id,
                     done.paused.iter().map(|r| r.id.to_string()).collect::<Vec<_>>().join(", ")

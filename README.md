@@ -40,7 +40,8 @@ which an agent writes through the CLI and you read in the desktop app.
   Taking a task, filing one, closing it, fetching what a run starts from, splitting by a
   classification and cutting a worktree are Amenbo's own built-ins, so a prompt is left with what
   needs an agent's judgement. A run starts from a task it takes: one a person files under one of
-  its roles, one a trigger files, or one filed from what a run goes and fetches.
+  its roles, one a trigger files, or one filed from what a run goes and fetches. A role that starts
+  by a trigger takes none: the trigger starts its run straight, handing it a title, notes, data and files.
   A run opens one terminal per step and reads back what the step reports, so what has been
   done and what comes next is in the store rather than in an agent's memory of it.
 
@@ -374,16 +375,19 @@ amenbo decision list --filter "status:decided superseded:no" --with-body --limit
 # own, never put inside an action you wrote. A prompt is left with what needs an agent's judgement:
 # the work itself, a review, how a PR and its CI are handled. A name in <angle brackets> below is a
 # built-in's own, as `builtin-list` prints it.
-# Each role's round starts at take_task, which takes a task of that role its filter finds; a launch
-# is refused while a role starts its round nowhere or anywhere else. `start` hands the run nothing:
-# work is a task filed under a role (`task add --role`, its files by `task attach`), for that
-# take_task to take. fetch goes to a URL, a file path or a command set beforehand; placed in a round, what it
-# fetches is filed through make_task.
+# A role starts its round one of two ways (`role-add --starts-by`). One started by a task starts it at
+# take_task, which takes a task of that role its filter finds and waits for one to turn up; a take_task
+# placed anywhere else is refused by the launch check. One started by a trigger starts it anywhere but
+# take_task, when a trigger aimed at it fires, holding no task. A launch is refused while a role starts
+# its round nowhere. `start` hands the run nothing: work is a task filed under a role (`task add --role`,
+# its files by `task attach`), for that take_task to take, or what a trigger hands on. fetch goes to a URL,
+# a file path or a command set beforehand; placed in a round, what it fetches is filed through make_task.
+# A way out of split_by_dim with no line drawn from it refuses no save and no launch: a task with that
+# value stops the run there, so leave such tasks to the filter of the take_task.
 amenbo automation add --name "Work the queue"          # the picture itself; what every step is told first is Amenbo's own
 amenbo automation builtin-list                         # take_task, make_task, fetch, split_by_dim, cut_worktree, fold_worktree, close_task, hand_back_task, defer_task, wait — with the names of what each reads, hands on and leaves by
 amenbo automation place-add 3 --builtin take_task      # 31: where a run starts, first placed; reserves the first task its filter finds
 amenbo automation cfg-set 31 --name "<filter>" --assignee me-ai --dim "Area=Core" # which tasks it takes (unanswered: the ones handed to the AI)
-amenbo automation cfg-set 31 --name "<when none>" --choice "<wait>" # or have Amenbo wait for one to turn up: the run ends there, and the app starts the next run once one does
 amenbo automation place-add 3 --builtin cut_worktree   # 32: the task's worktree, from the newest of the remote's default branch
 amenbo automation action-add --name "Implement"        # 7: a unit worth using twice, in the library
 amenbo automation step-add 7 --name "Implement" --prompt - --work-dir worktree # 11: one step of it = one terminal, run in the folder it is handed
@@ -396,15 +400,16 @@ amenbo automation edge-add --in-action --from "11:gave up" --exit-to "gave up"
 amenbo automation action-scope-set 7 --global          # move it to the device's library (into a project: --project)
 amenbo automation place-add 3 --action 7               # 33: put that action on the picture; a step nobody chooses for falls back to its role's agent, then Amenbo's
 amenbo automation agent-set 33 --step 11 --agent claude-code # who carries that step out at this spot, ahead of its role's default (--model too)
-amenbo automation role-update 8 --name Implement --entry 31 --agent claude-code # the role it was born with (8, from role-list): where its round starts — take_task, as every role's does — and the agent its steps fall back to; 31 then takes only a task of that role
-amenbo automation update 3 --failures-to 8           # where a failed round is filed: a role of it (8, from role-list) or `human`; a start is refused until one is named
-amenbo automation update 3 --failure-dim "Category=bug" # the classification a failed round's task is filed with, one axis at a time (the others keep theirs; --no-failure-dim takes all off); a start is refused while an axis the project requires has none
+amenbo automation role-update 8 --name Implement --entry 31 --agent claude-code # the role it was born with (8, from role-list): where its round starts — take_task, as a role started by a task does — and the agent its steps fall back to; 31 then takes only a task of that role
+amenbo automation role-add 3 --name Intake --starts-by trigger   # 9: a role a trigger starts with no task filed; its --entry is anything but take_task, and failed rounds cannot be filed to it
+amenbo automation update 3 --failures-to 8           # where a failed round is filed: a role of it started by a task (8, from role-list) or `human`; the save and the start are refused until one is named
+amenbo automation update 3 --failure-dim "Category=bug" # the classification a failed round's task is filed with, one axis at a time (the others keep theirs; --no-failure-dim takes all off); the save and the start are refused while an axis the project requires has none
 amenbo automation place-add 3 --builtin fold_worktree  # 34: leaves by its way out for unmerged while the branch is not in
 amenbo automation place-add 3 --builtin close_task     # 35: done, with the commit handed to it recorded
 amenbo automation edge-add --from 32: --to 33         # what happens after each way out (--max-times caps a way back)
 amenbo automation wire-add --from 32: --from-port worktree --to 33 --to-port worktree
 amenbo automation edge-add --from 33: --to 34
-amenbo automation edge-add --from "33:gave up" --halt  # stop the run; the round is filed to --failures-to
+amenbo automation edge-add --from "33:gave up" --halt  # stop the run; the round is filed to --failures-to, its notes saying why and where it stopped, the step's report, the run, the task and how many times in a row it has stopped
 amenbo automation edge-add --from 34: --to 35
 amenbo automation edge-add --from "34:<unmerged>" --to 33 --max-times 3
 amenbo automation edge-add --from 35: --to 31          # and on to the next task
@@ -432,18 +437,23 @@ amenbo automation trigger 4 --when-idle --title "Look over the inbox"  # ...or w
 amenbo automation trigger 4 --when-idle --if-tasks "status:todo" --fewer-than 3 --title "Look over the inbox"  # ...only while fewer than 3 of the project's tasks are todo; --if-tasks alone files one whenever that holds
 amenbo automation trigger 4 --when-idle --if-tasks "status:todo" --fewer-than 3 --if-tasks-role 7 --title "Look over the inbox"  # ...counting only the tasks worked under role 7 (one of this automation's)
 amenbo automation trigger 4 --if-script /usr/local/bin/has-mail --title "Look over the inbox"  # ...or whenever that program writes {"version":1,"file":true} to $AMENBO_OUTPUT (its exit code only says it ran to the end); --script-arg and --script-timeout-minutes go with it, and it may be laid on the others too
+amenbo automation trigger 4 --if-script /usr/local/bin/next-issue --task-from-if-script  # ...the program writing {"version":2,"start":true,"title":"…","notes":"…","data":{…},"key":"…"} and its files in out/ next to that file: what it found is handed on in place of --title
+amenbo automation trigger 4 --every 60 --title "Look over the inbox" --dim "Area=Core" --priority high --data '{"box":"support"}' --file /opt/notes/rules.md  # ...filed with that classification (an axis the project requires must be given one) and priority, the data closing its notes as a JSON code block, and the file read from that path each time and attached; a file not there starts nothing
+amenbo automation trigger 4 --if-script /usr/local/bin/next-issue --task-from-if-script --role 9  # ...aimed at role 9, started by a trigger: no task is filed, a run starts straight in its seat, handed the title, notes, data and files (a prompt step reads them in its prompt, a script step in input.json's `start` and in/start/); none starts while a run of that role with the same key is running or paused
 amenbo automation trigger 4 --every 60 --task-from-file /opt/notes/inbox-task.md  # ...the task read from that file each time instead of --title: a JSON object gives its title, notes, data, files and key ({"version":2,"title":"…","notes":"…","data":{…},"files":["/full/path"],"key":"…"}), any other file its first line as the title and the rest as the notes; a file not there starts nothing, and `automation show` says on the trigger's line when and why it could not start one
-amenbo automation trigger 4 --when-idle --task-from-script /usr/local/bin/next-mail  # ...or written each time by that program, as {"version":1,"title":"…","notes":"…"} in $AMENBO_OUTPUT; --task-script-arg and --task-script-timeout-minutes go with it
+amenbo automation trigger 4 --when-idle --task-from-script /usr/local/bin/next-mail  # ...or written each time by that program, as {"version":1,"title":"…","notes":"…"} in $AMENBO_OUTPUT (or version 2 with data, a key and files in out/); --task-script-arg and --task-script-timeout-minutes go with it
 amenbo automation trigger --trigger 12 --every 30 --title "Look over the inbox"  # ...write trigger 12 afresh, keeping its id, whether it is on, when it last filed a task and when it last could not start one
 amenbo automation trigger --trigger 12 --off                                  # ...have it asked no more, kept as it is; --on has it asked again
 amenbo automation trigger --trigger 12 --rm -y                                # ...take it away, the automation's other triggers left as they are
-amenbo automation stop 4                               # stop it starting new rounds: start is refused and its triggers file nothing, and each run pauses once its round is over (one waiting for room to take a task, at once); --off lets it start them again
+# A run a trigger started that stops where no way out of its step answers is filed to --failures-to like any
+# failed round, and that trigger starts nothing more until the task filed for it is closed
+amenbo automation stop 4                               # stop it starting new rounds: start is refused and its triggers file nothing, and each run pauses once its round is over (one waiting to take its next task — for a task to turn up, or for room — at once); --off lets it start them again
 amenbo automation pause 7                              # ...at the end of the action under way (a wait under way included: the run pauses once its time is up)
-amenbo automation pause 7 --before-next-task           # ...or where it would take its next task (one waiting for room pauses now)
+amenbo automation pause 7 --before-next-task           # ...or where it would take its next task (one already waiting there pauses now)
 amenbo automation cancel 7                             # a paused run ends canceled, handing the task back to todo and to the person
 amenbo automation cancel 7 --force                     # ...or one still going, now: the step under way is cut off where it stands
 amenbo automation acknowledge 7                        # a failed run has been seen: off the running tab, onto the history (whoever says it is kept)
-amenbo automation launch-show 4                        # each role of launch 4 (run-show names a run's launch): the definition's headcount, this launch's, the runs under way, the seats still to go, and whether it is stopped
+amenbo automation launch-show 4                        # each role of launch 4 (run-show names a run's launch): the definition's headcount, this launch's, the runs under way, the seats still to go, and whether it is stopped — and under it, how many of its tasks wait to be taken, the first three, and what keeps them waiting on a person where none is ready
 amenbo automation launch-headcount-set 4 --role 2 --headcount 3  # 1 to 10, for this launch alone: raised, it takes tasks at once; lowered, a seat goes once its run finishes the task it is on
 amenbo automation launch-headcount-reset 4 --role 2    # ...back at the definition's headcount
 amenbo automation launch-role-hold 4 --role 2          # stop the role once its task is done: its runs take no new task, its headcount stays

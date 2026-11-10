@@ -1033,6 +1033,8 @@ export const id: Translation = {
     "auto.trigger.disabled": "Dihentikan",
     "auto.trigger.lastFiled": "Terakhir dibuat: {at}",
     "auto.trigger.neverFiled": "Belum pernah membuat tugas",
+    "auto.trigger.refusedFiling": "Tidak bisa dibuat ({at}): {why}",
+    "auto.trigger.refusedStarting": "Tidak bisa dimulai ({at}): {why}",
     "auto.trigger.list": "Pemicu otomasi ini",
     "auto.trigger.whenPick": "Cara memutuskan apakah membuat tugas",
     "auto.trigger.taskPick": "Sumber isi tugas",

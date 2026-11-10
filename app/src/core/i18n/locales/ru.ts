@@ -1049,6 +1049,8 @@ export const ru: Translation = {
     "auto.trigger.disabled": "Остановлен",
     "auto.trigger.lastFiled": "Последняя создана: {at}",
     "auto.trigger.neverFiled": "Ещё ничего не создал",
+    "auto.trigger.refusedFiling": "Не удалось создать ({at}): {why}",
+    "auto.trigger.refusedStarting": "Не удалось запустить ({at}): {why}",
     "auto.trigger.list": "Триггеры этой автоматизации",
     "auto.trigger.whenPick": "Как решать, создавать ли задачу",
     "auto.trigger.taskPick": "Откуда берётся текст задачи",

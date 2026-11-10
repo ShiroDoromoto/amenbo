@@ -1033,6 +1033,8 @@ export const th: Translation = {
     "auto.trigger.disabled": "หยุดอยู่",
     "auto.trigger.lastFiled": "สร้างงานล่าสุด: {at}",
     "auto.trigger.neverFiled": "ยังไม่เคยสร้างงาน",
+    "auto.trigger.refusedFiling": "สร้างงานไม่ได้ ({at}): {why}",
+    "auto.trigger.refusedStarting": "เริ่มไม่ได้ ({at}): {why}",
     "auto.trigger.list": "ทริกเกอร์ของออโตเมชันนี้",
     "auto.trigger.whenPick": "วิธีตัดสินว่าจะสร้างงานหรือไม่",
     "auto.trigger.taskPick": "ที่มาของเนื้อหางาน",

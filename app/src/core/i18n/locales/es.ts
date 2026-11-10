@@ -1044,6 +1044,8 @@ export const es: Translation = {
     "auto.trigger.disabled": "Detenido",
     "auto.trigger.lastFiled": "Última creada: {at}",
     "auto.trigger.neverFiled": "Aún no ha creado ninguna",
+    "auto.trigger.refusedFiling": "No se pudo crear ({at}): {why}",
+    "auto.trigger.refusedStarting": "No se pudo iniciar ({at}): {why}",
     "auto.trigger.list": "Disparadores de esta automatización",
     "auto.trigger.whenPick": "Cómo decidir si crear una tarea",
     "auto.trigger.taskPick": "De dónde sale el contenido de la tarea",

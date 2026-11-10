@@ -1049,6 +1049,8 @@ export const uk: Translation = {
     "auto.trigger.disabled": "Зупинено",
     "auto.trigger.lastFiled": "Останнє створено: {at}",
     "auto.trigger.neverFiled": "Ще нічого не створив",
+    "auto.trigger.refusedFiling": "Не вдалося створити ({at}): {why}",
+    "auto.trigger.refusedStarting": "Не вдалося запустити ({at}): {why}",
     "auto.trigger.list": "Тригери цієї автоматизації",
     "auto.trigger.whenPick": "Як вирішувати, чи створювати завдання",
     "auto.trigger.taskPick": "Звідки береться текст завдання",

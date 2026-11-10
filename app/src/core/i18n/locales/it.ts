@@ -1044,6 +1044,8 @@ export const it: Translation = {
     "auto.trigger.disabled": "Fermo",
     "auto.trigger.lastFiled": "Ultima creata: {at}",
     "auto.trigger.neverFiled": "Non ha ancora creato nulla",
+    "auto.trigger.refusedFiling": "Impossibile creare ({at}): {why}",
+    "auto.trigger.refusedStarting": "Impossibile avviare ({at}): {why}",
     "auto.trigger.list": "Attivatori di questa automazione",
     "auto.trigger.whenPick": "Come decidere se creare un’attività",
     "auto.trigger.taskPick": "Da dove viene il contenuto dell’attività",

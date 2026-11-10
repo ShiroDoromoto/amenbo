@@ -1961,6 +1961,7 @@ export const tr: Translation = {
     invalid_make_task_blocker_open: "Alınacak görev kapanmamış olan {ref} görevine bağımlı olacağı için alınamadı",
     invalid_make_task_value_closed: "“Sınıflandırma” kapalı olan “{value}” değerini gösteriyor",
     invalid_make_task_required_empty: "Görevin, bu projenin zorunlu tuttuğu {axes} üzerinde değeri olmayacaktı",
+    invalid_trigger_axis_empty: "Zorunlu eksen «{axis}» için değer yok",
     invalid_make_task_task_not_a_number: "“Bağlı olduğu mevcut görevler” her satırda bir görev numarası okur ve “{line}” numara değil",
     invalid_make_task_decision_not_a_number: "“Bağlanacak kararlar” her satırda bir karar numarası okur ve “{line}” numara değil",
     invalid_make_task_task_not_in_project: "“Bağlı olduğu mevcut görevler” bu projede olmayan {line} görevini gösteriyor",

@@ -1302,7 +1302,7 @@ datasets! {
         script_program: col(OPT),
         script_args: col(REQ),
         script_timeout_minutes: col(INT_OPT),
-        // What it hands on: `fixed` is the title, notes, data and files written here; `file` is what the
+        // What it hands on: `fixed` is the title, notes, data, files and key written here; `file` is what the
         // file at `task_path` says when it starts a run; `script` is what the program in `task_script_*`
         // writes then, as a script step's is written; `asked` is what the program in `script_*` writes
         // beside its say that a run is to start, so it needs no column of its own. Each leaves the others'
@@ -1329,6 +1329,13 @@ datasets! {
         // for none, and always NULL for a `file` or a `script`.
         task_data: col(OPT),
         task_files: col(OPT),
+        // The key a `fixed` hands on (`AMB-D-1137`): while a run it started straight into a role started
+        // by a trigger, with the same key, is running or paused, it starts no other there. NULL for none,
+        // and always NULL for a `file` or a `script`.
+        task_key: col(OPT),
+        // The priority of the task it files, NULL for none — only where it files a task, aimed at a role
+        // started by a task or at no role. Its classification is `automation_trigger_value`.
+        task_priority: enum_opt("high", "medium", "low"),
         // The last time it was to start a run and could not (`AMB-D-1136`), and why, as JSON — the code
         // naming the sentence, the English, the values and the parts (`model::Refused`). Both NULL where
         // it has not failed since it last started one; a run started clears both.
@@ -1348,6 +1355,19 @@ datasets! {
         dimension_id: fk("dimension", "RESTRICT"),
         value_id: fk("dimension_value", "RESTRICT"),
     } => "UNIQUE (automation_id, dimension_id)"
+
+    // **The classification of the task a trigger files**: one value per axis, each one of the trigger's
+    // automation's project's own, written where the trigger is (`ops::automation::trigger_set`). An axis
+    // the project requires with no row here holds the trigger's save, and its start where the axis became
+    // required after (`ops::automation_run::fire`). Like the trigger, not part of a saved version, nor of
+    // the automation's export. `dimension_id` is denormalised, as `automation_failure_value`'s is, so one
+    // row per axis is held by the constraint below. Removing a value takes its rows with it, or moves them
+    // where the value's tasks move (`ops::dimension::value_delete`).
+    automation_trigger_value {
+        trigger_id: fk("automation_trigger", "RESTRICT"),
+        dimension_id: fk("dimension", "RESTRICT"),
+        value_id: fk("dimension_value", "RESTRICT"),
+    } => "UNIQUE (trigger_id, dimension_id)"
 
     // **A setting, declared by an action and answered where it is placed.** The action's row is the
     // declaration alone, so its `value` is NULL; each placement of that action carries a row of its
@@ -1616,6 +1636,10 @@ datasets! {
         // The task filed where a run started by a trigger failed (`AMB-D-1128`): the trigger starts no
         // run until it is closed. `SET NULL` for the reason `automation_run_task.task_id` is.
         incident_task_id: fk_opt("task", "SET NULL"),
+        // The key the trigger that started the run handed on (`AMB-D-1137`), kept only where it started
+        // the run straight into a role started by a trigger: while this run is running or paused, no
+        // other run of that role with the same key is started. NULL for none and on every other run.
+        start_key: col(OPT),
     }
 
     // **The step as it was at launch** — one row per step of the automation, written when the run is

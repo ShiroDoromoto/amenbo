@@ -114,6 +114,8 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   // The classification a failed round's task is filed with is read on the automation alone, as its
   // triggers are.
   automation_failure_value: ["automations"],
+  // The classification of the task a trigger files is read on the automation alone, as its triggers are.
+  automation_trigger_value: ["automations"],
   automation_action_step: ["automationActions", "automations"],
   automation_cfg: ["automationActions", "automations"],
   automation_exit: ["automationActions", "automations"],

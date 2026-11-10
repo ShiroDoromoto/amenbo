@@ -1961,6 +1961,7 @@ export const hi: Translation = {
     invalid_make_task_blocker_open: "लिया जाने वाला कार्य {ref} पर निर्भर होगा, जो बंद नहीं है, इसलिए उसे लिया नहीं जा सका",
     invalid_make_task_value_closed: "“वर्गीकरण” मान “{value}” बताता है, जो बंद है",
     invalid_make_task_required_empty: "कार्य का {axes} पर कोई मान नहीं होगा, जो यह प्रोजेक्ट ज़रूरी मानता है",
+    invalid_trigger_axis_empty: "ज़रूरी अक्ष «{axis}» का कोई मान नहीं है",
     invalid_make_task_task_not_a_number: "“मौजूदा कार्य जिन पर यह निर्भर है” हर पंक्ति में एक कार्य संख्या पढ़ता है, और “{line}” संख्या नहीं है",
     invalid_make_task_decision_not_a_number: "“जोड़ने के लिए निर्णय” हर पंक्ति में एक निर्णय संख्या पढ़ता है, और “{line}” संख्या नहीं है",
     invalid_make_task_task_not_in_project: "“मौजूदा कार्य जिन पर यह निर्भर है” {line} बताता है, जो इस प्रोजेक्ट में नहीं है",

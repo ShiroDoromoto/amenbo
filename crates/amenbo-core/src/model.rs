@@ -2080,6 +2080,17 @@ pub struct AutomationTrigger {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub script: Option<StepScript>,
     pub task: TriggerTask,
+    /// **The classification of the task it files** — one value per axis, each one of the automation's
+    /// project's own, in the order they were written (`AMB-D-1136`). Only a trigger that files a task —
+    /// aimed at a role started by a task, or at no role — has any; one aimed at a role started by a
+    /// trigger files none. An axis the project requires with no value here holds its save, and its start
+    /// where the axis became required after it was written. Kept in rows of their own, read in with it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub values: Vec<AutomationTriggerValue>,
+    /// **The priority of the task it files**, `None` for none (`AMB-D-1136`) — as [`Self::values`], only
+    /// on a trigger that files a task.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority: Option<Priority>,
     /// When it is next asked whether to file a task (for an `idle`, a `tasks` or a `script`, the soonest
     /// it may file one): set when the trigger is written, and moved on each time it files one.
     pub next_at: Timestamp,
@@ -2149,6 +2160,19 @@ fn fields_of(fields: &crate::error::Fields) -> std::collections::BTreeMap<String
     fields.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
 }
 
+/// **One value of the classification a trigger's task is filed with** ([`AutomationTrigger::values`]) —
+/// the row that says this trigger answers the axis `dimension_id` with `value_id`. `dimension_id` is
+/// denormalised, as [`AutomationFailureValue`]'s is, so one row per axis is held by the table.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AutomationTriggerValue {
+    pub id: i64,
+    pub trigger_id: i64,
+    pub dimension_id: i64,
+    pub value_id: i64,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
 /// **Whether a trigger files a task now** — the first part of [`AutomationTrigger`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -2213,11 +2237,13 @@ pub struct TriggerCondition {
 /// its file says, or what a program writes as its `data`: 64 KiB.
 pub const MAX_TRIGGER_DATA_BYTES: usize = 64 * 1024;
 
-/// **What a trigger hands on** — the second part of [`AutomationTrigger`]: a title, notes, data as JSON
-/// and files, handed to the run it starts and kept on that run ([`AutomationRun::start_title`] and the
-/// files attached to it as [`AttachmentTarget::AutomationRun`]). Where it is aimed at a role started by a
-/// task, the title and notes are also those of the task it files. A time it cannot say anything — the
-/// file not read, the program not answering — starts nothing, as a time it decides no does
+/// **What a trigger hands on** — the second part of [`AutomationTrigger`]: a title, notes, data as JSON,
+/// files and a key, handed to the run it starts and kept on that run ([`AutomationRun::start_title`] and the
+/// files attached to it as [`AttachmentTarget::AutomationRun`]). Where it files a task — aimed at a role
+/// started by a task, or at no role — the title, notes, data and files are also the task's (`AMB-D-1136`):
+/// the title and notes are its own, the data closes its notes as a JSON code block, and the files are
+/// attached to it; the key is not used there (`AMB-D-1142`). A time it cannot say anything — the file not
+/// read, the program not answering — starts nothing, as a time it decides no does
 /// ([`crate::ops::automation_run::fire`]).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -2226,6 +2252,9 @@ pub enum TriggerTask {
     /// aimed at a role started by a trigger, which files no task. `data` is JSON of at most
     /// [`MAX_TRIGGER_DATA_BYTES`], `None` for none. `files` are named by their full paths and read
     /// afresh each time it starts a run, never when it is written; one not there then starts nothing.
+    /// `key` is matched against the runs under way only where the trigger starts a run straight into a
+    /// role started by a trigger (`AMB-D-1137`), and passed over where it files a task (`AMB-D-1142`);
+    /// `None` for none.
     Fixed {
         title: String,
         notes: String,
@@ -2233,12 +2262,15 @@ pub enum TriggerTask {
         data: Option<String>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         files: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        key: Option<String>,
     },
     /// What the file at `path`, by its full path, says each time it starts a run, read then and never
-    /// when it is written; one not there then starts nothing. A JSON object says the title, notes, data
-    /// and files, `{"version":2,"title":"…","notes":"…","data":{…},"files":["/full/path",…]}`, each left
+    /// when it is written; one not there then starts nothing. A JSON object says the title, notes, data,
+    /// files and key,
+    /// `{"version":2,"title":"…","notes":"…","data":{…},"files":["/full/path",…],"key":"…"}`, each left
     /// out where it has none — the files read from their paths then too. Any other file says it in
-    /// lines: its first line that is not blank is the title, and what follows it the notes
+    /// lines, with no key: its first line that is not blank is the title, and what follows it the notes
     /// ([`crate::ops::automation_run::task_from_file`]).
     File { path: String },
     /// What the program writes in its `output.json` each time it starts a run —
@@ -2950,6 +2982,12 @@ pub struct AutomationRun {
     /// The data (JSON) the trigger handed on, as [`Self::start_title`] is kept.
     #[serde(default)]
     pub start_data: Option<String>,
+    /// **The key the trigger handed on** (`AMB-D-1137`), kept only on a run a trigger started straight
+    /// into a role started by a trigger — `None` on every other run, and where it handed none. While
+    /// this run is running or paused, the trigger starts no other run of the same role with the same key
+    /// ([`crate::ops::automation_run::fire`]).
+    #[serde(default)]
+    pub start_key: Option<String>,
     /// **The trigger that started the run in a role started by a trigger** ([`AutomationTrigger`],
     /// `AMB-D-1127`) — set at launch. `None` for a run started any other way — a trigger aimed at a role
     /// started by a task files a task, and the run is the task's — for one started before v140, and

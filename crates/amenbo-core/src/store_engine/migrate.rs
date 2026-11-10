@@ -1580,6 +1580,22 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 142,
+        name: "add automation_trigger.task_key and automation_run.start_key, the key a trigger hands on and the one a run was started with",
+        // **Every trigger hands on no key, and every run was started with none** — so no run under way
+        // holds a trigger back. No task is touched.
+        apply: Apply::Custom(add_the_key_a_trigger_hands_on),
+    },
+    Step {
+        to: 143,
+        name: "add automation_trigger.task_priority and automation_trigger_value, the priority and the classification of the task a trigger files",
+        // **Not seeded: every trigger files its task with no priority and no classification**, as each
+        // did until now. Which value of an axis the task should carry is the person's to say, not
+        // Amenbo's to guess. A trigger in a project with a required axis is refused at its next save and
+        // start until a person says. No task is touched.
+        apply: Apply::Custom(let_a_trigger_classify_its_task),
+    },
+    Step {
+        to: 144,
         name: "add automation_trigger.refused_at and refused_why, when a trigger last could not start a run and why",
         // **Unseeded.** A trigger that could not start a run left only a line in the log, so every
         // trigger reads as having no such time. No task is touched.
@@ -2177,27 +2193,6 @@ fn add_what_a_trigger_hands_on(ctx: &Ctx<'_>) -> Result<()> {
     Ok(())
 }
 
-/// v142: `automation_trigger.refused_at` and `refused_why`, when a trigger last could not start a run
-/// and why (`AMB-D-1136`). Both NULL on every row already there.
-///
-/// **Appended only where missing**, v68's guard and for v53's reason. Both are nullable with no default
-/// but NULL, so `ALTER TABLE` adds them as they stand; the `CHECK` is the one every timestamp column
-/// carries, frozen here as text.
-fn let_a_trigger_keep_why_it_could_not_start(ctx: &Ctx<'_>) -> Result<()> {
-    let tx = ctx.tx;
-    let there = column_names(tx, "automation_trigger")?;
-    if !there.iter().any(|c| c == "refused_at") {
-        tx.execute_batch(
-            "ALTER TABLE automation_trigger ADD COLUMN refused_at TEXT CHECK(refused_at GLOB \
-             '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');",
-        )?;
-    }
-    if !there.iter().any(|c| c == "refused_why") {
-        tx.execute_batch("ALTER TABLE automation_trigger ADD COLUMN refused_why TEXT;")?;
-    }
-    Ok(())
-}
-
 /// v141: `automation_trigger.task_kind` admits `asked`, a trigger handing on what its own script writes
 /// beside its say that a run is to start.
 ///
@@ -2235,6 +2230,68 @@ fn admit_what_the_asking_script_writes(ctx: &Ctx<'_>) -> Result<()> {
     wrote?;
     if column_names(ctx.tx, "automation_trigger")? != before {
         return Err(super::StoreEngineError::UnrecognisedDdl { table: "automation_trigger", expected: NARROW });
+    }
+    Ok(())
+}
+
+/// v142: `automation_trigger.task_key`, the key a trigger written with what it hands on hands on, and
+/// `automation_run.start_key`, the key a trigger started a run with (`AMB-D-1137`). Both NULL on every
+/// row already there: no trigger handed on a key, and no run kept one. Added only where they are not
+/// there yet, v68's guard and for v53's reason.
+fn add_the_key_a_trigger_hands_on(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    for (table, column) in [("automation_trigger", "task_key"), ("automation_run", "start_key")] {
+        if !column_names(tx, table)?.iter().any(|c| c == column) {
+            tx.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} TEXT;"))?;
+        }
+    }
+    Ok(())
+}
+
+/// v143: `automation_trigger.task_priority`, the priority of the task a trigger files, and
+/// `automation_trigger_value`, its classification (`AMB-D-1136`).
+///
+/// **No row is written.** The column is NULL on every trigger already there, and no trigger is given a
+/// value. Added only where it is not there yet, v68's guard and for v53's reason.
+fn let_a_trigger_classify_its_task(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    if !column_names(tx, "automation_trigger")?.iter().any(|c| c == "task_priority") {
+        tx.execute_batch(
+            "ALTER TABLE automation_trigger ADD COLUMN task_priority TEXT \
+             CHECK(task_priority IN ('high', 'medium', 'low'));",
+        )?;
+    }
+    tx.execute_batch(
+        "CREATE TABLE IF NOT EXISTS automation_trigger_value (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    trigger_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_trigger(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    dimension_id BIGINT NOT NULL DEFAULT 0 REFERENCES dimension(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    value_id BIGINT NOT NULL DEFAULT 0 REFERENCES dimension_value(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
+    UNIQUE (trigger_id, dimension_id)
+);",
+    )?;
+    Ok(())
+}
+
+/// v144: `automation_trigger.refused_at` and `refused_why`, when a trigger last could not start a run
+/// and why (`AMB-D-1136`). Both NULL on every row already there.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. Both are nullable with no default
+/// but NULL, so `ALTER TABLE` adds them as they stand; the `CHECK` is the one every timestamp column
+/// carries, frozen here as text.
+fn let_a_trigger_keep_why_it_could_not_start(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let there = column_names(tx, "automation_trigger")?;
+    if !there.iter().any(|c| c == "refused_at") {
+        tx.execute_batch(
+            "ALTER TABLE automation_trigger ADD COLUMN refused_at TEXT CHECK(refused_at GLOB \
+             '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');",
+        )?;
+    }
+    if !there.iter().any(|c| c == "refused_why") {
+        tx.execute_batch("ALTER TABLE automation_trigger ADD COLUMN refused_why TEXT;")?;
     }
     Ok(())
 }
@@ -14406,10 +14463,10 @@ mod tests {
         run(&engine, &dir, steps_through(139), &mut crate::progress::ignore).unwrap();
 
         assert_eq!(engine.format_version().unwrap(), 139);
-        // Both are read by their columns rather than through the registry, which names the columns of
-        // v140 and v142 too.
-        type Kept = (String, Option<String>, Option<String>, Option<String>, Option<String>);
-        let trigger: Kept = engine
+        // Both are read by their columns rather than through the registry, which names the
+        // columns of v140 and later steps too.
+        type Handing = (String, Option<String>, Option<String>, Option<String>, Option<String>);
+        let trigger: Handing = engine
             .conn()
             .query_row(
                 "SELECT task_kind, task_title, task_notes, task_data, task_files FROM automation_trigger WHERE id = 1",
@@ -14417,7 +14474,11 @@ mod tests {
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
             )
             .unwrap();
-        assert_eq!(trigger, ("fixed".into(), Some("在庫を見る".into()), Some("メモ".into()), None, None));
+        assert_eq!(
+            trigger,
+            ("fixed".into(), Some("在庫を見る".into()), Some("メモ".into()), None, None),
+            "hands on no data and no file",
+        );
         type Started = (Option<String>, Option<String>, Option<String>, Option<String>);
         let run: Started = engine
             .conn()
@@ -14497,25 +14558,138 @@ mod tests {
 
         assert_eq!(engine.format_version().unwrap(), 141);
         engine.conn().execute_batch(&asked).unwrap();
-        let read = |id: i64| -> (String, Option<String>, Option<String>) {
+        // Read by its columns rather than through the registry, which names later steps' columns too.
+        let read = |id: i64| -> (String, Option<String>) {
             engine
                 .conn()
-                .query_row("SELECT task_kind, task_title, task_notes FROM automation_trigger WHERE id = ?1", [id], |r| {
-                    Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+                .query_row("SELECT task_kind, task_title FROM automation_trigger WHERE id = ?1", [id], |r| {
+                    Ok((r.get(0)?, r.get(1)?))
                 })
                 .unwrap()
         };
-        assert_eq!(read(1), ("fixed".into(), Some("在庫を見る".into()), Some("メモ".into())));
-        assert_eq!(read(2), ("asked".into(), None, None));
+        assert_eq!(read(1), ("fixed".into(), Some("在庫を見る".into())));
+        assert_eq!(read(2), ("asked".into(), None));
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v142: a trigger written at v141 has no time it could not start a run, and one written then keeps
+    /// v141: a store with no automation is raised past it with nothing written.
+    #[test]
+    fn a_store_with_no_automation_is_raised_past_v141_with_nothing_written() {
+        let dir = scratch("trigger-asked-empty");
+        let engine = store_at(&dir, 140);
+
+        run(&engine, &dir, steps_through(141), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 141);
+        let count: i64 =
+            engine.conn().query_row("SELECT COUNT(*) FROM automation_trigger", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v142: a trigger and a run written at v141 are kept as they were, the trigger handing on no key
+    /// and the run started with none — read back through the registry — and both may then carry one.
+    #[test]
+    fn a_trigger_and_a_run_carry_no_key_until_given_one_at_v142() {
+        let dir = scratch("trigger-key");
+        let engine = store_at(&dir, 141);
+        let at = "2026-11-10T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name, created_at, updated_at) VALUES (1, 1, 'auto', '{at}', '{at}');
+                 INSERT INTO automation_trigger (id, automation_id, enabled, name, when_kind, every_minutes, task_kind,
+                                                 task_title, task_notes, task_data, next_at, order_key, created_at, updated_at)
+                 VALUES (1, 1, 1, '毎朝', 'every', 60, 'fixed', '在庫を見る', 'メモ', '{{"a":1}}', '{at}', 'm', '{at}', '{at}');
+                 INSERT INTO automation_run (id, automation_id, project_id, status, started_at, start_trigger, start_title,
+                                             trigger_id, created_at, updated_at)
+                 VALUES (1, 1, 1, 'running', '{at}', '毎朝', '在庫を見る', 1, '{at}', '{at}');"#
+            ))
+            .unwrap();
+
+        run(&engine, &dir, steps_through(142), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 142);
+        // Read through the registry once the store is raised to the latest, as the registry names the
+        // later steps' columns too.
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        let trigger = crate::store_engine::read::automation_trigger(engine.conn(), 1).unwrap().expect("the trigger");
+        assert_eq!(
+            trigger.task,
+            crate::model::TriggerTask::Fixed {
+                title: "在庫を見る".into(),
+                notes: "メモ".into(),
+                data: Some(r#"{"a":1}"#.into()),
+                files: Vec::new(),
+                key: None,
+            },
+        );
+        let run = crate::store_engine::read::automation_run(engine.conn(), 1).unwrap().expect("the run");
+        assert_eq!(
+            (run.start_trigger.as_deref(), run.start_title.as_deref(), run.trigger_id, run.start_key),
+            (Some("毎朝"), Some("在庫を見る"), Some(1), None),
+        );
+        engine
+            .conn()
+            .execute_batch(
+                "UPDATE automation_trigger SET task_key = 'issue-123' WHERE id = 1;
+                 UPDATE automation_run SET start_key = 'issue-123' WHERE id = 1;",
+            )
+            .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v143: a trigger written at v142 files its task with no priority and no classification, and a
+    /// trigger may then be given both — read back through the registry.
+    #[test]
+    fn a_trigger_files_its_task_unclassified_after_v143() {
+        let dir = scratch("trigger-classify");
+        let engine = store_at(&dir, 142);
+        let at = "2026-11-10T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO dimension (id, project_id, name) VALUES (1, 1, 'テーマ');
+                 INSERT INTO dimension_value (id, dimension_id, name) VALUES (1, 1, '音');
+                 INSERT INTO automation (id, project_id, name, created_at, updated_at) VALUES (1, 1, 'auto', '{at}', '{at}');
+                 INSERT INTO automation_trigger (id, automation_id, enabled, name, when_kind, every_minutes, task_kind,
+                                                 task_title, task_notes, next_at, order_key, created_at, updated_at)
+                 VALUES (1, 1, 1, '毎朝', 'every', 60, 'fixed', '在庫を見る', 'メモ', '{at}', 'm', '{at}', '{at}');"#
+            ))
+            .unwrap();
+
+        run(&engine, &dir, steps_through(143), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 143);
+        // Read through the registry once the store is raised to the latest, as the registry names the
+        // later steps' columns too.
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        let conn = engine.conn();
+        let read = || crate::store_engine::read::automation_trigger(conn, 1).unwrap().expect("the trigger");
+        assert_eq!((read().priority, read().values), (None, Vec::new()), "nothing is guessed");
+        conn.execute_batch(&format!(
+            "UPDATE automation_trigger SET task_priority = 'medium' WHERE id = 1;
+             INSERT INTO automation_trigger_value (trigger_id, dimension_id, value_id, created_at, updated_at)
+             VALUES (1, 1, 1, '{at}', '{at}');"
+        ))
+        .unwrap();
+        assert_eq!(read().priority, Some(crate::model::Priority::Medium));
+        assert_eq!(read().values.iter().map(|v| (v.dimension_id, v.value_id)).collect::<Vec<_>>(), vec![(1, 1)]);
+        assert!(
+            conn.execute("UPDATE automation_trigger SET task_priority = 'urgent' WHERE id = 1", []).is_err(),
+            "a priority is one of the three",
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v144: a trigger written at v143 has no time it could not start a run, and one written then keeps
     /// one, read back through the registry.
     #[test]
-    fn a_trigger_written_before_v142_could_not_start_no_time() {
+    fn a_trigger_written_before_v144_could_not_start_no_time() {
         let dir = scratch("trigger-refused");
-        let engine = store_at(&dir, 141);
+        let engine = store_at(&dir, 143);
         let at = "2026-11-10T00:00:00Z";
         engine
             .conn()
@@ -14528,9 +14702,9 @@ mod tests {
             ))
             .unwrap();
 
-        run(&engine, &dir, steps_through(142), &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(144), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), 142);
+        assert_eq!(engine.format_version().unwrap(), 144);
         let read = || crate::store_engine::read::automation_trigger(engine.conn(), 1).unwrap().expect("the trigger");
         let before = read();
         assert_eq!(before.last_refused, None, "no trigger kept a time it could not start before");
@@ -14552,18 +14726,20 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v141: a store with no automation is raised past it with nothing written.
+    /// v143: a store with no automation is raised past it with nothing written.
     #[test]
-    fn a_store_with_no_automation_is_raised_past_v141_with_nothing_written() {
-        let dir = scratch("trigger-asked-empty");
-        let engine = store_at(&dir, 140);
+    fn a_store_with_no_automation_is_raised_past_v143_with_nothing_written() {
+        let dir = scratch("trigger-classify-empty");
+        let engine = store_at(&dir, 142);
 
-        run(&engine, &dir, steps_through(141), &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(143), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), 141);
-        let count: i64 =
-            engine.conn().query_row("SELECT COUNT(*) FROM automation_trigger", [], |r| r.get(0)).unwrap();
-        assert_eq!(count, 0);
+        assert_eq!(engine.format_version().unwrap(), 143);
+        let count = |table: &str| -> i64 {
+            engine.conn().query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0)).unwrap()
+        };
+        assert_eq!(count("automation_trigger"), 0);
+        assert_eq!(count("automation_trigger_value"), 0);
         std::fs::remove_dir_all(&dir).ok();
     }
 

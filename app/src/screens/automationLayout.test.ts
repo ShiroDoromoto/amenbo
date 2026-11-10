@@ -2455,6 +2455,7 @@ describe("one role's round, as the build screen draws it", () => {
       roleId,
       when: { kind: "every", minutes: 60 },
       task: { kind: "fixed", title: name, notes: "" },
+      values: [],
       nextAt: "2026-11-07T00:00:00Z",
     });
     const upkept: AutomationDetailDto = {

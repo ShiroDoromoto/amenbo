@@ -6711,21 +6711,62 @@ pub fn automation_failure_value(
     super::hydrate::row_by_id(conn, "automation_failure_value", id, super::hydrate::automation_failure_value_row)
 }
 
-/// The `automation_trigger` record with this id.
+/// The `automation_trigger` record with this id, with the classification of the task it files.
 pub fn automation_trigger(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationTrigger>> {
-    super::hydrate::row_by_id(conn, "automation_trigger", id, super::hydrate::automation_trigger_row)
+    let Some(mut trigger) =
+        super::hydrate::row_by_id(conn, "automation_trigger", id, super::hydrate::automation_trigger_row)?
+    else {
+        return Ok(None);
+    };
+    trigger.values = automation_trigger_values_of(conn, id)?;
+    Ok(Some(trigger))
 }
 
-/// The triggers of one automation, in the order they are written in.
+/// The triggers of one automation, in the order they are written in, each with the classification of
+/// the task it files.
 pub fn automation_triggers_of(conn: &Connection, automation_id: i64) -> Result<Vec<crate::model::AutomationTrigger>> {
     const T: col::automation_trigger::Cols = col::automation_trigger::ALL;
-    automation_rows(
+    let mut triggers = automation_rows(
         conn,
         T.table,
         &Pred::eq(T.automation_id, automation_id),
         &[Sort::by(T.order_key), Sort::by(T.id)],
         super::hydrate::automation_trigger_row,
+    )?;
+    for trigger in &mut triggers {
+        trigger.values = automation_trigger_values_of(conn, trigger.id)?;
+    }
+    Ok(triggers)
+}
+
+/// The classification of the task one trigger files, in the order it was written.
+pub fn automation_trigger_values_of(
+    conn: &Connection,
+    trigger_id: i64,
+) -> Result<Vec<crate::model::AutomationTriggerValue>> {
+    const V: col::automation_trigger_value::Cols = col::automation_trigger_value::ALL;
+    automation_rows(
+        conn,
+        V.table,
+        &Pred::eq(V.trigger_id, trigger_id),
+        &[Sort::by(V.id)],
+        super::hydrate::automation_trigger_value_row,
     )
+}
+
+/// The rows of the classification triggers file their tasks with that name this value, ascending — what
+/// has to move or go before the value does.
+pub fn automation_trigger_value_ids_of_value(conn: &Connection, value_id: i64) -> Result<Vec<i64>> {
+    const V: col::automation_trigger_value::Cols = col::automation_trigger_value::ALL;
+    select_ids(conn, V.id, Some(&Pred::eq(V.value_id, value_id)))
+}
+
+/// The row of the classification a trigger files its task with that has this id.
+pub fn automation_trigger_value(
+    conn: &Connection,
+    id: i64,
+) -> Result<Option<crate::model::AutomationTriggerValue>> {
+    super::hydrate::row_by_id(conn, "automation_trigger_value", id, super::hydrate::automation_trigger_value_row)
 }
 
 /// The triggers whose task is worked under this role, or whose condition counts the tasks worked under
@@ -7440,6 +7481,24 @@ pub fn automation_run_ids_under_way_as(conn: &Connection, automation_id: i64, ro
     const R: col::automation_run::Cols = col::automation_run::ALL;
     let pred = Pred::eq(R.automation_id, automation_id)
         .and(Pred::eq(R.role_id, role_id))
+        .and(Pred::is_in(R.status, [S::Running.as_str(), S::Paused.as_str()]));
+    select_ids(conn, R.id, Some(&pred))
+}
+
+/// [`automation_run_ids_under_way_as`], of the runs a trigger started there with the key `key`
+/// ([`crate::model::AutomationRun::start_key`], `AMB-D-1137`). A run started with no key is never among
+/// them.
+pub fn automation_run_ids_under_way_with_key(
+    conn: &Connection,
+    automation_id: i64,
+    role_id: i64,
+    key: &str,
+) -> Result<Vec<i64>> {
+    use crate::model::AutomationRunStatus as S;
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    let pred = Pred::eq(R.automation_id, automation_id)
+        .and(Pred::eq(R.role_id, role_id))
+        .and(Pred::eq(R.start_key, key))
         .and(Pred::is_in(R.status, [S::Running.as_str(), S::Paused.as_str()]));
     select_ids(conn, R.id, Some(&pred))
 }

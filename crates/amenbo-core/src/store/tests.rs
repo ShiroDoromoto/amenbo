@@ -1826,6 +1826,8 @@ fn a_trigger_that_could_not_start_keeps_when_and_why() {
                 condition: None,
                 script: None,
                 task: NewTriggerTask::File { path: path.clone() },
+                values: Vec::new(),
+                priority: None,
             },
         )
         .unwrap();

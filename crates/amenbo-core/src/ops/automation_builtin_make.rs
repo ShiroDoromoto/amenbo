@@ -1743,7 +1743,9 @@ mod tests {
                 when: every,
                 condition: None,
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: "what to do".into(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: "what to do".into(), data: String::new(), files: Vec::new(), key: String::new() },
+                values: Vec::new(),
+                priority: None,
             };
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
             let next_at = |tx: &WriteTx<'_>| {
@@ -1784,9 +1786,9 @@ mod tests {
         });
     }
 
-    /// **A trigger that cannot file its task keeps why** (`AMB-D-1136`) — here its project requires an
-    /// axis the task it files would have no value on, which the filing refuses before it writes the task
-    /// (`invalid_make_task_required_empty`). The write that would have started the run takes
+    /// **A trigger that cannot file its task keeps why** (`AMB-D-1136`) — here its project came to
+    /// require an axis after it was written, and it names no value of it, which its start refuses before
+    /// it files the task (`invalid_trigger_axis_empty`). The write that would have started the run takes
     /// everything with it, and what it was refused with, kept in a write of its own
     /// ([`crate::ops::automation_run::refused`]), names the axis; nothing else of the trigger moves.
     #[test]
@@ -1795,6 +1797,25 @@ mod tests {
         use crate::ops::automation_run::{fire, refused};
         with_tx(|tx| {
             let (automation, _, _) = entry(tx);
+            let trigger = automation::NewTrigger {
+                name: "毎朝".into(),
+                role_id: None,
+                when: TriggerWhen::Every { minutes: 60 },
+                condition: None,
+                script: None,
+                task: automation::NewTriggerTask::Fixed {
+                    title: "受信箱を見る".into(),
+                    notes: String::new(),
+                    data: String::new(),
+                    files: Vec::new(),
+                    key: String::new(),
+                },
+                values: Vec::new(),
+                priority: None,
+            };
+            // Written before the axis is required: a trigger naming no value of a required axis is
+            // refused at its save.
+            let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
             let axis = crate::ops::dimension::add(
                 tx,
                 automation.project_id,
@@ -1807,15 +1828,6 @@ mod tests {
             // The task a failed round is filed as answers it, or the launch is refused for that instead.
             crate::ops::automation::update(tx, automation.id, None, None, None, None, Some(&[screen.id][..]))
                 .expect("the failed round's classification");
-            let trigger = automation::NewTrigger {
-                name: "毎朝".into(),
-                role_id: None,
-                when: TriggerWhen::Every { minutes: 60 },
-                condition: None,
-                script: None,
-                task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
-            };
-            let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
             let kept = |tx: &WriteTx<'_>| read::automation_trigger(tx.conn(), trigger_id).expect("read").expect("there");
             let due = kept(tx).next_at;
             let claude = ["claude".to_string()];
@@ -1824,14 +1836,14 @@ mod tests {
             // The store answers this in a transaction of its own, which goes with the error; here it is
             // only asked what the error is.
             let unfiled = fire(tx, trigger_id, &by, due, None, None, &[]).expect_err("a required axis left empty");
-            assert_eq!(unfiled.code(), "invalid_make_task_required_empty");
+            assert_eq!(unfiled.code(), "invalid_trigger_axis_empty");
 
             refused(tx, trigger_id, &unfiled, due).expect("kept");
             let after = kept(tx);
             let why = after.last_refused.clone().expect("why it could not start");
             assert_eq!(why.at, due);
-            assert_eq!(why.why.code, "invalid_make_task_required_empty");
-            assert_eq!(why.why.fields.get("axes").map(String::as_str), Some("テーマ"));
+            assert_eq!(why.why.code, "invalid_trigger_axis_empty");
+            assert_eq!(why.why.fields.get("axis").map(String::as_str), Some("テーマ"));
             assert_eq!(why.why.message, unfiled.message_en());
             assert_eq!((after.next_at, after.last_filed_at), (due, None), "nothing else moves");
         });
@@ -1853,7 +1865,9 @@ mod tests {
                 when: TriggerWhen::Every { minutes: 60 },
                 condition: None,
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
+                values: Vec::new(),
+                priority: None,
             };
             let first = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers.remove(0);
             let second = AutomationTrigger {
@@ -1915,7 +1929,9 @@ mod tests {
                 when: TriggerWhen::Every { minutes: 60 },
                 condition: None,
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "受信箱を見る".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
+                values: Vec::new(),
+                priority: None,
             };
 
             let other = automation::add(
@@ -1977,7 +1993,9 @@ mod tests {
                 when: TriggerWhen::Idle,
                 condition: None,
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "手が空いたら見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "手が空いたら見る".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
+                values: Vec::new(),
+                priority: None,
             };
             let written = Timestamp::now();
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
@@ -2032,7 +2050,9 @@ mod tests {
                 when: TriggerWhen::Tasks,
                 condition: Some(TriggerCondition { filter: "status:todo".into(), role_id: None, below: 2 }),
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "足りなければ起こす".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "足りなければ起こす".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
+                values: Vec::new(),
+                priority: None,
             };
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger.clone())).expect("trigger").triggers[0].id;
             let next_at = |tx: &WriteTx<'_>| {
@@ -2113,7 +2133,9 @@ mod tests {
                 when: TriggerWhen::Tasks,
                 condition: Some(TriggerCondition { filter: "status:todo".into(), role_id: counted, below: 2 }),
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
+                values: Vec::new(),
+                priority: None,
             };
 
             let other = automation::add(
@@ -2199,7 +2221,9 @@ mod tests {
                 when: TriggerWhen::Idle,
                 condition: Some(TriggerCondition { filter: "status:todo".into(), role_id: None, below: 2 }),
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: "3 件まで".into(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: "3 件まで".into(), data: String::new(), files: Vec::new(), key: String::new() },
+                values: Vec::new(),
+                priority: None,
             };
             let written = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].clone();
             mk_task_in(tx, "待っている", Some(project));
@@ -2261,8 +2285,10 @@ mod tests {
                 condition: Some(TriggerCondition { filter: "status:todo".into(), role_id: None, below: 2 }),
                 script: None,
                 task,
+                values: Vec::new(),
+                priority: None,
             };
-            let fixed = || automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: "3 件まで".into(), data: String::new(), files: Vec::new() };
+            let fixed = || automation::NewTriggerTask::Fixed { title: "調査を起票する".into(), notes: "3 件まで".into(), data: String::new(), files: Vec::new(), key: String::new() };
             mk_task_in(tx, "待っている", Some(project));
 
             let draft = trigger_draft(tx.conn(), automation.id, typed(fixed())).expect("ready");
@@ -2316,7 +2342,7 @@ mod tests {
 
             let soon = automation::NewTrigger { when: TriggerWhen::Every { minutes: 0 }, ..typed(fixed()) };
             assert!(matches!(trigger_draft(tx.conn(), automation.id, soon), Err(Error::Invalid(_))), "under a minute");
-            let blank = automation::NewTriggerTask::Fixed { title: " ".into(), notes: String::new(), data: String::new(), files: Vec::new() };
+            let blank = automation::NewTriggerTask::Fixed { title: " ".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() };
             assert!(matches!(trigger_draft(tx.conn(), automation.id, typed(blank)), Err(Error::Invalid(_))), "no title");
             let elsewhere = automation::NewTrigger {
                 condition: Some(TriggerCondition { filter: "project:x".into(), role_id: None, below: 2 }),
@@ -2347,7 +2373,9 @@ mod tests {
                     args: Vec::new(),
                     timeout_minutes: Some(5),
                 }),
-                task: automation::NewTriggerTask::Fixed { title: "判定で起こす".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "判定で起こす".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
+                values: Vec::new(),
+                priority: None,
             };
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
             let next_at = |tx: &WriteTx<'_>| {
@@ -2398,6 +2426,8 @@ mod tests {
                 condition: None,
                 script: None,
                 task: automation::NewTriggerTask::File { path: shown.clone() },
+                values: Vec::new(),
+                priority: None,
             };
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
             let kept = |tx: &WriteTx<'_>| {
@@ -2464,6 +2494,8 @@ mod tests {
                     args: Vec::new(),
                     timeout_minutes: None,
                 }),
+                values: Vec::new(),
+                priority: None,
             };
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
             let next_at = |tx: &WriteTx<'_>| {
@@ -2513,7 +2545,9 @@ mod tests {
                 when: TriggerWhen::Every { minutes: 5 },
                 condition: None,
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "見る".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
+                values: Vec::new(),
+                priority: None,
             };
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
             automation::stop(tx, automation.id, true).expect("stop");
@@ -2554,7 +2588,9 @@ mod tests {
                 when: TriggerWhen::Every { minutes: 5 },
                 condition: None,
                 script: None,
-                task: automation::NewTriggerTask::Fixed { title: "見る".into(), notes: String::new(), data: String::new(), files: Vec::new() },
+                task: automation::NewTriggerTask::Fixed { title: "見る".into(), notes: String::new(), data: String::new(), files: Vec::new(), key: String::new() },
+                values: Vec::new(),
+                priority: None,
             };
             let trigger_id = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].id;
             let before = read::automation(tx.conn(), automation.id).expect("read").expect("there");

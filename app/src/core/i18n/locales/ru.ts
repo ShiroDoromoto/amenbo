@@ -1987,6 +1987,7 @@ export const ru: Translation = {
     invalid_make_task_blocker_open: "Взятая задача зависела бы от {ref}, которая не закрыта, поэтому её нельзя было взять",
     invalid_make_task_value_closed: "«Классификация» называет значение «{value}», которое закрыто",
     invalid_make_task_required_empty: "У задачи не было бы значения по {axes}, а этот проект его требует",
+    invalid_trigger_axis_empty: "У обязательной оси «{axis}» нет значения",
     invalid_make_task_task_not_a_number: "«Существующие задачи, от которых она зависит» читает один номер задачи на строку, а «{line}» — не номер",
     invalid_make_task_decision_not_a_number: "«Решения для связи» читает один номер решения на строку, а «{line}» — не номер",
     invalid_make_task_task_not_in_project: "«Существующие задачи, от которых она зависит» называет {line}, которой нет в этом проекте",

@@ -1961,6 +1961,7 @@ export const vi: Translation = {
     invalid_make_task_blocker_open: "Công việc cần nhận sẽ phụ thuộc vào {ref}, vốn chưa đóng, nên không nhận được",
     invalid_make_task_value_closed: "“Phân loại” chỉ giá trị “{value}”, vốn đã đóng",
     invalid_make_task_required_empty: "Công việc sẽ không có giá trị trên {axes}, điều mà dự án này bắt buộc",
+    invalid_trigger_axis_empty: "Trục bắt buộc «{axis}» chưa có giá trị",
     invalid_make_task_task_not_a_number: "“Việc có sẵn mà nó phụ thuộc” đọc mỗi dòng một số công việc, và “{line}” không phải là số",
     invalid_make_task_decision_not_a_number: "“Quyết định cần liên kết” đọc mỗi dòng một số quyết định, và “{line}” không phải là số",
     invalid_make_task_task_not_in_project: "“Việc có sẵn mà nó phụ thuộc” chỉ {line}, vốn không thuộc dự án này",

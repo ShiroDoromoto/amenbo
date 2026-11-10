@@ -580,6 +580,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     notes: body_arg_opt(notes)?.unwrap_or_default(),
                     data: String::new(),
                     files: Vec::new(),
+                    key: String::new(),
                 },
                 (None, Some(path), _) => NewTriggerTask::File { path },
                 (None, None, Some(program)) => NewTriggerTask::Script(NewScript {
@@ -589,7 +590,8 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 }),
                 (None, None, None) => unreachable!("clap asks for the task unless --rm, --on or --off"),
             };
-            let new = NewTrigger { name: name.unwrap_or_default(), role_id: role, when, condition, script, task };
+            let name = name.unwrap_or_default();
+            let new = NewTrigger { name, role_id: role, when, condition, script, task, values: Vec::new(), priority: None };
             let (t, done) = match trigger_id {
                 Some(trigger_id) => (store.automation_trigger_update(trigger_id, new).map_err(CliError::from)?, "Rewrote a trigger of"),
                 None => (store.automation_trigger_add(target, new).map_err(CliError::from)?, "Added a trigger to"),
@@ -2573,6 +2575,8 @@ mod tests {
             condition: None,
             script: None,
             task: TriggerTask::File { path: "/tmp/next.md".into() },
+            values: Vec::new(),
+            priority: None,
             next_at: at,
             last_filed_at: None,
             last_refused: None,

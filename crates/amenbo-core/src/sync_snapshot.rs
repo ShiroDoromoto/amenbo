@@ -257,6 +257,15 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
             " AND value_id IN (SELECT id FROM dimension_value WHERE dimension_id IN",
             " (SELECT id FROM dimension WHERE project_id = ?1))",
         ),
+        // The classification of the task a trigger files, closed by its three ends in the same way: the
+        // trigger's automation, the axis and the value all inside.
+        "automation_trigger_value" => concat!(
+            "trigger_id IN (SELECT id FROM automation_trigger WHERE automation_id IN",
+            " (SELECT id FROM automation WHERE project_id = ?1))",
+            " AND dimension_id IN (SELECT id FROM dimension WHERE project_id = ?1)",
+            " AND value_id IN (SELECT id FROM dimension_value WHERE dimension_id IN",
+            " (SELECT id FROM dimension WHERE project_id = ?1))",
+        ),
         "automation_action_step" | "automation_action_version" => {
             "action_id IN (SELECT id FROM automation_action WHERE project_id = ?1)"
         }
@@ -1130,12 +1139,18 @@ mod tests {
              VALUES (?1, ?2, ?3, ?4, ?4)",
             rusqlite::params![automation, axis, value, at],
         );
-        put(
+        let trigger = put(
             "INSERT INTO automation_trigger \
                  (automation_id, enabled, name, when_kind, every_minutes, task_kind, task_title, task_notes, \
                   next_at, order_key, created_at, updated_at) \
              VALUES (?1, 1, '毎時', 'every', 60, 'fixed', '見回る', '', ?2, 'm', ?2, ?2)",
             rusqlite::params![automation, at],
+        );
+        put(
+            "INSERT INTO automation_trigger_value \
+                 (trigger_id, dimension_id, value_id, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?4)",
+            rusqlite::params![trigger, axis, value, at],
         );
         put(
             "INSERT INTO automation_cfg \

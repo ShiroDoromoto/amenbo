@@ -7465,7 +7465,8 @@ pub fn automation_history(conn: &Connection, automation_id: i64) -> Result<crate
 }
 
 /// The runs of one automation that are still going — `running` or `paused`. A paused run can be picked
-/// up again, so the definition it launched from is as much in use as a running one's (`AMB-D-961`).
+/// up again, so the definition it launched from is as much in use as a running one's (`AMB-D-961`). The
+/// same runs are what the most that go at once counts, in every role (`AMB-D-1145`).
 pub fn automation_run_ids_under_way(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
     use crate::model::AutomationRunStatus as S;
     const R: col::automation_run::Cols = col::automation_run::ALL;

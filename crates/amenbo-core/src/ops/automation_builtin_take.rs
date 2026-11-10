@@ -1870,6 +1870,134 @@ mod tests {
         });
     }
 
+    /// Two roles ([`by_role`]), two of the builder's tasks, made on the first and the third, and a launch
+    /// whose one run sits in the builder's seat, with the run limit `limit` set on it. Answers the
+    /// automation, the launch, the roles, and the run.
+    fn a_builder_launched(
+        tx: &WriteTx<'_>,
+        project: i64,
+        limit: Option<u32>,
+    ) -> (Automation, i64, [i64; 2], AutomationRun) {
+        use crate::ops::automation_run::launch_limit_set;
+        let (automation, [(builder, _), (reviewer, _)]) = by_role(tx, project);
+        for (title, at) in [("build one", "2026-01-01T00:00:00Z"), ("build two", "2026-01-03T00:00:00Z")] {
+            let built = for_ai(tx, title, project, None);
+            give_to(tx, built, builder);
+            made_at(tx, built, at);
+        }
+        let run = launched(tx, &automation);
+        assert_eq!(run.role_id, Some(builder));
+        let launch = run.launch_id.expect("a launch");
+        launch_limit_set(tx, launch, limit).expect("the run limit");
+        (automation, launch, [builder, reviewer], run)
+    }
+
+    /// A task for the reviewer, made on the second.
+    fn to_review(tx: &WriteTx<'_>, project: i64, reviewer: i64) -> i64 {
+        let reviewed = for_ai(tx, "to review", project, None);
+        give_to(tx, reviewed, reviewer);
+        made_at(tx, reviewed, "2026-01-02T00:00:00Z");
+        reviewed
+    }
+
+    /// The builder's run takes its task, works it and closes it, and opens the take again.
+    fn builder_comes_round(tx: &WriteTx<'_>, run: &AutomationRun) -> Opened {
+        let Opened::Carried { next: Next::Step(work), .. } = open_entry(tx, run) else {
+            panic!("the take goes on to the work");
+        };
+        let Next::Step(take) = round_finished(tx, run.id, &work) else { panic!("back round to the take") };
+        open(tx, run.id, take.id, Some(&[])).expect("open the take")
+    }
+
+    /// **At the run limit, a run that finishes a task gives its seat back while another role has a task
+    /// waiting** (`AMB-D-1145`): it ends where it comes to take the next, completed, and the launch fills
+    /// the seat with a run of the role whose task has waited longer than the builder's next one.
+    #[test]
+    fn at_the_run_limit_a_run_gives_its_seat_back_for_another_roles_task() {
+        use crate::ops::automation_run::top_up;
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (_, launch, [_, reviewer], run) = a_builder_launched(tx, project, Some(1));
+            let reviewed = to_review(tx, project, reviewer);
+
+            let Opened::LetGo { run: let_go } = builder_comes_round(tx, &run) else {
+                panic!("the reviewer's task waits, so the builder's seat goes");
+            };
+            assert_eq!(let_go.status, AutomationRunStatus::Completed);
+            let next = top_up(tx, launch, &launcher()).expect("top up").expect("a run for the reviewer");
+            assert_eq!(next.role_id, Some(reviewer));
+            open_entry(tx, &next);
+            assert_eq!(status(tx, reviewed), TaskStatus::InProgress);
+        });
+    }
+
+    /// **With no other role's work waiting, the run keeps its seat** at the run limit and takes its own
+    /// role's next task — nor does it give it back with room under the limit, or with no limit at all.
+    #[test]
+    fn a_run_keeps_its_seat_where_no_other_role_waits_or_there_is_room() {
+        for (limit, review, why) in [
+            (Some(1), false, "no other role has work waiting"),
+            (Some(2), true, "there is room under the limit"),
+            (None, true, "there is no limit"),
+        ] {
+            with_tx(|tx| {
+                let project = mk_project(tx, "amenbo");
+                let (_, _, [_, reviewer], run) = a_builder_launched(tx, project, limit);
+                if review {
+                    to_review(tx, project, reviewer);
+                }
+                assert!(matches!(builder_comes_round(tx, &run), Opened::Carried { .. }), "{why}");
+            });
+        }
+    }
+
+    /// **A run that has taken no task yet keeps its seat** at the run limit, another role's task waiting
+    /// or not: it gives the seat back only once it has finished one.
+    #[test]
+    fn a_run_takes_its_first_task_at_the_run_limit_whatever_waits() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (_, _, [_, reviewer], run) = a_builder_launched(tx, project, Some(1));
+            to_review(tx, project, reviewer);
+            assert!(matches!(open_entry(tx, &run), Opened::Carried { .. }), "it takes its first task");
+        });
+    }
+
+    /// **A trigger of another role held back by the run limit is work waiting too** (`AMB-D-1145`): the
+    /// run gives its seat back for it as it would for a task.
+    #[test]
+    fn at_the_run_limit_a_run_gives_its_seat_back_for_a_trigger_waiting() {
+        use crate::ops::automation_run::trigger_waits;
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let (automation, _, [_, reviewer], run) = a_builder_launched(tx, project, Some(1));
+            let trigger = automation::NewTrigger {
+                name: "毎朝".into(),
+                role_id: Some(reviewer),
+                when: crate::model::TriggerWhen::Every { minutes: 24 * 60 },
+                condition: None,
+                script: None,
+                task: automation::NewTriggerTask::Fixed {
+                    title: "見直す".into(),
+                    notes: String::new(),
+                    data: String::new(),
+                    files: Vec::new(),
+                    key: String::new(),
+                },
+                values: Vec::new(),
+                priority: None,
+            };
+            let trigger =
+                automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers.remove(0);
+            trigger_waits(tx, &[trigger.id], &[], trigger.next_at).expect("held back by the limit");
+
+            assert!(
+                matches!(builder_comes_round(tx, &run), Opened::LetGo { .. }),
+                "the reviewer's trigger waits, so the builder's seat goes",
+            );
+        });
+    }
+
     /// **A launch read at once names each role's tasks waiting to be taken**: how many there are, and
     /// the first of them in the order the role takes them in. The tasks the runs have taken are under
     /// way, and are not among them.

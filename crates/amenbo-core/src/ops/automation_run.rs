@@ -3520,6 +3520,43 @@ pub(crate) fn over_run_limit(conn: &Connection, run: &AutomationRun) -> Result<b
     Ok(total.under_way.contains(&run.id) && total.to_let_go() > 0)
 }
 
+/// **Whether a run gives its seat back for another role's work** (`AMB-D-1145`) — the automation at the
+/// most runs that go at once, and another role with work waiting: a task of its own to take where its
+/// round starts, in a free seat of it ([`with_a_task`], as [`tops_up`] finds one), or a trigger aimed at it
+/// held back by the run limit alone ([`crate::model::AutomationTrigger::waiting_since`]). Asked as the run
+/// comes to the step that takes its next task, once it has finished one: such a run ends there without
+/// taking another ([`crate::ops::automation_step::Opened::LetGo`]), so the seat goes to whatever has
+/// waited longest instead of the run keeping it round after round. A run that has taken no task yet keeps
+/// its seat, and so does a run in the seats of no role, there being no other role to give it to. Nothing
+/// is recorded of it: work taken by another run before then leaves the run in its seat.
+pub(crate) fn yields_at_run_limit(conn: &Connection, run: &AutomationRun) -> Result<bool> {
+    let Some(role_id) = run.role_id else { return Ok(false) };
+    if read::automation_run_task_last(conn, run.id)?.is_none() {
+        return Ok(false);
+    }
+    let automation =
+        read::automation(conn, run.automation_id)?.ok_or_else(|| not_found("automation", run.automation_id))?;
+    let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+    let total = run_total(conn, automation.id, &pic)?;
+    if !total.under_way.contains(&run.id) || total.at_limit().is_none() {
+        return Ok(false);
+    }
+    let seats = seats_of(conn, automation.id, &pic)?;
+    let mut others: Vec<&Seats> = Vec::new();
+    for s in seats.iter().filter(|s| s.role_id != Some(role_id) && s.free()) {
+        if start_builtin(conn, &pic, s.role_id)?.is_some_and(|start| start.takes_a_task()) {
+            others.push(s);
+        }
+    }
+    if with_a_task(conn, automation.project_id, &pic, &others)?.is_some() {
+        return Ok(true);
+    }
+    Ok(automation
+        .triggers
+        .iter()
+        .any(|t| t.enabled && t.waiting_since.is_some() && trigger_role(&pic, t) != Some(role_id)))
+}
+
 /// **Whether the seats of a trigger's role leave it room to start a run** ([`room_of`]) — `under_way`
 /// being the runs `running` or `paused` in them, and `max` how many there are. An `every`, a `tasks`
 /// or a `script` starts one while a seat is free; an `idle` only once none of them is taken. With no

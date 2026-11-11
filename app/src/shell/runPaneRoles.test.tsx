@@ -219,6 +219,21 @@ describe("the face a run's pane is turned to", () => {
     expect(body?.querySelector(":scope > .slot__builtin.slot__runbody"), "the run's card is not a child of the body").not.toBeNull();
   });
 
+  // With the roles up, the terminal's box is moved out past the body's edge and the clip, so that
+  // xterm.js finds it off screen and stops drawing (`styles/global.css`): the rule reaches it as a
+  // descendant of the body, and the bar over the run's terminal must not be inside what it moves.
+  it("keeps the terminal face inside the body the roles stand in, and the bar outside it", async () => {
+    await pane(FAILED, { autoStart: true });
+    expect(pressed()).toBe("roles");
+    const body = container.querySelector(".slot__body");
+    expect(body?.querySelector(":scope > .runroles"), "the roles are not a child of the body").not.toBeNull();
+    const face = body?.querySelector(".workspace__face");
+    expect(face, "the terminal face is not inside the body").toBeTruthy();
+    const bar = body?.querySelector(":scope > .runterm");
+    expect(bar, "the bar over the run's terminal is not a child of the body").not.toBeNull();
+    expect(face?.contains(bar!), "the bar would be moved out with the terminal").toBe(false);
+  });
+
   it("turns to the terminal and back, and keeps the turn for that run's pane", async () => {
     await pane(FAILED);
     await act(async () => toTerminal());

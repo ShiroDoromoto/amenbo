@@ -184,7 +184,15 @@ scripts/              what the Makefile calls out to — build, sign, notarise, 
                       tag, pushing the tag, and re-running a red run. judge-workspace.sh
                       sorts the paths a task touches by where they sit in a repository,
                       and priority-scope.sh lays out the tasks whose priorities are
-                      compared; step-lib.sh holds the helpers they share
+                      compared. Before a release is handed out,
+                      fetch-release-artifacts.sh downloads what its run built and
+                      matches it with the release, verify-provenance.sh,
+                      rehearse-store-migration.sh, verify-pkg-signature.sh,
+                      verify-updater-signatures.sh and run-cli-scenarios.sh check
+                      what was downloaded, and list-gui-scenarios.sh lists what the
+                      GUI scenarios are chosen from; promote-release.sh promotes it,
+                      and judge-redo.sh says how a red one is redone. step-lib.sh
+                      holds the helpers they share
   windows/            drive a real Windows desktop from here, for the roads out of the
                       app that only a physical machine can walk
 ```

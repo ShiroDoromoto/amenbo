@@ -102,3 +102,27 @@ write_red_run() {
 now_utc() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
 ci_watch="$(pwd)/scripts/watch-ci.sh"
+
+# The release version an input carries, without the leading `v`, or the step stops.
+input_version() {
+    local version
+    version=$(input "${1:-版}")
+    [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || die "no version in the input: \"$version\""
+    echo "$version"
+}
+
+# The folder the release's artifacts were downloaded to, as an input carries it, or the step stops.
+input_place() {
+    local place
+    place=$(input "${1:-置き場}")
+    [ -n "$place" ] && [ -d "$place" ] || die "no folder of downloaded artifacts in the input: \"$place\""
+    echo "$place"
+}
+
+# Leave by the red way out, handing on the evidence file already written beside output.json under the
+# output named RED_OUTPUT, which the verification steps share.
+RED_EXIT="赤"
+RED_OUTPUT="結果"
+leave_red() {
+    leave "$RED_EXIT" "$(jq -n --arg k "$RED_OUTPUT" --arg f "$1" '{($k): $f}')" "$2"
+}

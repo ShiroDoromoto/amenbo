@@ -27,8 +27,7 @@ cd "$(dirname "$0")/../.."
 # shellcheck source=scripts/automation/step-lib.sh
 . scripts/automation/step-lib.sh
 
-version=$(input 版)
-[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || die "no version in the input: \"$version\""
+version=$(input_version)
 tag="v$version"
 resolve_repo
 

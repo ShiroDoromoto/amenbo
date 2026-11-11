@@ -7598,6 +7598,16 @@ pub fn automation_launches_running(conn: &Connection) -> Result<Vec<crate::model
     automation_rows(conn, L.table, &pred, &[Sort::by(L.id)], super::hydrate::automation_launch_row)
 }
 
+/// **The launches that have not ended** — running or paused — across every project, oldest first: the
+/// ones the workspace keeps a pane up for (`AMB-D-1154`). A paused launch can be picked up again, and a
+/// launch waiting for a task has no run, so neither status nor runs leave one out here.
+pub fn automation_launches_not_ended(conn: &Connection) -> Result<Vec<crate::model::AutomationLaunch>> {
+    use crate::model::AutomationLaunchStatus as S;
+    const L: col::automation_launch::Cols = col::automation_launch::ALL;
+    let pred = Pred::is_in(L.status, [S::Running.as_str(), S::Paused.as_str()]);
+    automation_rows(conn, L.table, &pred, &[Sort::by(L.id)], super::hydrate::automation_launch_row)
+}
+
 /// **Every run one launch started**, oldest first, whatever it stands at now.
 pub fn automation_launch_run_ids(conn: &Connection, launch_id: i64) -> Result<Vec<i64>> {
     const R: col::automation_run::Cols = col::automation_run::ALL;

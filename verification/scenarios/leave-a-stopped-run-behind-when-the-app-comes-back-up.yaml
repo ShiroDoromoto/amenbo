@@ -1,9 +1,10 @@
 # Every launch stands a pane of its own, and the arrangement is kept as places between runs of the
 # app. A pane kept for every launch would have the pages grow by one with every launch and never shrink
-# again. So a launch none of whose runs needs anybody — each completed, canceled, or failed and
-# acknowledged — is left behind as the app comes back up, and its pane with it
-# (`app/src/shell/WorkspaceFace.tsx`, `settledLaunchesSeated`). While the app is up the pane stays,
-# so what the terminal printed is still there to be read.
+# again. So a launch that has ended and none of whose runs needs anybody — each completed, canceled,
+# or failed and acknowledged — is left behind as the app comes back up, and its pane with it
+# (`app/src/shell/WorkspaceFace.tsx`, `settledLaunchesSeated`). A launch still going keeps its pane,
+# waiting with no run or paused; the stop pressed here ends the launch. While the app
+# is up the pane stays, so what the terminal printed is still there to be read.
 #
 # A pane of the reader's own is opened and made half the page first, so the run's pane — which takes
 # the size of the pane before it — lands beside it on the same page: the count of panes on that page

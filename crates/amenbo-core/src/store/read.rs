@@ -996,6 +996,12 @@ impl Store {
         Ok(crate::store_engine::read::automation_launch_standing(self.engine.conn(), automation_id)?)
     }
 
+    /// **The launches that have not ended** — running or paused — across every project, oldest first
+    /// ([`crate::store_engine::read::automation_launches_not_ended`]).
+    pub fn automation_launches_not_ended(&self) -> Result<Vec<crate::model::AutomationLaunch>> {
+        Ok(crate::store_engine::read::automation_launches_not_ended(self.engine.conn())?)
+    }
+
     /// **One launch as its pane draws it, read at once** ([`crate::ops::automation_run::launch_state`]).
     pub fn automation_launch_state(&self, launch_id: i64) -> Result<crate::ops::automation_run::LaunchState> {
         crate::ops::automation_run::launch_state(self.engine.conn(), launch_id)

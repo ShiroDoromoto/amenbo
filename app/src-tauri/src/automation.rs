@@ -69,7 +69,7 @@ use crate::dto::{
     AutomationHeldByRecordDto, AutomationHeldByValueDto, AutomationHistoryDto, AutomationLaunchAsksDto,
     AutomationCarrierDto, AutomationLaunchBlockDto,
     AutomationLaunchAttentionDto, AutomationLaunchCheckDto, AutomationLaunchIncidentDto, AutomationLaunchRoleStateDto,
-    AutomationLaunchStateDto,
+    AutomationLaunchStateDto, AutomationLiveLaunchDto,
     AutomationPlacedOnDto, AutomationPlacementDto,
     AutomationPlacementStepDto, AutomationPortDto, AutomationRoleDto, AutomationRolePassDto, AutomationRunCardDto,
     AutomationRunEndingsDto,
@@ -2317,6 +2317,21 @@ pub fn automation_launch_state(launch_id: i64) -> Result<AutomationLaunchStateDt
     })
 }
 
+/// **The launches that have not ended** — running or paused — across every project, oldest first
+/// ([`amenbo_core::store_engine::read::automation_launches_not_ended`]). Each stands a pane in the
+/// workspace, a launch waiting for a task with no run among them, and the app coming up stands them
+/// again (`AMB-D-1154`).
+#[tauri::command]
+pub fn automation_launches_live() -> Result<Vec<AutomationLiveLaunchDto>, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("automation_launches_live");
+    let store = open_store_read()?;
+    Ok(store
+        .automation_launches_not_ended()?
+        .into_iter()
+        .map(|launch| AutomationLiveLaunchDto { launch: launch.id, project: launch.project_id })
+        .collect())
+}
+
 /// **One line of what needs a person's hand in a launch**, as its pane draws it.
 fn attention_dto(line: automation_run::LaunchAttention) -> AutomationLaunchAttentionDto {
     AutomationLaunchAttentionDto {
@@ -3793,6 +3808,18 @@ mod tests {
         assert!(stop_if_going(&mut store, 404)
             .expect("a run nobody can find is not an error")
             .is_none());
+    }
+
+    /// **A store with no launch answers no launch to stand a pane for**, rather than refusing: the
+    /// workspace reads this on every way in, before anything has ever been launched.
+    #[test]
+    fn a_store_with_no_launch_has_no_live_launch() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("automation-launches-live");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        amenbo_core::Store::open().unwrap();
+
+        assert!(automation_launches_live().expect("read").is_empty());
     }
 
     /// **A run stopped has nothing for a face coming up to stand on**, however it was stopped; a

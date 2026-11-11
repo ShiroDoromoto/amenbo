@@ -9689,6 +9689,34 @@ mod tests {
         });
     }
 
+    /// **A launch that has not ended is read as one, with no run and paused alike** (`AMB-D-1154`): a
+    /// launch waiting for a task opens no run, and a paused one can be picked up again. One that has
+    /// ended is left out.
+    #[test]
+    fn a_launch_waiting_with_no_run_or_paused_is_read_as_not_ended() {
+        use crate::ops::automation_stop::{cancel_launch, pause_launch};
+        with_tx(|tx| {
+            let automation = mk_automation(tx, "起票だけ");
+            let (_, deciding) = mk_placed(tx, &automation, "決める", "decide the next work", "claude");
+            automation::edge_add(tx, AutomationPictureOwner::Automation, deciding.id, None, EdgeTarget::Done, None)
+                .expect("decide → end");
+            started_by_a_trigger(tx, &automation, deciding.id);
+            assert!(matches!(start(tx, automation.id, &here(&claude())).expect("start"), Started::Waits(_)));
+            let launch = read::automation_launch_standing(tx.conn(), automation.id).expect("read").expect("opened");
+            let not_ended = |tx: &WriteTx<'_>| {
+                read::automation_launches_not_ended(tx.conn()).expect("read").into_iter().map(|one| one.id).collect::<Vec<_>>()
+            };
+            assert_eq!(not_ended(tx), vec![launch.id], "waiting with no run");
+
+            pause_launch(tx, launch.id).expect("pause");
+            assert_eq!(not_ended(tx), vec![launch.id], "paused");
+            assert!(read::automation_launches_running(tx.conn()).expect("read").is_empty(), "the top-up's read leaves it out");
+
+            cancel_launch(tx, launch.id).expect("cancel");
+            assert!(not_ended(tx).is_empty(), "ended");
+        });
+    }
+
     /// **A run started by a trigger is asked to pause before its next task, and is not refused**
     /// (`AMB-D-1019`, `AMB-D-1127`): it pauses where its round starts, holding no task.
     #[test]

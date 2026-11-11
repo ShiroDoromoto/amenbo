@@ -1462,13 +1462,14 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                     .collect();
                 print_json(&json!({
                     "launch_id": launch,
+                    "status": state.launch.status.as_str(),
                     "run_limit": limit.limit,
                     "defined_run_limit": limit.defined,
                     "count": roles.len(),
                     "roles": roles,
                 }));
             } else {
-                human(flags, format!("Launch {launch} — {} role(s)  {}", state.roles.len(), launch_limit_words(limit)));
+                human(flags, format!("Launch {launch} — {} — {} role(s)  {}", state.launch.status.as_str(), state.roles.len(), launch_limit_words(limit)));
                 for role in &state.roles {
                     human(flags, format!("  {}", one_launch_role(&role.headcount)));
                     for line in launch_role_waits(role) {
@@ -1520,6 +1521,15 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let row = store.automation_launch_role_release(launch, role).map_err(CliError::from)?;
             let line = format!("✓ Role {} in launch {} takes tasks again, up to {}", row.role_id, row.launch_id, row.headcount);
             write_envelope(flags, "automation.launch-role-release", "automation_launch_role", serde_json::to_value(&row).unwrap(), None, false, line);
+        }
+        AutomationCmd::LaunchStop { launch } => {
+            // Stopping a launch is a person's (`AMB-D-1154`): no step stops one, its own or another.
+            not_from_a_step("launch-stop")?;
+            let stopped = store.automation_launch_stop(launch).map_err(CliError::from)?;
+            let ended: Vec<i64> = stopped.runs.iter().map(|r| r.id).collect();
+            let line = format!("✓ Launch {} stopped — {} run(s) ended", stopped.launch.id, ended.len());
+            let value = serde_json::to_value(&stopped.launch).unwrap();
+            write_envelope_with(flags, "automation.launch-stop", "automation_launch", value, None, false, line, &[("runs_ended", json!(ended))]);
         }
 
         AutomationCmd::StepOut { value, file } => {
@@ -1600,6 +1610,21 @@ fn not_from_its_own_step(store: &Store, run: i64, verb: &str) -> Result<(), CliE
         hint: Some(format!(
             "finish the step with `automation step-done`; a person can pause or cancel run {run} from its pane"
         )),
+        exit: 2,
+    })
+}
+
+/// **A step does not stop a launch** (`AMB-D-1154`) — its own or any other: ending a launch is a
+/// person's, from its pane or from a terminal outside every run. An AI step's terminal and a script
+/// step's program are both inside a step.
+fn not_from_a_step(verb: &str) -> Result<(), CliError> {
+    if amenbo_core::env::automation_step().is_none() && amenbo_core::env::run_step().is_none() {
+        return Ok(());
+    }
+    Err(CliError {
+        code: "invalid_value",
+        message: format!("`automation {verb}` is refused inside a step of a run — stopping a launch is a person's."),
+        hint: Some("a person stops a launch by closing its pane, or with this command outside every run".to_string()),
         exit: 2,
     })
 }

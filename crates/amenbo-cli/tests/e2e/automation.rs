@@ -1807,6 +1807,61 @@ fn inside_a_step_its_own_run_is_not_paused_or_force_canceled() {
     cli.json(&["automation", "cancel", &own, "--force", "--json"]);
 }
 
+/// **A person stops a launch from the terminal** (`AMB-D-1154`), as closing its pane does: each run of
+/// it still going is force-canceled, and `launch-show` reads the launch as ended. Inside a step — an AI
+/// step's terminal or a script step's program — it is refused whichever launch it names, and nothing is
+/// stopped. A launch that has ended already is refused, and one that does not exist is not_found.
+#[test]
+fn a_person_stops_a_launch_and_a_step_does_not() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, _, _) = a_saved_launchable(&cli);
+    let started = cli.json(&["automation", "start", &a, "--json"]);
+    let launch = id_str(&started["automation_run"]["launch_id"]);
+    let run = id_of(&started, "automation_run");
+    let shown = cli.json(&["automation", "launch-show", &launch, "--json"]);
+    assert_eq!(shown["status"].as_str(), Some("running"), "{shown}");
+
+    // No watch opens a step here, so the run's first one is opened on the store, as the app's watch
+    // would.
+    let step = {
+        let run: i64 = run.parse().unwrap();
+        let paths = amenbo_core::config::Paths::at(cli.home.clone());
+        let mut store = amenbo_core::Store::open_at(paths).expect("the store");
+        let entry = store.automation_run_defs(run).expect("defs").into_iter().find(|d| !d.role_ids().is_empty()).expect("an entry");
+        match store.automation_step_open(run, entry.id, None).expect("open") {
+            amenbo_core::ops::automation_step::Opened::Carried { run_step_id, .. } => run_step_id.to_string(),
+            _ => panic!("the entry takes a task and is carried out"),
+        }
+    };
+    for var in ["AMENBO_AUTOMATION_STEP", "AMENBO_RUN_STEP"] {
+        let (refused, code) = cli.run_env_err(&[(var, step.as_str())], &["automation", "launch-stop", &launch, "--json"]);
+        assert_eq!(code, 2, "{var}: {refused}");
+        assert!(refused.contains("refused inside a step"), "{var}: {refused}");
+        assert!(refused.contains("closing its pane"), "{var}: {refused}");
+    }
+    let shown = cli.json(&["automation", "launch-show", &launch, "--json"]);
+    assert_eq!(shown["status"].as_str(), Some("running"), "a refusal stops nothing: {shown}");
+
+    let stopped = cli.json(&["automation", "launch-stop", &launch, "--json"]);
+    assert_eq!(stopped["automation_launch"]["status"].as_str(), Some("ended"), "{stopped}");
+    assert_eq!(stopped["runs_ended"].as_array().map(Vec::len), Some(1), "{stopped}");
+    assert_eq!(id_str(&stopped["runs_ended"][0]), run, "{stopped}");
+    let shown = cli.json(&["automation", "launch-show", &launch, "--json"]);
+    assert_eq!(shown["status"].as_str(), Some("ended"), "{shown}");
+    let (text, _) = cli.run(&["automation", "launch-show", &launch]);
+    assert!(text.contains(&format!("Launch {launch} — ended")), "{text}");
+    let ran = cli.json(&["automation", "run-show", &run, "--json"]);
+    assert_eq!(ran["run"]["status"].as_str(), Some("canceled"), "{ran}");
+
+    let (refused, code) = cli.run_err(&["automation", "launch-stop", &launch, "--json"]);
+    assert_ne!(code, 0, "{refused}");
+    assert!(refused.contains("has ended"), "{refused}");
+    let (err, code) = cli.run_err(&["automation", "launch-stop", "999999", "--json"]);
+    assert_ne!(code, 0, "{err}");
+    assert!(err.contains("not_found"), "{err}");
+}
+
 /// **A task filed inside a step says which step it was filed in** — in an AI step's terminal, which
 /// names its step in `AMENBO_AUTOMATION_STEP`, and in a script step's program, which names it in
 /// `AMENBO_RUN_STEP` instead. Filed outside every run, or under a step this store has no row for, it

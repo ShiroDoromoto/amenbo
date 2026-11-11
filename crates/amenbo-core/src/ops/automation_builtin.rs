@@ -288,13 +288,13 @@ pub struct HeldBack {
     pub first_start: Option<crate::model::Schedule>,
     /// How many are still being created.
     pub drafts: usize,
-    /// **How many wait for a person's hand** (`AMB-D-1144`) — held back by a value still open before
-    /// theirs, a linked decision that is not live grounds, or their creation not being finished. A task
-    /// held by more than one of them is counted once; one held only by an unfinished task or its start is
-    /// not counted, for it moves on by itself.
+    /// **How many wait for a person's hand** (`AMB-D-1144`, `AMB-D-1155`) — held back by a value still
+    /// open before theirs, or a linked decision that is not live grounds. A task held by both is counted
+    /// once. One held only by an unfinished task or its start is not counted, for it moves on by itself;
+    /// nor is one held only by its creation not being finished, for it is in the hands of whoever is
+    /// creating it.
     pub awaits_person: usize,
-    /// The first of those still being created, by its id — where a person goes to finish it. `None` where
-    /// none is.
+    /// The first of those still being created, by its id. `None` where none is.
     pub first_draft: Option<i64>,
 }
 

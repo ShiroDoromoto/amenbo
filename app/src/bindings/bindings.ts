@@ -353,9 +353,8 @@ saveBlocks: Array<AutomationLaunchBlockDto>, };
 
 /**
  * **A role's tasks that move only once a person has done something**
- * ([`amenbo_core::ops::automation_run::AwaitsPerson`]) — a value to close, a decision to settle, a task
- * to finish creating — and the one place a person goes first. Exactly one of `dimension`, `decision`
- * and `task` is given.
+ * ([`amenbo_core::ops::automation_run::AwaitsPerson`]) — a value to close or a decision to settle — and
+ * the one place a person goes first. Exactly one of `dimension` and `decision` is given.
  */
 export type AutomationAwaitsPersonDto = { 
 /**
@@ -375,7 +374,7 @@ dimension?: number,
  */
 decision?: number, 
 /**
- * The task to finish creating, by its id.
+ * Never given, since a task still being created is not counted; kept while a face still reads it.
  */
 task?: number, };
 

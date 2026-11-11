@@ -10,21 +10,25 @@
 # It reads the section of the task's notes headed SECTION, and takes each `code span` there that reads
 # as a path: one with a slash in it, or a bare file name that the repository holds at its top. A span
 # with spaces, placeholders, wildcards or other marks of a command or an expression is passed over.
-# A path is read against the repository's top; `~/` is the home folder. Each path is put in one of four
+# A path is read against the repository's top; `~/` is the home folder. Each path is put in one of five
 # kinds:
 #
 #   TRACKED   — git tracks it, or a file under it (`git ls-files`)
 #   IGNORED   — inside the repository, and `git check-ignore` matches it
-#   UNTRACKED — inside the repository, neither tracked nor ignored: a new file
+#   UNTRACKED — inside the repository, neither tracked nor ignored, and its parent folder is already
+#               there: a new file put in that folder
+#   MISSING   — inside the repository, neither tracked nor ignored, and its parent folder is not there
+#               either: it may be a path in another repository rather than a new file in this one
 #   OUTSIDE   — not under the repository's top
 #
 # The kinds are written to a Markdown table (TABLE_FILE, beside output.json, handed on as TABLE_OUTPUT),
-# one row per path. It leaves by:
+# one row per path, with the reason a MISSING or OUTSIDE path is sent to be judged. It leaves by:
 #
 #   DONE_EXIT     — every path is inside the repository, and one at least is tracked or new
 #   IGNORED_EXIT  — every path is inside the repository and ignored
-#   JUDGE_EXIT    — no section, no path in it, or a path outside the repository. Whether such a task
-#                   commits to another repository or commits nothing is not for a script to say.
+#   JUDGE_EXIT    — no section, no path in it, or a path that is missing or outside the repository.
+#                   Whether such a task commits to another repository, makes new folders in this one or
+#                   commits nothing is not for a script to say.
 #
 # The way out is decided by output.json, never by this script's exit code. Anything it cannot read or
 # write — no task, a work folder outside git, a command that failed — ends it with exit code 1, which
@@ -42,6 +46,7 @@ TABLE_FILE="作業場所.md"
 TRACKED="管理下"
 IGNORED="gitignore"
 UNTRACKED="追跡外"
+MISSING="リポジトリに無い"
 OUTSIDE="リポジトリの外"
 DONE_EXIT="完了"
 IGNORED_EXIT="git の外"
@@ -103,33 +108,44 @@ inside() {
     case "$dir/" in "$real_top"/*) return 0 ;; *) return 1 ;; esac
 }
 
+# Sets kind to the path's kind, and reason to why a path sent to be judged is sent there.
 kind_of() {
-    local path="$1"
-    if ! inside "$path"; then echo "$OUTSIDE"; return; fi
-    if [ -n "$(git -C "$top" ls-files -- "$path" | head -n 1)" ]; then echo "$TRACKED"; return; fi
-    if git -C "$top" check-ignore -q -- "$path"; then echo "$IGNORED"; return; fi
-    echo "$UNTRACKED"
+    local path="$1" parent abs_parent
+    reason=""
+    if ! inside "$path"; then
+        kind="$OUTSIDE"
+        reason="${top} の下に無い"
+        return
+    fi
+    if [ -n "$(git -C "$top" ls-files -- "$path" | head -n 1)" ]; then kind="$TRACKED"; return; fi
+    if git -C "$top" check-ignore -q -- "$path"; then kind="$IGNORED"; return; fi
+    parent=$(dirname "$path")
+    case "$parent" in /*) abs_parent="$parent" ;; *) abs_parent="$top/$parent" ;; esac
+    if [ -d "$abs_parent" ]; then kind="$UNTRACKED"; return; fi
+    kind="$MISSING"
+    reason="ファイルも、親のフォルダ \`$parent\` もリポジトリに無い"
 }
 
 table="$out_dir/$TABLE_FILE"
-tracked=0 ignored=0 untracked=0 outside=0
+tracked=0 ignored=0 untracked=0 missing=0 outside=0
 {
-    echo "| パス | 分け |"
-    echo "|---|---|"
+    echo "| パス | 分け | 判断に回す理由 |"
+    echo "|---|---|---|"
     for path in ${paths[@]+"${paths[@]}"}; do
-        kind=$(kind_of "$path")
+        kind_of "$path"
         case "$kind" in
             "$TRACKED") tracked=$((tracked + 1)) ;;
             "$IGNORED") ignored=$((ignored + 1)) ;;
             "$UNTRACKED") untracked=$((untracked + 1)) ;;
+            "$MISSING") missing=$((missing + 1)) ;;
             *) outside=$((outside + 1)) ;;
         esac
-        echo "| \`$path\` | $kind |"
+        echo "| \`$path\` | $kind | $reason |"
     done
 } > "$table" || die "could not write $table"
 
-total=$((tracked + ignored + untracked + outside))
-counts="${TRACKED} ${tracked}件・${UNTRACKED} ${untracked}件・${IGNORED} ${ignored}件・${OUTSIDE} ${outside}件"
+total=$((tracked + ignored + untracked + missing + outside))
+counts="${TRACKED} ${tracked}件・${UNTRACKED} ${untracked}件・${IGNORED} ${ignored}件・${MISSING} ${missing}件・${OUTSIDE} ${outside}件"
 if [ -z "$section" ]; then
     exit_name="$JUDGE_EXIT"
     report="${task} の notes に「${SECTION#\#\# }」の節がありません"
@@ -139,6 +155,9 @@ elif [ "$total" -eq 0 ]; then
 elif [ "$outside" -gt 0 ]; then
     exit_name="$JUDGE_EXIT"
     report="${task} の「${SECTION#\#\# }」に ${top} の外のパスがあります（${counts}）"
+elif [ "$missing" -gt 0 ]; then
+    exit_name="$JUDGE_EXIT"
+    report="${task} の「${SECTION#\#\# }」に、親のフォルダも ${top} に無いパスがあります（${counts}）"
 elif [ "$ignored" -eq "$total" ]; then
     exit_name="$IGNORED_EXIT"
     report="${task} の「${SECTION#\#\# }」のパスは、すべて ${top} の gitignore されたファイルです（${counts}）"

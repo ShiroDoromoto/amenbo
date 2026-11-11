@@ -294,8 +294,6 @@ pub struct HeldBack {
     /// nor is one held only by its creation not being finished, for it is in the hands of whoever is
     /// creating it.
     pub awaits_person: usize,
-    /// The first of those still being created, by its id. `None` where none is.
-    pub first_draft: Option<i64>,
 }
 
 /// One value holding tasks back — by the axis's id, which is where a person goes to close it, and by

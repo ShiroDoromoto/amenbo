@@ -4606,13 +4606,6 @@ impl Instructor {
                 "In the workspace, press the control that takes away the pane this run is drawn in. Confirm a question comes up before the pane goes — where the launch is still going, it says the run stops with the pane — and answer it to take the pane away."
                     .to_string()
             }
-            // Following a waiting launch to what a person has to do for its role's tasks: the role's
-            // one line counting them, which goes to where the first of them is done — for a task held
-            // by a value, the panel its axis is managed in. Which value is not drawn on the pane;
-            // `dimension focused` reads where the press landed.
-            (Domain::Automation, "open-held-value") => {
-                "In the workspace, in the pane standing for this automation's launch, on the bar of its roles under the desks, on the line of the role whose tasks cannot be taken, press \"Tasks waiting for a person\" with its count.".to_string()
-            }
             // The header's own link (`app/src/shell/LaunchHead.tsx`), whichever seat is in front: no
             // row of any one run is drawn under it.
             (Domain::Automation, "see-history") => {
@@ -6880,10 +6873,10 @@ impl Instructor {
             },
             // What keeps a launch's role waiting, read off the role on the bar of the launch's pane
             // (`app/src/shell/RunPicture.tsx`, `RunRoles`). Only the tasks a person has to do something
-            // for are counted, in one line per role: which value, decision or unfinished
-            // task holds them is where the line goes, not something it lists.
+            // for are counted, in one line per role, and only how many: which value or decision holds
+            // them is not listed, and the line is not pressed.
             (Domain::Automation, "held-back") => format!(
-                "In the workspace, in the pane standing for this automation's launch, on the bar of its roles under the desks, confirm that one role's line carries, after its name and headcount, \"Tasks waiting for a person: {}\", and that no task is listed one by one under it.",
+                "In the workspace, in the pane standing for this automation's launch, on the bar of its roles under the desks, confirm that one role's line carries, after its name and headcount, \"Tasks waiting for a person: {}\" as plain text with nothing to press, and that no task is listed one by one under it.",
                 count(with, "tasks")?
             ),
             // The header of the launch's pane (`app/src/shell/LaunchHead.tsx`). Where the launch stands

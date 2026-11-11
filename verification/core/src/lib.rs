@@ -4715,16 +4715,13 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "see-history", required: &[], refs: &["target"], strings: &[], binds: false },
     // **What keeps a launch's role waiting for a person**, on the role's line on the bar
     // of the launch's pane: how many of its tasks move only once a person has done something — a value
-    // ordered before theirs still open, a decision not settled, a task still being created (`tasks`).
-    // The tasks are not listed one by one, nor what holds each. `target` is the automation, since a
-    // launch waiting with nothing to take has no run to name.
+    // ordered before theirs still open or a decision not settled (`tasks`). A task still being created
+    // is not counted. The tasks are not listed one by one, nor what holds each, and the
+    // line is not pressed. `target` is the automation, since a launch waiting with nothing to take has
+    // no run to name.
     //
     // A screen road alone. The terminal says a run waits (`run-show`) and counts nothing.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "held-back", required: &["tasks"], refs: &["target"], strings: &[], binds: false },
-    // Pressing that line, which goes to where the first of them is done — for a task held by a value,
-    // the launch's project with the panel managing its categories open on the value's axis, which is
-    // what `dimension focused` reads.
-    OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "open-held-value", required: &[], refs: &["target"], strings: &[], binds: false },
     //
     // **What a step of a run types**, typed where the run opened a terminal for it. Which step is
     // being answered is not in any of them: it comes off the environment the window set on that

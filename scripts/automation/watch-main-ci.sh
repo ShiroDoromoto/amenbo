@@ -29,12 +29,12 @@ cd "$(dirname "$0")/../.."
 . scripts/automation/step-lib.sh
 
 commit=$(input コミット)
-[[ "$commit" =~ ^[0-9a-f]{7,40}$ ]] || die "no commit in the input: \"$commit\""
+[[ "$commit" =~ ^[0-9a-f]{7,40}$ ]] || die "入力にコミットがありません：\"$commit\""
 resolve_repo
 
 parent=$(gh api "repos/$repo/commits/$commit" --jq '.parents[0].sha') ||
-    die "could not read the commit $commit on $repo"
-[ -n "$parent" ] || die "the commit $commit on $repo has no parent"
+    die "$repo のコミット $commit を読めませんでした"
+[ -n "$parent" ] || die "$repo のコミット $commit に親がありません"
 
 code=0
 id=$(resolve_run main "$commit") || code=$?
@@ -44,7 +44,7 @@ case "$code" in
         echo "no push run started for $commit; dispatching ci-change-manual.yml against $parent" >&2
         stamp=$(now_utc)
         gh workflow run ci-change-manual.yml -R "$repo" --ref main -f "base=$parent" ||
-            die "could not dispatch ci-change-manual.yml on main"
+            die "main で ci-change-manual.yml を起動できませんでした"
         id=$(resolve_run dispatch ci-change-manual.yml main "$stamp")
         ;;
     *) exit "$code" ;;
@@ -52,7 +52,7 @@ esac
 
 verdict=$(watch_run "$id")
 if [ "$verdict" = green ]; then
-    leave 完了 "$(jq -n --arg c "$commit" '{"コミット": $c}')" "main is green at $commit: $(run_url "$id")"
+    leave 完了 "$(jq -n --arg c "$commit" '{"コミット": $c}')" "main は $commit で緑です：$(run_url "$id")"
 fi
 
 {
@@ -60,4 +60,4 @@ fi
     echo "main before it: $parent"
     write_red_run "$id"
 } > "$out_dir/red.log"
-leave "main が赤" '{"指摘": "red.log"}' "main is red at $commit, run $id ($(failed_jobs "$id")): $(run_url "$id")"
+leave "main が赤" '{"指摘": "red.log"}' "main は $commit で赤です。run ${id}（$(failed_jobs "$id")）：$(run_url "$id")"

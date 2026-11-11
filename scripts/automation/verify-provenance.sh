@@ -32,11 +32,11 @@ cd "$(dirname "$0")/../.."
 version=$(input_version)
 place=$(input_place)
 pkg="$place/dist-macos/amenbo-darwin-arm64.pkg"
-[ -f "$pkg" ] || die "no $pkg"
+[ -f "$pkg" ] || die "$pkg がありません"
 resolve_repo
 
-sha=$(gh api "repos/$repo/commits/v$version" --jq .sha) || die "could not read the commit of v$version on $repo"
-[ -n "$sha" ] || die "the tag v$version on $repo names no commit"
+sha=$(gh api "repos/$repo/commits/v$version" --jq .sha) || die "$repo の v$version のコミットを読めませんでした"
+[ -n "$sha" ] || die "$repo のタグ v$version がコミットを指していません"
 
 code=0
 gh attestation verify "$pkg" --repo "$repo" --format json > "$place/attestation.json" 2> "$place/attestation.log" || code=$?
@@ -46,21 +46,21 @@ got_sha=""
 got_workflow=""
 if [ "$code" = 0 ]; then
     cert='.[0].verificationResult.signature.certificate'
-    got_repo=$(jq -r "$cert.sourceRepositoryURI // empty" "$place/attestation.json") || die "could not read $place/attestation.json"
+    got_repo=$(jq -r "$cert.sourceRepositoryURI // empty" "$place/attestation.json") || die "$place/attestation.json を読めませんでした"
     got_sha=$(jq -r "$cert.sourceRepositoryDigest // empty" "$place/attestation.json")
     got_workflow=$(jq -r "$cert.buildSignerURI // empty" "$place/attestation.json")
 fi
 
 wrong=()
-[ "$code" = 0 ] || wrong+=("gh attestation verify ended with exit code $code: $(tail -n 1 "$place/attestation.log")")
+[ "$code" = 0 ] || wrong+=("gh attestation verify が終了コード $code で終わりました：$(tail -n 1 "$place/attestation.log")")
 [ "$code" != 0 ] || [ "$got_repo" = "https://github.com/$repo" ] ||
-    wrong+=("repo is \"$got_repo\", not https://github.com/$repo")
-[ "$code" != 0 ] || [ "$got_sha" = "$sha" ] || wrong+=("sha is \"$got_sha\", not $sha (v$version)")
+    wrong+=("repo が https://github.com/$repo ではなく \"$got_repo\" です")
+[ "$code" != 0 ] || [ "$got_sha" = "$sha" ] || wrong+=("sha が ${sha}（v${version}）ではなく \"$got_sha\" です")
 [ "$code" != 0 ] || [[ "$got_workflow" == *"_release.yml@refs/tags/v$version" ]] ||
-    wrong+=("workflow is \"$got_workflow\", which does not end with _release.yml@refs/tags/v$version")
+    wrong+=("workflow が \"$got_workflow\" で、_release.yml@refs/tags/v$version で終わっていません")
 
 if [ "${#wrong[@]}" = 0 ]; then
-    leave 完了 '{}' "the provenance of $(basename "$pkg") holds: $repo at $sha, signed by $got_workflow"
+    leave 完了 '{}' "$(basename "$pkg") の来歴を確かめました：$repo の $sha から、$got_workflow で署名されています"
 fi
 
 {
@@ -72,4 +72,4 @@ fi
     echo
     printf -- '- %s\n' "${wrong[@]}"
 } > "$out_dir/$RED_FILE"
-leave_red "$RED_FILE" "the provenance of $(basename "$pkg") does not hold: ${wrong[0]}"
+leave_red "$RED_FILE" "$(basename "$pkg") の来歴が合いません：${wrong[0]}"

@@ -34,16 +34,16 @@ cd "$(dirname "$0")/../.."
 die() { echo "✗ $*" >&2; exit 1; }
 
 [ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
-    die "run this as a script step: AMENBO_INPUT and AMENBO_OUTPUT are not set"
+    die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"
 
 pr=$(jq -r '.ins["PR"] // empty' "$AMENBO_INPUT")
-[[ "$pr" =~ ^[0-9]+$ ]] || die "no pull request number in the input: \"$pr\""
+[[ "$pr" =~ ^[0-9]+$ ]] || die "入力にプルリクエストの番号がありません：\"$pr\""
 
 if [ -n "${AMENBO_CI_REPO:-}" ]; then
     repo="$AMENBO_CI_REPO"
 else
     repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
-        die "no repository: set AMENBO_CI_REPO=OWNER/REPO"
+        die "リポジトリがわかりません：AMENBO_CI_REPO=OWNER/REPO を設定してください"
 fi
 url="https://github.com/$repo/pull/$pr"
 
@@ -75,9 +75,9 @@ done < "$work/events"
 leave_conflict() {
     local v
     v=$(gh pr view "$pr" -R "$repo" --json state,mergeStateStatus --jq '"\(.state) \(.mergeStateStatus)"') ||
-        die "could not read the merge state of $url"
-    [ "$v" = "OPEN DIRTY" ] || die "watch-ci.sh said DIRTY, and the pull request reads \"$v\": $url"
-    leave 衝突 '{}' "pull request $pr conflicts with main: $url"
+        die "マージの状態を読めませんでした：$url"
+    [ "$v" = "OPEN DIRTY" ] || die "watch-ci.sh は DIRTY と言いましたが、プルリクエストは \"$v\" です：$url"
+    leave 衝突 '{}' "プルリクエスト $pr が main と衝突しています：$url"
 }
 
 if [ -n "$dirty" ]; then
@@ -95,23 +95,23 @@ watch=""
 
 case "$watched" in
     0)
-        v=$(gh pr view "$pr" -R "$repo" --json state,mergeCommit) || die "could not read the landing of $url"
-        [ "$(jq -r .state <<< "$v")" = MERGED ] || die "watch-ci.sh said merged, and the pull request reads $(jq -c . <<< "$v"): $url"
+        v=$(gh pr view "$pr" -R "$repo" --json state,mergeCommit) || die "マージされたかどうかを読めませんでした：$url"
+        [ "$(jq -r .state <<< "$v")" = MERGED ] || die "watch-ci.sh はマージ済みと言いましたが、プルリクエストは $(jq -c . <<< "$v") です：$url"
         oid=$(jq -r '.mergeCommit.oid // empty' <<< "$v")
-        [ -n "$oid" ] || die "pull request $pr is merged, and carries no merge commit: $url"
-        leave 完了 "$(jq -n --arg c "$oid" '{"コミット": $c}')" "pull request $pr landed as $oid: $url"
+        [ -n "$oid" ] || die "プルリクエスト $pr はマージ済みですが、マージコミットがありません：$url"
+        leave 完了 "$(jq -n --arg c "$oid" '{"コミット": $c}')" "プルリクエスト $pr が $oid としてマージされました：$url"
         ;;
     1)
         # 1 is also a watch that broke, and a pull request closed without merging. Only a check
         # read as failed or cancelled now is red.
-        state=$(gh pr view "$pr" -R "$repo" --json state --jq .state) || die "could not read the state of $url"
-        [ "$state" = OPEN ] || die "pull request $pr is $state without landing: $url"
+        state=$(gh pr view "$pr" -R "$repo" --json state --jq .state) || die "プルリクエストの状態を読めませんでした：$url"
+        [ "$state" = OPEN ] || die "プルリクエスト $pr はマージされないまま $state になっています：$url"
         # `gh pr checks` exits non-zero when a check failed, so its output is what is read.
         checks=$(gh pr checks "$pr" -R "$repo" --json name,bucket,link 2>&1) || :
         failed=$(jq -c '[.[] | select(.bucket == "fail" or .bucket == "cancel")]' <<< "$checks" 2>/dev/null) ||
-            die "could not read the checks of $url: $checks"
+            die "チェックを読めませんでした：${url}：$checks"
         [ "$(jq length <<< "$failed")" -gt 0 ] ||
-            die "watch-ci.sh ended with exit code 1, and no check of $url reads failed: $(tail -n 1 "$work/events.log" 2>/dev/null)"
+            die "watch-ci.sh は終了コード 1 で終わりましたが、失敗したチェックがありません（${url}）：$(tail -n 1 "$work/events.log" 2>/dev/null)"
         while IFS=$'\t' read -r name bucket link; do
             echo "## $name ($bucket) $link"
             run=$(sed -nE 's|.*/actions/runs/([0-9]+).*|\1|p' <<< "$link")
@@ -121,11 +121,11 @@ case "$watched" in
             fi
             echo
         done < <(jq -r '.[] | [.name, .bucket, .link] | @tsv' <<< "$failed") > "$out_dir/failed.log"
-        leave 赤 '{"指摘": "failed.log"}' "pull request $pr is red ($(jq -r 'map(.name) | join(", ")' <<< "$failed")): $url"
+        leave 赤 '{"指摘": "failed.log"}' "プルリクエスト $pr のチェックが赤です（$(jq -r 'map(.name) | join(", ")' <<< "$failed")）：$url"
         ;;
     4)
-        die "every check of $url is green and it is not merging: $(grep '^settled but not merging:' "$work/events.log" | tail -n 1)"
+        die "チェックはすべて緑ですが、マージされません（${url}）：$(grep '^settled but not merging:' "$work/events.log" | tail -n 1)"
         ;;
     6) leave_conflict ;;
-    *) die "watch-ci.sh pr $pr ended with exit code $watched: $url" ;;
+    *) die "watch-ci.sh pr $pr が終了コード $watched で終わりました：$url" ;;
 esac

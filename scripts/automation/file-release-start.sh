@@ -38,37 +38,37 @@ cd "$(dirname "$0")/../.."
 die() { echo "✗ $*" >&2; exit 1; }
 
 [ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
-    die "run this as a script step: AMENBO_INPUT and AMENBO_OUTPUT are not set"
+    die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"
 
-input() { jq -r --arg i "$1" '.ins[$i] // empty' "$AMENBO_INPUT" || die "could not read $AMENBO_INPUT"; }
+input() { jq -r --arg i "$1" '.ins[$i] // empty' "$AMENBO_INPUT" || die "$AMENBO_INPUT を読めませんでした"; }
 version=$(input "$VERSION_INPUT")
-[ -n "$version" ] || die "no version: wire the version into this step's $VERSION_INPUT"
+[ -n "$version" ] || die "バージョンがありません：バージョンを、このステップの「${VERSION_INPUT}」につないでください"
 build=$(input "$BUILD_INPUT")
-[ -n "$build" ] || die "no build number: wire it into this step's $BUILD_INPUT"
+[ -n "$build" ] || die "ビルド番号がありません：ビルド番号を、このステップの「${BUILD_INPUT}」につないでください"
 state=$(input "$STATE_INPUT")
-[ -n "$state" ] || die "no state of the stores: wire it into this step's $STATE_INPUT"
+[ -n "$state" ] || die "ストアの状態がありません：ストアの状態を、このステップの「${STATE_INPUT}」につないでください"
 folder=$(input "$FOLDER_INPUT")
 task=$(input "$TASK_INPUT")
 
 amenbo_ai() { amenbo "$@" --actor ai; }
 
 if [ -z "$task" ]; then
-    [ -n "${AMENBO_RUN:-}" ] || die "no task: wire one into $TASK_INPUT, or run this as a step of a run"
+    [ -n "${AMENBO_RUN:-}" ] || die "タスクがありません：「${TASK_INPUT}」にタスクをつなぐか、run のステップとして動かしてください"
     id=$(amenbo_ai automation run-show "$AMENBO_RUN" --json | jq -r '.tasks[-1].task_id // empty') ||
-        die "could not read run $AMENBO_RUN"
-    [ -n "$id" ] || die "run $AMENBO_RUN has taken no task"
+        die "run $AMENBO_RUN を読めませんでした"
+    [ -n "$id" ] || die "run $AMENBO_RUN はタスクを取っていません"
     task="AMB-T-$id"
 fi
 
 if [ -z "$folder" ]; then
-    folder=$(amenbo_ai task show "$task" --json | jq -r '.at.dir // empty') || die "could not read $task"
+    folder=$(amenbo_ai task show "$task" --json | jq -r '.at.dir // empty') || die "$task を読めませんでした"
 fi
 at_args=()
 [ -z "$folder" ] || at_args=(--at "$folder")
 
 # shellcheck disable=SC2016 # the backticks are Markdown, not a command
 notes=$(printf '%s\n' \
-    "- 版：$version" \
+    "- バージョン：$version" \
     "- ビルド番号：$build" \
     "- ストアの状態：$state" \
     '' \
@@ -79,15 +79,15 @@ notes=$(printf '%s\n' \
 title="${version}（${PRODUCT}）の審査が通ったら配信を始める"
 id=$(amenbo_ai task add --title "$title" --notes - --to human ${at_args[@]+"${at_args[@]}"} \
     --dim "プロダクト=$PRODUCT" --dim テーマ=メイン --dim 作業種別=リリース作業 \
-    --json <<< "$notes" | jq -r '.task.id // empty') || die "could not file the task to start the release"
-[ -n "$id" ] || die "filing the task to start the release gave no task id"
+    --json <<< "$notes" | jq -r '.task.id // empty') || die "配信開始のタスクを起票できませんでした"
+[ -n "$id" ] || die "配信開始のタスクを起票しましたが、タスクの id を読めませんでした"
 filed="AMB-T-$id"
-amenbo_ai task finish-creating "$filed" >&2 || die "could not finish creating $filed"
-amenbo_ai task block "$filed" --reason "$BLOCK_REASON" >&2 || die "could not mark $filed blocked"
+amenbo_ai task finish-creating "$filed" >&2 || die "$filed の作成を終えられませんでした"
+amenbo_ai task block "$filed" --reason "$BLOCK_REASON" >&2 || die "$filed を blocked にできませんでした"
 
-printf '%s\n' "版 ${version}（ビルド ${build}）を両ストアへ出しました。" "- ストアの状態：$state" \
+printf '%s\n' "バージョン ${version}（ビルド ${build}）を両ストアへ出しました。" "- ストアの状態：$state" \
     "- 配信開始のタスク：$filed" | amenbo_ai comment add "$task" --text - >&2 ||
-    die "could not add the comment to $task"
+    die "$task にコメントを付けられませんでした"
 
 report="配信開始のタスク ${filed}「${title}」を起票し、ストアの審査待ちにしました。${task} にコメントしました。"
 jq -n --arg exit "$DONE_EXIT" --arg report "$report" \

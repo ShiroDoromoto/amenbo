@@ -29,20 +29,20 @@ cd "$(dirname "$0")/../.."
 die() { echo "✗ $*" >&2; exit 1; }
 
 [ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
-    die "run this as a script step: AMENBO_INPUT and AMENBO_OUTPUT are not set"
+    die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"
 
-value=$(jq -r --arg i "$VALUE_INPUT" '.ins[$i] // empty' "$AMENBO_INPUT") || die "could not read $AMENBO_INPUT"
-[ -n "$value" ] || die "no value: wire the release axis's value into this step's $VALUE_INPUT"
+value=$(jq -r --arg i "$VALUE_INPUT" '.ins[$i] // empty' "$AMENBO_INPUT") || die "$AMENBO_INPUT を読めませんでした"
+[ -n "$value" ] || die "値がありません：軸「リリース」の値を、このステップの「${VALUE_INPUT}」につないでください"
 
 amenbo_ai() { amenbo "$@" --actor ai; }
 
 slug=$(amenbo_ai dimension show リリース --closed --json |
     jq -r --arg v "$value" '[.values[] | select(.name == $v) | .slug][0] // empty') ||
-    die "could not read the release axis"
-[ -n "$slug" ] || die "\"$value\" is not a value of the release axis"
+    die "軸「リリース」を読めませんでした"
+[ -n "$slug" ] || die "「${value}」は軸「リリース」の値ではありません"
 
 undone=$(amenbo_ai task list --filter "dim:リリース=$slug done:false" --json) ||
-    die "could not list the undone tasks of \"$value\""
+    die "「${value}」の done でないタスクの一覧を読めませんでした"
 
 if [ "$(jq -r '.tasks | length' <<< "$undone")" != 0 ]; then
     report="分類「${value}」には done でないタスクが残っているので、閉じていません。"$'\n'
@@ -52,10 +52,10 @@ if [ "$(jq -r '.tasks | length' <<< "$undone")" != 0 ]; then
     exit 0
 fi
 
-amenbo_ai dimension value-close リリース "$slug" --yes >&2 || die "could not close \"$value\""
+amenbo_ai dimension value-close リリース "$slug" --yes >&2 || die "「${value}」を閉じられませんでした"
 
 next=$(amenbo_ai dimension show リリース --json | jq -r '[.values[] | select(.closed | not) | .name][0] // empty') ||
-    die "could not read the release axis"
+    die "軸「リリース」を読めませんでした"
 
 report="分類「${value}」を閉じました。次に開いている値：${next:-なし}"
 jq -n --arg exit "$DONE_EXIT" --arg report "$report" \

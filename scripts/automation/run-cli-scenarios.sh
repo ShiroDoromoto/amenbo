@@ -30,9 +30,9 @@ cd "$(dirname "$0")/../.."
 
 place=$(input_place)
 pkg="$place/dist-macos/amenbo-darwin-arm64.pkg"
-[ -f "$pkg" ] || die "no $pkg"
-command -v devtool >/dev/null || make devtool >&2 || die "devtool is not on the PATH, and make devtool failed"
-command -v devtool >/dev/null || die "devtool is not on the PATH after make devtool"
+[ -f "$pkg" ] || die "$pkg がありません"
+command -v devtool >/dev/null || make devtool >&2 || die "devtool が PATH に無く、make devtool も失敗しました"
+command -v devtool >/dev/null || die "make devtool のあとも devtool が PATH にありません"
 
 json="$place/verify-cli.json"
 log="$place/verify-cli.log"
@@ -44,9 +44,9 @@ rollup=$(grep '^{' "$json" | tail -n 1 | jq -c 'select(has("total"))' 2>/dev/nul
 
 if [ "$code" = 0 ]; then
     if [ -n "$rollup" ]; then
-        leave 完了 '{}' "$(jq -r '"the CLI scenarios are green: \(.passed) of \(.total) passed, \(.skipped) skipped for their driver"' <<< "$rollup")"
+        leave 完了 '{}' "$(jq -r '"CLI のシナリオは緑です：\(.total) 件のうち \(.passed) 件が通り、ドライバの都合で \(.skipped) 件を飛ばしました"' <<< "$rollup")"
     fi
-    leave 完了 '{}' "devtool vm verify cli ended with exit code 0, but left no roll-up in $json"
+    leave 完了 '{}' "devtool vm verify cli は終了コード 0 で終わりましたが、$json に集計がありません"
 fi
 
 {
@@ -73,6 +73,6 @@ fi
     fi
 } > "$out_dir/$RED_FILE"
 if [ -n "$rollup" ]; then
-    leave_red "$RED_FILE" "$(jq -r '"the CLI scenarios are red: \(.failed) of \(.total) failed (\([.scenarios[] | select(.passed == false) | .scenario // .path] | join(", ")))"' <<< "$rollup")"
+    leave_red "$RED_FILE" "$(jq -r '"CLI のシナリオが赤です：\(.total) 件のうち \(.failed) 件が失敗しました（\([.scenarios[] | select(.passed == false) | .scenario // .path] | join(", "))）"' <<< "$rollup")"
 fi
-leave_red "$RED_FILE" "devtool vm verify cli ended with exit code $code before any result: $(tail -n 1 "$log")"
+leave_red "$RED_FILE" "devtool vm verify cli が、結果を出す前に終了コード $code で終わりました：$(tail -n 1 "$log")"

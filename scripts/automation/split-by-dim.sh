@@ -26,19 +26,19 @@ cd "$(dirname "$0")/../.."
 die() { echo "✗ $*" >&2; exit 1; }
 
 [ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
-    die "run this as a script step: AMENBO_INPUT and AMENBO_OUTPUT are not set"
+    die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"
 
 axis="${1:-}"
-[ -n "$axis" ] || die "no axis: pass the axis's name as the first argument"
+[ -n "$axis" ] || die "軸がありません：1つ目の引数に軸の名前を渡してください"
 shift
 values=("$@")
 
-task=$(jq -r --arg i "$TASK_INPUT" '.ins[$i] // empty' "$AMENBO_INPUT") || die "could not read $AMENBO_INPUT"
-[ -n "$task" ] || die "no task: wire take_task's $TASK_INPUT into this step's $TASK_INPUT"
+task=$(jq -r --arg i "$TASK_INPUT" '.ins[$i] // empty' "$AMENBO_INPUT") || die "$AMENBO_INPUT を読めませんでした"
+[ -n "$task" ] || die "タスクがありません：take_task の「${TASK_INPUT}」を、このステップの「${TASK_INPUT}」につないでください"
 
 value=$(amenbo task show "$task" --json --actor ai |
     jq -r --arg a "$axis" '[.dimensions[] | select(.dimension == $a) | .value][0] // empty') ||
-    die "could not read $task"
+    die "$task を読めませんでした"
 
 exit_name="$NO_VALUE"
 for one in "${values[@]}"; do

@@ -36,11 +36,11 @@ cd "$(dirname "$0")/../.."
 die() { echo "✗ $*" >&2; exit 1; }
 
 [ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
-    die "run this as a script step: AMENBO_INPUT and AMENBO_OUTPUT are not set"
+    die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"
 
-table=$(jq -r --arg i "$FILED_INPUT" '.ins[$i] // empty' "$AMENBO_INPUT") || die "could not read $AMENBO_INPUT"
-[ -n "$table" ] || die "no table: wire the filed tasks into this step's $FILED_INPUT"
-[ -r "$table" ] || die "could not read the table at $table"
+table=$(jq -r --arg i "$FILED_INPUT" '.ins[$i] // empty' "$AMENBO_INPUT") || die "$AMENBO_INPUT を読めませんでした"
+[ -n "$table" ] || die "表がありません：起票したタスクの表を、このステップの「${FILED_INPUT}」につないでください"
+[ -r "$table" ] || die "表 $table を読めませんでした"
 
 # Each table row is split on its bars and its cells trimmed. The first row that carries both headings
 # says which cells they are; a row whose filed cell says yes gives the task in its ref cell. It is read
@@ -51,7 +51,7 @@ refs=$(jq -Rnr --arg ref "$REF_COLUMN" --arg filed "$FILED_COLUMN" --arg yes "$F
         | first) as $cols
     | if $cols == null then error("no columns")
       else $rows[] | select(.[$cols[1]] == $yes) | .[$cols[0]] end
-' "$table") || die "the table at $table has no \"$REF_COLUMN\" and \"$FILED_COLUMN\" columns"
+' "$table") || die "表 $table に「${REF_COLUMN}」と「${FILED_COLUMN}」の列がありません"
 
 amenbo_ai() { amenbo "$@" --actor ai; }
 
@@ -78,7 +78,7 @@ while IFS= read -r ref; do
 done <<< "$refs"
 
 drafts=$(amenbo_ai task list --filter "draft:yes" --json | jq -r '.tasks[].ref') ||
-    die "could not list the tasks being created"
+    die "作成中のタスクの一覧を読めませんでした"
 left=()
 for ref in ${targets[@]+"${targets[@]}"}; do
     if grep -qxF "$ref" <<< "$drafts"; then left+=("$ref"); fi

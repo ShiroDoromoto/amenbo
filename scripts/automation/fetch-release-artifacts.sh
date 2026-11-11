@@ -39,10 +39,10 @@ cd "$(dirname "$0")/../.."
 
 version=$(input_version)
 run=$(input run)
-[[ "$run" =~ ^[0-9]+$ ]] || die "no run id in the input: \"$run\""
+[[ "$run" =~ ^[0-9]+$ ]] || die "入力に run の id がありません：\"$run\""
 task=$(input タスク)
 task="${task#AMB-T-}"
-[ -z "$task" ] || [[ "$task" =~ ^[0-9]+$ ]] || die "the task in the input is not a task: \"$task\""
+[ -z "$task" ] || [[ "$task" =~ ^[0-9]+$ ]] || die "入力のタスクがタスクの番号ではありません：\"$task\""
 resolve_repo
 
 tmp="${TMPDIR:-/tmp}"
@@ -52,20 +52,20 @@ if [ -n "$task" ]; then
 else
     place="$tmp/amenbo-release-$version"
 fi
-mkdir -p "$place" || die "could not make $place"
+mkdir -p "$place" || die "$place を作れませんでした"
 
 names=$(gh api "repos/$repo/actions/runs/$run/artifacts" --paginate --jq '.artifacts[].name | select(startswith("dist-"))') ||
-    die "could not list the artifacts of $(run_url "$run")"
-[ -n "$names" ] || die "$(run_url "$run") has no artifact named dist-*"
+    die "run の成果物の一覧を読めませんでした：$(run_url "$run")"
+[ -n "$names" ] || die "run に dist-* という名前の成果物がありません：$(run_url "$run")"
 
 while IFS= read -r name; do
     rm -rf "${place:?}/$name"
     gh run download "$run" --repo "$repo" --name "$name" -D "$place/$name" >&2 ||
-        die "could not download $name from $(run_url "$run")"
+        die "$name をダウンロードできませんでした：$(run_url "$run")"
 done <<< "$names"
 
 gh api "repos/$repo/releases/tags/v$version" --jq '.assets[] | "\(.digest) \(.name)"' > "$place/release-digests.txt" ||
-    die "could not read the release v$version on $repo"
+    die "$repo のリリース v$version を読めませんでした"
 
 ok=0
 absent=0
@@ -85,10 +85,10 @@ while IFS= read -r -d '' file; do
     fi
 done < <(find "$place" -mindepth 2 -type f -path "$place/dist-*" -print0)
 
-counts="$ok OK, $absent not on the release, ${#differ[@]} different"
+counts="一致 ${ok}件、リリースに無い ${absent}件、違う ${#differ[@]}件"
 if [ "${#differ[@]}" = 0 ]; then
     leave 完了 "$(jq -n --arg k "$PLACE_OUTPUT" --arg p "$place" '{($k): $p}')" \
-        "the artifacts of $(run_url "$run") match the release v$version: $counts. Downloaded to $place"
+        "run の成果物はリリース v$version と一致しました（${counts}）。ダウンロード先：${place}。run：$(run_url "$run")"
 fi
 
 {
@@ -101,4 +101,4 @@ fi
     echo
     printf -- '- %s\n' "${differ[@]}"
 } > "$out_dir/$RED_FILE"
-leave_red "$RED_FILE" "the artifacts of $(run_url "$run") differ from the release v$version: $counts"
+leave_red "$RED_FILE" "run の成果物がリリース v$version と違います（${counts}）。run：$(run_url "$run")"

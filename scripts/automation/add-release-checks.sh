@@ -43,22 +43,22 @@ cd "$(dirname "$0")/../.."
 die() { echo "✗ $*" >&2; exit 1; }
 
 [ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
-    die "run this as a script step: AMENBO_INPUT and AMENBO_OUTPUT are not set"
+    die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"
 
-given=$(jq -r --arg i "$CHECKS_INPUT" '.ins[$i] // empty' "$AMENBO_INPUT") || die "could not read $AMENBO_INPUT"
-[ -n "$given" ] || die "no list: wire the checks into this step's $CHECKS_INPUT"
+given=$(jq -r --arg i "$CHECKS_INPUT" '.ins[$i] // empty' "$AMENBO_INPUT") || die "$AMENBO_INPUT を読めませんでした"
+[ -n "$given" ] || die "一覧がありません：確かめることの一覧を、このステップの「${CHECKS_INPUT}」につないでください"
 if [ -f "$given" ]; then
-    list=$(cat "$given") || die "could not read the list at $given"
+    list=$(cat "$given") || die "一覧 $given を読めませんでした"
 else
     list="$given"
 fi
 
 checks=$(jq -Rc '
     capture("^\\s*(?:[-*]\\s+(?:\\[[ xX]\\]\\s+)?)?AMB-T-(?<n>[0-9]+)\\s*[：:]\\s*(?<what>.*\\S)\\s*$")
-' <<< "$list") || die "could not read the list"
+' <<< "$list") || die "一覧を読めませんでした"
 
 if [ -z "$checks" ]; then
-    [ -z "$(tr -d '[:space:]' <<< "$list")" ] || die "the list holds no line of the form AMB-T-<n>：<what to check>"
+    [ -z "$(tr -d '[:space:]' <<< "$list")" ] || die "一覧に「AMB-T-<n>：<確かめること>」の形の行がありません"
     jq -n --arg exit "$DONE_EXIT" '{version: 1, exit: $exit, outs: {}, report: "足す項目：なし"}' > "$AMENBO_OUTPUT"
     exit 0
 fi
@@ -70,10 +70,10 @@ slug_of() {
         jq -r --arg v "$2" '[.values[] | select(.name == $v) | .slug][0] // empty'
 }
 
-kind_slug=$(slug_of 作業種別 "$RELEASE_KIND") || die "could not read the kind-of-work axis"
-[ -n "$kind_slug" ] || die "\"$RELEASE_KIND\" is not a value of the kind-of-work axis"
+kind_slug=$(slug_of 作業種別 "$RELEASE_KIND") || die "軸「作業種別」を読めませんでした"
+[ -n "$kind_slug" ] || die "「${RELEASE_KIND}」は軸「作業種別」の値ではありません"
 first_open=$(amenbo_ai dimension show リリース --json | jq -r '[.values[] | select(.closed | not) | .name][0] // empty') ||
-    die "could not read the release axis"
+    die "軸「リリース」を読めませんでした"
 
 # Whether the notes already hold a checklist line for task n.
 # shellcheck disable=SC2016 # $n is jq's, not the shell's
@@ -101,7 +101,7 @@ while IFS= read -r check; do
     n=$(jq -r .n <<< "$check")
     what=$(jq -r .what <<< "$check")
     task="AMB-T-$n"
-    shown=$(amenbo_ai task show "$task" --json) || die "could not read $task"
+    shown=$(amenbo_ai task show "$task" --json) || die "$task を読めませんでした"
     value=$(jq -r '[.dimensions[] | select(.dimension == "リリース") | .value][0] // empty' <<< "$shown")
     [ -n "$value" ] || value="$first_open"
     product=$(jq -r '[.dimensions[] | select(.dimension == "プロダクト") | .value][0] // empty' <<< "$shown")
@@ -109,31 +109,31 @@ while IFS= read -r check; do
         missing+=("${task}：プロダクトかリリースの値が無い（${what}）")
         continue
     fi
-    value_slug=$(slug_of リリース "$value") || die "could not read the release axis"
-    [ -n "$value_slug" ] || die "\"$value\" is not a value of the release axis"
-    product_slug=$(slug_of プロダクト "$product") || die "could not read the product axis"
-    [ -n "$product_slug" ] || die "\"$product\" is not a value of the product axis"
+    value_slug=$(slug_of リリース "$value") || die "軸「リリース」を読めませんでした"
+    [ -n "$value_slug" ] || die "「${value}」は軸「リリース」の値ではありません"
+    product_slug=$(slug_of プロダクト "$product") || die "軸「プロダクト」を読めませんでした"
+    [ -n "$product_slug" ] || die "「${product}」は軸「プロダクト」の値ではありません"
 
     release=$(amenbo_ai task list --filter "dim:リリース=$value_slug dim:プロダクト=$product_slug dim:作業種別=$kind_slug" --json |
-        jq -r '.tasks[0].ref // empty') || die "could not list the release tasks of \"$value\""
+        jq -r '.tasks[0].ref // empty') || die "「${value}」のリリースのタスクの一覧を読めませんでした"
     if [ -z "$release" ]; then
         missing+=("${task}：分類「${value}」・プロダクト「${product}」のリリースのタスクが無い（${what}）")
         continue
     fi
 
-    notes=$(amenbo_ai task show "$release" --json | jq -r '.notes // ""') || die "could not read $release"
+    notes=$(amenbo_ai task show "$release" --json | jq -r '.notes // ""') || die "$release を読めませんでした"
     if [ "$(jq -Rsr --arg n "$n" "$HAS_LINE" <<< "$notes")" = true ]; then
         already+=("${release}：${task}")
         continue
     fi
     line="- [ ] ${task}：${what}"
     new_notes=$(jq -Rsr --arg heading "$CHECKLIST_HEADING" --arg line "$line" "$ADD_LINE" <<< "$notes") ||
-        die "could not add the line to the notes of $release"
-    amenbo_ai task update "$release" --notes - <<< "$new_notes" >&2 || die "could not write the notes of $release"
+        die "$release の notes に行を足せませんでした"
+    amenbo_ai task update "$release" --notes - <<< "$new_notes" >&2 || die "$release の notes を書き込めませんでした"
 
-    read_back=$(amenbo_ai task show "$release" --json | jq -r '.notes // ""') || die "could not read $release again"
+    read_back=$(amenbo_ai task show "$release" --json | jq -r '.notes // ""') || die "$release を読み直せませんでした"
     [ "$read_back" = "$new_notes" ] ||
-        die "the notes of $release did not read back as written"
+        die "$release の notes を読み直すと、書いたとおりになっていません"
     added+=("${release}：${line}")
 done <<< "$checks"
 

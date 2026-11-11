@@ -39,10 +39,10 @@ tag="v$version"
 resolve_repo
 
 stamp=$(now_utc)
-gh workflow run promote-manual.yml -R "$repo" --ref main -f "tag=$tag" || die "could not dispatch promote-manual.yml for $tag"
+gh workflow run promote-manual.yml -R "$repo" --ref main -f "tag=$tag" || die "$tag の promote-manual.yml を起動できませんでした"
 id=$(resolve_run dispatch promote-manual.yml main "$stamp")
 verdict=$(watch_run "$id")
-[ "$verdict" = green ] || die "the promotion of $tag is red ($(failed_jobs "$id")): $(run_url "$id")"
+[ "$verdict" = green ] || die "$tag の昇格が赤です（$(failed_jobs "$id")）：$(run_url "$id")"
 
 fetch() { curl -fsSL -H 'Cache-Control: no-cache' "$1?cb=$RANDOM"; }
 status_of() { curl -sIL -o /dev/null -w '%{http_code}' "$1" || true; }
@@ -53,30 +53,30 @@ joined() {
     echo "$out"
 }
 
-latest=$(fetch "https://github.com/$repo/releases/latest/download/latest.json") || die "could not fetch the latest latest.json"
-tauri=$(fetch "https://github.com/$repo/releases/latest/download/latest-tauri.json") || die "could not fetch the latest latest-tauri.json"
+latest=$(fetch "https://github.com/$repo/releases/latest/download/latest.json") || die "最新リリースの latest.json を取得できませんでした"
+tauri=$(fetch "https://github.com/$repo/releases/latest/download/latest-tauri.json") || die "最新リリースの latest-tauri.json を取得できませんでした"
 
 wrong=()
 for name in latest.json latest-tauri.json; do
     if [ "$name" = latest.json ]; then body="$latest"; else body="$tauri"; fi
-    served=$(jq -r '.version // empty' <<< "$body") || served="(not JSON)"
-    [ "${served#v}" = "$version" ] || wrong+=("$name serves version \"$served\", not $version")
+    served=$(jq -r '.version // empty' <<< "$body") || served="（JSON ではない）"
+    [ "${served#v}" = "$version" ] || wrong+=("$name のバージョンが $version ではなく \"$served\" です")
 done
 
 if [ "${#wrong[@]}" != 0 ]; then
-    prerelease=$(gh release view "$tag" -R "$repo" --json isPrerelease --jq .isPrerelease 2>/dev/null) || prerelease="(no release)"
-    own=$(fetch "https://github.com/$repo/releases/download/$tag/latest.json" | jq -r '.version // empty') || own="(unreadable)"
-    die "$(joined "${wrong[@]}"); $tag reads isPrerelease=$prerelease, and its own latest.json carries \"$own\""
+    prerelease=$(gh release view "$tag" -R "$repo" --json isPrerelease --jq .isPrerelease 2>/dev/null) || prerelease="（リリースが無い）"
+    own=$(fetch "https://github.com/$repo/releases/download/$tag/latest.json" | jq -r '.version // empty') || own="（読めない）"
+    die "$(joined "${wrong[@]}")。$tag は isPrerelease=$prerelease で、$tag 自身の latest.json のバージョンは \"$own\" です"
 fi
 
 for key in "${LATEST_KEYS[@]}"; do
     url=$(jq -r --arg k "$key" '.assets[$k] // empty' <<< "$latest")
     if [ -z "$url" ]; then
-        wrong+=("latest.json has no url for $key")
+        wrong+=("latest.json に $key の url がありません")
         continue
     fi
     code=$(status_of "$url")
-    [ "$code" = 200 ] || wrong+=("latest.json $key answered $code: $url")
+    [ "$code" = 200 ] || wrong+=("latest.json の $key が $code を返しました：$url")
 done
 
 platforms=$(jq -r '.platforms // {} | to_entries[] | "\(.key) \(.value.url // "")"' <<< "$tauri")
@@ -85,14 +85,14 @@ while read -r platform url; do
     [ -n "$platform" ] || continue
     count=$((count + 1))
     if [ -z "$url" ]; then
-        wrong+=("latest-tauri.json has no url for $platform")
+        wrong+=("latest-tauri.json に $platform の url がありません")
         continue
     fi
     code=$(status_of "$url")
-    [ "$code" = 200 ] || wrong+=("latest-tauri.json $platform answered $code: $url")
+    [ "$code" = 200 ] || wrong+=("latest-tauri.json の $platform が $code を返しました：$url")
 done <<< "$platforms"
-[ "$count" = 6 ] || wrong+=("latest-tauri.json has $count platforms, not 6")
+[ "$count" = 6 ] || wrong+=("latest-tauri.json のプラットフォームが 6 ではなく $count です")
 
-[ "${#wrong[@]}" = 0 ] || die "$tag is promoted ($(run_url "$id")), but: $(joined "${wrong[@]}")"
+[ "${#wrong[@]}" = 0 ] || die "$tag を昇格しましたが（$(run_url "$id")）、次のものが合いません：$(joined "${wrong[@]}")"
 
-leave 完了 '{}' "promoted $tag ($(run_url "$id")); latest.json and latest-tauri.json serve $version, and their 6 + 6 urls answer 200"
+leave 完了 '{}' "$tag を昇格しました（$(run_url "$id")）。latest.json と latest-tauri.json のバージョンは $version で、6 + 6 の url はすべて 200 を返します"

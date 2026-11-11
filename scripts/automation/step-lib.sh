@@ -12,7 +12,7 @@
 die() { echo "✗ $*" >&2; exit 1; }
 
 [ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
-    die "run this as a script step: AMENBO_INPUT and AMENBO_OUTPUT are not set"
+    die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"
 
 # shellcheck disable=SC2034 # read by the steps that source this file
 out_dir=$(dirname "$AMENBO_OUTPUT")
@@ -34,7 +34,7 @@ resolve_repo() {
         repo="$AMENBO_CI_REPO"
     else
         repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
-            die "no repository: set AMENBO_CI_REPO=OWNER/REPO"
+            die "リポジトリがわかりません：AMENBO_CI_REPO=OWNER/REPO を設定してください"
     fi
 }
 
@@ -44,7 +44,7 @@ resolve_run() {
     local id code=0
     id=$(AMENBO_CI_REPO="$repo" "$ci_watch" --print-id "$@") || code=$?
     [ "$code" = 0 ] || return "$code"
-    [[ "$id" =~ ^[0-9]+$ ]] || die "watch-ci.sh --print-id $* gave no run id: \"$id\""
+    [[ "$id" =~ ^[0-9]+$ ]] || die "watch-ci.sh --print-id $* が run の id を返しませんでした：\"$id\""
     echo "$id"
 }
 
@@ -63,16 +63,16 @@ watch_run() {
         0) echo green ;;
         1)
             verdict=$(gh run view "$id" -R "$repo" --json status,conclusion --jq '"\(.status) \(.conclusion)"') ||
-                die "could not read the verdict of $(run_url "$id")"
+                die "run の結果を読めませんでした：$(run_url "$id")"
             case "$verdict" in
                 "completed success" | "completed null" | "completed ")
-                    die "watch-ci.sh said red, and the run reads \"$verdict\": $(run_url "$id")" ;;
+                    die "watch-ci.sh は赤と言いましたが、run は \"$verdict\" です：$(run_url "$id")" ;;
                 completed\ *) echo red ;;
-                *) die "the watch ended before the run did (\"$verdict\"): $(run_url "$id")" ;;
+                *) die "run が終わる前に監視が終わりました（\"$verdict\"）：$(run_url "$id")" ;;
             esac
             ;;
-        7) die "run $id reads completed, but a job it carries never reached a conclusion: $(run_url "$id")" ;;
-        *) die "watch-ci.sh run $id ended with exit code $code: $(run_url "$id")" ;;
+        7) die "run $id は completed ですが、結果の出ていないジョブがあります：$(run_url "$id")" ;;
+        *) die "watch-ci.sh run $id が終了コード $code で終わりました：$(run_url "$id")" ;;
     esac
 }
 
@@ -83,7 +83,7 @@ run_url() { echo "https://github.com/$repo/actions/runs/$1"; }
 failed_jobs() {
     gh run view "$1" -R "$repo" --json jobs \
         --jq '[.jobs[] | select(.conclusion != "success" and .conclusion != "skipped") | "\(.name) (\(.conclusion))"] | join(", ")' ||
-        echo "(could not read the jobs of run $1)"
+        echo "（run $1 のジョブを読めませんでした）"
 }
 
 # What a red run leaves to go on: its id and URL, the jobs that failed, and their failed log.
@@ -107,7 +107,7 @@ ci_watch="$(pwd)/scripts/watch-ci.sh"
 input_version() {
     local version
     version=$(input "${1:-版}")
-    [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || die "no version in the input: \"$version\""
+    [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || die "入力にバージョンがありません：\"$version\""
     echo "$version"
 }
 
@@ -115,7 +115,7 @@ input_version() {
 input_place() {
     local place
     place=$(input "${1:-置き場}")
-    [ -n "$place" ] && [ -d "$place" ] || die "no folder of downloaded artifacts in the input: \"$place\""
+    [ -n "$place" ] && [ -d "$place" ] || die "入力に、成果物をダウンロードしたフォルダがありません：\"$place\""
     echo "$place"
 }
 

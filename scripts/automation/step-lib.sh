@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-# step-lib.sh — sourced helpers shared by the script steps that open a pull request, push a tag and
-# watch the CI runs that follow. Not executable on its own.
+# step-lib.sh — sourced helpers shared by the script steps: reading an input, leaving by a way out, and
+# opening a pull request, pushing a tag and watching the CI runs that follow. Not executable on its own.
 #
 # A script step reads its inputs from the JSON file AMENBO_INPUT names and writes its way out to the
 # one AMENBO_OUTPUT names, as {"version":1,"exit":…,"outs":{…},"report":…}. The way out is decided by

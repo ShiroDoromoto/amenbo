@@ -69,14 +69,14 @@ export const WORKSPACES = [
 export const BUNDLED_SOURCES = [
   {
     crate: 'sqlcipher-src',
-    version: '419.0.6+sqlcipher-4.19.0-sqlite-3.53.4-libtomcrypt-1.18.2',
+    version: '420.0.0+sqlcipher-4.20.0-sqlite-3.54.1-libtomcrypt-1.18.2',
     component: 'SQLCipher',
     license: 'BSD-3-Clause',
     files: ['sqlcipher/LICENSE-sqlcipher'],
   },
   {
     crate: 'sqlcipher-src',
-    version: '419.0.6+sqlcipher-4.19.0-sqlite-3.53.4-libtomcrypt-1.18.2',
+    version: '420.0.0+sqlcipher-4.20.0-sqlite-3.54.1-libtomcrypt-1.18.2',
     component: 'SQLite (inside the SQLCipher amalgamation)',
     license: 'blessing (public domain)',
     evidence: { file: 'sqlcipher/sqlcipher.c', contains: 'The author disclaims copyright to this source code.' },
@@ -91,7 +91,7 @@ export const BUNDLED_SOURCES = [
   },
   {
     crate: 'sqlcipher-src',
-    version: '419.0.6+sqlcipher-4.19.0-sqlite-3.53.4-libtomcrypt-1.18.2',
+    version: '420.0.0+sqlcipher-4.20.0-sqlite-3.54.1-libtomcrypt-1.18.2',
     component: 'LibTomCrypt',
     license: 'public domain or WTFPL',
     files: ['sqlcipher/LICENSE-libtomcrypt'],

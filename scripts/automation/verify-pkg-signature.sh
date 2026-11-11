@@ -35,8 +35,8 @@ cd "$(dirname "$0")/../.."
 place=$(input_place)
 arm="$place/dist-macos/amenbo-darwin-arm64.pkg"
 amd="$place/dist-macos/amenbo-darwin-amd64.pkg"
-[ -f "$arm" ] || die "no $arm"
-[ -f "$amd" ] || die "no $amd"
+[ -f "$arm" ] || die "$arm がありません"
+[ -f "$amd" ] || die "$amd がありません"
 
 wrong=()
 
@@ -53,7 +53,7 @@ check() {
     "$@" > "$log" 2>&1 || true
     local text
     for text in "${texts[@]}"; do
-        grep -qF -- "$text" "$log" || wrong+=("$label: no \"$text\" in $log")
+        grep -qF -- "$text" "$log" || wrong+=("${label}：$log に \"$text\" がありません")
     done
 }
 
@@ -68,13 +68,13 @@ mkdir -p "$place/cli-amd64"
 cli="$place/cli-amd64/amenbo"
 if scripts/extract-shipped-cli.sh "$amd" "$cli" > "$place/extract-amd64.log" 2>&1; then
     archs=$(lipo -archs "$cli" 2>&1) || true
-    [ "$archs" = x86_64 ] || wrong+=("lipo -archs $cli answered \"$archs\", not x86_64")
+    [ "$archs" = x86_64 ] || wrong+=("lipo -archs $cli が x86_64 ではなく \"$archs\" を返しました")
 else
-    wrong+=("could not take the CLI out of $amd: $(tail -n 1 "$place/extract-amd64.log")")
+    wrong+=("$amd から CLI を取り出せませんでした：$(tail -n 1 "$place/extract-amd64.log")")
 fi
 
 if [ "${#wrong[@]}" = 0 ]; then
-    leave 完了 '{}' "$(basename "$arm") is signed, notarised and stapled, and the CLI of $(basename "$amd") is x86_64"
+    leave 完了 '{}' "$(basename "$arm") は署名・notarize・staple 済みで、$(basename "$amd") の CLI は x86_64 です"
 fi
 
 {
@@ -84,4 +84,4 @@ fi
     echo
     printf -- '- %s\n' "${wrong[@]}"
 } > "$out_dir/$RED_FILE"
-leave_red "$RED_FILE" "${#wrong[@]} check(s) of the mac .pkg files failed: ${wrong[0]}"
+leave_red "$RED_FILE" "mac の .pkg の確認が ${#wrong[@]} 件失敗しました：${wrong[0]}"

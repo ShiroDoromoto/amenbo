@@ -43,20 +43,20 @@ cd "$(dirname "$0")/../.."
 version=$(input_version)
 tag="v$version"
 run=$(input run)
-[[ "$run" =~ ^[0-9]+$ ]] || die "no run id in the input: \"$run\""
+[[ "$run" =~ ^[0-9]+$ ]] || die "入力に run の id がありません：\"$run\""
 resolve_repo
 
 runs=$(gh run list -R "$repo" --workflow release-tag.yml --limit 200 \
-    --json databaseId,headBranch,headSha,createdAt,conclusion) || die "could not list the release-tag.yml runs"
+    --json databaseId,headBranch,headSha,createdAt,conclusion) || die "release-tag.yml の run の一覧を読めませんでした"
 this=$(jq -c --argjson id "$run" '.[] | select(.databaseId == $id)' <<< "$runs")
-[ -n "$this" ] || die "run $run is not among the last 200 release-tag.yml runs"
-[ "$(jq -r .headBranch <<< "$this")" = "$tag" ] || die "run $run is of $(jq -r .headBranch <<< "$this"), not $tag"
+[ -n "$this" ] || die "run $run は release-tag.yml の直近 200 件の run にありません"
+[ "$(jq -r .headBranch <<< "$this")" = "$tag" ] || die "run $run は $tag ではなく $(jq -r .headBranch <<< "$this") の run です"
 head=$(jq -r .headSha <<< "$this")
 started=$(jq -r .createdAt <<< "$this")
 
 previous=$(jq -c --arg tag "$tag" --arg t "$started" '[.[] | select(.headBranch != $tag and (.headBranch | startswith("v"))
     and .conclusion == "success" and .createdAt < $t)] | max_by(.createdAt) // empty' <<< "$runs")
-[ -n "$previous" ] || die "no green release-tag.yml run of another version before run $run"
+[ -n "$previous" ] || die "run $run より前に、別のバージョンの release-tag.yml の緑の run がありません"
 previous_tag=$(jq -r .headBranch <<< "$previous")
 previous_run=$(jq -r .databaseId <<< "$previous")
 previous_sha=$(jq -r .headSha <<< "$previous")
@@ -64,17 +64,17 @@ previous_sha=$(jq -r .headSha <<< "$previous")
 last=$(jq -c --arg tag "$tag" --arg t "$started" '[.[] | select(.headBranch == $tag and .createdAt < $t)]
     | max_by(.createdAt) // empty' <<< "$runs")
 
-have() { git cat-file -e "$1^{commit}" 2>/dev/null || git fetch -q origin "$1" || die "could not fetch $1"; }
+have() { git cat-file -e "$1^{commit}" 2>/dev/null || git fetch -q origin "$1" || die "$1 を fetch できませんでした"; }
 have "$head"
 have "$previous_sha"
 
 gui=$(git grep -l '^steps_gui:' "$head" -- "$SCENARIOS/*.yaml" | sed "s/^$head://") ||
-    die "no GUI scenario in $SCENARIOS at $head"
+    die "$head の $SCENARIOS に GUI のシナリオがありません"
 
 # The changes from one commit to the commit of the run: the GUI scenarios, then the app/ paths.
 section() {
     local from="$1" changed
-    changed=$(git diff --name-only "$from..$head" -- "$SCENARIOS/") || die "could not diff $from..$head"
+    changed=$(git diff --name-only "$from..$head" -- "$SCENARIOS/") || die "$from..$head の差分を読めませんでした"
     echo "### GUI scenarios changed"
     echo
     comm -12 <(sort <<< "$changed") <(sort <<< "$gui") | sed 's/^/- /' | grep . || echo "(none)"
@@ -112,6 +112,6 @@ section() {
 outs=$(jq -n --arg lk "$LIST_OUTPUT" --arg lf "$LIST_FILE" --arg pk "$PREVIOUS_OUTPUT" --arg pr "$previous_run" \
     '{($lk): $lf, ($pk): $pr}')
 if [ -n "$last" ]; then
-    leave 完了 "$outs" "listed the GUI scenarios of $tag since $previous_tag (run $previous_run) and since the last check at $(jq -r .headSha <<< "$last")"
+    leave 完了 "$outs" "$tag の GUI のシナリオを、${previous_tag}（run ${previous_run}）からと、前回の確認（$(jq -r .headSha <<< "$last")）からの2つで一覧にしました"
 fi
-leave 完了 "$outs" "listed the GUI scenarios of $tag since $previous_tag (run $previous_run); $tag was not checked before"
+leave 完了 "$outs" "$tag の GUI のシナリオを、${previous_tag}（run ${previous_run}）から一覧にしました。$tag の確認はこれが初めてです"

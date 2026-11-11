@@ -36,45 +36,45 @@ cd "$(dirname "$0")/../.."
 die() { echo "✗ $*" >&2; exit 1; }
 
 [ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
-    die "run this as a script step: AMENBO_INPUT and AMENBO_OUTPUT are not set"
+    die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"
 
 product="${1:-}"
-[ -n "$product" ] || die "no product: pass the product's value as the first argument"
+[ -n "$product" ] || die "プロダクトがありません：1つ目の引数にプロダクトの値を渡してください"
 
-task=$(jq -r --arg i "$TASK_INPUT" '.ins[$i] // empty' "$AMENBO_INPUT") || die "could not read $AMENBO_INPUT"
+task=$(jq -r --arg i "$TASK_INPUT" '.ins[$i] // empty' "$AMENBO_INPUT") || die "$AMENBO_INPUT を読めませんでした"
 
 amenbo_ai() { amenbo "$@" --actor ai; }
 
 if [ -z "$task" ]; then
-    [ -n "${AMENBO_RUN:-}" ] || die "no task: wire one into $TASK_INPUT, or run this as a step of a run"
+    [ -n "${AMENBO_RUN:-}" ] || die "タスクがありません：「${TASK_INPUT}」にタスクをつなぐか、run のステップとして動かしてください"
     id=$(amenbo_ai automation run-show "$AMENBO_RUN" --json | jq -r '.tasks[-1].task_id // empty') ||
-        die "could not read run $AMENBO_RUN"
-    [ -n "$id" ] || die "run $AMENBO_RUN has taken no task"
+        die "run $AMENBO_RUN を読めませんでした"
+    [ -n "$id" ] || die "run $AMENBO_RUN はタスクを取っていません"
     task="AMB-T-$id"
 fi
 
-shown=$(amenbo_ai task show "$task" --json) || die "could not read $task"
+shown=$(amenbo_ai task show "$task" --json) || die "$task を読めませんでした"
 own_ref=$(jq -r '.ref' <<< "$shown")
 value=$(jq -r '[.dimensions[] | select(.dimension == "リリース") | .value][0] // empty' <<< "$shown")
-[ -n "$value" ] || die "$task carries no value of the release axis"
+[ -n "$value" ] || die "$task に軸「リリース」の値がありません"
 
 slug_of() {
     amenbo_ai dimension show "$1" --closed --json |
         jq -r --arg v "$2" '[.values[] | select(.name == $v) | .slug][0] // empty'
 }
 
-value_slug=$(slug_of リリース "$value") || die "could not read the release axis"
-[ -n "$value_slug" ] || die "\"$value\" is not a value of the release axis"
-product_slug=$(slug_of プロダクト "$product") || die "could not read the product axis"
-[ -n "$product_slug" ] || die "\"$product\" is not a value of the product axis"
+value_slug=$(slug_of リリース "$value") || die "軸「リリース」を読めませんでした"
+[ -n "$value_slug" ] || die "「${value}」は軸「リリース」の値ではありません"
+product_slug=$(slug_of プロダクト "$product") || die "軸「プロダクト」を読めませんでした"
+[ -n "$product_slug" ] || die "「${product}」は軸「プロダクト」の値ではありません"
 
 undone=$(amenbo_ai task list --filter "dim:リリース=$value_slug dim:プロダクト=$product_slug done:false" --json |
     jq -c --arg own "$own_ref" '[.tasks[] | select(.ref != $own)]') ||
-    die "could not list the undone tasks of \"$value\""
+    die "「${value}」の done でないタスクの一覧を読めませんでした"
 
 if [ "$(jq -r 'length' <<< "$undone")" = 0 ]; then
     done_count=$(amenbo_ai task list --filter "dim:リリース=$value_slug dim:プロダクト=$product_slug done:true" --json |
-        jq -r '.total_matched') || die "could not list the done tasks of \"$value\""
+        jq -r '.total_matched') || die "「${value}」の done のタスクの一覧を読めませんでした"
     report="出す分類：${value}（${product} の done のタスク：${done_count}件）"
     jq -n --arg exit "$DONE_EXIT" --arg out "$VALUE_OUTPUT" --arg value "$value" --arg report "$report" \
         '{version: 1, exit: $exit, outs: {($out): $value}, report: $report}' > "$AMENBO_OUTPUT"
@@ -88,7 +88,7 @@ left="$(dirname "$AMENBO_OUTPUT")/$LEFT_FILE"
     echo "| 番号 | タイトル | 状態 |"
     echo "|---|---|---|"
     jq -r '.[] | "| \(.ref) | \(.title | gsub("\\|"; "\\|")) | \(.status) |"' <<< "$undone"
-} > "$left" || die "could not write $left"
+} > "$left" || die "$left に書き込めませんでした"
 
 report="分類「${value}」に ${product} のタスクが $(jq -r 'length' <<< "$undone")件残っています。"$'\n'
 report+=$(jq -r '.[] | "- \(.ref)　\(.title)（\(.status)）"' <<< "$undone")

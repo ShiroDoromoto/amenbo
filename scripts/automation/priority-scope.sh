@@ -49,9 +49,9 @@ cd "$(dirname "$0")/../.."
 # shellcheck source=scripts/automation/step-lib.sh
 . scripts/automation/step-lib.sh
 
-table=$(input "$FILED_INPUT") || die "could not read $AMENBO_INPUT"
-[ -n "$table" ] || die "no table: wire the filed tasks into this step's $FILED_INPUT"
-[ -r "$table" ] || die "could not read the table at $table"
+table=$(input "$FILED_INPUT") || die "$AMENBO_INPUT を読めませんでした"
+[ -n "$table" ] || die "表がありません：起票したタスクの表を、このステップの「${FILED_INPUT}」につないでください"
+[ -r "$table" ] || die "表 $table を読めませんでした"
 
 # Each table row is split on its bars and its cells trimmed. The first row that carries both headings
 # says which cells they are; a row whose filed cell says yes gives the task in its ref cell. It is read
@@ -62,7 +62,7 @@ filed=$(jq -Rnr --arg ref "$REF_COLUMN" --arg filed "$FILED_COLUMN" --arg yes "$
         | first) as $cols
     | if $cols == null then error("no columns")
       else $rows[] | select(.[$cols[1]] == $yes) | .[$cols[0]] end
-' "$table") || die "the table at $table has no \"$REF_COLUMN\" and \"$FILED_COLUMN\" columns"
+' "$table") || die "表 $table に「${REF_COLUMN}」と「${FILED_COLUMN}」の列がありません"
 
 amenbo_ai() { amenbo "$@" --actor ai; }
 
@@ -71,9 +71,9 @@ outs=$(jq -n --arg k "$TABLE_OUTPUT" --arg v "$TABLE_FILE" '{($k): $v}')
 
 release=$(amenbo_ai dimension show "$RELEASE_AXIS" --json |
     jq -c '[.values[] | select(.closed | not) | {name, slug}][0] // empty') ||
-    die "could not read the release axis"
+    die "軸「リリース」を読めませんでした"
 if [ -z "$release" ]; then
-    echo "「${RELEASE_AXIS}」に開いている値がありません。" > "$out_file" || die "could not write $out_file"
+    echo "「${RELEASE_AXIS}」に開いている値がありません。" > "$out_file" || die "$out_file に書き込めませんでした"
     leave "$OUT_EXIT" "$outs" "「${RELEASE_AXIS}」に開いている値が無いので、比べる範囲がありません"
 fi
 release_name=$(jq -r .name <<< "$release")
@@ -81,7 +81,7 @@ release_slug=$(jq -r .slug <<< "$release")
 
 products=$(amenbo_ai dimension show "$PRODUCT_AXIS" --json |
     jq -c '.values[] | select(.closed | not) | {name, slug}') ||
-    die "could not read the product axis"
+    die "軸「プロダクト」を読めませんでした"
 
 in_scope=()
 summary=()
@@ -92,9 +92,9 @@ summary=()
         name=$(jq -r .name <<< "$product")
         slug=$(jq -r .slug <<< "$product")
         listed=$(amenbo_ai task list --filter "status:todo dim:${RELEASE_AXIS}=$release_slug dim:${PRODUCT_AXIS}=$slug" \
-            --sort priority --json) || die "could not list the tasks of \"$name\""
+            --sort priority --json) || die "「${name}」のタスクの一覧を読めませんでした"
         [ "$(jq '.tasks | length' <<< "$listed")" = "$(jq .total_matched <<< "$listed")" ] ||
-            die "the list of \"$name\" did not hold every task it matched"
+            die "「${name}」の一覧に、当てはまったタスクの全部が入っていません"
         count=$(jq '.tasks | length' <<< "$listed")
         high=$(jq '[.tasks[] | select(.priority == "high")] | length' <<< "$listed")
         if [ "$count" -eq 0 ]; then
@@ -112,7 +112,7 @@ summary=()
         echo "|---|---|---|---|---|"
         while IFS=$'\t' read -r ref priority title; do
             [ -n "$ref" ] || continue
-            blocks=$(amenbo_ai task show "$ref" --json < /dev/null | jq '.blocks | length') || die "could not read $ref"
+            blocks=$(amenbo_ai task show "$ref" --json < /dev/null | jq '.blocks | length') || die "$ref を読めませんでした"
             if grep -qxF "$ref" <<< "$filed"; then
                 mine="$FILED_YES"
                 in_scope+=("$ref")
@@ -129,7 +129,7 @@ summary=()
     echo "| プロダクト | 件数 | high の件数 | high の割合 | ${HIGH_LIMIT}% を |"
     echo "|---|---|---|---|---|"
     for line in ${summary[@]+"${summary[@]}"}; do echo "$line"; done
-} > "$out_file" || die "could not write $out_file"
+} > "$out_file" || die "$out_file に書き込めませんでした"
 
 filed_count=$(grep -c . <<< "$filed" || true)
 if [ "${#in_scope[@]}" -eq 0 ]; then

@@ -33,17 +33,17 @@ cd "$(dirname "$0")/../.."
 die() { echo "✗ $*" >&2; exit 1; }
 
 [ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
-    die "run this as a script step: AMENBO_INPUT and AMENBO_OUTPUT are not set"
+    die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"
 
 run_id=$(jq -r '.ins["GitHub Actions の run ID"] // empty' "$AMENBO_INPUT")
-[[ "$run_id" =~ ^[0-9]+$ ]] || die "no run id in the input: \"$run_id\""
+[[ "$run_id" =~ ^[0-9]+$ ]] || die "入力に run の id がありません：\"$run_id\""
 screen=$(jq -r '.ins["画面の確認が要る"] // empty' "$AMENBO_INPUT")
 
 if [ -n "${AMENBO_CI_REPO:-}" ]; then
     repo="$AMENBO_CI_REPO"
 else
     repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
-        die "no repository: set AMENBO_CI_REPO=OWNER/REPO"
+        die "リポジトリがわかりません：AMENBO_CI_REPO=OWNER/REPO を設定してください"
 fi
 url="https://github.com/$repo/actions/runs/$run_id"
 
@@ -72,33 +72,33 @@ set -e
 
 case "$watched" in
     0)
-        gh run view "$run_id" -R "$repo" --log > "$work/run.log" || die "could not read the log of $url"
+        gh run view "$run_id" -R "$repo" --log > "$work/run.log" || die "run のログを読めませんでした：$url"
         if grep -F "perf budget exceeded" "$work/run.log" > "$work/perf.log"; then
-            red "$work/perf.log" "run $run_id is green, but its log carries a perf budget WARN: $url"
+            red "$work/perf.log" "run $run_id は緑ですが、ログに性能予算の WARN があります：$url"
         fi
         if [ "$screen" = 要る ]; then
-            leave 画面の確認が要る '{}' "run $run_id is green, and the change moves what the screen does: $url"
+            leave 画面の確認が要る '{}' "run $run_id は緑です。変更が画面の動きを変えるので、画面の確認が要ります：$url"
         fi
-        leave 完了 '{}' "run $run_id is green: $url"
+        leave 完了 '{}' "run $run_id は緑です：$url"
         ;;
     1)
         # 1 is also a watch that broke. Only a run that finished and did not succeed is red.
         verdict=$(gh run view "$run_id" -R "$repo" --json status,conclusion --jq '"\(.status) \(.conclusion)"') ||
-            die "could not read the verdict of $url"
+            die "run の結果を読めませんでした：$url"
         case "$verdict" in
-            "completed success" | "completed null") die "watch-ci.sh said red, and the run reads \"$verdict\": $url" ;;
+            "completed success" | "completed null") die "watch-ci.sh は赤と言いましたが、run は \"$verdict\" です：$url" ;;
             completed\ *) ;;
-            *) die "the watch ended before the run did (\"$verdict\"): $url" ;;
+            *) die "run が終わる前に監視が終わりました（\"$verdict\"）：$url" ;;
         esac
         gh run view "$run_id" -R "$repo" --log-failed > "$work/failed.log" ||
-            die "could not read the failed log of $url"
+            die "失敗したジョブのログを読めませんでした：$url"
         if grep -F "error: no tests to run" "$work/failed.log" > "$work/none.log"; then
             reason="The test filter matched no tests, so the run failed without running any: $url
 $(cat "$work/none.log")"
-            leave 指定の誤り "$(jq -n --arg r "$reason" '{"理由": $r}')" "run $run_id ran no tests: $url"
+            leave 指定の誤り "$(jq -n --arg r "$reason" '{"理由": $r}')" "run $run_id はテストを1つも動かしませんでした：$url"
         fi
-        red "$work/failed.log" "run $run_id is red: $url"
+        red "$work/failed.log" "run $run_id は赤です：$url"
         ;;
-    7) die "run $run_id reads completed, but a job it carries never reached a conclusion: $url" ;;
-    *) die "watch-ci.sh run $run_id ended with exit code $watched: $url" ;;
+    7) die "run $run_id は completed ですが、結果の出ていないジョブがあります：$url" ;;
+    *) die "watch-ci.sh run $run_id が終了コード $watched で終わりました：$url" ;;
 esac

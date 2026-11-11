@@ -36,11 +36,11 @@ cd "$(dirname "$0")/../.."
 
 place=$(input_place)
 digests="$place/release-digests.txt"
-[ -f "$digests" ] || die "no $digests"
+[ -f "$digests" ] || die "$digests がありません"
 key="$place/updater-pub.key"
 jq -r '.plugins.updater.pubkey // empty' app/src-tauri/tauri.conf.json | base64 -d > "$key" ||
-    die "could not read the updater's public key from app/src-tauri/tauri.conf.json"
-[ -s "$key" ] || die "app/src-tauri/tauri.conf.json has no updater public key"
+    die "app/src-tauri/tauri.conf.json から updater の公開鍵を読めませんでした"
+[ -s "$key" ] || die "app/src-tauri/tauri.conf.json に updater の公開鍵がありません"
 
 targets=(
     "$place/dist-macos/amenbo-darwin-arm64-update.app.tar.gz"
@@ -60,21 +60,21 @@ wrong=()
 for file in "${targets[@]}"; do
     base=$(basename "$file")
     if [ ! -f "$file" ]; then
-        wrong+=("${file#"$place"/}: not downloaded")
+        wrong+=("${file#"$place"/}：ダウンロードされていません")
         continue
     fi
     if [ ! -f "$file.sig" ]; then
-        wrong+=("${file#"$place"/}: no .sig beside it")
+        wrong+=("${file#"$place"/}：隣に .sig がありません")
         continue
     fi
     sig="$place/$base.minisig"
     if ! base64 -d < "$file.sig" > "$sig"; then
-        wrong+=("${file#"$place"/}: its .sig is not base64")
+        wrong+=("${file#"$place"/}：.sig が base64 ではありません")
         continue
     fi
     said=$(minisign -Vm "$file" -x "$sig" -p "$key" 2>&1) || true
     if [[ "$said" != *"Signature and comment signature verified"* ]]; then
-        wrong+=("${file#"$place"/}: minisign said \"$(tail -n 1 <<< "$said")\"")
+        wrong+=("${file#"$place"/}：minisign の出力は \"$(tail -n 1 <<< "$said")\" でした")
         continue
     fi
     case "$base" in
@@ -83,7 +83,7 @@ for file in "${targets[@]}"; do
             fresh=$(digest_of "$base")
             again=$(digest_of "$update")
             if [ -z "$fresh" ] || [ "$fresh" != "$again" ]; then
-                wrong+=("${file#"$place"/}: the release's digest of $base (\"$fresh\") is not that of $update (\"$again\")")
+                wrong+=("${file#"$place"/}：リリースの $base のダイジェスト（\"$fresh\"）が $update のもの（\"$again\"）と違います")
                 continue
             fi
             ;;
@@ -92,9 +92,9 @@ for file in "${targets[@]}"; do
 done
 
 if [ "${#wrong[@]}" = 0 ] && [ "$ok" = 6 ]; then
-    leave 完了 '{}' "the updater signatures of the 6 files verify with the key the app carries"
+    leave 完了 '{}' "6 個のファイルの updater の署名を、アプリに入っている鍵で確かめました"
 fi
-[ "${#wrong[@]}" != 0 ] || wrong+=("$ok file(s) were found, not 6")
+[ "${#wrong[@]}" != 0 ] || wrong+=("見つかったファイルが 6 個ではなく $ok 個です")
 
 {
     echo "# The updater signatures do not all verify"
@@ -105,4 +105,4 @@ fi
     echo
     printf -- '- %s\n' "${wrong[@]}"
 } > "$out_dir/$RED_FILE"
-leave_red "$RED_FILE" "$ok of the 6 updater files verified: ${wrong[0]}"
+leave_red "$RED_FILE" "updater のファイル 6 個のうち、署名を確かめられたのは $ok 個です：${wrong[0]}"

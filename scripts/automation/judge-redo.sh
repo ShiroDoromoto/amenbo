@@ -46,32 +46,32 @@ resolve_repo
 code=0
 said=$(gh release view "$tag" -R "$repo" --json isPrerelease --jq .isPrerelease 2>&1) || code=$?
 if [ "$code" != 0 ]; then
-    [[ "$said" == *"release not found"* ]] || die "could not read the release $tag: $said"
+    [[ "$said" == *"release not found"* ]] || die "リリース $tag を読めませんでした：$said"
     prerelease=""
 else
     prerelease="$said"
 fi
 
 served=$(curl -fsSL -H 'Cache-Control: no-cache' "https://github.com/$repo/releases/latest/download/latest.json?cb=$RANDOM" |
-    jq -r '.version // empty') || die "could not fetch the latest latest.json"
+    jq -r '.version // empty') || die "最新リリースの latest.json を取得できませんでした"
 served="${served#v}"
 
 if [ -z "$prerelease" ]; then
     way="$DELETE_TAG"
-    measured="$tag has no release; latest.json serves $served"
+    measured="$tag のリリースはありません。latest.json のバージョンは $served です"
     commands="git push origin :refs/tags/$tag && git tag -d $tag"
 elif [ "$prerelease" = true ] && [ "$served" != "$version" ]; then
     way="$DELETE_RELEASE"
-    measured="$tag is a prerelease; latest.json serves $served"
+    measured="$tag は prerelease です。latest.json のバージョンは $served です"
     commands="gh release delete $tag --repo $repo --cleanup-tag --yes && git tag -d $tag"
 else
     way="$NEXT_PATCH"
-    measured="$tag reads isPrerelease=$prerelease; latest.json serves $served"
-    commands="none: the tag stays, and the next patch version is released"
+    measured="$tag は isPrerelease=$prerelease です。latest.json のバージョンは $served です"
+    commands="なし：タグは残し、次のパッチバージョンを出す"
 fi
 
-report="$measured. Redo: $way ($commands)"
+report="${measured}。打ち直し方：${way}（${commands}）"
 if [ -n "$red" ] && [ -f "$red" ]; then
-    report=$(printf '%s\n\nThe red check:\n%s' "$report" "$(head -n 20 "$red")")
+    report=$(printf '%s\n\n赤になった確認：\n%s' "$report" "$(head -n 20 "$red")")
 fi
 leave 完了 "$(jq -n --arg k "$WAY_OUTPUT" --arg w "$way" '{($k): $w}')" "$report"

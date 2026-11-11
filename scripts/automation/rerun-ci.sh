@@ -23,25 +23,25 @@ cd "$(dirname "$0")/../.."
 . scripts/automation/step-lib.sh
 
 id=$(input run)
-[[ "$id" =~ ^[0-9]+$ ]] || die "no run id in the input: \"$id\""
+[[ "$id" =~ ^[0-9]+$ ]] || die "入力に run の id がありません：\"$id\""
 resolve_repo
 
 attempt() { gh run view "$id" -R "$repo" --json attempt --jq .attempt; }
 
-before=$(attempt) || die "could not read $(run_url "$id")"
-gh run rerun "$id" -R "$repo" --failed || die "could not re-run the failed jobs of $(run_url "$id")"
+before=$(attempt) || die "run を読めませんでした：$(run_url "$id")"
+gh run rerun "$id" -R "$repo" --failed || die "失敗したジョブを再実行できませんでした：$(run_url "$id")"
 
 # Until GitHub registers the re-run, the run reads its previous attempt and that attempt's verdict.
 tries=0
 until [ "$(attempt)" -gt "$before" ] 2>/dev/null; do
     tries=$((tries + 1))
-    [ "$tries" -le 60 ] || die "the re-run of $(run_url "$id") did not start in 10 minutes"
+    [ "$tries" -le 60 ] || die "10分待っても再実行が始まりませんでした：$(run_url "$id")"
     sleep 10
 done
 
 verdict=$(watch_run "$id")
 outs=$(jq -n --arg r "$id" '{run: $r}')
 if [ "$verdict" = green ]; then
-    leave 完了 "$outs" "the re-run of run $id is green: $(run_url "$id")"
+    leave 完了 "$outs" "run $id の再実行は緑です：$(run_url "$id")"
 fi
-leave "CI が赤" "$outs" "the re-run of run $id is red ($(failed_jobs "$id")): $(run_url "$id")"
+leave "CI が赤" "$outs" "run $id の再実行は赤です（$(failed_jobs "$id")）：$(run_url "$id")"

@@ -23,13 +23,13 @@ cd "$(dirname "$0")/../.."
 resolve_repo
 
 stamp=$(now_utc)
-gh workflow run ci-full-manual.yml -R "$repo" --ref main || die "could not dispatch ci-full-manual.yml on main"
+gh workflow run ci-full-manual.yml -R "$repo" --ref main || die "main で ci-full-manual.yml を起動できませんでした"
 id=$(resolve_run dispatch ci-full-manual.yml main "$stamp")
 
 verdict=$(watch_run "$id")
 if [ "$verdict" = green ]; then
-    leave 完了 '{}' "the full CI on main is green: $(run_url "$id")"
+    leave 完了 '{}' "main のフル CI は緑です：$(run_url "$id")"
 fi
 
 write_red_run "$id" >&2
-die "the full CI on main is red, run $id ($(failed_jobs "$id")): $(run_url "$id")"
+die "main のフル CI は赤です。run ${id}（$(failed_jobs "$id")）：$(run_url "$id")"

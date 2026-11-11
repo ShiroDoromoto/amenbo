@@ -31,22 +31,22 @@ version=$(input_version)
 tag="v$version"
 resolve_repo
 
-[ "$(git branch --show-current)" = main ] || die "the checkout $(pwd) is not on main"
-git fetch origin -q || die "could not fetch origin"
-git pull -q --ff-only || die "could not fast-forward main to origin/main"
-[ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || die "main is not even with origin/main"
+[ "$(git branch --show-current)" = main ] || die "チェックアウト $(pwd) が main にいません"
+git fetch origin -q || die "origin を fetch できませんでした"
+git pull -q --ff-only || die "main を origin/main へ fast-forward できませんでした"
+[ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || die "main が origin/main と一致していません"
 if git rev-parse -q --verify "refs/tags/$tag" >/dev/null || git ls-remote --exit-code --tags origin "$tag" >/dev/null; then
-    die "the tag $tag already exists"
+    die "タグ $tag は既にあります"
 fi
 
-git tag -a "$tag" -m "amenbo $version" || die "could not tag $tag"
-git push -q origin "$tag" || die "could not push $tag"
+git tag -a "$tag" -m "amenbo $version" || die "タグ $tag を付けられませんでした"
+git push -q origin "$tag" || die "$tag を push できませんでした"
 echo "pushed $tag at $(git rev-parse --short HEAD)" >&2
 
 id=$(resolve_run tag "$tag")
 verdict=$(watch_run "$id")
 outs=$(jq -n --arg r "$id" '{run: $r}')
 if [ "$verdict" = green ]; then
-    leave 完了 "$outs" "the run of $tag is green: $(run_url "$id")"
+    leave 完了 "$outs" "$tag の run は緑です：$(run_url "$id")"
 fi
-leave "CI が赤" "$outs" "the run of $tag is red ($(failed_jobs "$id")): $(run_url "$id")"
+leave "CI が赤" "$outs" "$tag の run は赤です（$(failed_jobs "$id")）：$(run_url "$id")"

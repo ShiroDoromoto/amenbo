@@ -35,10 +35,10 @@ cd "$(dirname "$0")/../.."
 die() { echo "✗ $*" >&2; exit 1; }
 
 [ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
-    die "run this as a script step: AMENBO_INPUT and AMENBO_OUTPUT are not set"
+    die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"
 
 product="${1:-}"
-[ -n "$product" ] || die "no product: pass the product's value as the first argument"
+[ -n "$product" ] || die "プロダクトがありません：1つ目の引数にプロダクトの値を渡してください"
 role="${2:-}"
 role_args=()
 [ -z "$role" ] || role_args=(--role "$role")
@@ -50,12 +50,12 @@ amenbo_ai() { amenbo "$@" --actor ai; }
 
 product_slug=$(amenbo_ai dimension show プロダクト --json |
     jq -r --arg p "$product" '[.values[] | select(.name == $p) | .slug][0] // empty') ||
-    die "could not read the product axis"
-[ -n "$product_slug" ] || die "\"$product\" is not a value of the product axis"
+    die "軸「プロダクト」を読めませんでした"
+[ -n "$product_slug" ] || die "「${product}」は軸「プロダクト」の値ではありません"
 
 releases=$(amenbo_ai dimension show リリース --json |
     jq -c '.values[] | select(.closed | not) | {name, slug}') ||
-    die "could not read the release axis"
+    die "軸「リリース」を読めませんでした"
 
 # shellcheck disable=SC2016 # the backticks are Markdown, not a command
 notes=$(printf '%s\n' 'リリースのオートメーションが取って進めるリリースのタスク。' '' '## チェックリスト' \
@@ -67,16 +67,16 @@ while IFS= read -r release; do
     name=$(jq -r .name <<< "$release")
     slug=$(jq -r .slug <<< "$release")
     found=$(amenbo_ai task list --filter "dim:リリース=$slug dim:プロダクト=$product_slug dim:作業種別=リリース作業" --json |
-        jq -r .total_matched) || die "could not list the release tasks of \"$name\""
+        jq -r .total_matched) || die "「${name}」のリリースのタスクの一覧を読めませんでした"
     [ "$found" = 0 ] || continue
     held=$(amenbo_ai task list --filter "dim:リリース=$slug dim:プロダクト=$product_slug" --json |
-        jq -r .total_matched) || die "could not list the tasks of \"$name\""
+        jq -r .total_matched) || die "「${name}」のタスクの一覧を読めませんでした"
     [ "$held" != 0 ] || continue
     id=$(amenbo_ai task add --title "$name をリリースする" --notes - --to human ${role_args[@]+"${role_args[@]}"} ${at_args[@]+"${at_args[@]}"} \
         --dim "リリース=$name" --dim "プロダクト=$product" --dim テーマ=メイン --dim 作業種別=リリース作業 \
-        --json <<< "$notes" | jq -r '.task.id // empty') || die "could not file the release task of \"$name\""
-    [ -n "$id" ] || die "filing the release task of \"$name\" gave no task id"
-    amenbo_ai task finish-creating "AMB-T-$id" >&2 || die "could not finish creating AMB-T-$id"
+        --json <<< "$notes" | jq -r '.task.id // empty') || die "「${name}」のリリースのタスクを起票できませんでした"
+    [ -n "$id" ] || die "「${name}」のリリースのタスクを起票しましたが、タスクの id を読めませんでした"
+    amenbo_ai task finish-creating "AMB-T-$id" >&2 || die "AMB-T-$id の作成を終えられませんでした"
     filed+=("AMB-T-$id")
 done <<< "$releases"
 

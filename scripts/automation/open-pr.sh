@@ -34,14 +34,14 @@ cd "$(dirname "$0")/../.."
 . scripts/automation/step-lib.sh
 
 worktree=$(input worktree)
-[ -n "$worktree" ] && [ -d "$worktree" ] || die "no worktree folder in the input: \"$worktree\""
+[ -n "$worktree" ] && [ -d "$worktree" ] || die "入力に worktree のフォルダがありません：\"$worktree\""
 cd "$worktree"
 
 branch=$(git branch --show-current)
-[ -n "$branch" ] || die "the worktree $worktree is on no branch"
-[ "$branch" != main ] || die "the worktree $worktree is on main, and main is not opened as a pull request"
+[ -n "$branch" ] || die "worktree $worktree がどのブランチにもいません"
+[ "$branch" != main ] || die "worktree $worktree は main にいます。main からはプルリクエストを作りません"
 
-git fetch origin -q || die "could not fetch origin"
+git fetch origin -q || die "origin を fetch できませんでした"
 
 opened() { leave 完了 "$(jq -n --arg n "$1" '{"PR": $n}')" "$2"; }
 
@@ -52,29 +52,29 @@ state=$(jq -r '.state // empty' <<< "$pr_json")
 ahead=$(git rev-list --count origin/main..HEAD)
 
 if [ "$state" = MERGED ] && [ "$ahead" = 0 ]; then
-    opened "$pr" "pull request $pr of $branch is already merged, and the branch carries nothing since: $(jq -r .url <<< "$pr_json")"
+    opened "$pr" "$branch のプルリクエスト $pr はマージ済みで、そのあとのコミットはありません：$(jq -r .url <<< "$pr_json")"
 fi
 
 if [ "$state" = OPEN ]; then
-    git push -q --force-with-lease -u origin "$branch" || die "could not push $branch"
-    opened "$pr" "pull request $pr of $branch is open; pushed the branch to it: $(jq -r .url <<< "$pr_json")"
+    git push -q --force-with-lease -u origin "$branch" || die "$branch を push できませんでした"
+    opened "$pr" "$branch のプルリクエスト $pr は開いているので、ブランチを push しました：$(jq -r .url <<< "$pr_json")"
 fi
 
 commits=$(git rev-list --no-merges --count origin/main..HEAD)
-[ "$commits" -gt 0 ] || die "$branch carries no commit that main does not, so there is nothing to open"
+[ "$commits" -gt 0 ] || die "$branch には main に無いコミットが無いので、プルリクエストを作れません"
 
 if [ "$commits" -gt 1 ]; then
     oldest=$(git rev-list --no-merges --reverse origin/main..HEAD | head -n 1)
-    base=$(git merge-base origin/main HEAD) || die "$branch shares no history with origin/main"
-    git reset -q --soft "$base" || die "could not fold the commits of $branch"
-    git commit -q -C "$oldest" || die "could not commit the folded commits of $branch"
+    base=$(git merge-base origin/main HEAD) || die "$branch と origin/main に共通の履歴がありません"
+    git reset -q --soft "$base" || die "$branch のコミットをまとめられませんでした"
+    git commit -q -C "$oldest" || die "$branch のまとめたコミットをコミットできませんでした"
     echo "folded $commits commits of $branch into $(git rev-parse --short HEAD)" >&2
 fi
 
-git push -q --force-with-lease -u origin "$branch" || die "could not push $branch"
-url=$(gh pr create --fill --base main --head "$branch") || die "could not open the pull request of $branch"
+git push -q --force-with-lease -u origin "$branch" || die "$branch を push できませんでした"
+url=$(gh pr create --fill --base main --head "$branch") || die "$branch のプルリクエストを作れませんでした"
 pr=$(sed -nE 's|.*/pull/([0-9]+)$|\1|p' <<< "$url" | tail -n 1)
-[ -n "$pr" ] || die "opening the pull request of $branch gave no number: $url"
-gh pr merge "$pr" --merge --auto || die "opened pull request $pr, and could not turn auto-merge on: $url"
+[ -n "$pr" ] || die "$branch のプルリクエストを作りましたが、番号を読めませんでした：$url"
+gh pr merge "$pr" --merge --auto || die "プルリクエスト $pr を作りましたが、自動マージをオンにできませんでした：$url"
 
-opened "$pr" "opened pull request $pr of $branch with auto-merge on: $url"
+opened "$pr" "$branch のプルリクエスト $pr を作り、自動マージをオンにしました：$url"

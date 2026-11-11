@@ -30,7 +30,7 @@ cd "$(dirname "$0")/../.."
 
 place=$(input_place)
 pkg="$place/dist-macos/amenbo-darwin-arm64.pkg"
-[ -f "$pkg" ] || die "no $pkg"
+[ -f "$pkg" ] || die "$pkg がありません"
 log="$place/open-existing-store.log"
 
 code=0
@@ -49,10 +49,10 @@ fi
 
 if [ "$code" = 0 ]; then
     if grep -q 'nothing to do' "$log"; then
-        leave 完了 '{}' "this machine has no store, so there was nothing to open: $(grep 'nothing to do' "$log")"
+        leave 完了 '{}' "このマシンにはストアが無いので、開くものがありませんでした：$(grep 'nothing to do' "$log")"
     fi
-    [ -n "$format" ] || die "the clone opened, but its format version could not be read: $log"
-    leave 完了 '{}' "the CLI $(basename "$pkg") ships opened a clone of the store and read it back; the store is format v$format"
+    [ -n "$format" ] || die "複製は開けましたが、フォーマットのバージョンを読めませんでした：$log"
+    leave 完了 '{}' "$(basename "$pkg") に入っている CLI で、ストアの複製を開いて読み戻せました。ストアのフォーマットは v$format です"
 fi
 
 {
@@ -66,4 +66,4 @@ fi
     tail -n 40 "$log"
     echo '```'
 } > "$out_dir/$RED_FILE"
-leave_red "$RED_FILE" "the CLI $(basename "$pkg") ships could not open a clone of the store: $(grep '✗' "$log" | tail -n 1)"
+leave_red "$RED_FILE" "$(basename "$pkg") に入っている CLI で、ストアの複製を開けませんでした：$(grep '✗' "$log" | tail -n 1)"

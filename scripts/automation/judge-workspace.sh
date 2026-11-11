@@ -58,12 +58,12 @@ cd "$(dirname "$0")/../.."
 . scripts/automation/step-lib.sh
 
 folder="${1:-$(pwd)}"
-top=$(git -C "$folder" rev-parse --show-toplevel 2>/dev/null) || die "$folder is not in a git repository"
+top=$(git -C "$folder" rev-parse --show-toplevel 2>/dev/null) || die "$folder は git のリポジトリの中にありません"
 
-task=$(input "$TASK_INPUT") || die "could not read $AMENBO_INPUT"
-[ -n "$task" ] || die "no task: wire take_task's $TASK_INPUT into this step's $TASK_INPUT"
+task=$(input "$TASK_INPUT") || die "$AMENBO_INPUT を読めませんでした"
+[ -n "$task" ] || die "タスクがありません：take_task の「${TASK_INPUT}」を、このステップの「${TASK_INPUT}」につないでください"
 
-notes=$(amenbo task show "$task" --json --actor ai | jq -r '.notes // ""') || die "could not read $task"
+notes=$(amenbo task show "$task" --json --actor ai | jq -r '.notes // ""') || die "$task を読めませんでした"
 
 # The section runs from its heading to the next heading of the same or a higher level. It is read in
 # bash rather than awk, whose comparison of two Japanese words is not exact on every platform.
@@ -142,7 +142,7 @@ tracked=0 ignored=0 untracked=0 missing=0 outside=0
         esac
         echo "| \`$path\` | $kind | $reason |"
     done
-} > "$table" || die "could not write $table"
+} > "$table" || die "$table に書き込めませんでした"
 
 total=$((tracked + ignored + untracked + missing + outside))
 counts="${TRACKED} ${tracked}件・${UNTRACKED} ${untracked}件・${IGNORED} ${ignored}件・${MISSING} ${missing}件・${OUTSIDE} ${outside}件"

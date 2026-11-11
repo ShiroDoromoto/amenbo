@@ -1098,7 +1098,8 @@ function Pane({
         {/* Everything the terminal face is, kept mounted and in the layout while the roles are up:
             the terminal is a program writing into the rows it was told it has, and taking its element
             away would be ending what draws it. The roles are drawn over it, so it keeps its size when
-            the face is turned (`../talk/terminal`). */}
+            the face is turned (`../talk/terminal`), and the terminal under them is moved out past the
+            body's edge so that it stops drawing for nobody (`.slot__body` in `styles/global.css`). */}
         <div className="slot__body">
         {/* **The bar over a run's terminal** (`./RunPicture`): the way back to the roles — the only
             way, the row above has no other — whose round this is and, where a step turned the pane, why.

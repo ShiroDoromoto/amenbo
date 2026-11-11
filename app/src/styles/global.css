@@ -228,6 +228,9 @@ input[type="color"] {
   background: var(--c-pane-bg-pic) var(--c-pane-bg);
   color-scheme: dark;
   overflow: hidden;
+  /* xterm.js stacks its scrollbar at `z-index: 11`, which without a stacking context of the pane's own
+     is drawn over a run's roles (`.runroles`, `z-index: 1`). Kept inside the pane, the roles cover it. */
+  isolation: isolate;
   /* Only the ring below moves, and it fades rather than appears: what it is saying is "here", which a
      mark that blinks on says less clearly than one the eye catches arriving. */
   transition: box-shadow 160ms ease-out;
@@ -584,6 +587,19 @@ input[type="color"] {
    body (`.modelpick`). `clip` rather than `hidden`, so a press given the focus never scrolls the
    body's own contents out from under the roles. */
 .slot__body:has(> .runroles, > .slot__builtin) { overflow: clip; }
+/* **With the roles up, the terminal is moved out past the body's edge, not hidden.** A terminal under
+   the roles went on drawing every line its program wrote — a spinner or a log scrolling by — for
+   nobody to see. Below the clip above, xterm.js finds it off screen and stops drawing, and draws every
+   row once when it comes back. It keeps its size in the layout, so a window resized meanwhile still
+   refits it and tells the program (`../talk/terminal`). Not `display: none`, which opens a terminal
+   at 80×24 (`AMB-D-860`); not `content-visibility: hidden`, under which the resize is never heard;
+   not `visibility: hidden`, under which it goes on drawing. Only the pane moves: the bar over a run's
+   terminal and the box a line is written in stand beside it, not in it. It goes sideways rather than
+   down: the box a line is written in may be open under the roles, and a pane moved down by its own
+   height would land over that box, still inside the clip and still drawing. Nothing stands beside
+   the terminal in the body, so a pane moved past its right edge is out of the clip whatever the
+   pane's height. No transition, so turning the face back shows the terminal where it is at once. */
+.slot__body:has(> .runroles) .workspace__pane { transform: translateX(calc(100% + 1px)); }
 /* Where a finished run is read from now (`AMB-T-5539`), standing where its moves stood: a word, since
    it goes somewhere rather than acting on the run. */
 .slot__runlink {

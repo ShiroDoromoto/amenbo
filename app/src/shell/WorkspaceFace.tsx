@@ -37,6 +37,7 @@ import { rootShown, sectionsOf } from "../files/sections";
 import { fileUnderAny } from "../files/fileUnder";
 import { composeStartsOpen } from "../core/composeStartsOpen";
 import { RefNavProvider, useLedgerNav } from "../core/refNav";
+import { showRolesOf } from "./runFaces";
 import { isBlankSpaceClose } from "./outsideClose";
 import { useHandDrag } from "../files/handDrag";
 import { Icon } from "../components/Icon";
@@ -779,6 +780,11 @@ export function WorkspaceFace({
    * terminal has ended.
    */
   const seats = useRef(new Map<number, Seat & { launch: number }>());
+  /**
+   * **The task each seat of a launch was last told on**, by the seat's run — null where its step had
+   * none, before one is taken. What `rolesOnNewRound` tells a round ended inside a run by.
+   */
+  const roundsOf = useRef(new Map<number, number | null>());
 
   /**
    * **A step's terminal goes on the pane its run is drawn in** — the run's own pane, or its launch's
@@ -821,6 +827,38 @@ export function WorkspaceFace({
   const sessionOfRun = (run: number, launch: number | null): string | null => (launch === null
     ? standing.current.frames.find((frame) => frame.id === runFrameId(run))?.session ?? null
     : seats.current.get(run)?.session ?? null);
+
+  /**
+   * **A new round of a launch turns its pane back to the roles, where the round in front is over** —
+   * completed, failed or canceled. The pane keeps the seat it has in front (`stoodForLaunch`), and a
+   * reader left on that seat's terminal would see nothing of the round that has started; the roles
+   * show it. The new round's terminal is not put in front: that is the reader's to press. A round in
+   * front still going or held is left as it is.
+   *
+   * The seat in front is read again from the store, not off the cards drawn: the round before ended a
+   * moment ago, and the cards may not have heard yet.
+   *
+   * **A round can also end inside the run in front**, which then goes on to its next task: a role
+   * that takes a task works one round per task, and its run stays running across them. There the
+   * round is told over by the step leaving the task the run was on (`roundsOf`): the first step of
+   * the next round, the one about to take a task or the one that has taken another. `task` is
+   * undefined where the run was stopped instead, which tells no round.
+   */
+  const rolesOnNewRound = (run: number, launch: number, task: number | null | undefined) => {
+    const was = roundsOf.current.get(run);
+    if (task !== undefined) roundsOf.current.set(run, task);
+    const front = paneOfLaunch(standing.current, launch)?.run ?? null;
+    if (front === null) return;
+    if (front === run) {
+      if (task !== undefined && typeof was === "number" && was !== task) showRolesOf(run);
+      return;
+    }
+    if (seats.current.has(run)) return;
+    void fetchRunCards([front]).then((cards) => {
+      const status = cards.find((one) => one.run === front)?.status;
+      if (status === "completed" || status === "failed" || status === "canceled") showRolesOf(front);
+    }).catch(() => {});
+  };
 
   /**
    * **A built-in is being carried out on a run, or has been** (`AMB-D-964`): stand the run's pane if
@@ -899,6 +937,10 @@ export function WorkspaceFace({
     const id = runFrameId(one.run);
     const launch = one.launch ?? null;
     const before = sessionOfRun(one.run, launch);
+    if (launch !== null) {
+      const told = one.step !== undefined || one.builtin !== undefined;
+      rolesOnNewRound(one.run, launch, told ? (one.step?.task ?? one.builtin?.task)?.id ?? null : undefined);
+    }
     if (one.builtin !== undefined) {
       builtinArrived(one.run, launch, one.project, one.builtin, before, one.session ?? null);
       return;
@@ -916,7 +958,7 @@ export function WorkspaceFace({
     keepSeat(one.run, launch, { session: step.session, folder: step.folder ?? null, agent: step.agent });
     setLayout((was) => putOn(was, one.run, launch, one.project, before, step.session, step.folder ?? null, step.agent));
     landOn(paneIdOf(one.run, launch));
-    // `sessionOfRun` reads only refs.
+    // `sessionOfRun` and `rolesOnNewRound` read only refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landOn, builtinArrived, putOn]);
 
@@ -1995,6 +2037,7 @@ export function WorkspaceFace({
                       : [...seats.current].flatMap(([run, seat]) => {
                         if (seat.launch !== frame.launch) return [];
                         seats.current.delete(run);
+                        roundsOf.current.delete(run);
                         return [runFrameId(run)];
                       });
                     if (frame.run !== null && !terminals.includes(terminal)) terminals.push(terminal);

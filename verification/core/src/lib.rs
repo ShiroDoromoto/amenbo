@@ -4696,7 +4696,7 @@ const REGISTRY: &[OpSpec] = &[
     // standing in the order the roles are defined in, with a seat per run of it; a role with no round
     // is an icon on the bar under the desks. `desk` is the name the desk carries — the role's, or the
     // automation's where it defines no role — and `step` the step under way that a seat of it says. On
-    // the terminal, a bar over it names the role and the seat and carries the one way back to the
+    // the terminal, a bar over it names the role and the seat and carries the press back to the
     // roles. A road names what it is sure of and leaves the rest out.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-roles", required: &["face"], refs: &["target"], strings: &["face", "desk", "step"], binds: false },
     // **Whether the program in that pane has ended**, once its run is over. The pane outlives the

@@ -41,7 +41,7 @@ import { RunActs } from "./RunActs";
 import { LaunchAttention, LaunchHead } from "./LaunchHead";
 import { BuiltinCard } from "./BuiltinCard";
 import { RunRoles, RunTermBar, useRoundFellLines } from "./RunPicture";
-import { faceOf, keepFace, onTerminalShown, showTerminalOf, type Face } from "./runFaces";
+import { faceOf, keepFace, onFaceTurned, showTerminalOf, type Face } from "./runFaces";
 import { RunOverCard, RunPausedCard } from "./RunBody";
 import { useBoxNumber } from "../screens/boxNumber";
 import type { BuiltinRun } from "../talk/automationStep";
@@ -241,13 +241,14 @@ function Pane({
     showTerminalOf(other);
     on.current.onGoToRun?.(other);
   };
-  // A press elsewhere turning this run to its terminal (`./runFaces`): its seat pressed among the roles
-  // of its launch's pane, or the task this run's failed round was filed as.
+  // A turn from elsewhere (`./runFaces`): to the terminal, by this run's seat pressed among the roles
+  // of its launch's pane or by the task this run's failed round was filed as; back to the roles, by
+  // another round of the launch starting once this one is over (`./WorkspaceFace`).
   useEffect(() => {
     if (runId === null) return;
-    return onTerminalShown((one) => {
+    return onFaceTurned((one, to) => {
       if (one !== runId) return;
-      setFace("terminal");
+      setFace(to);
       setByStep(false);
     });
   }, [runId]);

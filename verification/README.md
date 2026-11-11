@@ -794,9 +794,10 @@ of any one run stands under the header: a run is read off its seat among the des
 step there, and a run that has ended has left its seat (`run-pane`). No one run speaks for the pane,
 so no band on it says a run failed: why a run failed is read on its row on the running tab
 (`run-row`), and the history is reached by the header's "See the history" (`see-history`). The pane opens on the desks of the roles
-(`run-roles`); a seat pressed turns it to that seat's terminal, and the bar over the terminal is the
-one way back (`press-run` with `press: terminal` / `roles`). A start with no task to take, on an
-automation that waits for one (`start` with `waits: true`), opens the launch and no run, so it binds
+(`run-roles`); a seat pressed turns it to that seat's terminal, and the bar over the terminal takes
+it back (`press-run` with `press: terminal` / `roles`). Once the round of the seat in front is over,
+another round of the launch starting turns the pane back to its roles as well. A start with no task
+to take, on an automation that waits for one (`start` with `waits: true`), opens the launch and no run, so it binds
 nothing; the pane stands all the same, its header and its roles with no seat's row, and is read by
 the automation (`launch-pane`). The run Amenbo opens once a task turns up comes to that same pane.
 **A role of a launch is changed for that launch alone**, from the menu its desk's "⋯" opens and at

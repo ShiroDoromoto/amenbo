@@ -625,6 +625,8 @@ export const ja: Translation = {
     "face.runTask": "{n}件目",
     "face.elapsed": "経過 {time}",
     "face.dropRunLive": "実行が終わるまで消せません",
+    "face.dropLaunch": "このペインを消して実行を止める",
+    "face.dropLaunchConfirm": "このペインを消しますか？ペインを消すと実行も止まります。すべての役割の動いているステップをその場で終わらせるので、途中までの変更や worktree が残ることがあります。",
     "face.runStoppedAt": "{exit}で止まった",
     "quit.confirm": "Amenbo を終了しますか？開いている端末はすべて終わります。会話は次の起動で戻りますが、走っていたものは戻りません。",
     "quit.confirmNotAll": "Amenbo を終了しますか？開いている端末はすべて終わります。会話は次の起動で戻りますが、{names} のペインは戻りません。走っていたものも戻りません。",

@@ -5,8 +5,9 @@
 # pause, at the end of the action under way, is on its row on the running tab
 # (`pause-a-run-at-the-end-of-the-action-under-way`).
 #
-# Stopping from the header keeps the pane — the control that takes the pane away cannot be pressed
-# while the run is going or held, so this is the one way to end it from here.
+# Stopping from the header keeps the pane, so what the run printed is still there to be read. Taking
+# the pane away stops the launch too, but the pane goes with it
+# (`close-the-pane-a-run-is-drawn-in`).
 id: pause-a-launch-after-the-current-task-from-its-pane
 title: A launch is paused after the current task, picked up again and stopped from its pane's header, and the pane stays
 description: >

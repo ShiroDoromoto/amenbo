@@ -621,6 +621,8 @@ export const id: Translation = {
     "face.runTask": "Tugas {n}",
     "face.elapsed": "Durasi {time}",
     "face.dropRunLive": "Tidak bisa dihapus sampai eksekusi selesai",
+    "face.dropLaunch": "Hapus panel ini dan hentikan eksekusi",
+    "face.dropLaunchConfirm": "Hapus panel ini? Eksekusi ikut berhenti: langkah yang sedang berjalan di semua peran diakhiri di tempat, jadi perubahan setengah jalan dan worktree bisa tertinggal.",
     "face.runStoppedAt": "Berhenti di {exit}",
     "quit.confirm": "Keluar dari Amenbo? Semua terminal yang terbuka berakhir. Percakapannya kembali saat dijalankan lagi, tetapi yang sedang berjalan di dalamnya tidak.",
     "quit.confirmNotAll": "Keluar dari Amenbo? Semua terminal yang terbuka berakhir. Percakapannya kembali saat dijalankan lagi, kecuali di panel yang menjalankan {names}. Yang sedang berjalan di dalamnya juga tidak kembali.",

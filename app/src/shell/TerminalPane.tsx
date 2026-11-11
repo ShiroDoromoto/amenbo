@@ -18,7 +18,7 @@ import {
 } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
 import type { Plate as Row, Say } from "../talk/nameplate";
-import { acknowledgeRun } from "../core/automations";
+import { acknowledgeRun, stopLaunch, useLaunchState } from "../core/automations";
 import { FacetAvatar, facetActor } from "../components/atoms";
 import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
@@ -108,7 +108,8 @@ async function handOver(session: string, paths: string[]) {
  * (`../talk/layout`). It is not the same act as a program ending: what a terminal exits with stays on
  * the screen to be read, and a page that closed up under a reader because a shell finished would be
  * the app deciding they were done with it. So this is asked before it happens, and it ends whatever is
- * running on the way out — a session whose place has gone is one nobody can reach.
+ * running on the way out — a session whose place has gone is one nobody can reach. On a launch's pane
+ * that is the launch itself (`AMB-D-1154`): a launch and its pane are one to one.
  */
 function Pane({
   frame, terminal, launch = null, at, hue, project, names, start, autoStart, focused, landed = false, offered = false, written,
@@ -263,10 +264,11 @@ function Pane({
   };
 
   /** **The run this pane draws is still going or held** — the two states the run's own moves are
-   *  drawn for, and the two the pane cannot be taken away in (`AMB-T-5529`). Stopping is its own press
-   *  beside the state, so taking the pane away never has to stop a run on the way: a run left going
-   *  with its pane gone would be one nobody could see, reach or stop. A run not read yet is not held
-   *  to this — a pane whose run has gone from under its id would otherwise stand there for good. */
+   *  drawn for, and the two a run's own pane cannot be taken away in (`AMB-T-5529`). Stopping is its
+   *  own press beside the state, so taking the pane away never has to stop a run on the way: a run
+   *  left going with its pane gone would be one nobody could see, reach or stop. A run not read yet is
+   *  not held to this — a pane whose run has gone from under its id would otherwise stand there for
+   *  good. A launch's pane is not held to it either: taking it away stops the launch ({@link drop}). */
   const runLive = run?.state?.status === "running" || run?.state?.status === "paused";
   // Over, as the row says it — ended one of the three ways a run ends. Not read off `runLive`: a run's
   // state is null until it is first read, and that is not over.
@@ -283,6 +285,13 @@ function Pane({
   const runsTab: RunsTab =
     run?.state?.status === "failed" && !run.state.acknowledged ? "running" : "history";
 
+  // The launch this pane draws, read for whether it has ended: one that has is not stopped again.
+  const launchState = useLaunchState(launch);
+  // The close button cannot be pressed: a run's own pane while its run is going or held.
+  const stuck = launch === null && runLive;
+  // Taking the pane away stops the launch it draws: one not ended yet.
+  const stopsLaunch = launch !== null && launchState?.status !== "ended";
+
   /** Take the place away, once the person has said so. The terminal in it is ended first: a session
    *  whose pane has gone is one nobody can get back to.
    *
@@ -294,21 +303,38 @@ function Pane({
    *  (`AMB-D-869`). It is the heavier of the app's two questions now, the way out of the app being
    *  the lighter one.
    *
-   *  **A run's pane is not taken away while its run is going or held** ({@link runLive}): the press is
-   *  drawn and cannot be pressed. A pane press that stopped a run would be one a reader made meaning
-   *  only to tidy the page; stopping is its own press beside the run's state. Once the run is over the
-   *  pane goes without a question.
+   *  **A run's own pane — one no launch draws — is not taken away while its run is going or held**
+   *  ({@link stuck}): the press is drawn and cannot be pressed. A pane press that stopped a run would
+   *  be one a reader made meaning only to tidy the page; stopping is its own press beside the run's
+   *  state. Once the run is over the pane goes without a question.
+   *
+   *  **A launch's pane is always asked about, and taking it away stops the launch** (`AMB-D-1154`),
+   *  whether a seat is in front, going or held, or none yet. A launch left going with its pane gone
+   *  waited on unseen and took the next task. The question says the launch stops with the pane; a
+   *  "no" leaves the pane, the terminal and the launch as they were. A launch already ended is not
+   *  stopped again — core refuses it — and its pane is asked about as any other place. Where the stop
+   *  is refused the pane stays, and the refusal is said on the toast.
    *
    *  **One press at a time** ({@link dropping}): presses that pile up while the app is busy would
    *  otherwise each ask again, or take the frame away twice. */
   const drop = async () => {
-    if (runLive || dropping.current) return;
+    if (stuck || dropping.current) return;
     dropping.current = true;
     try {
-      // A run's pane is not asked about: there is no way back into a step's conversation to lose —
-      // every step opens one of its own — and the run it drew is over. Nor is a launch's with no seat
-      // yet: it has had no conversation, and the launch's first run stands it again.
-      if (run === null && !seatless && !await confirmDialog(t("face.dropConfirm"))) return;
+      if (launch !== null && stopsLaunch) {
+        const labels = { ok: t("auto.launch.stop"), cancel: t("auto.run.keepRunning") };
+        if (!await confirmDialog(t("face.dropLaunchConfirm"), labels)) return;
+        try {
+          await stopLaunch(launch);
+        } catch (e) {
+          pushNotice(errText(e));
+          return;
+        }
+      } else if (launch !== null || run === null) {
+        // A run's own pane is not asked about: there is no way back into a step's conversation to
+        // lose — every step opens one of its own — and the run it drew is over.
+        if (!await confirmDialog(t("face.dropConfirm"))) return;
+      }
       if (live !== null) await endTerminal(live).catch(() => {});
       on.current.onDrop(frame);
     } finally {
@@ -937,9 +963,9 @@ function Pane({
           )}
           <button
             className="slot__end"
-            title={t(runLive ? "face.dropRunLive" : "face.drop")}
-            aria-label={t(runLive ? "face.dropRunLive" : "face.drop")}
-            disabled={runLive}
+            title={t(stuck ? "face.dropRunLive" : stopsLaunch ? "face.dropLaunch" : "face.drop")}
+            aria-label={t(stuck ? "face.dropRunLive" : stopsLaunch ? "face.dropLaunch" : "face.drop")}
+            disabled={stuck}
             onClick={() => { void drop(); }}
           >
             <Icon name="close" />

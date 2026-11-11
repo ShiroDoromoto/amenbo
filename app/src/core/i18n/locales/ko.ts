@@ -617,6 +617,8 @@ export const ko: Translation = {
     "face.runTask": "{n}번째 작업",
     "face.elapsed": "경과 {time}",
     "face.dropRunLive": "실행이 끝날 때까지 지울 수 없습니다",
+    "face.dropLaunch": "이 페인을 지우고 실행을 중지",
+    "face.dropLaunchConfirm": "이 페인을 지울까요? 페인을 지우면 실행도 중지됩니다. 모든 역할의 진행 중인 단계를 그 자리에서 끝내므로, 중간까지의 변경이나 worktree가 남을 수 있습니다.",
     "face.runStoppedAt": "{exit}에서 멈춤",
     "quit.confirm": "Amenbo를 종료할까요? 열려 있는 터미널이 모두 끝납니다. 대화는 다음에 켜면 돌아오지만, 그 안에서 돌던 것은 돌아오지 않습니다.",
     "quit.confirmNotAll": "Amenbo를 종료할까요? 열려 있는 터미널이 모두 끝납니다. 대화는 다음에 켜면 돌아오지만, {names} 페인은 돌아오지 않습니다. 그 안에서 돌던 것도 돌아오지 않습니다.",

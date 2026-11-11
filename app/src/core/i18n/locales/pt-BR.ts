@@ -631,6 +631,8 @@ export const ptBR: Translation = {
     "face.runTask": "Tarefa {n}",
     "face.elapsed": "Duração {time}",
     "face.dropRunLive": "Não dá para remover até a execução terminar",
+    "face.dropLaunch": "Remover este painel e parar a execução",
+    "face.dropLaunchConfirm": "Remover este painel? A execução para junto: as etapas em andamento de todos os papéis terminam onde estão, então alterações pela metade e worktrees podem ficar para trás.",
     "face.runStoppedAt": "Parou em {exit}",
     "quit.confirm": "Encerrar o Amenbo? Todos os terminais abertos são encerrados. As conversas voltam na próxima execução; o que estava rodando nelas, não.",
     "quit.confirmNotAll": "Encerrar o Amenbo? Todos os terminais abertos são encerrados. As conversas voltam na próxima execução, exceto nos painéis com {names}. O que estava rodando nelas também não volta.",

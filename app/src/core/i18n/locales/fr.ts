@@ -630,6 +630,8 @@ export const fr: Translation = {
     "face.runTask": "Tâche {n}",
     "face.elapsed": "Durée {time}",
     "face.dropRunLive": "Impossible de la retirer avant la fin de l'exécution",
+    "face.dropLaunch": "Supprimer ce volet et arrêter l'exécution",
+    "face.dropLaunchConfirm": "Supprimer ce volet ? L’exécution s’arrête avec lui : les étapes en cours de tous les rôles s’arrêtent sur place, des modifications partielles et des worktrees peuvent rester.",
     "face.runStoppedAt": "Arrêtée à {exit}",
     "quit.confirm": "Quitter Amenbo ? Tous les terminaux ouverts se terminent. Les conversations reviennent au prochain démarrage, pas ce qu'elles exécutaient.",
     "quit.confirmNotAll": "Quitter Amenbo ? Tous les terminaux ouverts se terminent. Les conversations reviennent au prochain démarrage, sauf dans les volets qui font tourner {names}. Ce qu'elles exécutaient ne revient pas non plus.",

@@ -11,8 +11,8 @@ description: >
   Start a run whose built-in takes a task, then stop it from the header of its pane. Read the
   three things that leaves behind: the task is `todo` again and the person's, its timeline says the
   run was canceled, and the run's row on the history tab says so too. What separates this road from
-  close-the-pane-a-run-is-drawn-in is what is read after the stop — that one reads the pane, and the
-  giving back is not on it.
+  close-the-pane-a-run-is-drawn-in is how the run is stopped and what is read after — that one stops
+  it by taking the pane away and reads the pane, and the giving back is not on it.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: runs } }
 

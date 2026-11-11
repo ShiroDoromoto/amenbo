@@ -619,6 +619,8 @@ export const tr: Translation = {
     "face.runTask": "{n}. görev",
     "face.elapsed": "Süre {time}",
     "face.dropRunLive": "Çalıştırma bitene kadar kaldırılamaz",
+    "face.dropLaunch": "Bu bölmeyi kaldır ve çalıştırmayı durdur",
+    "face.dropLaunchConfirm": "Bu bölme kaldırılsın mı? Çalıştırma da onunla birlikte durur: tüm rollerin süren adımları olduğu yerde biter; yarım kalan değişiklikler ve worktree’ler geride kalabilir.",
     "face.runStoppedAt": "{exit} çıkışında durdu",
     "quit.confirm": "Amenbo'dan çıkılsın mı? Açık olan tüm terminaller sonlandırılır. Konuşmalar bir dahaki açılışta geri gelir, içlerinde çalışanlar gelmez.",
     "quit.confirmNotAll": "Amenbo'dan çıkılsın mı? Açık olan tüm terminaller sonlandırılır. Konuşmalar bir dahaki açılışta geri gelir, {names} çalıştıran bölmeler hariç. İçlerinde çalışanlar da geri gelmez.",

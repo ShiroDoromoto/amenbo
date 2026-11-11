@@ -2,16 +2,21 @@
 # ensure-release-tasks.sh — a script step: see that every open value of the release axis has its
 # release task for one product, and file the ones that are missing.
 #
-# For each open value of the release axis, it looks for a task classified with that value, the
-# product, and the release kind of work. Where there is none, it files a task titled to release
+# For each open value of the release axis that holds at least one task of the product, it looks for a
+# task classified with that value, the product, and the release kind of work. A value that holds none
+# of the product's tasks has nothing of the product to release, and is passed over. Where there is
+# none, it files a task titled to release
 # that value, for the human, classified with the value, the product, the main theme and the release
 # kind of work, and finishes creating it. The axes and values are named in Japanese, so the names
 # below are the ones written in the board.
 #
 # Its first argument is the product's value, by name. Its second, which may be left out, is the id of
 # the automation role that works release tasks: each task filed is worked under it, so the release
-# automation's seat takes it. Left out, the task is filed under no role. It has one way out, done, and
-# its report names the tasks it filed, or says it filed none.
+# automation's seat takes it. Left out, the task is filed under no role. Its third, which may also be
+# left out, is the full path of the folder the release task is worked in (`task add --at`), for a
+# product whose code lives in another checkout than this one. Left out, the task takes this
+# checkout's folder. It has one way out, done, and its report names the tasks it filed, or says it
+# filed none.
 #
 # A filter splits on whitespace before it reads a value, so a value's name cannot be written in one.
 # The filter names each value by its slug instead; `task add --dim` takes the name as an argument of
@@ -37,6 +42,9 @@ product="${1:-}"
 role="${2:-}"
 role_args=()
 [ -z "$role" ] || role_args=(--role "$role")
+folder="${3:-}"
+at_args=()
+[ -z "$folder" ] || at_args=(--at "$folder")
 
 amenbo_ai() { amenbo "$@" --actor ai; }
 
@@ -50,7 +58,7 @@ releases=$(amenbo_ai dimension show リリース --json |
     die "could not read the release axis"
 
 # shellcheck disable=SC2016 # the backticks are Markdown, not a command
-notes=$(printf '%s\n' '「リリース（amenbo）」が取って進めるリリースのタスク。' '' '## チェックリスト' \
+notes=$(printf '%s\n' 'リリースのオートメーションが取って進めるリリースのタスク。' '' '## チェックリスト' \
     '出荷バイナリでしか確かめられない項目を `- [ ] …` で書く。')
 
 filed=()
@@ -61,7 +69,10 @@ while IFS= read -r release; do
     found=$(amenbo_ai task list --filter "dim:リリース=$slug dim:プロダクト=$product_slug dim:作業種別=リリース作業" --json |
         jq -r .total_matched) || die "could not list the release tasks of \"$name\""
     [ "$found" = 0 ] || continue
-    id=$(amenbo_ai task add --title "$name をリリースする" --notes - --to human ${role_args[@]+"${role_args[@]}"} \
+    held=$(amenbo_ai task list --filter "dim:リリース=$slug dim:プロダクト=$product_slug" --json |
+        jq -r .total_matched) || die "could not list the tasks of \"$name\""
+    [ "$held" != 0 ] || continue
+    id=$(amenbo_ai task add --title "$name をリリースする" --notes - --to human ${role_args[@]+"${role_args[@]}"} ${at_args[@]+"${at_args[@]}"} \
         --dim "リリース=$name" --dim "プロダクト=$product" --dim テーマ=メイン --dim 作業種別=リリース作業 \
         --json <<< "$notes" | jq -r '.task.id // empty') || die "could not file the release task of \"$name\""
     [ -n "$id" ] || die "filing the release task of \"$name\" gave no task id"

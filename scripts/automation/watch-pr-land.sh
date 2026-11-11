@@ -9,9 +9,9 @@
 #
 #   done            merged. Hands on the merge commit
 #   conflict        the merge state is DIRTY: the branch conflicts with main
-#   red             a check failed or was cancelled. Hands on the failed log of each such check as a
-#                   file beside output.json. Whether a re-run would clear it is the next step's to
-#                   judge, from the log
+#   red             a check failed or was cancelled. Hands on, for each such check, its name, its run
+#                   id and URL, and its failed log, as a file beside output.json. Whether the red is
+#                   the change's own, main's or a flaky run is the next step's to judge, from the log
 #
 # Input, from AMENBO_INPUT's `ins`: the pull request number (required).
 #
@@ -116,11 +116,12 @@ case "$watched" in
             echo "## $name ($bucket) $link"
             run=$(sed -nE 's|.*/actions/runs/([0-9]+).*|\1|p' <<< "$link")
             if [ -n "$run" ]; then
+                echo "run: $run"
                 gh run view "$run" -R "$repo" --log-failed || echo "(could not read the failed log of run $run)"
             fi
             echo
         done < <(jq -r '.[] | [.name, .bucket, .link] | @tsv' <<< "$failed") > "$out_dir/failed.log"
-        leave 赤 '{"失敗ログ": "failed.log"}' "pull request $pr is red ($(jq -r 'map(.name) | join(", ")' <<< "$failed")): $url"
+        leave 赤 '{"指摘": "failed.log"}' "pull request $pr is red ($(jq -r 'map(.name) | join(", ")' <<< "$failed")): $url"
         ;;
     4)
         die "every check of $url is green and it is not merging: $(grep '^settled but not merging:' "$work/events.log" | tail -n 1)"

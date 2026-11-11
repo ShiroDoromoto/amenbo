@@ -5084,9 +5084,8 @@ pub struct AutomationLaunchRoleStateDto {
 }
 
 /// **A role's tasks that move only once a person has done something**
-/// ([`amenbo_core::ops::automation_run::AwaitsPerson`]) — a value to close, a decision to settle, a task
-/// to finish creating — and the one place a person goes first. Exactly one of `dimension`, `decision`
-/// and `task` is given.
+/// ([`amenbo_core::ops::automation_run::AwaitsPerson`]) — a value to close or a decision to settle — and
+/// the one place a person goes first. Exactly one of `dimension` and `decision` is given.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -5105,7 +5104,7 @@ pub struct AutomationAwaitsPersonDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub(crate) decision: Option<i64>,
-    /// The task to finish creating, by its id.
+    /// Never given, since a task still being created is not counted; kept while a face still reads it.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub(crate) task: Option<i64>,

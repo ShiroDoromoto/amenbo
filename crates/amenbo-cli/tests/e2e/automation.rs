@@ -1907,6 +1907,7 @@ fn a_start_with_nothing_to_take_makes_no_run_and_shows_the_wait_on_the_launch() 
     let shown = cli.json(&["automation", "launch-show", &launch, "--json"]);
     assert_eq!(shown["roles"][0]["waiting"].as_u64(), Some(0), "{shown}");
     assert_eq!(shown["roles"][0]["held_back"]["drafts"].as_u64(), Some(1), "{shown}");
+    assert!(shown["roles"][0]["awaits_person"].is_null(), "its creator has it in hand, so the pane counts none: {shown}");
     let (text, _) = cli.run(&["automation", "launch-show", &launch]);
     assert!(text.contains("waiting on a person: 1 task(s) still being created"), "{text}");
 

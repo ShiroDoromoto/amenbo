@@ -64,10 +64,11 @@
 // by reference and title, and the desk's border is in the stop colour.
 //
 // **A role's tasks that move only once a person has done something** — a value still open before
-// theirs, a decision not settled, a task still being created (`AMB-D-1144`) — are one line under the
-// rest, "Tasks waiting for a person: 3", pressed to where the first of them is done: the value's
-// dimension, the decision, or the task. A task waiting for another task or for its start goes on by
-// itself, and is not said. They are counted again when the store changes, not on each look for a task.
+// theirs, or a decision not settled (`AMB-D-1144`, `AMB-D-1155`) — are one line under the rest, "Tasks
+// waiting for a person: 3", pressed to where the first of them is done: the value's dimension, or the
+// decision. A task waiting for another task or for its start goes on by itself, and one still being
+// created is in the hands of whoever is creating it; neither is said. They are counted again when the
+// store changes, not on each look for a task.
 //
 // **A role with no task is on the bar under the desks**, one line each, wrapping: its icon, its name, its
 // headcount and, where there are any, its tasks waiting for a person. The bar is in the room the desks

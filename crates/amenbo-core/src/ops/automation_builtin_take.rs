@@ -268,7 +268,9 @@ pub(crate) fn held_back(conn: &Connection, project_id: i64, roles: &[i64], cfg: 
                     held.first_draft = Some(task.id);
                 }
             }
-            if !task.waiting_on_values.is_empty() || !task.blocked_by_decisions.is_empty() || task.draft {
+            // A task still being created is in the hands of whoever is creating it, a person or a run,
+            // and waits for nobody else's (`AMB-D-1155`).
+            if !task.waiting_on_values.is_empty() || !task.blocked_by_decisions.is_empty() {
                 held.awaits_person += 1;
             }
         }
@@ -789,6 +791,75 @@ mod tests {
 
             ours(tx, "one it can take", &automation, None);
             assert_eq!(run_held_back(tx.conn(), run.id).expect("held back"), None, "no longer waiting");
+        });
+    }
+
+    /// **A task still being created waits for nobody's hand but its creator's** (`AMB-D-1155`): it is
+    /// counted among the tasks still being created, and not among those waiting for a person. One that
+    /// also stands on a decision nobody has settled is counted for the decision.
+    #[test]
+    fn a_task_still_being_created_is_not_counted_as_waiting_for_a_person() {
+        use crate::ops::automation_run::{launch_state, AwaitsPerson};
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = picture(tx, project).0;
+            let drafted = |title: &str| {
+                let id = task::add(
+                    tx,
+                    task::NewTask {
+                        title: title.to_string(),
+                        project_id: Some(project),
+                        due: None,
+                        start: None,
+                        priority: None,
+                        notes: String::new(),
+                        created_by_kind: None,
+                        at_binding_id: None,
+                        role_id: None,
+                        made_in_run_step_id: None,
+                        made_in: None,
+                    },
+                )
+                .expect("add task")
+                .id;
+                task::set_assignee(tx, id, Some(ActorKind::Ai), ActorKind::Ai).expect("give it to the AI");
+                give_to(tx, id, born(tx, &automation));
+                id
+            };
+            let first = drafted("being created");
+            let launch = launched(tx, &automation).launch_id.expect("a launch");
+
+            let state = launch_state(tx.conn(), launch).expect("read");
+            let role = &state.roles[0];
+            let held = role.held_back.as_ref().expect("nothing to take");
+            assert_eq!((held.tasks, held.drafts, held.first_draft), (1, 1, Some(first)));
+            assert_eq!(held.awaits_person, 0, "whoever is creating it has it in hand");
+            assert_eq!(AwaitsPerson::of(held), None);
+            assert_eq!(role.awaits_person, None);
+
+            let second = drafted("being created, on a premise");
+            let premise = crate::ops::decision::add(
+                tx,
+                crate::ops::decision::NewDecision {
+                    proposed_by: None,
+                    title: "the premise".to_string(),
+                    body: String::new(),
+                    project_id: project,
+                    made_in: None,
+                },
+            )
+            .expect("decision");
+            crate::ops::decision::link(tx, premise.id, second).expect("link");
+
+            let state = launch_state(tx.conn(), launch).expect("read");
+            let role = &state.roles[0];
+            let held = role.held_back.as_ref().expect("still nothing to take");
+            assert_eq!((held.tasks, held.drafts), (2, 2));
+            assert_eq!(held.awaits_person, 1, "the decision waits for a person, whoever is creating the task");
+            assert_eq!(
+                role.awaits_person,
+                Some(AwaitsPerson { tasks: 1, dimension_id: None, decision_id: Some(premise.id), task_id: None }),
+            );
         });
     }
 

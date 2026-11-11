@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PaneStart } from "../talk/terminal";
 import type { BuiltinRun, StepOpened, StepRun } from "../talk/automationStep";
 import type { AutomationLaunchStateDto, AutomationRunCardDto } from "../bindings/bindings";
+import { faceOf, showTerminalOf } from "./runFaces";
 
 const hoisted = vi.hoisted(() => ({
   /** Every opening the face asked for, in order. */
@@ -46,6 +47,8 @@ const hoisted = vi.hoisted(() => ({
   standing: [] as StepOpened[],
   /** The runs the host answers the face's panes with (`useRunCards`). */
   cards: [] as AutomationRunCardDto[],
+  /** The runs the host answers a read made at once with (`fetchRunCards`). */
+  fetched: [] as AutomationRunCardDto[],
   /** What the host answers a launch's pane with (`useLaunchState`). */
   launch: null as AutomationLaunchStateDto | null,
   /** The launches the header was pressed on, as `pause 3`, `resume 3` or `stop 3`, in order. */
@@ -92,6 +95,7 @@ vi.mock("../talk/frames", async (importOriginal) => ({
 vi.mock("../core/automations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../core/automations")>()),
   useRunCards: () => hoisted.cards,
+  fetchRunCards: (runs: readonly number[]) => Promise.resolve(hoisted.fetched.filter((one) => runs.includes(one.run))),
   useLaunchState: (launch: number | null) => (launch === null ? null : hoisted.launch),
   pauseLaunchBeforeNextTask: (launch: number) => {
     hoisted.launchMoves.push(`pause ${launch}`);
@@ -265,6 +269,7 @@ beforeEach(() => {
   hoisted.says = true;
   hoisted.standing = [];
   hoisted.cards = [];
+  hoisted.fetched = [];
   hoisted.launch = null;
   hoisted.launchMoves = [];
   container = document.createElement("div");
@@ -1024,6 +1029,91 @@ describe("the pane a launch is drawn in", () => {
     await seat(9, "step-9");
     expect(panes()).toHaveLength(1);
     expect(hoisted.opened[hoisted.opened.length - 1]!.session).toBe("step-9");
+  });
+
+  // The seat in front was turned to its terminal, its round is over, and the launch starts another:
+  // the pane goes back to the roles, where the new round is seen, and the new round's terminal is not
+  // put in front by itself.
+  it.each(["completed", "failed", "canceled"] as const)(
+    "goes back to the roles as a new round starts once the round in front has %s",
+    async (status) => {
+      await mount();
+      await seat(7, "step-7");
+      await act(async () => showTerminalOf(7));
+      expect(faceOf(7)).toBe("terminal");
+
+      hoisted.fetched = [runCard({ run: 7, status })];
+      await seat(8, "step-8");
+      expect(faceOf(7)).toBe("roles");
+      expect(container.querySelector(".runroles")).not.toBeNull();
+      expect(hoisted.opened[hoisted.opened.length - 1]!.frame).toBe("run-7");
+    },
+  );
+
+  it("keeps the terminal in front while its round is still going or held", async () => {
+    await mount();
+    await seat(7, "step-7");
+    await act(async () => showTerminalOf(7));
+
+    hoisted.fetched = [runCard({ run: 7, status: "running" })];
+    await seat(8, "step-8");
+    expect(faceOf(7)).toBe("terminal");
+    expect(container.querySelector(".runroles")).toBeNull();
+
+    hoisted.fetched = [runCard({ run: 7, status: "paused" })];
+    await seat(9, "step-9");
+    expect(faceOf(7)).toBe("terminal");
+  });
+
+  it("does not turn the pane back for a later step of a round already started", async () => {
+    await mount();
+    await seat(7, "step-7");
+    hoisted.fetched = [runCard({ run: 7, status: "completed" })];
+    await seat(8, "step-8");
+    // The reader turns back to the round that is over, and the new round goes on to its next step.
+    await act(async () => showTerminalOf(7));
+    await arrive({ run: 8, launch: 3, step: step({ runStep: 81, session: "step-8b" }) });
+    expect(faceOf(7)).toBe("terminal");
+  });
+
+  // A role that takes a task works one round per task inside the same run, which stays running: the
+  // round in front is over once the run leaves its task, and the pane goes back to the roles there.
+  it("goes back to the roles as the run in front leaves its task for the next round", async () => {
+    await mount();
+    await seat(7, "step-7");
+    await act(async () => showTerminalOf(7));
+    // The round closes its task, and the run goes on to take the next one.
+    await arrive({ run: 7, launch: 3, step: undefined, builtin: builtin({ key: "close_task", runStep: 71 }) });
+    expect(faceOf(7)).toBe("terminal");
+    await arrive({
+      run: 7,
+      launch: 3,
+      step: undefined,
+      builtin: builtin({ name: "タスクに着手する", key: "take_task", task: undefined }),
+    });
+    expect(faceOf(7)).toBe("roles");
+    expect(container.querySelector(".runroles")).not.toBeNull();
+
+    // The reader turns to the new round's terminal: taking its task and going on does not turn it back.
+    await act(async () => showTerminalOf(7));
+    const next = { id: 5253, ref: "AMB-T-5253", title: "ペインのフッタを描く", seq: 2 };
+    await arrive({
+      run: 7,
+      launch: 3,
+      step: undefined,
+      builtin: builtin({ name: "タスクに着手する", key: "take_task", task: next, runStep: 72, finished: true }),
+    });
+    await arrive({ run: 7, launch: 3, step: step({ runStep: 73, session: "step-7b", task: next }) });
+    expect(faceOf(7)).toBe("terminal");
+  });
+
+  it("goes back to the roles where the run in front is told its next task taken at once", async () => {
+    await mount();
+    await seat(7, "step-7");
+    await act(async () => showTerminalOf(7));
+    const next = { id: 5253, ref: "AMB-T-5253", title: "ペインのフッタを描く", seq: 2 };
+    await arrive({ run: 7, launch: 3, step: step({ runStep: 71, session: "step-7b", task: next }) });
+    expect(faceOf(7)).toBe("roles");
   });
 
   it("draws no band for a failed seat: no one run speaks for the launch", async () => {

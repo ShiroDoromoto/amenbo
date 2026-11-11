@@ -6859,7 +6859,8 @@ impl Instructor {
             // Which face the pane's body is turned to, and on the roles which desk stands and what it
             // says. Whether a role is a desk or on the bar is an eye's, so the line asks for the desk to
             // be looked at rather than read. Nothing on the row turns the face: a seat pressed does, and
-            // the bar over a seat's terminal is the one way back (`app/src/shell/RunPicture.tsx`).
+            // the bar over a seat's terminal turns it back (`app/src/shell/RunPicture.tsx`), as another
+            // round starting once the round in front is over does (`app/src/shell/WorkspaceFace.tsx`).
             (Domain::Automation, "run-roles") => match req(with, "face")? {
                 "roles" => {
                     let mut line = "In the workspace, confirm the body of the pane this run is drawn in is the desks of its roles rather than a terminal, with no bar saying \"← Back to the roles\" standing in it".to_string();

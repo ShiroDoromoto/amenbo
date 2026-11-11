@@ -716,9 +716,12 @@ export function paneIdOf(run: number, launch: number | null | undefined): string
  * at the size of its last one, moving neither the page nor the pane being worked in (`AMB-D-939`).
  * **A pane already standing keeps the seat it has in front.** A step arriving on another seat is that
  * seat's news, and a pane that swapped its terminal for every one of them would change under the
- * reader at every report; the reader swaps it (`seatedIn`). **The seat in front is only whose terminal
- * the pane turns to**: the pane's header is drawn off the launch alone (`../shell/LaunchHead`), and
- * says nothing of the seat in front, which may have finished long ago (`AMB-D-1141`).
+ * reader at every report; the reader swaps it (`seatedIn`). Where the round in front is over and another
+ * round starts, on another seat or on the same one with its next task, the pane is turned back to its
+ * roles rather than swapped, so the new round is seen without its terminal put in front
+ * (`../shell/WorkspaceFace`'s `rolesOnNewRound`). **The seat in front is only whose terminal the pane
+ * turns to**: the pane's header is drawn off the launch alone (`../shell/LaunchHead`), and says nothing
+ * of the seat in front, which may have finished long ago (`AMB-D-1141`).
  *
  * **A launch with no run yet stands its pane all the same**, with no seat in front (`run` null): a
  * launch that waits for a task to take opens no run (`AMB-D-1123`), and a press on Start that stood

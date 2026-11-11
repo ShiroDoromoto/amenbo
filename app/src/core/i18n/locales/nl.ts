@@ -619,6 +619,8 @@ export const nl: Translation = {
     "face.runTask": "Taak {n}",
     "face.elapsed": "Duur {time}",
     "face.dropRunLive": "Kan pas worden verwijderd als de uitvoering klaar is",
+    "face.dropLaunch": "Dit deelvenster verwijderen en de run stoppen",
+    "face.dropLaunchConfirm": "Dit deelvenster verwijderen? De run stopt mee: de lopende stappen van alle rollen stoppen ter plekke, dus halve wijzigingen en worktrees kunnen achterblijven.",
     "face.runStoppedAt": "Gestopt bij {exit}",
     "quit.confirm": "Amenbo stoppen? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, wat erin liep niet.",
     "quit.confirmNotAll": "Amenbo stoppen? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, behalve in de deelvensters met {names}. Wat erin liep, komt ook niet terug.",

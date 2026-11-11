@@ -1,15 +1,13 @@
-# The pane a run is drawn in cannot be taken away while the run is going. A pane is an ordinary thing
-# to take away, and a press that also stopped the run was one a reader made meaning only to tidy the
-# page — so the control is drawn and cannot be pressed until the run is over, and stopping is its own
-# press, on the header of the launch the pane is drawn for. Once the run is stopped, the pane goes
-# like any other.
+# The pane a run is drawn in is its launch's, and a launch and its pane are one to one:
+# a launch left going with its pane gone waits where nobody sees it and takes the next task. So
+# taking the pane away while the run is going is asked about, the question saying the run stops with
+# the pane, and its yes stops the launch before the pane goes.
 id: close-the-pane-a-run-is-drawn-in
-title: The pane a run is drawn in is taken away only once the run is over, and stops nothing going
+title: The pane a run is drawn in is taken away after a question, and the launch stops with it
 description: >
-  Start a run and read its pane: the run is under way, and the control that takes the pane away
-  cannot be pressed. Stop the launch from the header of the pane, then take the pane away, and read what
-  is left: the pane is gone, and the run's row on the history tab says it was canceled — by the stop,
-  not by the pane going.
+  Start a run and read its pane: the run is under way. Take the pane away, answering the question
+  that says the run stops with it, and read what is left: the pane is gone, and the run's row on the
+  history tab says it was canceled.
 given:
   - { type: action, domain: workspace, op: can-start, with: { count: 2, then: reads } }
   # The task the built-in the run starts at takes, so the run goes on to the step after it.
@@ -70,7 +68,6 @@ steps_gui:
       target: auto
     as: run
 
-  # Under way, and the pane held up by it: the control that would take it away cannot be pressed.
   - type: assert
     domain: automation
     op: run-pane
@@ -81,33 +78,8 @@ steps_gui:
       state: running
       present: true
 
-  # Stopped from the pane's header, which keeps the pane. The stop is the launch's, so it ends the
-  # one run the launch has.
-  - type: action
-    domain: automation
-    op: press-run
-    with:
-      target: run
-      press: stop
-      on: pane
-
-  - type: assert
-    domain: automation
-    op: run-pane
-    with:
-      target: run
-      state: canceled
-      present: true
-
-  # The launch is over with it: its header draws no move left to make.
-  - type: assert
-    domain: automation
-    op: launch-head
-    with:
-      target: run
-      state: ended
-
-  # And now the pane goes, the way any other does.
+  # Taken away while the run is going: the question says the run stops with the pane, and its yes
+  # stops the launch.
   - type: action
     domain: automation
     op: close-run-pane

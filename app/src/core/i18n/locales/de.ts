@@ -623,6 +623,8 @@ export const de: Translation = {
     "face.runTask": "Aufgabe {n}",
     "face.elapsed": "Dauer {time}",
     "face.dropRunLive": "Kann erst entfernt werden, wenn der Lauf zu Ende ist",
+    "face.dropLaunch": "Diesen Bereich entfernen und den Lauf stoppen",
+    "face.dropLaunchConfirm": "Diesen Bereich entfernen? Der Lauf stoppt mit ihm: Die laufenden Schritte aller Rollen enden an Ort und Stelle, daher können halbfertige Änderungen und Worktrees zurückbleiben.",
     "face.runStoppedAt": "Angehalten bei {exit}",
     "quit.confirm": "Amenbo beenden? Alle offenen Terminals werden beendet. Die Gespräche kommen beim nächsten Start zurück, das, was in ihnen lief, nicht.",
     "quit.confirmNotAll": "Amenbo beenden? Alle offenen Terminals werden beendet. Die Gespräche kommen beim nächsten Start zurück, außer in den Bereichen mit {names}. Was in ihnen lief, kommt ebenfalls nicht zurück.",

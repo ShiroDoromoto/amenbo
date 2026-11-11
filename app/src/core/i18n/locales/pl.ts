@@ -634,6 +634,8 @@ export const pl: Translation = {
     "face.runTask": "Zadanie {n}",
     "face.elapsed": "Czas {time}",
     "face.dropRunLive": "Nie można usunąć, dopóki uruchomienie się nie skończy",
+    "face.dropLaunch": "Usuń ten panel i zatrzymaj uruchomienie",
+    "face.dropLaunchConfirm": "Usunąć ten panel? Uruchomienie zatrzyma się razem z nim: trwające kroki wszystkich ról kończą się w miejscu, więc mogą zostać częściowe zmiany i worktree.",
     "face.runStoppedAt": "Zatrzymano na {exit}",
     "quit.confirm": "Zakończyć Amenbo? Wszystkie otwarte terminale zostaną zakończone. Rozmowy wrócą przy następnym uruchomieniu, ale to, co w nich działało — nie.",
     "quit.confirmNotAll": "Zakończyć Amenbo? Wszystkie otwarte terminale zostaną zakończone. Rozmowy wrócą przy następnym uruchomieniu, poza panelami z {names}. To, co w nich działało, też nie wróci.",

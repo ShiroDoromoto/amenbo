@@ -4599,10 +4599,11 @@ impl Instructor {
             // Going back from the action standing over its automation, by the button on its head
             // named after the automation.
             (Domain::Automation, "action-back") => "On the action build screen standing over the automation's, press the button going back to the automation, named after it. Confirm the automation's build screen is in front again.".to_string(),
-            // Taking away the pane a run is drawn in, once the run is over. While the run is going or
-            // held the control cannot be pressed (`pane_state`), so this stops nothing.
+            // Taking away the pane a run is drawn in, which is its launch's. It is always
+            // asked about, and a launch not ended yet stops with it: the question says so, and its yes
+            // is the stop's.
             (Domain::Automation, "close-run-pane") => {
-                "In the workspace, press the control that takes away the pane this run is drawn in. Confirm it goes without a question: the run is over, and there is nothing of it left to lose."
+                "In the workspace, press the control that takes away the pane this run is drawn in. Confirm a question comes up before the pane goes — where the launch is still going, it says the run stops with the pane — and answer it to take the pane away."
                     .to_string()
             }
             // Following a waiting launch to what a person has to do for its role's tasks: the role's
@@ -7634,20 +7635,20 @@ fn run_ending(reason: &str) -> Result<&'static str, String> {
 /// A seat at work ends its first line with how long its round has run; a paused one, and one going to
 /// hold at the end of the action it is on, with a chip saying so in its place. A run that has ended has
 /// left its seat (`run-pane`). No one run speaks for a launch's pane, so no band under its header says
-/// a run failed, whatever the run: why a run failed is the running tab's row's to say (`run-row`). A run
-/// going or held is one whose pane cannot be taken away, and the control that would do it is read for
-/// that.
+/// a run failed, whatever the run: why a run failed is the running tab's row's to say (`run-row`). The
+/// control that takes the pane away is not read for: it can be pressed whatever the run, and taking the
+/// pane away stops the launch (`close-run-pane`).
 fn pane_state(state: Option<&str>) -> Result<String, String> {
     let Some(state) = state else {
         return Ok(String::new());
     };
     run_state(state)?;
     Ok(match state {
-        "running" => ". Confirm too that the seat's first line ends with how long its round has run and no chip for where the run stands, that no band under the header says it failed, and that the control that takes the pane away cannot be pressed".to_string(),
+        "running" => ". Confirm too that the seat's first line ends with how long its round has run and no chip for where the run stands, and that no band under the header says it failed".to_string(),
         // Pausing is still `running` until the action it is on ends, so the pane stays as fixed as
         // a held one.
-        "pausing" => ". Confirm too that the seat's first line ends with a chip saying it is pausing, that no band under the header says it failed, and that the control that takes the pane away cannot be pressed".to_string(),
-        "paused" => ". Confirm too that the seat's first line ends with a chip saying it has stopped, that no band under the header says it failed, and that the control that takes the pane away cannot be pressed".to_string(),
+        "pausing" => ". Confirm too that the seat's first line ends with a chip saying it is pausing, and that no band under the header says it failed".to_string(),
+        "paused" => ". Confirm too that the seat's first line ends with a chip saying it has stopped, and that no band under the header says it failed".to_string(),
         _ => ". Confirm too that no band under the header says it failed".to_string(),
     })
 }
@@ -9996,10 +9997,10 @@ steps_gui:
     }
 
     #[test]
-    fn a_run_pane_going_to_hold_cannot_be_taken_away() {
+    fn a_launch_pane_going_or_held_is_not_read_as_one_that_cannot_be_taken_away() {
         for state in ["running", "pausing", "paused"] {
             let line = pane_state(Some(state)).expect("the state renders");
-            assert!(line.contains("the control that takes the pane away cannot be pressed"), "{state}: {line}");
+            assert!(!line.contains("cannot be pressed"), "{state}: {line}");
         }
         let line = pane_state(Some("pausing")).expect("the state renders");
         assert!(line.contains("a chip saying it is pausing"), "{line}");

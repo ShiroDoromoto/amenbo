@@ -4706,8 +4706,8 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `target` is which run's pane, read the way `close-run-pane` reads it.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-pane-ended", required: &[], refs: &["target"], strings: &[], binds: false },
-    // Taking that pane away, once its run is over: while the run is going or held the control cannot
-    // be pressed, so a road stops the launch first (`press-run` with `on: pane`).
+    // Taking that pane away, which is always asked about and stops the launch with it where the
+    // launch is still going.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "close-run-pane", required: &[], refs: &["target"], strings: &[], binds: false },
     // **From a run's pane to the ledger.** The launch's header carries "See the history", which opens
     // the automations on the history tab whichever seat is in front. It brings the ledger forward, from

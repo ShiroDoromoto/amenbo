@@ -618,6 +618,8 @@ export const zhHans: Translation = {
     "face.runTask": "第 {n} 个任务",
     "face.elapsed": "已用 {time}",
     "face.dropRunLive": "运行结束前无法移除",
+    "face.dropLaunch": "移除此窗格并停止运行",
+    "face.dropLaunchConfirm": "要移除此窗格吗？运行也会随之停止：所有角色正在进行的步骤会当场结束，因此可能留下做到一半的更改或 worktree。",
     "face.runStoppedAt": "停在 {exit}",
     "quit.confirm": "要退出 Amenbo 吗？打开的终端都会结束。下次启动时对话会回来，正在跑的东西不会。",
     "quit.confirmNotAll": "要退出 Amenbo 吗？打开的终端都会结束。下次启动时对话会回来，但跑着 {names} 的窗格不会。正在跑的东西也不会。",

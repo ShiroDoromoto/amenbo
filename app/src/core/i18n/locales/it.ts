@@ -630,6 +630,8 @@ export const it: Translation = {
     "face.runTask": "Attività {n}",
     "face.elapsed": "Durata {time}",
     "face.dropRunLive": "Non si può rimuovere finché l'esecuzione non termina",
+    "face.dropLaunch": "Rimuovi questo riquadro e ferma l'esecuzione",
+    "face.dropLaunchConfirm": "Rimuovere questo riquadro? L'esecuzione si ferma con lui: i passi in corso di tutti i ruoli si chiudono sul posto, quindi possono restare modifiche a metà e worktree.",
     "face.runStoppedAt": "Fermata a {exit}",
     "quit.confirm": "Uscire da Amenbo? Tutti i terminali aperti terminano. Le conversazioni tornano al prossimo avvio, ciò che stavano eseguendo no.",
     "quit.confirmNotAll": "Uscire da Amenbo? Tutti i terminali aperti terminano. Le conversazioni tornano al prossimo avvio, tranne nei riquadri con {names}. Non torna nemmeno ciò che stavano eseguendo.",

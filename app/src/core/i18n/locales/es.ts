@@ -630,6 +630,8 @@ export const es: Translation = {
     "face.runTask": "Tarea {n}",
     "face.elapsed": "Duración {time}",
     "face.dropRunLive": "No se puede quitar hasta que termine la ejecución",
+    "face.dropLaunch": "Quitar este panel y detener la ejecución",
+    "face.dropLaunchConfirm": "¿Quitar este panel? La ejecución se detiene con él: los pasos en curso de todos los roles terminan donde están, así que pueden quedar cambios a medias y worktrees.",
     "face.runStoppedAt": "Detenida en {exit}",
     "quit.confirm": "¿Salir de Amenbo? Todas las terminales abiertas se cierran. Las conversaciones vuelven en el próximo arranque; lo que estaban ejecutando, no.",
     "quit.confirmNotAll": "¿Salir de Amenbo? Todas las terminales abiertas se cierran. Las conversaciones vuelven en el próximo arranque, salvo en los paneles con {names}. Lo que estaban ejecutando tampoco vuelve.",

@@ -692,6 +692,8 @@ const ui = {
   "face.runTask": "Task {n}",
   "face.elapsed": "Elapsed {time}",
   "face.dropRunLive": "Can't be removed while the run is going",
+  "face.dropLaunch": "Remove this pane and stop the run",
+  "face.dropLaunchConfirm": "Remove this pane? The run stops with it: every role's step under way ends where it stands, so changes made partway and worktrees may be left behind.",
   "face.runStoppedAt": "Stopped at {exit}",
   // The way out of the whole app, which ends every terminal at once and is asked about for the same
   // reason one pane is (`app/src/shell/openPanes.ts`, `crate::quit`). It is its own sentence rather

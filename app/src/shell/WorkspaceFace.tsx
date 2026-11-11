@@ -1988,7 +1988,8 @@ export function WorkspaceFace({
                     startWith.current.delete(id);
                     // A run's pane takes its step with it. Its run is over — the pane cannot be taken
                     // away before (`./TerminalPane`) — and a step left here would put the row back the
-                    // moment a pane of that id stood again. A launch's pane takes every seat's with it.
+                    // moment a pane of that id stood again. A launch's pane takes every seat's with it:
+                    // the launch was stopped on the way out, or had ended already.
                     const terminals = frame.launch === null
                       ? [id]
                       : [...seats.current].flatMap(([run, seat]) => {

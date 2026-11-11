@@ -9,8 +9,8 @@
 # The value to ship is the run's task's value of the release axis. It lists the tasks under that value
 # and the product that are not done, leaving out the run's task itself. When there are none, it leaves by
 # DONE_EXIT, handing the value on by name (VALUE_OUTPUT), and its report gives the value and how many of
-# the product's tasks under it are done. When some are left, it writes them — ref, title and status — as
-# a Markdown table (LEFT_FILE, beside output.json), hands that on (LEFT_OUTPUT) and leaves by LEFT_EXIT.
+# the product's tasks under it are done. When some are left, it leaves by the error way out, handing
+# nothing on; its report names each of them, by ref, title and status.
 #
 # A filter splits on whitespace before it reads a value, so it names each value by its slug, looked up by
 # name on the axis.
@@ -23,13 +23,12 @@
 # project the axes and tasks are read from.
 set -euo pipefail
 
-# The names the board writes in Japanese: the input, the outputs and the file handed on, and the ways out.
+# The names the board writes in Japanese: the input, the output, and the ways out: done, and the error
+# way out, which output.json names as `*`.
 TASK_INPUT="タスク"
 VALUE_OUTPUT="分類"
-LEFT_OUTPUT="残り"
-LEFT_FILE="残り.md"
 DONE_EXIT="完了"
-LEFT_EXIT="中身が残っている"
+ERROR_EXIT="*"
 
 cd "$(dirname "$0")/../.."
 
@@ -81,16 +80,7 @@ if [ "$(jq -r 'length' <<< "$undone")" = 0 ]; then
     exit 0
 fi
 
-left="$(dirname "$AMENBO_OUTPUT")/$LEFT_FILE"
-{
-    echo "分類「${value}」に残っている ${product} のタスク"
-    echo
-    echo "| 番号 | タイトル | 状態 |"
-    echo "|---|---|---|"
-    jq -r '.[] | "| \(.ref) | \(.title | gsub("\\|"; "\\|")) | \(.status) |"' <<< "$undone"
-} > "$left" || die "$left に書き込めませんでした"
-
 report="分類「${value}」に ${product} のタスクが $(jq -r 'length' <<< "$undone")件残っています。"$'\n'
 report+=$(jq -r '.[] | "- \(.ref)　\(.title)（\(.status)）"' <<< "$undone")
-jq -n --arg exit "$LEFT_EXIT" --arg out "$LEFT_OUTPUT" --arg file "$LEFT_FILE" --arg report "$report" \
-    '{version: 1, exit: $exit, outs: {($out): $file}, report: $report}' > "$AMENBO_OUTPUT"
+jq -n --arg exit "$ERROR_EXIT" --arg report "$report" \
+    '{version: 1, exit: $exit, outs: {}, report: $report}' > "$AMENBO_OUTPUT"

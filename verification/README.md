@@ -807,7 +807,8 @@ the launch holds for it beside the definition — off `launch-show` at the termi
 count, note and tag on the screen, and the default headcount off its "⋯" menu. None and past ten are refused at the terminal alone, since the
 screen's stepper stops at 1 and 10; the role's stop while the launch is paused as a whole is refused on
 the screen alone, since no terminal pauses a launch as a whole, and so is the role read back at its
-definition once the launch has ended, since no terminal ends one.
+definition once the launch has ended, since the terminal's roads have no op that ends one
+(`automation launch-stop` is not walked there).
 **What a step of a run types is the screen's too** (`out-in-pane` / `done-in-pane`):
 which step is being answered comes off the environment the window opened that terminal with, so the
 two are refused anywhere else — and a run started at the terminal opens no pane to type them in.

@@ -2618,11 +2618,12 @@ pub enum AutomationCmd {
         run: i64,
     },
 
-    /// How many go in one launch, beside its definition: the most runs that go at once, all its roles
-    /// together, and for each role the headcount the definition gives it, the one this launch holds, the
-    /// runs under way, the seats still to go after it was lowered, and whether it is stopped once its
-    /// task is done — and under each role, the tasks waiting for it to take and what waits on a person
-    /// where none is. A run names its launch (`run-show`)
+    /// How many go in one launch, beside its definition: whether it is running, paused or ended, the
+    /// most runs that go at once, all its roles together, and for each role the headcount the definition
+    /// gives it, the one this launch holds, the runs under way, the seats still to go after it was
+    /// lowered, and whether it is stopped once its task is done — and under each role, the tasks
+    /// waiting for it to take and what waits on a person where none is. A run names its launch
+    /// (`run-show`)
     LaunchShow {
         /// launch id
         launch: i64,
@@ -2690,6 +2691,13 @@ pub enum AutomationCmd {
         /// role id
         #[arg(long)]
         role: i64,
+    },
+    /// Stop a launch now, as closing its pane does: each run of it still going is force-canceled where
+    /// it stands, and the launch ends — no run is started in it again. A person's: refused inside a step
+    /// of a run, and for a launch that has ended already
+    LaunchStop {
+        /// launch id
+        launch: i64,
     },
 
     /// **Put down one thing this step produced**, on the output the step's text lists it under. Written

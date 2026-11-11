@@ -4495,6 +4495,18 @@ pub struct AutomationLaunchCheckDto {
     pub(crate) blocks: Vec<AutomationLaunchBlockDto>,
 }
 
+/// **A launch that has not ended** — running or paused — and the project its pane stands in
+/// ([`crate::automation::automation_launches_live`], `AMB-D-1154`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationLiveLaunchDto {
+    #[ts(type = "number")]
+    pub(crate) launch: i64,
+    #[ts(type = "number")]
+    pub(crate) project: i64,
+}
+
 /// **A run, just launched** — what the press is answered with.
 ///
 /// A run says nothing beyond its id: it starts on the spot, nothing being in line ahead of it

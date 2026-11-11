@@ -5,7 +5,7 @@ import {
   goProject, gridAt, laidOut, landingOn, movedTo, movedWithin, needsNobody, openedFrame, openedIn,
   pageCount, pageOfFrame, paneIn, paneOfRun, panesOf, placing, reordered, resized, restored,
   roomOnPage, runFrameId, runOfFrameId, runsKept, SIZES, slotsOf, stoodForRun, withoutRuns, writing,
-  launchFrameId, launchOfFrameId, launchesKept, paneIdOf, paneOfLaunch, paneOfTerminal, seatedIn, seatedOn,
+  launchFrameId, launchOfFrameId, paneIdOf, paneOfLaunch, paneOfTerminal, seatedIn, seatedOn,
   stoodForLaunch, terminalOf,
   folding, type Layout, type Size,
 } from "./layout";
@@ -1146,35 +1146,62 @@ describe("a launch's pane kept between runs of the app", () => {
     expect(launchOfFrameId("launch-")).toBeNull();
   });
 
-  it("is named only where it came out of the store", () => {
+  it("is not taken for a run's pane kept in the store", () => {
     const saved = { frames: [
       { id: "1", project: 1 },
       { id: launchFrameId(4), project: 1 },
       { id: launchFrameId(5), project: 1, run: 9, launch: 5 },
       { id: runFrameId(6), project: 1 },
     ] };
-    expect(launchesKept(saved)).toEqual([4]);
     expect(runsKept(saved)).toEqual([6]);
   });
 
-  it("comes back with the seat it was given in front, and goes where it was given none", () => {
+  it("comes back with the seat it was given in front, with none while it is still going, and goes once it has ended", () => {
     const saved = { project: 1, frames: [
       { id: "1", project: 1 },
       { id: launchFrameId(4), project: 1 },
       { id: launchFrameId(5), project: 1 },
+      { id: launchFrameId(7), project: 1 },
       { id: runFrameId(6), project: 1 },
     ] };
-    const back = restored(seatedOn(saved, new Map([[4, 21]])), 1);
-    expect(back.frames.map((one) => one.id)).toEqual(["1", launchFrameId(4), runFrameId(6)]);
+    // 4 has a seat, 5 waits for a task with no run, and 7 has ended.
+    const back = restored(seatedOn(saved, new Map([[4, 21]]), new Map([[4, 1], [5, 1]])), 1);
+    expect(back.frames.map((one) => one.id)).toEqual(["1", launchFrameId(4), launchFrameId(5), runFrameId(6)]);
     expect(back.frames[1]).toMatchObject({ launch: 4, run: 21 });
-    expect(back.frames[2]).toMatchObject({ launch: null, run: 6 });
+    expect(back.frames[2]).toMatchObject({ launch: 5, run: null });
+    expect(back.frames[3]).toMatchObject({ launch: null, run: 6 });
     expect(paneOfLaunch(back, 4)?.id).toBe(launchFrameId(4));
-    // Found again by the launch's next step rather than stood a second time.
-    expect(stoodForLaunch(back, 1, 4, 22).layout.frames).toHaveLength(3);
+    // Found again by the launch's next step rather than stood a second time, and the seatless one
+    // takes its first seat in front.
+    expect(stoodForLaunch(back, 1, 4, 22).layout.frames).toHaveLength(4);
+    expect(stoodForLaunch(back, 1, 5, 23).frame).toMatchObject({ id: launchFrameId(5), run: 23 });
   });
 
-  it("stays where the arrangement came from the other window, seat and all", () => {
+  it("keeps a launch that has ended where a seat is still given to it", () => {
+    const saved = { frames: [{ id: launchFrameId(7), project: 1 }] };
+    expect(seatedOn(saved, new Map([[7, 30]]), new Map()).frames).toEqual([{ id: launchFrameId(7), project: 1, run: 30 }]);
+  });
+
+  it("stays, seatless, where the launches could not be read", () => {
+    const saved = { frames: [{ id: launchFrameId(4), project: 1 }, { id: launchFrameId(5), project: 1 }] };
+    const back = restored(seatedOn(saved, new Map(), null), 1);
+    expect(back.frames.map((one) => [one.launch, one.run])).toEqual([[4, null], [5, null]]);
+  });
+
+  it("is stood for a launch still going whose pane the store did not keep, at the end of its project's panes", () => {
+    const saved = { project: 1, frames: [
+      { id: "1", project: 1, size: "half" as const },
+      { id: "2", project: 2 },
+    ] };
+    const back = restored(seatedOn(saved, new Map([[9, 40]]), new Map([[8, 1], [9, 2]])), 1);
+    expect(back.frames.map((one) => one.id)).toEqual(["1", "2", launchFrameId(8), launchFrameId(9)]);
+    expect(back.frames[2]).toMatchObject({ project: 1, launch: 8, run: null, size: "half", composeOpen: false });
+    expect(back.frames[3]).toMatchObject({ project: 2, launch: 9, run: 40 });
+  });
+
+  it("stays where the arrangement came from the other window, seat and all, and is not stood twice", () => {
     const saved = { frames: [{ id: launchFrameId(4), project: 1, run: 9, launch: 4 }] };
-    expect(seatedOn(saved, new Map()).frames).toHaveLength(1);
+    expect(seatedOn(saved, new Map(), new Map()).frames).toHaveLength(1);
+    expect(seatedOn(saved, new Map(), new Map([[4, 1]])).frames).toHaveLength(1);
   });
 });

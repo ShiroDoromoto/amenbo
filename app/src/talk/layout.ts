@@ -1178,43 +1178,54 @@ export function launchOfFrameId(id: string): number | null {
 }
 
 /**
- * The launches whose panes came back out of the store, in the order they were kept. A frame carrying
- * its launch came from the other window, and stays (`runsKept`).
+ * **What the store kept, with each launch's pane given the seat to draw in front** — and a pane for
+ * every launch still going, whether the store kept one for it or not (`AMB-D-1154`).
+ *
+ * The store keeps places, so a launch's pane comes out of it naming no seat. `seats` gives each launch
+ * the seat to put in front, and `live` the launches that have not ended, each with its project — or
+ * null where they could not be read.
+ *
+ * **A launch still going keeps its pane with no seat in front** where `seats` gives it none: a launch
+ * that waits for a task to take opens no run (`AMB-D-1123`), and a paused one may be picked up again.
+ * Its pane says so off the launch alone (`AMB-D-1141`), and its next seat is put in front
+ * (`stoodForLaunch`).
+ *
+ * **A launch that has ended loses its pane** where `seats` gives it none either — over and needing
+ * nobody (`needsNobody`, `AMB-D-955`), the way a run's pane goes with its run (`withoutRuns`). Where
+ * the launches could not be read, every launch's pane stays: a pane left over is one close away, and a
+ * launch going on with no pane is one nobody would know to look for.
+ *
+ * **A launch still going whose pane the store did not keep is given one**, at the end of its project's
+ * panes, as Start stands it (`stoodForLaunch`): a build before this one let such a pane go.
  */
-export function launchesKept(saved: SavedLayout): number[] {
-  return saved.frames.flatMap((frame) => {
-    if (frame.launch != null) return [];
+export function seatedOn(
+  saved: SavedLayout,
+  seats: ReadonlyMap<number, number>,
+  live: ReadonlyMap<number, number> | null,
+): SavedLayout {
+  const frames: SavedLayout["frames"] = saved.frames.flatMap((frame) => {
+    if (frame.launch != null) return [frame];
     const launch = launchOfFrameId(frame.id);
-    return launch === null ? [] : [launch];
+    if (launch === null) return [frame];
+    const run = seats.get(launch);
+    if (run !== undefined) return [{ ...frame, run }];
+    return live === null || live.has(launch) ? [frame] : [];
   });
-}
-
-/**
- * **What the store kept, with each launch's pane given the seat to draw in front** — and without the
- * launch's pane where `seats` gives it none (`launchesKept`).
- *
- * The store keeps places, so a launch's pane comes out of it naming no seat, and the pane goes where
- * there is none to give: a launch that is over and needs nobody — ended, and every run of it over and
- * needing nobody (`needsNobody`, `AMB-D-955`) — the way a run's pane goes with its run
- * (`withoutRuns`), and a launch that could not be read. The next step of a launch still going stands
- * its pane again (`stoodForLaunch`).
- *
- * **A launch still waiting for its first task goes too**, though Start stands its pane with no seat in
- * front. The seats are read off the runs, and a run is all that tells a launch that is still going
- * from one that ended while the app was down; a pane kept on no run could be one for a launch nobody
- * will ever work again. Its first run stands it again.
- */
-export function seatedOn(saved: SavedLayout, seats: ReadonlyMap<number, number>): SavedLayout {
-  return {
-    ...saved,
-    frames: saved.frames.flatMap((frame) => {
-      if (frame.launch != null) return [frame];
-      const launch = launchOfFrameId(frame.id);
-      if (launch === null) return [frame];
-      const run = seats.get(launch);
-      return run === undefined ? [] : [{ ...frame, run }];
-    }),
-  };
+  const standing = new Set(frames.map((frame) => frame.launch ?? launchOfFrameId(frame.id)));
+  for (const [launch, project] of live ?? []) {
+    if (standing.has(launch)) continue;
+    const last = frames.filter((frame) => frame.project === project).pop();
+    const run = seats.get(launch);
+    frames.push({
+      id: launchFrameId(launch),
+      project,
+      size: last?.size ?? DEFAULT_SIZE,
+      // Closed, for the reason a run's pane starts closed (`stoodForRun`).
+      composeOpen: false,
+      ...(run === undefined ? {} : { run }),
+    });
+  }
+  return { ...saved, frames };
 }
 
 /**

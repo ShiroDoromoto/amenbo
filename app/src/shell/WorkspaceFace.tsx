@@ -14,7 +14,7 @@ import {
 } from "../talk/frames";
 import {
   addPane, closedFrame, closedIn, EMPTY_LAYOUT, filledPages, focusOn, folding, goPage, goProject,
-  gridAt, landingOn, laidOut, launchesKept, movedTo, movedWithin, needsNobody, openedFrame, openedIn,
+  gridAt, landingOn, laidOut, movedTo, movedWithin, needsNobody, openedFrame, openedIn,
   pageCount, paneIdOf, paneIn, paneOfLaunch, paneOfTerminal, panesOf, reordered, resized, restored,
   runFrameId, runsKept, seatedIn, seatedOn, slotsOf, stoodForLaunch, stoodForRun, terminalOf,
   withoutRuns, writing, type Frame, type Layout, type SavedLayout, type Seat, type Size,
@@ -48,7 +48,7 @@ import type { PtySessionDto } from "../bindings/bindings";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
-import { fetchLiveRuns, fetchRunCards, useRunCards } from "../core/automations";
+import { fetchLiveLaunches, fetchLiveRuns, fetchRunCards, useRunCards } from "../core/automations";
 import { roomWaitState, roundOf, runSayOf, waitingState } from "../core/runWords";
 import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 
@@ -131,23 +131,28 @@ async function settledRunsLeftOut(saved: SavedLayout | null): Promise<SavedLayou
 }
 
 /**
- * **The launches' panes the store kept, each with the seat to draw in front** (`../talk/layout`'s
- * `seatedOn`): the oldest of its runs somebody still has something to do with — going, held, or a
- * failure nobody has acknowledged (`AMB-D-955`), which is what the "running" tab lists. A launch with
- * none of those has no seat to draw, and its pane is left behind: over and needing nobody, or with no
- * seat under way yet, when the next step of it stands the pane again (`stoodForLaunch`).
+ * **The launches' panes the store kept, each with the seat to draw in front, and a pane for every
+ * launch still going** (`../talk/layout`'s `seatedOn`, `AMB-D-1154`). A launch's seat is the oldest of
+ * its runs somebody still has something to do with — going, held, or a failure nobody has acknowledged
+ * (`AMB-D-955`), which is what the "running" tab lists.
+ *
+ * A launch still going keeps its pane with no seat where it has none, waiting for a task to take or
+ * paused, and where the runs cannot be read. One that has ended with no seat is left behind. Where the
+ * launches cannot be read, no launch's pane is left behind.
  */
 async function settledLaunchesSeated(saved: SavedLayout): Promise<SavedLayout> {
-  const launches = new Set(launchesKept(saved));
-  if (launches.size === 0) return saved;
-  const live = await fetchLiveRuns().catch(() => []);
+  const [runs, launches] = await Promise.all([
+    fetchLiveRuns().catch(() => []),
+    fetchLiveLaunches().then(
+      (all) => new Map(all.map((one) => [one.launch, one.project])),
+      () => null,
+    ),
+  ]);
   const seats = new Map<number, number>();
-  for (const card of [...live].sort((a, b) => a.run - b.run)) {
-    if (card.launch !== undefined && launches.has(card.launch) && !seats.has(card.launch)) {
-      seats.set(card.launch, card.run);
-    }
+  for (const card of [...runs].sort((a, b) => a.run - b.run)) {
+    if (card.launch !== undefined && !seats.has(card.launch)) seats.set(card.launch, card.run);
   }
-  return seatedOn(saved, seats);
+  return seatedOn(saved, seats, launches);
 }
 
 /**

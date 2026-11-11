@@ -8,7 +8,7 @@ vi.mock("./snapshot", async (importOriginal) => ({
   inTauri: () => tauri.on,
 }));
 
-import { fetchLaunchState, launchPause, roleHeld } from "./automations";
+import { fetchLaunchState, fetchLiveLaunches, launchPause, roleHeld } from "./automations";
 import type { AutomationLaunchStateDto, AutomationRunCardDto } from "../bindings/bindings";
 
 beforeEach(() => {
@@ -28,6 +28,22 @@ describe("reading one launch", () => {
   it("reads nothing outside Tauri", async () => {
     tauri.on = false;
     expect(await fetchLaunchState(3)).toBeNull();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+// The launches that have not ended are read at once, for the panes the app stands again as it comes up.
+describe("reading the launches still going", () => {
+  it("asks with nothing and hands back what it answers", async () => {
+    const live = [{ launch: 3, project: 1 }, { launch: 5, project: 2 }];
+    invoke.mockResolvedValue(live);
+    expect(await fetchLiveLaunches()).toBe(live);
+    expect(invoke).toHaveBeenCalledWith("automation_launches_live", {});
+  });
+
+  it("reads nothing outside Tauri", async () => {
+    tauri.on = false;
+    expect(await fetchLiveLaunches()).toEqual([]);
     expect(invoke).not.toHaveBeenCalled();
   });
 });

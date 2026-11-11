@@ -43,6 +43,7 @@ import type {
   AutomationLaunchAsksDto,
   AutomationLaunchCheckDto,
   AutomationLaunchStateDto,
+  AutomationLiveLaunchDto,
   AutomationPortDto,
   AutomationRoleDto,
   AutomationRunCardDto,
@@ -1444,6 +1445,16 @@ export function useRunCards(runs: readonly number[]): AutomationRunCardDto[] {
 export async function fetchLaunchState(launchId: number): Promise<AutomationLaunchStateDto | null> {
   if (!inTauri()) return null;
   return invoke<AutomationLaunchStateDto>("automation_launch_state", { launchId });
+}
+
+/**
+ * **The launches that have not ended** — running or paused — across every project, oldest first, each
+ * with the project its pane stands in (`AMB-D-1154`). A launch waiting for a task with no run is among
+ * them. Empty outside Tauri.
+ */
+export async function fetchLiveLaunches(): Promise<AutomationLiveLaunchDto[]> {
+  if (!inTauri()) return [];
+  return invoke<AutomationLiveLaunchDto[]>("automation_launches_live", {});
 }
 
 /**

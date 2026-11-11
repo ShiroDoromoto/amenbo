@@ -1032,6 +1032,12 @@ roles: Array<AutomationLaunchRoleStateDto>,
 attention: Array<AutomationLaunchAttentionDto>, };
 
 /**
+ * **A launch that has not ended** — running or paused — and the project its pane stands in
+ * ([`crate::automation::automation_launches_live`], `AMB-D-1154`).
+ */
+export type AutomationLiveLaunchDto = { launch: number, project: number, };
+
+/**
  * **One automation an action is placed on**, with the project it is in — a global action stands on
  * automations in more than one, and going to one is going to its project.
  */

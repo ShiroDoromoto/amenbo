@@ -7,6 +7,7 @@ import {
 } from "../components/atoms";
 import { Pager, PAGE_SIZE } from "../components/Pager";
 import { Icon } from "../components/Icon";
+import { TaskRoleChip } from "../components/TaskRoleChip";
 import { useSmartView } from "../core/reads";
 import { t } from "../core/i18n";
 import { isClosed } from "../core/status";
@@ -149,6 +150,7 @@ const TaskRow = memo(function TaskRow({
       <TaskIdChip id={task.id} />
       <BlockedChips task={task} />
       <PremiseChangedChip task={task} />
+      <TaskRoleChip projectId={task.projectId} roleId={task.roleId} />
       {task.assignee && <FacetAvatar actor={task.assignee} />}
       <PriorityDot priority={task.priority} />
       {showUnread && <TriggeredAtChip at={task.triggeredAt} />}

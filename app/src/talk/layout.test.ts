@@ -6,7 +6,7 @@ import {
   pageCount, pageOfFrame, paneIn, paneOfRun, panesOf, placing, reordered, resized, restored,
   roomOnPage, runFrameId, runOfFrameId, runsKept, SIZES, slotsOf, stoodForRun, withoutRuns, writing,
   launchFrameId, launchOfFrameId, paneIdOf, paneOfLaunch, paneOfTerminal, seatedIn, seatedOn,
-  stoodForLaunch, terminalOf,
+  stoodForLaunch, stoodForLaunches, terminalOf,
   folding, type Layout, type Size,
 } from "./layout";
 
@@ -1083,6 +1083,24 @@ describe("the pane a launch stands in", () => {
     expect(layout.frames.map((frame) => frame.id)).toEqual(["1", launchFrameId(3)]);
     expect(layout.focus).toBe(one.focus);
     expect(layout.page).toBe(one.page);
+  });
+
+  it("stands one for every live launch that has none, in its own project, moving nothing", () => {
+    const one = withPanes(1);
+    const seated = stoodForLaunch(one, 1, 3, 7).layout;
+    const all = stoodForLaunches(seated, [{ launch: 3, project: 1 }, { launch: 5, project: 1 }, { launch: 6, project: 2 }]);
+    expect(all.frames.map((frame) => [frame.id, frame.project, frame.run])).toEqual([
+      ["1", 1, null],
+      [launchFrameId(3), 1, 7],
+      [launchFrameId(5), 1, null],
+      [launchFrameId(6), 2, null],
+    ]);
+    expect(all.focus).toBe(seated.focus);
+    expect(all.page).toBe(seated.page);
+    expect(all.project).toBe(seated.project);
+    // Every one standing already: the arrangement given is the one answered.
+    expect(stoodForLaunches(all, [{ launch: 5, project: 1 }, { launch: 6, project: 2 }])).toBe(all);
+    expect(stoodForLaunches(all, [])).toBe(all);
   });
 
   it("is where a run of a launch is gone to, and a run kept from before launches has its own", () => {

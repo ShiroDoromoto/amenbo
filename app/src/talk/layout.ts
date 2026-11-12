@@ -759,6 +759,20 @@ export function stoodForLaunch(
   return { layout: atTheEnd(layout, project, frame), frame };
 }
 
+/**
+ * **A pane for every launch in `launches` that has none**, each stood with no seat in front
+ * (`stoodForLaunch`, `AMB-D-1154`). It is how a launch started outside this window — at the command
+ * line, or by a trigger — comes onto the screen before it has a run: one waiting for a task to take
+ * opens none (`AMB-D-1123`). A launch that has a pane keeps it as it is, and where every one has, the
+ * arrangement answered is the one given.
+ */
+export function stoodForLaunches(
+  layout: Layout,
+  launches: readonly { launch: number; project: number }[],
+): Layout {
+  return launches.reduce((was, one) => stoodForLaunch(was, one.project, one.launch, null).layout, layout);
+}
+
 /** What a seat of a launch is running now: its terminal, and the folder and agent it was started
  *  with — null where its step has ended or none has come yet. */
 export type Seat = {

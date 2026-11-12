@@ -18,7 +18,7 @@
 #
 # The way out is decided by output.json, never by this script's exit code. Anything it cannot read or
 # write — no product, no value, no version, a name that is not a value, no task to write on, a command
-# that failed — ends it with exit code 1, which the step leaves through its error way out.
+# that failed — ends it by its error way out, with the reason as its report.
 #
 # Amenbo starts a script step in no particular folder, so it moves to the checkout it sits in, whose
 # project the axes and tasks are read from.
@@ -31,11 +31,8 @@ TASK_INPUT="タスク"
 DONE_EXIT="完了"
 
 cd "$(dirname "$0")/../.."
-
-die() { echo "✗ $*" >&2; exit 1; }
-
-[ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
-    die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"
+# shellcheck source=scripts/automation/step-lib.sh
+. scripts/automation/step-lib.sh
 
 [ "$#" -gt 0 ] || die "プロダクトがありません：引数にプロダクトの値を渡してください"
 products=("$@")

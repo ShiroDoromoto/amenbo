@@ -17,9 +17,9 @@
 # Inputs, from AMENBO_INPUT's `ins`: the run id (required), and whether the screen needs checking
 # (optional).
 #
-# The way out is decided by output.json, never by this script's exit code. Anything it cannot read
-# — no run id, a watch that broke, a run that ended without a verdict — ends it with exit code 1,
-# which the step leaves through its error way out, instead of passing for a red.
+# The way out is decided by output.json, never by this script's exit code. Anything it cannot read — no
+# run id, a watch that broke, a run that ended without a verdict — ends it by its error way out, with the
+# reason as its report, instead of passing for a red.
 #
 # watch-ci.sh is called as it is: its exit codes are read by hand and by other steps, so the
 # reading of a red log is done here, not there.
@@ -29,34 +29,18 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
-
-die() { echo "✗ $*" >&2; exit 1; }
-
-[ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
-    die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"
+# shellcheck source=scripts/automation/step-lib.sh
+. scripts/automation/step-lib.sh
 
 run_id=$(jq -r '.ins["GitHub Actions の run ID"] // empty' "$AMENBO_INPUT")
 [[ "$run_id" =~ ^[0-9]+$ ]] || die "入力に run の id がありません：\"$run_id\""
 screen=$(jq -r '.ins["画面の確認が要る"] // empty' "$AMENBO_INPUT")
 
-if [ -n "${AMENBO_CI_REPO:-}" ]; then
-    repo="$AMENBO_CI_REPO"
-else
-    repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
-        die "リポジトリがわかりません：AMENBO_CI_REPO=OWNER/REPO を設定してください"
-fi
+resolve_repo
 url="https://github.com/$repo/actions/runs/$run_id"
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-out_dir=$(dirname "$AMENBO_OUTPUT")
-
-# Write output.json and stop: the way out, its outputs as a JSON object, and the report.
-leave() {
-    jq -n --arg exit "$1" --argjson outs "$2" --arg report "$3" \
-        '{version: 1, exit: $exit, outs: $outs, report: $report}' > "$AMENBO_OUTPUT"
-    exit 0
-}
 
 # Hand the failure on as a file, and leave through the red way out.
 red() {

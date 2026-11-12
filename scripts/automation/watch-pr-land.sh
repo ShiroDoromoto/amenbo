@@ -15,10 +15,9 @@
 #
 # Input, from AMENBO_INPUT's `ins`: the pull request number (required).
 #
-# The way out is decided by output.json, never by this script's exit code. Anything else — every
-# check green and the pull request still not merging (watch-ci.sh's exit code 4), a pull request
-# closed without merging, a watch that broke or stalled — ends it with exit code 1, which the step
-# leaves through its error way out, the reason being the last line on stderr.
+# The way out is decided by output.json, never by this script's exit code. Anything else — every check
+# green and the pull request still not merging (watch-ci.sh's exit code 4), a pull request closed without
+# merging, a watch that broke or stalled — ends it by its error way out, with the reason as its report.
 #
 # watch-ci.sh is called as it is: its exit codes are read by hand and by other steps. On DIRTY read
 # twice in a row it says `needs a hand: DIRTY` and ends with exit code 6. Its events are read as
@@ -30,34 +29,18 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
-
-die() { echo "✗ $*" >&2; exit 1; }
-
-[ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
-    die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"
+# shellcheck source=scripts/automation/step-lib.sh
+. scripts/automation/step-lib.sh
 
 pr=$(jq -r '.ins["PR"] // empty' "$AMENBO_INPUT")
 [[ "$pr" =~ ^[0-9]+$ ]] || die "入力にプルリクエストの番号がありません：\"$pr\""
 
-if [ -n "${AMENBO_CI_REPO:-}" ]; then
-    repo="$AMENBO_CI_REPO"
-else
-    repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
-        die "リポジトリがわかりません：AMENBO_CI_REPO=OWNER/REPO を設定してください"
-fi
+resolve_repo
 url="https://github.com/$repo/pull/$pr"
 
 work=$(mktemp -d)
 watch=""
 trap '[ -n "$watch" ] && kill "$watch" 2>/dev/null; rm -rf "$work"' EXIT
-out_dir=$(dirname "$AMENBO_OUTPUT")
-
-# Write output.json and stop: the way out, its outputs as a JSON object, and the report.
-leave() {
-    jq -n --arg exit "$1" --argjson outs "$2" --arg report "$3" \
-        '{version: 1, exit: $exit, outs: $outs, report: $report}' > "$AMENBO_OUTPUT"
-    exit 0
-}
 
 # Its stdout is the events it saw. Each goes to stderr, which the run keeps the end of, and to a
 # log read once the watch is over.

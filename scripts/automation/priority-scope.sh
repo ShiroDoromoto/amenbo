@@ -23,8 +23,8 @@
 # The filter names each value by its slug instead.
 #
 # The way out is decided by output.json, never by this script's exit code. Anything it cannot read or
-# write — no input, a table with neither column, a command that failed — ends it with exit code 1, which
-# the step leaves through its error way out.
+# write — no input, a table with neither column, a command that failed — ends it by its error way out,
+# with the reason as its report.
 #
 # Amenbo starts a script step in no particular folder, so it moves to the checkout it sits in, whose
 # project the tasks are read from.

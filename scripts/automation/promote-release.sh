@@ -19,10 +19,10 @@
 # Input, from AMENBO_INPUT's `ins`: the version, without the leading `v` (required).
 #
 # The way out is decided by output.json, never by this script's exit code. A red run, a file that does
-# not hold, or anything it cannot read or do ends it with exit code 1, which the step leaves through
-# its error way out; the last line on stderr says what. When the latest release still serves another
-# version, that line also says whether `v<version>` reads as a prerelease, and which version the
-# tag's own latest.json carries, to tell a promotion that did not happen from a stale cache.
+# not hold, or anything it cannot read or do ends it by its error way out, with the reason as its report.
+# When the latest release still serves another version, the report also says whether `v<version>` reads
+# as a prerelease, and which version the tag's own latest.json carries, to tell a promotion that did not
+# happen from a stale cache.
 #
 # Amenbo starts a script step in no particular folder, so it moves to the checkout it sits in, which
 # is where `gh` reads the repository from (AMENBO_CI_REPO overrides it, as in watch-ci.sh).

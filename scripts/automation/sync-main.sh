@@ -10,9 +10,9 @@
 # No input, no output.
 #
 # The way out is decided by output.json, never by this script's exit code. A checkout not on main, a
-# working tree with changes to tracked files, or a main that cannot be fast-forwarded ends it with exit
-# code 1, which the step leaves through its error way out. Untracked files are not counted as changes:
-# a fast-forward leaves them alone, and if one would be overwritten the pull fails and the step stops.
+# working tree with changes to tracked files, or a main that cannot be fast-forwarded ends it by its
+# error way out, with the reason as its report. Untracked files are not counted as changes: a
+# fast-forward leaves them alone, and if one would be overwritten the pull fails and the step stops.
 #
 # Amenbo starts a script step in no particular folder, so it moves to the checkout it sits in.
 set -euo pipefail

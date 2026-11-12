@@ -15,9 +15,9 @@
 # Inputs, from AMENBO_INPUT's `ins`: the version, without the leading `v`, and the place the artifacts
 # were downloaded to (both required).
 #
-# The way out is decided by output.json, never by this script's exit code. Anything it cannot read —
-# no version, no place, no .pkg in it, a tag GitHub does not have — ends it with exit code 1, which
-# the step leaves through its error way out.
+# The way out is decided by output.json, never by this script's exit code. Anything it cannot read — no
+# version, no place, no .pkg in it, a tag GitHub does not have — ends it by its error way out, with the
+# reason as its report.
 #
 # Amenbo starts a script step in no particular folder, so it moves to the checkout it sits in, which
 # is where `gh` reads the repository from (AMENBO_CI_REPO overrides it, as in watch-ci.sh).

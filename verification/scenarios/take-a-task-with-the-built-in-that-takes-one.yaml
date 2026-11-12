@@ -101,6 +101,5 @@ steps_gui:
     with:
       target: run
       step: build
-      action: work
       task: seed
       present: true

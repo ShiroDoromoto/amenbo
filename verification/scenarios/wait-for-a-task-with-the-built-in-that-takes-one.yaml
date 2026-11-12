@@ -128,6 +128,5 @@ steps_gui:
     op: run-pane
     with:
       step: build
-      action: work
       task: seed
       present: true

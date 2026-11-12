@@ -98,7 +98,6 @@ steps_gui:
     with:
       target: run
       step: claim
-      action: take
       task: seed
       present: true
 

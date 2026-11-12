@@ -4664,17 +4664,15 @@ const REGISTRY: &[OpSpec] = &[
     // The pane's header is the launch's alone (`launch-head`), with no row of any one run under it
     //. A run is read off its seat among the desks: the task it is on (`task`) on the
     // seat's first line, and on the second its number, written "#" and the number, and which step it
-    // is on. The step is said with the action it was opened from (`action`), as one value — the step
-    // is one terminal, and which action it belongs to is what says where on the automation's picture
-    // the run has got to. A run whose placement has been taken off the picture since says the step
-    // alone. `label` reads a pane's name and nothing else, which is why this one is here.
+    // is on, by the step's own name and nothing else: which action the step belongs to is not drawn on
+    // the seat. `label` reads a pane's name and nothing else, which is why this one is here.
     //
     // `state` is where the run stands, spelled as `run-row` spells it: at the end of the seat's first
     // line while it holds a seat. A run that has ended has left its seat, so the road reads that it is
-    // gone, and `step`, `action` and `task` are not read for it. The pane outlives the runs that were
+    // gone, and `step` and `task` are not read for it. The pane outlives the runs that were
     // its seats, which is why a run that is over is read here at all. No one run speaks for the pane,
     // so a failure is not said on it: why a run failed is read on the running tab's row (`run-row`).
-    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-pane", required: &[], refs: &["target", "task"], strings: &["step", "action", "state"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "run-pane", required: &[], refs: &["target", "task"], strings: &["step", "state"], binds: false },
     // **The header of that pane** — the launch, not any one run of it: the chip saying
     // it is automatic, the automation's name, where the launch stands, "See the history" and its moves.
     // It counts no one at work: that is each role's (`launch-role`). `state` is `running`, `pausing`

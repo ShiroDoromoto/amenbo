@@ -81,7 +81,6 @@ steps_gui:
     with:
       target: run
       step: claim
-      action: take
       present: true
 
   # And the press went there: the run's pane is the one being worked in.

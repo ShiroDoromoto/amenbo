@@ -12,6 +12,7 @@ import { useTaskPage, useTaskSearchIds } from "../core/reads";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { useSingleFlightPerKey } from "../core/singleFlight";
 import { FirstLoop } from "../components/FirstLoop";
+import { TaskRoleChip } from "../components/TaskRoleChip";
 import { AgentHookWiringRow, useAgentHookWiring } from "./AgentHookWiringRow";
 import { LinkFolderNotice } from "./LinkFolderNotice";
 import { pickBoardNotice } from "./boardNotice";
@@ -482,6 +483,7 @@ export function BoardScreen({
                 <span className="row__spacer" />
                 <BlockedChips task={t} />
                 <PremiseChangedChip task={t} />
+                <TaskRoleChip projectId={t.projectId} roleId={t.roleId} />
                 {t.assignee && <FacetAvatar actor={t.assignee} />}
                 <PriorityDot priority={t.priority} />
                 <DueChip due={t.due} />
@@ -706,6 +708,7 @@ const TaskCardView = memo(function TaskCardView({
             {t("card.assignee")} <FacetAvatar actor={task.assignee} showName />
           </span>
         )}
+        <TaskRoleChip projectId={task.projectId} roleId={task.roleId} />
       </div>
 
       <div className="card__row">

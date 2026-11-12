@@ -1,4 +1,5 @@
-// The roles a task of a project can be worked under, read for the task editor's role field.
+// The roles a task of a project can be worked under, read for the task editor's role field and for the
+// role a list row or a board card shows (`components/TaskRoleChip`).
 //
 // The field is drawn only when the project has a role, so an empty answer is what keeps it off — which
 // is also what an unanswered read and a failed one come back as: nothing is drawn rather than a field

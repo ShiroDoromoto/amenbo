@@ -303,6 +303,14 @@ body.is-dragging { user-select: none; }
 .card__title { font-size: var(--fs-md); font-weight: var(--fw-medium); overflow-wrap: anywhere; }
 .card__row { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 .card__assign { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-xs); color: var(--c-text-muted); }
+/* The role a task is worked under (`TaskRoleChip`), on a card and a list row: the role's picture, then its
+   name. The box gives way first when the row runs short, and the name, not the picture, is what is cut —
+   with an ellipsis, the whole name being in the tooltip. On a list row it stops at a set width so a long
+   name does not push the title out of sight. */
+.taskrole { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; font-size: var(--fs-xs); color: var(--c-text-muted); }
+.taskrole > :first-child { flex: none; }
+.taskrole__name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row > .taskrole { flex: 0 1 auto; max-width: 12em; }
 .card__footer { display: flex; align-items: center; gap: var(--s-2); color: var(--c-text-muted); font-size: var(--fs-xs); }
 .card__spacer { flex: 1; }
 /* A compact select sat inline among a card's or row's chips (the status control, a dimension value).

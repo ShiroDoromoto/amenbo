@@ -264,9 +264,6 @@ pub(crate) fn held_back(conn: &Connection, project_id: i64, roles: &[i64], cfg: 
             }
             if task.draft {
                 held.drafts += 1;
-                if held.first_draft.is_none() {
-                    held.first_draft = Some(task.id);
-                }
             }
             // A task still being created is in the hands of whoever is creating it, a person or a run,
             // and waits for nobody else's (`AMB-D-1155`).
@@ -776,7 +773,6 @@ mod tests {
             assert!(held.values.is_empty());
             assert_eq!(held.drafts, 0);
             assert_eq!(held.awaits_person, 1, "only the task on the decision waits for a person's hand");
-            assert_eq!(held.first_draft, None);
 
             // A start at an instant before that day is the first, and it is carried to the instant.
             let sooner = ours(tx, "sooner", &automation, None);
@@ -826,13 +822,13 @@ mod tests {
                 give_to(tx, id, born(tx, &automation));
                 id
             };
-            let first = drafted("being created");
+            drafted("being created");
             let launch = launched(tx, &automation).launch_id.expect("a launch");
 
             let state = launch_state(tx.conn(), launch).expect("read");
             let role = &state.roles[0];
             let held = role.held_back.as_ref().expect("nothing to take");
-            assert_eq!((held.tasks, held.drafts, held.first_draft), (1, 1, Some(first)));
+            assert_eq!((held.tasks, held.drafts), (1, 1));
             assert_eq!(held.awaits_person, 0, "whoever is creating it has it in hand");
             assert_eq!(AwaitsPerson::of(held), None);
             assert_eq!(role.awaits_person, None);
@@ -856,10 +852,7 @@ mod tests {
             let held = role.held_back.as_ref().expect("still nothing to take");
             assert_eq!((held.tasks, held.drafts), (2, 2));
             assert_eq!(held.awaits_person, 1, "the decision waits for a person, whoever is creating the task");
-            assert_eq!(
-                role.awaits_person,
-                Some(AwaitsPerson { tasks: 1, dimension_id: None, decision_id: Some(premise.id), task_id: None }),
-            );
+            assert_eq!(role.awaits_person, Some(AwaitsPerson { tasks: 1 }));
         });
     }
 
@@ -2171,12 +2164,8 @@ mod tests {
             assert_eq!(build.name, "実装");
             assert_eq!(build.waiting, 1);
             assert_eq!(build.held_back, None, "a role with a task to take is not kept waiting");
-            let awaits = |tasks| Some(AwaitsPerson { tasks, dimension_id: Some(axis.id), decision_id: None, task_id: None });
-            assert_eq!(
-                build.awaits_person,
-                awaits(1),
-                "its task behind v1 waits for a person all the same, and the value is where to go",
-            );
+            let awaits = |tasks| Some(AwaitsPerson { tasks });
+            assert_eq!(build.awaits_person, awaits(1), "its task behind v1 waits for a person all the same");
             assert_eq!(review.name, "レビュー");
             assert_eq!(review.waiting, 0);
             let held = review.held_back.as_ref().expect("the reviewer has nothing to take");

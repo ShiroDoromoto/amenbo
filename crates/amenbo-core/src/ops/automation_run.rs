@@ -3214,21 +3214,15 @@ pub struct LaunchRoleState {
 }
 
 /// **A role's tasks that move only once a person has done something** (`AMB-D-1144`, `AMB-D-1155`) — a
-/// value to close or a decision to settle ([`crate::ops::automation_builtin::HeldBack::awaits_person`]),
-/// and the one place a person goes first. A task waiting for another task or for its start goes on by
-/// itself, and one still being created is in the hands of whoever is creating it; neither is among them.
+/// value to close or a decision to settle ([`crate::ops::automation_builtin::HeldBack::awaits_person`]).
+/// A task waiting for another task or for its start goes on by itself, and one still being created is in
+/// the hands of whoever is creating it; neither is among them.
 ///
-/// Exactly one place is given: the value holding the most of them, else the decision holding the most.
+/// Only how many is given: a person looks for them in the list of tasks.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct AwaitsPerson {
     /// How many tasks, each counted once.
     pub tasks: usize,
-    /// The axis of the value to close, by its id.
-    pub dimension_id: Option<i64>,
-    /// The decision to settle, by its id.
-    pub decision_id: Option<i64>,
-    /// Always `None`, since a task still being created is not counted; kept while a face still reads it.
-    pub task_id: Option<i64>,
 }
 
 impl AwaitsPerson {
@@ -3237,9 +3231,7 @@ impl AwaitsPerson {
         if held.awaits_person == 0 {
             return None;
         }
-        let dimension_id = held.values.first().map(|v| v.dimension_id);
-        let decision_id = held.decisions.first().map(|d| d.id).filter(|_| dimension_id.is_none());
-        Some(Self { tasks: held.awaits_person, dimension_id, decision_id, task_id: None })
+        Some(Self { tasks: held.awaits_person })
     }
 }
 

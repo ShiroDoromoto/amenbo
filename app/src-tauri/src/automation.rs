@@ -2291,13 +2291,7 @@ pub fn automation_launch_state(launch_id: i64) -> Result<AutomationLaunchStateDt
                 })
                 .collect(),
             held_back: role.held_back.map(|held| held_back_dto(state.launch.project_id, held)),
-            awaits_person: role.awaits_person.map(|awaits| AutomationAwaitsPersonDto {
-                project: state.launch.project_id,
-                tasks: awaits.tasks,
-                dimension: awaits.dimension_id,
-                decision: awaits.decision_id,
-                task: awaits.task_id,
-            }),
+            awaits_person: role.awaits_person.map(|awaits| AutomationAwaitsPersonDto { tasks: awaits.tasks }),
             at_run_limit: role.at_run_limit,
         });
     }
@@ -3858,7 +3852,6 @@ mod tests {
             first_start: chrono::NaiveDate::from_ymd_opt(2026, 12, 1).map(amenbo_core::model::Schedule::Day),
             drafts: 0,
             awaits_person: 2,
-            first_draft: None,
         };
         assert_eq!(
             serde_json::to_value(held_back_dto(2, held)).expect("json"),

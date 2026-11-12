@@ -107,8 +107,8 @@ const launchRole = (role: number, name: string, runs: AutomationRunCardDto[], he
   atRunLimit: false,
 });
 
-/** Three tasks waiting for a person: the value v1, still open before theirs on the dimension 7, first. */
-const AWAITS: AutomationAwaitsPersonDto = { project: 1, tasks: 3, dimension: 7 };
+/** Three tasks waiting for a person. */
+const AWAITS: AutomationAwaitsPersonDto = { tasks: 3 };
 
 /** The launch 5, with the roles `roles` and what needs a person's hand `attention`. */
 const launchOf = (roles: AutomationLaunchRoleStateDto[], attention: AutomationLaunchAttentionDto[] = []): AutomationLaunchStateDto => ({
@@ -446,12 +446,10 @@ describe("the desks of a launch", () => {
       .toBe(tf("auto.run.roles.staff", { n: 2, m: 3 }));
   });
 
-  it("says beside a role on the bar how many of its tasks wait for a person, and presses it to where the first is done", async () => {
+  it("says beside a role on the bar how many of its tasks wait for a person, and nothing to press", async () => {
     const went: string[] = [];
     launched = launchOf([
       { ...launchRole(14, "山田", [], 2), awaitsPerson: AWAITS },
-      { ...launchRole(15, "さくら", [], 1), awaitsPerson: { project: 1, tasks: 1, decision: 40 } },
-      { ...launchRole(16, "Alice", [], 1), awaitsPerson: { project: 1, tasks: 2, task: 41 } },
       launchRole(17, "Bob", [], 1),
     ]);
     await pane(null, {
@@ -462,18 +460,18 @@ describe("the desks of a launch", () => {
         selectTask: (id) => went.push(`task ${id}`),
       },
     });
-    const [yamada, sakura, alice, bob] = idle();
-    const link = (one: HTMLElement) => one.querySelector<HTMLButtonElement>(".runroles__awaits");
+    const [yamada, bob] = idle();
+    const count = (one: HTMLElement) => one.querySelector<HTMLElement>(".runroles__awaits");
     expect(yamada!.textContent).toBe(
       `山田${tf("auto.run.roles.headcount", { n: 2 })}${tf("auto.run.roles.awaitsPerson", { n: 3 })}`,
     );
-    expect(link(bob!), "a role nothing waits on a person for said more").toBeNull();
+    expect(count(bob!), "a role nothing waits on a person for said more").toBeNull();
     // Neither the tasks one by one nor what holds each back is listed.
     expect(container.querySelector(".slot__held")).toBeNull();
-    act(() => link(yamada!)!.click());
-    act(() => link(sakura!)!.click());
-    act(() => link(alice!)!.click());
-    expect(went).toEqual(["dimension 1:7", "decision 40", "task 41"]);
+    expect(count(yamada!)!.tagName, "only the count, not a button").toBe("SPAN");
+    expect(container.querySelector(".runroles__idle button")).toBeNull();
+    act(() => count(yamada!)!.click());
+    expect(went, "pressing the count goes nowhere").toEqual([]);
   });
 
   it("keeps the bar under the desks, in the room they scroll in, however many roles it holds", async () => {
@@ -481,7 +479,7 @@ describe("the desks of a launch", () => {
       launchRole(12, "Bob", [liveRun(31, { role: 12 })], 2),
       ...Array.from({ length: 9 }, (_, at) => ({
         ...launchRole(20 + at, `Role ${at}`, [], 1),
-        ...(at < 3 ? { awaitsPerson: { project: 1, tasks: 15 + at * 5, dimension: 7 } } : {}),
+        ...(at < 3 ? { awaitsPerson: { tasks: 15 + at * 5 } } : {}),
       })),
     ]);
     await pane(FRONT, { launch: 5 });

@@ -65,8 +65,8 @@
 //
 // **A role's tasks that move only once a person has done something** — a value still open before
 // theirs, or a decision not settled (`AMB-D-1144`, `AMB-D-1155`) — are one line under the rest, "Tasks
-// waiting for a person: 3", pressed to where the first of them is done: the value's dimension, or the
-// decision. A task waiting for another task or for its start goes on by itself, and one still being
+// waiting for a person: 3", only how many and nothing to press — a person looks for them in the list of
+// tasks. A task waiting for another task or for its start goes on by itself, and one still being
 // created is in the hands of whoever is creating it; neither is said. They are counted again when the
 // store changes, not on each look for a task.
 //
@@ -124,7 +124,6 @@ import {
 import { errText, t, tf } from "../core/i18n";
 import { pushNotice } from "../core/notice";
 import { formatNumber } from "../core/i18n/format";
-import { useRefNav } from "../core/refNav";
 import { Icon } from "../components/Icon";
 import { Menu, MenuItem } from "../components/Menu";
 import { Stepper } from "../components/Stepper";
@@ -910,22 +909,11 @@ function DeskView({ desk, front, now, silenceAt, onOpen, menuAt, onMenu }: {
 }
 
 /**
- * **A role's tasks waiting for a person's hand** (`AMB-D-1144`): how many, pressed to where the first of
- * them is done — the value's dimension, the decision, or the task still being created.
+ * **A role's tasks waiting for a person's hand** (`AMB-D-1144`, `AMB-D-1155`): how many, and nothing to
+ * press — a person looks for them in the list of tasks.
  */
 function AwaitsPerson({ awaits }: { awaits: AutomationAwaitsPersonDto }) {
-  const nav = useRefNav();
-  const { dimension, decision, task } = awaits;
-  const go = dimension !== undefined
-    ? nav.openDimension && (() => nav.openDimension?.(awaits.project, dimension))
-    : decision !== undefined
-      ? nav.selectDecision && (() => nav.selectDecision?.(decision))
-      : task !== undefined ? nav.selectTask && (() => nav.selectTask?.(task)) : undefined;
-  return (
-    <button type="button" className="runroles__awaits" disabled={go === undefined} onClick={go}>
-      {tf("auto.run.roles.awaitsPerson", { n: awaits.tasks })}
-    </button>
-  );
+  return <span className="runroles__awaits">{tf("auto.run.roles.awaitsPerson", { n: awaits.tasks })}</span>;
 }
 
 /**

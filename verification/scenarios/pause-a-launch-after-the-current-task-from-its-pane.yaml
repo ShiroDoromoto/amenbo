@@ -150,7 +150,6 @@ steps_gui:
     with:
       target: run
       step: wait
-      action: after
       task: seed
 
   - type: action

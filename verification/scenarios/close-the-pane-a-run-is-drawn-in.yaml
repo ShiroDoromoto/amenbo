@@ -74,7 +74,6 @@ steps_gui:
     with:
       target: run
       step: claim
-      action: take
       state: running
       present: true
 

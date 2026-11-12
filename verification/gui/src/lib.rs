@@ -6791,9 +6791,9 @@ impl Instructor {
             // any one run under it (`app/src/talk/nameplate.ts`'s `headed`): a run is read
             // off its seat among the desks (`app/src/shell/RunPicture.tsx`'s `SeatRow`) — the task on
             // its first line, and on the second its number, written "#" and the number, and the step
-            // it is on. A run that has ended has left its seat, so the road reads that it is gone, and
-            // which step it ended on is the tab's to say (`run-row`); `step`, `action` and `task` are
-            // not read for it. How many tasks into the run it is is drawn nowhere on the pane now.
+            // it is on, by its name alone. A run that has ended has left its seat, so the road reads that
+            // it is gone, and which step it ended on is the tab's to say (`run-row`); `step` and `task`
+            // are not read for it. How many tasks into the run it is is drawn nowhere on the pane now.
             // `label` reads a pane's name and nothing else, which is why this one is here.
             (Domain::Automation, "run-pane") => match present(with) {
                 // A road that bound no run — its start waited for a task (`start` with `waits`) — reads
@@ -6813,14 +6813,10 @@ impl Instructor {
                         ),
                         _ => format!(
                             ". On the desks of its roles — pressing \"← Back to the roles\" first where the pane is on a terminal — confirm a seat whose second line starts with {number}, written \"#\" and the number, followed by which step it is on{}{}",
-                            // The step and the action it was opened from are one value on the screen, in
-                            // the order the reader's language puts them — so the line names both and
-                            // leaves the order to the eye.
-                            match (arg_str(with, "step"), arg_str(with, "action")) {
-                                (Some(step), Some(action)) => format!(" (\"{step}\", said with the action \"{action}\" it belongs to)"),
-                                (Some(step), None) => format!(" (\"{step}\")"),
-                                (None, Some(action)) => format!(" (said with the action \"{action}\" it belongs to)"),
-                                (None, None) => String::new(),
+                            // The seat names the step by its own name, with no action beside it.
+                            match arg_str(with, "step") {
+                                Some(step) => format!(" (\"{step}\", and no action name with it)"),
+                                None => String::new(),
                             },
                             // The first line is empty while the run is on no task, so a road that names
                             // none says nothing of it.
@@ -9439,7 +9435,7 @@ steps_gui:
   - type: assert
     domain: automation
     op: run-pane
-    with: { target: run, step: work, action: build, task: seed, present: true }
+    with: { target: run, step: work, task: seed, present: true }
   - type: assert
     domain: automation
     op: run-row
@@ -9537,7 +9533,7 @@ steps_gui:
         assert!(lines[7].contains("the run ends"), "{}", lines[7]);
         assert!(lines[15].contains("row that opens inside that card") && lines[15].contains("a value"), "{}", lines[15]);
         assert!(lines[16].contains("nothing reaches one of a box's required inputs"), "{}", lines[16]);
-        assert!(lines[19].contains("\"work\"") && lines[19].contains("\"build\""), "{}", lines[19]);
+        assert!(lines[19].contains("\"work\"") && lines[19].contains("no action name") && !lines[19].contains("\"build\""), "{}", lines[19]);
         assert!(
             lines.iter().any(|l| l.contains("makes an action") && l.contains("\"Triage\"") && l.contains("the global library")),
             "the action made from the list is said with its reach",

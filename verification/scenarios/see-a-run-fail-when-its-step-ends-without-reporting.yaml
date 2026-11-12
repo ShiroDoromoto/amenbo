@@ -89,7 +89,6 @@ steps_gui:
     with:
       target: run
       step: do
-      action: work
       state: failed
       present: true
 

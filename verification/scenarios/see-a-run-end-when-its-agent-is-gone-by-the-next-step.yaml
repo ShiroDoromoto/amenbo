@@ -110,7 +110,6 @@ steps_gui:
     with:
       target: run
       step: claim
-      action: take
       present: true
 
   # The agent goes while the first step is still open. Its pane goes on — the program was already

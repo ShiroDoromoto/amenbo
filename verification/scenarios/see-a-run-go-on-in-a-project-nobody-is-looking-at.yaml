@@ -132,5 +132,4 @@ steps_gui:
     with:
       target: run
       step: follow
-      action: second
       present: true

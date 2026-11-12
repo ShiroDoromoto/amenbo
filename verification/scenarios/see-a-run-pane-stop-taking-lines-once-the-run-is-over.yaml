@@ -75,7 +75,6 @@ steps_gui:
     with:
       target: run
       step: do
-      action: work
       present: true
 
   # Typed in the pane, which is a process of its own: the app hears nothing of it but what the store
@@ -93,7 +92,6 @@ steps_gui:
     with:
       target: run
       step: do
-      action: work
       state: failed
       present: true
 

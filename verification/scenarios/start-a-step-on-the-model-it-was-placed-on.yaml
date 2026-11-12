@@ -79,7 +79,6 @@ steps_gui:
     with:
       target: run
       step: do
-      action: work
       state: running
       present: true
 

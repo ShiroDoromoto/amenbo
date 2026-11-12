@@ -98,7 +98,6 @@ steps_gui:
     with:
       target: run
       step: draft
-      action: work
       state: running
 
   # Paused while the first step is open, from the run's own row: its seat in the pane says the pause
@@ -150,7 +149,6 @@ steps_gui:
     with:
       target: run
       step: review
-      action: work
       state: pausing
 
   # The second step reports, and the run would leave the action: that is where it pauses.

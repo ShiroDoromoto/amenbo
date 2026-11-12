@@ -20,8 +20,7 @@
 # Input, from AMENBO_INPUT's `ins`: the place the artifacts were downloaded to (required).
 #
 # The way out is decided by output.json, never by this script's exit code. Anything it cannot read —
-# no place, no .pkg in it — ends it with exit code 1, which the step leaves through its error way
-# out.
+# no place, no .pkg in it — ends it by its error way out, with the reason as its report.
 #
 # Amenbo starts a script step in no particular folder, so it moves to the checkout it sits in.
 set -euo pipefail

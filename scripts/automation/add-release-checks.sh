@@ -24,8 +24,7 @@
 #
 # The way out is decided by output.json, never by this script's exit code. Anything it cannot read or
 # write — no list, a list with no check, a name that is not a value, notes that did not read back as
-# written, a command that failed — ends it with exit code 1, which the step leaves through its error way
-# out.
+# written, a command that failed — ends it by its error way out, with the reason as its report.
 #
 # Amenbo starts a script step in no particular folder, so it moves to the checkout it sits in, whose
 # project the axes and tasks are read from.
@@ -39,11 +38,8 @@ RELEASE_KIND="リリース作業"
 DONE_EXIT="完了"
 
 cd "$(dirname "$0")/../.."
-
-die() { echo "✗ $*" >&2; exit 1; }
-
-[ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
-    die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"
+# shellcheck source=scripts/automation/step-lib.sh
+. scripts/automation/step-lib.sh
 
 given=$(jq -r --arg i "$CHECKS_INPUT" '.ins[$i] // empty' "$AMENBO_INPUT") || die "$AMENBO_INPUT を読めませんでした"
 [ -n "$given" ] || die "一覧がありません：確かめることの一覧を、このステップの「${CHECKS_INPUT}」につないでください"

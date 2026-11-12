@@ -23,7 +23,7 @@
 #
 # The way out is decided by output.json, never by this script's exit code. Anything it cannot read —
 # no version, no run, a run that is not of this tag, no previous version, a commit that cannot be
-# fetched — ends it with exit code 1, which the step leaves through its error way out.
+# fetched — ends it by its error way out, with the reason as its report.
 #
 # Amenbo starts a script step in no particular folder, so it moves to the checkout it sits in, which
 # is where the commits are read, and fetched into when it lacks them, and where `gh` reads the

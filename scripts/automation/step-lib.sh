@@ -4,12 +4,30 @@
 #
 # A script step reads its inputs from the JSON file AMENBO_INPUT names and writes its way out to the
 # one AMENBO_OUTPUT names, as {"version":1,"exit":…,"outs":{…},"report":…}. The way out is decided by
-# that file, never by the exit code: anything a step cannot read or do ends it with exit code 1, which
-# the run leaves through the step's error way out, the reason being the last line on stderr.
+# that file, never by the exit code: anything a step cannot read or do ends it with `die`, which leaves
+# through the error way out with the reason as its report.
 #
 # A file a step hands on is written beside output.json, and named in its outs by its file name.
 
-die() { echo "✗ $*" >&2; exit 1; }
+# Stop the step for a reason: leave through the error way out ("*") with the reason as its report, and
+# say it on stderr too. Without AMENBO_OUTPUT, or when output.json cannot be written, it ends with exit
+# code 1, the reason being the last line on stderr. Called inside $(…) or a pipe, it stops the step's
+# own shell as well, by a signal the traps below turn into the same exit code, so nothing after it
+# runs and writes output.json over the reason.
+die() {
+    local code=1
+    echo "✗ $*" >&2
+    if [ -n "${AMENBO_OUTPUT:-}" ] &&
+        jq -n --arg report "$*" '{version: 1, exit: "*", outs: {}, report: $report}' > "$AMENBO_OUTPUT"; then
+        code=0
+    fi
+    if [ "$BASH_SUBSHELL" -gt 0 ]; then
+        if [ "$code" = 0 ]; then kill -USR1 $$; else kill -USR2 $$; fi
+    fi
+    exit "$code"
+}
+trap 'exit 0' USR1
+trap 'exit 1' USR2
 
 [ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
     die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"

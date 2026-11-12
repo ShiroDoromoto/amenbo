@@ -12,8 +12,8 @@
 # added to the axis after the automation was built — leaves by NO_VALUE, so it is never stranded.
 #
 # The way out is decided by output.json, never by this script's exit code. Anything it cannot read or
-# write — no axis, no task, a command that failed — ends it with exit code 1, which the step leaves
-# through its error way out.
+# write — no axis, no task, a command that failed — ends it by its error way out, with the reason as its
+# report.
 set -euo pipefail
 
 # The names the board writes in Japanese: the input take_task hands the task on, and the way out
@@ -22,11 +22,8 @@ TASK_INPUT="タスク"
 NO_VALUE="分類なし"
 
 cd "$(dirname "$0")/../.."
-
-die() { echo "✗ $*" >&2; exit 1; }
-
-[ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
-    die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"
+# shellcheck source=scripts/automation/step-lib.sh
+. scripts/automation/step-lib.sh
 
 axis="${1:-}"
 [ -n "$axis" ] || die "軸がありません：1つ目の引数に軸の名前を渡してください"

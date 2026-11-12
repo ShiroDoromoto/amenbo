@@ -14,8 +14,8 @@
 # or one is still being created, it leaves by the error way out, and its report names each with why.
 #
 # The way out is decided by output.json, never by this script's exit code. Anything it cannot read or
-# write — no input, a table with neither column, a command that failed to list — ends it with exit code
-# 1, which the step leaves through its error way out as well.
+# write — no input, a table with neither column, a command that failed to list — ends it by its error way
+# out as well, with the reason as its report.
 #
 # Amenbo starts a script step in no particular folder, so it moves to the checkout it sits in, whose
 # project the list is read from.
@@ -32,11 +32,8 @@ DONE_EXIT="完了"
 ERROR_EXIT="*"
 
 cd "$(dirname "$0")/../.."
-
-die() { echo "✗ $*" >&2; exit 1; }
-
-[ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
-    die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"
+# shellcheck source=scripts/automation/step-lib.sh
+. scripts/automation/step-lib.sh
 
 table=$(jq -r --arg i "$FILED_INPUT" '.ins[$i] // empty' "$AMENBO_INPUT") || die "$AMENBO_INPUT を読めませんでした"
 [ -n "$table" ] || die "表がありません：起票したタスクの表を、このステップの「${FILED_INPUT}」につないでください"

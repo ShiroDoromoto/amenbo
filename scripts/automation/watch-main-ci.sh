@@ -16,9 +16,9 @@
 #
 # Input, from AMENBO_INPUT's `ins`: the merge commit (required).
 #
-# The way out is decided by output.json, never by this script's exit code. Anything it cannot read or
-# do — no commit, a watch that broke, a run that ended without a verdict — ends it with exit code 1,
-# which the step leaves through its error way out.
+# The way out is decided by output.json, never by this script's exit code. Anything it cannot read or do
+# — no commit, a watch that broke, a run that ended without a verdict — ends it by its error way out,
+# with the reason as its report.
 #
 # Amenbo starts a script step in no particular folder, so it moves to the checkout it sits in, which
 # is where `gh` reads the repository from (AMENBO_CI_REPO overrides it, as in watch-ci.sh).

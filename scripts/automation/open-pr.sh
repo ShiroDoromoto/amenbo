@@ -23,7 +23,7 @@
 #
 # The way out is decided by output.json, never by this script's exit code. Anything it cannot read or
 # do — no worktree, a worktree on main or on no branch, a branch with nothing to open, a command that
-# failed — ends it with exit code 1, which the step leaves through its error way out.
+# failed — ends it by its error way out, with the reason as its report.
 #
 # Amenbo starts a script step in no particular folder, so it moves to the checkout it sits in to read
 # its helpers, then works in the worktree, which is where `git` and `gh` read the repository from.

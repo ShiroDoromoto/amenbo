@@ -23,19 +23,16 @@
 # its own, where a space is no harm.
 #
 # The way out is decided by output.json, never by this script's exit code. Anything it cannot read or
-# write — no product, a product that is not a value, a command that failed — ends it with exit code 1,
-# which the step leaves through its error way out.
+# write — no product, a product that is not a value, a command that failed — ends it by its error way
+# out, with the reason as its report.
 #
 # Amenbo starts a script step in no particular folder, so it moves to the checkout it sits in. That is
 # where `task add` reads the project and the folder of a new task from.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
-
-die() { echo "✗ $*" >&2; exit 1; }
-
-[ -n "${AMENBO_INPUT:-}" ] && [ -n "${AMENBO_OUTPUT:-}" ] ||
-    die "スクリプトのステップとして動かしてください：AMENBO_INPUT と AMENBO_OUTPUT が設定されていません"
+# shellcheck source=scripts/automation/step-lib.sh
+. scripts/automation/step-lib.sh
 
 product="${1:-}"
 [ -n "$product" ] || die "プロダクトがありません：1つ目の引数にプロダクトの値を渡してください"

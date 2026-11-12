@@ -7,10 +7,9 @@
 # the one written in the code. It has one way out, done, taken when the run is green; its report
 # carries the run's URL.
 #
-# The way out is decided by output.json, never by this script's exit code. A red run ends it with exit
-# code 1, which the step leaves through its error way out, the last lines on stderr naming the run and
-# the jobs that failed. So does anything it cannot read or do — a dispatch that failed, a watch that
-# broke, a run that ended without a verdict.
+# The way out is decided by output.json, never by this script's exit code. A red run ends it by its error
+# way out, the report naming the run and the jobs that failed. So does anything it cannot read or do — a
+# dispatch that failed, a watch that broke, a run that ended without a verdict.
 #
 # Amenbo starts a script step in no particular folder, so it moves to the checkout it sits in, which
 # is where `gh` reads the repository from (AMENBO_CI_REPO overrides it, as in watch-ci.sh).

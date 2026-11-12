@@ -6897,7 +6897,7 @@ impl Instructor {
                     _ => return Err("`stopped` and `seats` are one phrase on the header — name both or neither".to_string()),
                 };
                 let said = match state {
-                    "running" => "the chip after the automation's name says \"Running\", and that beside \"See the history\" its buttons are \"Everyone pauses after their current task\" and \"Stop\"".to_string(),
+                    "running" => "the chip after the automation's name says \"Running\", and that beside \"See the history\" its buttons are \"Pause\" and \"Stop\"".to_string(),
                     "pausing" => format!(
                         "the chip after the automation's name says \"Pausing: {} seats stopped\", and that beside \"See the history\" its buttons are \"Cancel the pause\", pressed, and \"Stop\"",
                         match counts {
@@ -7577,10 +7577,10 @@ fn run_press(press: &str) -> Result<&'static str, String> {
 /// on the bar over a seat's terminal (`app/src/shell/RunPicture.tsx`).
 fn launch_press(press: &str) -> Result<&'static str, String> {
     Ok(match press {
-        "pause" => "on the header, press \"Everyone pauses after their current task\". Confirm the header's chip now says the launch is pausing or paused, and that the button in its place says \"Cancel the pause\" or \"Resume\", pressed",
+        "pause" => "on the header, press \"Pause\". Confirm the header's chip now says the launch is pausing or paused, and that the button in its place says \"Cancel the pause\" or \"Resume\", pressed",
         // "Cancel the pause" while a seat still works its task, "Resume" once every one has stopped:
         // the same press either way (`resumeLaunch`).
-        "resume" => "on the header, press \"Cancel the pause\" or \"Resume\", whichever stands there. Confirm the header's chip says \"Running\" again, and that the button in its place says \"Everyone pauses after their current task\"",
+        "resume" => "on the header, press \"Cancel the pause\" or \"Resume\", whichever stands there. Confirm the header's chip says \"Running\" again, and that the button in its place says \"Pause\"",
         "stop" => "on the header, press \"Stop\". A question asks first, saying every role's step under way ends where it stands and that changes made partway and worktrees may be left behind — answer it with \"Stop\", the press that goes through with it",
         "terminal" => "where the desks of its roles are up, press the seat this run sits in — the one carrying its task. Confirm the pane turns to that seat's terminal, with a bar over it naming the role and the seat",
         "roles" => "on the bar over the terminal, press \"← Back to the roles\". Confirm the pane turns back to the desks of its roles",
@@ -9889,7 +9889,7 @@ steps_gui:
         let steps = s.steps(Driver::Gui);
         let line = |ins: &mut Instructor, i: usize| ins.render(&steps[i]).expect("the press renders");
         let pause = line(&mut ins, 0);
-        assert!(pause.contains("on the header") && pause.contains("\"Everyone pauses after their current task\""), "{pause}");
+        assert!(pause.contains("on the header") && pause.contains("\"Pause\""), "{pause}");
         let resume = line(&mut ins, 1);
         assert!(resume.contains("\"Cancel the pause\" or \"Resume\""), "{resume}");
         let stop = line(&mut ins, 2);
@@ -9938,7 +9938,7 @@ steps_gui:
         let mut ins = Instructor::new();
         let steps = s.steps(Driver::Gui);
         let running = ins.render(&steps[0]).expect("renders");
-        assert!(running.contains("says \"Running\"") && running.contains("\"Everyone pauses after their current task\""), "{running}");
+        assert!(running.contains("says \"Running\"") && running.contains("\"Pause\""), "{running}");
         let pausing = ins.render(&steps[1]).expect("renders");
         assert!(pausing.contains("\"Pausing: 1 / 3 seats stopped\"") && pausing.contains("\"Cancel the pause\", pressed"), "{pausing}");
         let paused = ins.render(&steps[2]).expect("renders");

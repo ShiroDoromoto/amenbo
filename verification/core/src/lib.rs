@@ -4678,11 +4678,11 @@ const REGISTRY: &[OpSpec] = &[
     // **The header of that pane** — the launch, not any one run of it: the chip saying
     // it is automatic, the automation's name, where the launch stands, "See the history" and its moves.
     // It counts no one at work: that is each role's (`launch-role`). `state` is `running`, `pausing`
-    // (the header's "Everyone pauses after their current task" pressed while a seat still works its
-    // task — the chip counts the seats stopped, `stopped` of `seats`, and the button says "Cancel the
-    // pause"), `paused` (every seat stopped, and the button says "Resume") or `ended` (stopped, and its
-    // moves gone from the header). `stopped` and `seats` are read with `pausing` alone, both or
-    // neither. `target` is a run of the launch, whose pane is read.
+    // (the header's "Pause" pressed while a seat still works its task — the chip counts the seats
+    // stopped, `stopped` of `seats`, and the button says "Cancel the pause"), `paused` (every seat
+    // stopped, and the button says "Resume") or `ended` (stopped, and its moves gone from the header).
+    // `stopped` and `seats` are read with `pausing` alone, both or neither. `target` is a run of the
+    // launch, whose pane is read.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "launch-head", required: &["state"], refs: &["target"], strings: &["state"], binds: false },
     // **The pane of a launch with no run yet** — Start pressed on an automation that waits for a task
     // to take, with none there (`start` with `waits: true`). `target` is the automation, since there is
@@ -4785,10 +4785,10 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `on: pane` presses on the pane the run is drawn in rather than on the tab's row: a reader
     // watching a run is in its pane. The pane is the launch's, so its moves are the launch's, on its
-    // header: `pause` is "Everyone pauses after their current task" — every run of it finishes the task
-    // it is on and takes no new one, not the pause at the end of the action the row asks — `resume`
-    // ("Cancel the pause" while a seat still works, "Resume" once every one has stopped) picks the
-    // launch up again, and `stop` force-cancels every run of it, through the question it asks first.
+    // header: `pause` is "Pause" — every run of it finishes the task it is on and takes no new one,
+    // not the pause at the end of the action the row asks — `resume` ("Cancel the pause" while a seat
+    // still works, "Resume" once every one has stopped) picks the launch up again, and `stop`
+    // force-cancels every run of it, through the question it asks first.
     // `terminal` presses this run's seat among the desks, turning the pane to that seat's terminal, and
     // `roles` presses the way back on the bar over the terminal (`run-roles`). Left off, or `on: row`,
     // it is the row. `open` and `cancel` are the row's alone: the pane is where `open` leads, and a

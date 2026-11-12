@@ -181,7 +181,9 @@ scripts/              what the Makefile calls out to — build, sign, notarise, 
                       for each open release that has none. open-pr.sh, watch-main-ci.sh,
                       run-full-ci.sh, push-tag.sh and rerun-ci.sh do the same for opening
                       a pull request, main's run after a merge, the full run before a
-                      tag, pushing the tag, and re-running a red run. judge-workspace.sh
+                      tag, pushing the tag, and re-running a red run. sync-main.sh
+                      brings the checkout's main up to origin/main, so that a merged
+                      fix to these programs is the one that runs. judge-workspace.sh
                       sorts the paths a task touches by where they sit in a repository,
                       and priority-scope.sh lays out the tasks whose priorities are
                       compared. Before a release is handed out,

@@ -1246,6 +1246,8 @@ describe("the header of a launch's pane", () => {
     hoisted.launch = launchState();
     await standLaunch();
     expect(button(t("auto.launch.pauseAll"))!.getAttribute("aria-pressed")).toBe("false");
+    // The short label leaves when it stops to the tooltip.
+    expect(button(t("auto.launch.pauseAll"))!.title).toBe(t("auto.launch.pauseAllHint"));
     await press(t("auto.launch.pauseAll"));
     expect(hoisted.launchMoves).toEqual(["pause 3"]);
 
@@ -1256,6 +1258,7 @@ describe("the header of a launch's pane", () => {
     expect(button(t("auto.launch.resume")), "resume offered while a seat still works").toBeUndefined();
     const unpause = button(t("auto.launch.unpause"))!;
     expect(unpause.getAttribute("aria-pressed")).toBe("true");
+    expect(unpause.hasAttribute("title"), "no tooltip once paused").toBe(false);
     await press(t("auto.launch.unpause"));
     expect(hoisted.launchMoves).toEqual(["pause 3", "resume 3"]);
 

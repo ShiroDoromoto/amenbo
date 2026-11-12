@@ -6,8 +6,9 @@
 // Left to right: the "auto" chip, the automation's name, where the launch stands, and then "See the
 // history", which is where what has already happened in it is read, and its two moves.
 //
-// - **"Everyone pauses after the task they are on"** asks every run of it to pause before it takes its
-//   next task (`AMB-D-1019`): each finishes the task it is on and takes no new one, in every role alike.
+// - **"Pause"** asks every run of it to pause before it takes its next task (`AMB-D-1019`): each
+//   finishes the task it is on and takes no new one, in every role alike. The label is short; its
+//   tooltip says when the seats stop.
 //   Once asked, the launch is paused. While a seat is still working its task, the header says how many
 //   of its seats have stopped ("Pausing: 1 / 3 seats stopped") and the button says "Cancel the pause"; once
 //   every seat has stopped, the header says "Paused" and the button "Resume". Both are the same press
@@ -200,6 +201,7 @@ export function LaunchHead({ launch, project }: { launch: number; project: numbe
           type="button"
           className="btn launchhead__hold"
           aria-pressed={pause !== null}
+          title={pause === null ? t("auto.launch.pauseAllHint") : undefined}
           disabled={pressing}
           onClick={() => void press(() => (pause !== null ? resumeLaunch(launch) : pauseLaunchBeforeNextTask(launch)))}
         >

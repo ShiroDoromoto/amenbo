@@ -16,8 +16,8 @@ import {
   addPane, closedFrame, closedIn, EMPTY_LAYOUT, filledPages, focusOn, folding, goPage, goProject,
   gridAt, landingOn, laidOut, movedTo, movedWithin, needsNobody, openedFrame, openedIn,
   pageCount, paneIdOf, paneIn, paneOfLaunch, paneOfTerminal, panesOf, reordered, resized, restored,
-  runFrameId, runsKept, seatedIn, seatedOn, slotsOf, stoodForLaunch, stoodForRun, terminalOf,
-  withoutRuns, writing, type Frame, type Layout, type SavedLayout, type Seat, type Size,
+  runFrameId, runsKept, seatedIn, seatedOn, slotsOf, stoodForLaunch, stoodForLaunches, stoodForRun,
+  terminalOf, withoutRuns, writing, type Frame, type Layout, type SavedLayout, type Seat, type Size,
 } from "../talk/layout";
 import { onStep, standingSteps, type BuiltinRun, type StepOpened, type StepRun } from "../talk/automationStep";
 import { axisOnPane, sideOnPane, sizeStretchedTo } from "./paneDrag";
@@ -50,6 +50,7 @@ import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
 import { builtinWord } from "../core/builtinWords";
 import { fetchLiveLaunches, fetchLiveRuns, fetchRunCards, useRunCards } from "../core/automations";
+import { useQuery } from "../core/query";
 import { roomWaitState, roundOf, runSayOf, waitingState } from "../core/runWords";
 import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 
@@ -978,6 +979,25 @@ export function WorkspaceFace({
     // Once, as the face settles: every step after that arrives by the event.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settled]);
+
+  // **And a pane for every launch still going that has none** (`AMB-D-1154`), once the arrangement
+  // has been put back, for the reason the steps above wait for it. A launch started outside this
+  // window — at the command line, or by a trigger — tells this face nothing until a step of it opens,
+  // and one waiting for a task to take opens no run (`AMB-D-1123`), so it would go on unseen. The
+  // launches are read again whenever a launch or a run moves (`automationRuns`), which is what a launch
+  // started anywhere writes. The pane is stood the way a run's is — at the end of its project's panes,
+  // moving neither the page nor the focus (`stoodForLaunches`). A read that fails stands nothing.
+  //
+  // **A launch whose pane a person took away is not stood again** (`droppedLaunches`). Taking it away
+  // stopped the launch, but a read sent before the stop can answer after the pane has gone, still
+  // naming it.
+  const droppedLaunches = useRef(new Set<number>());
+  const liveLaunches = useQuery(["automationRuns", "liveLaunches"], fetchLiveLaunches).data;
+  useEffect(() => {
+    if (!settled || liveLaunches === undefined) return;
+    const left = liveLaunches.filter((one) => !droppedLaunches.current.has(one.launch));
+    setLayout((was) => stoodForLaunches(was, left));
+  }, [settled, liveLaunches]);
 
   /**
    * Hand a file the panel is showing to the pane the reader is working in — the reverse of
@@ -2025,6 +2045,7 @@ export function WorkspaceFace({
                     setLayout((was) => closedIn(was, session));
                   }}
                   onDrop={(id) => {
+                    if (frame.launch !== null) droppedLaunches.current.add(frame.launch);
                     setLayout((was) => closedFrame(was, id));
                     startNow.current.delete(id);
                     startWith.current.delete(id);

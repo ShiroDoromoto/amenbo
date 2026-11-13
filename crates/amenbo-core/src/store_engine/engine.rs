@@ -167,6 +167,11 @@ pub struct StoreEngine {
     /// ([`keep_activity_in`](Self::keep_activity_in)). `None` on an engine opened on its own (a test, a
     /// migration), which refuses a commit that queued any.
     activity_file: Option<std::path::PathBuf>,
+    /// Where the rounds a transaction gathers ([`super::WriteTx::record_round`]) are written once it
+    /// commits — the store's `runs/` folder, named by the `Store` that opened this engine
+    /// ([`keep_run_logs_in`](Self::keep_run_logs_in)). `None` on an engine opened on its own, which
+    /// gathers no round: the run log is a copy, and nothing is lost by not writing one.
+    run_logs: Option<crate::run_log::Place>,
 }
 
 impl StoreEngine {
@@ -200,6 +205,7 @@ impl StoreEngine {
             changes: ChangeBuffer::default(),
             rows_since_trim: Default::default(),
             activity_file: None,
+            run_logs: None,
         })
     }
 
@@ -270,7 +276,7 @@ impl StoreEngine {
         install_change_hook(&mut conn, &changes)?;
         // Due from the start, so the first commit this engine makes trims — the bound a CLI-only store
         // would otherwise never reach (`rows_since_trim`). An engine that never writes never pays it.
-        Ok(StoreEngine { conn, changes, rows_since_trim: trim_due_at_once(), activity_file: None })
+        Ok(StoreEngine { conn, changes, rows_since_trim: trim_due_at_once(), activity_file: None, run_logs: None })
     }
 
     /// Name the activity ledger this engine's transactions append their queued lines to once they
@@ -283,6 +289,17 @@ impl StoreEngine {
     /// The activity ledger named with [`keep_activity_in`](Self::keep_activity_in), if any.
     pub(crate) fn activity_file(&self) -> Option<&Path> {
         self.activity_file.as_deref()
+    }
+
+    /// Name the run log this engine's transactions write the rounds they gathered to once they commit
+    /// ([`crate::run_log`]).
+    pub(crate) fn keep_run_logs_in(&mut self, place: crate::run_log::Place) {
+        self.run_logs = Some(place);
+    }
+
+    /// The run log named with [`keep_run_logs_in`](Self::keep_run_logs_in), if any.
+    pub(crate) fn run_logs(&self) -> Option<&crate::run_log::Place> {
+        self.run_logs.as_ref()
     }
 
     /// Borrow the read-model connection (for the read/query layer built on top of this engine).

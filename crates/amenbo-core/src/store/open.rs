@@ -311,6 +311,7 @@ impl Store {
         reconcile_legacy_key_space(&db_path, &paths.base_dir)?;
         let mut engine = StoreEngine::open(&db_path)?;
         engine.keep_activity_in(paths.activity_file.clone());
+        engine.keep_run_logs_in(paths.run_log_place());
         let engine_populated = engine.is_populated()?;
 
         // **This open does not migrate the truth source**: if the engine is already populated (the
@@ -410,6 +411,7 @@ impl Store {
             _ => return Store::open_at(paths),
         };
         engine.keep_activity_in(paths.activity_file.clone());
+        engine.keep_run_logs_in(paths.run_log_place());
         // A store in the pre-consolidation key space (ULID keys) is refused by name on this path too —
         // unless it is provably empty, which the writing open clears to genesis. This read
         // open writes nothing to disk, so it cannot clear; it defers to `open_at`, which does. Anything

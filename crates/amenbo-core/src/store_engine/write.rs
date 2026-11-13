@@ -69,6 +69,9 @@ pub struct WriteTx<'a> {
     /// by [`commit`](Self::commit), only after the SQLite commit succeeds
     /// ([`record_activity`](Self::record_activity)). `RefCell` for the same reason as `projects`.
     activity: std::cell::RefCell<Vec<crate::activity_log::Entry>>,
+    /// The finished rounds this operation gathered ([`record_round`](Self::record_round)) — written to
+    /// the run log by [`commit`](Self::commit), only after the SQLite commit succeeds.
+    rounds: std::cell::RefCell<Vec<crate::run_log::Round>>,
 }
 
 impl<'a> WriteTx<'a> {
@@ -85,6 +88,7 @@ impl<'a> WriteTx<'a> {
             projects: Default::default(),
             language: "en".to_string(),
             activity: Default::default(),
+            rounds: Default::default(),
         })
     }
 
@@ -161,6 +165,29 @@ impl<'a> WriteTx<'a> {
         self.activity.borrow_mut().push(entry);
     }
 
+    /// **Gather one finished round** of a run for the run log ([`crate::run_log`]): read out of the
+    /// store now, as this transaction sees it, and written by [`commit`](Self::commit) **after** the
+    /// SQLite commit succeeds — on an earlier `?` it goes with the guard. Called where a round is over:
+    /// where the next one begins and where the run ends. An engine with no run log named gathers nothing,
+    /// and a round that cannot be read is a `warn`, not a failed operation: the log is a copy.
+    pub fn record_round(&self, run_id: i64, round_id: i64) {
+        if self.engine.run_logs().is_none() {
+            return;
+        }
+        match crate::run_log::Round::gather(self.conn(), run_id, round_id) {
+            Ok(Some(round)) => self.rounds.borrow_mut().push(round),
+            Ok(None) => {}
+            Err(e) => tracing::warn!(run = run_id, round = round_id, error = %e, "run log: round not read; not written"),
+        }
+    }
+
+    /// The rounds this operation has gathered so far, in order — for a test to read before the commit
+    /// writes them.
+    #[cfg(test)]
+    pub(crate) fn queued_rounds(&self) -> Vec<crate::run_log::Round> {
+        self.rounds.borrow().clone()
+    }
+
     /// The activity lines this operation has queued so far, in order — for a test to read before the
     /// commit appends them.
     #[cfg(test)]
@@ -203,11 +230,16 @@ impl<'a> WriteTx<'a> {
     /// the operation: the ledger is not the truth source ([`crate::activity_log::append`]). An engine with
     /// no ledger has nowhere to put them, so a batch that queued any is refused before it commits — in
     /// every build — rather than committed with its lines lost.
+    ///
+    /// **The rounds it gathered are written after the commit too** ([`record_round`](Self::record_round)),
+    /// to the run log the engine was opened with ([`StoreEngine::keep_run_logs_in`]). Like the ledger, it
+    /// cannot fail the operation ([`crate::run_log::write`]).
     pub fn commit(self) -> Result<()> {
         // Copied out of the guard: `self.tx` is moved by the commit below, the ledger path outlives it.
         let engine = self.engine;
         let ledger = engine.activity_file();
         let activity = self.activity.take();
+        let rounds = self.rounds.take();
         if ledger.is_none() && !activity.is_empty() {
             return Err(StoreEngineError::ActivityWithoutLedger(activity.len()));
         }
@@ -216,6 +248,11 @@ impl<'a> WriteTx<'a> {
         if let Some(path) = ledger {
             for entry in &activity {
                 crate::activity_log::append(path, entry);
+            }
+        }
+        if let Some(place) = engine.run_logs() {
+            for round in &rounds {
+                crate::run_log::write(place, round);
             }
         }
         Ok(())
@@ -419,6 +456,40 @@ mod tests {
             .query_row("SELECT count(*) FROM task_dependency WHERE task_id=1", [], |r| r.get(0))
             .unwrap();
         assert_eq!((tasks, edges), (0, 0), "no half-applied operation is left behind");
+    }
+
+    fn a_round(run_id: i64) -> crate::run_log::Round {
+        crate::run_log::Round {
+            run: crate::model::AutomationRun { id: run_id, ..Default::default() },
+            round: crate::model::AutomationRunTask { id: 1, run_id, seq: 1, ..Default::default() },
+            steps: vec![],
+            defs: vec![],
+            files: vec![],
+        }
+    }
+
+    /// A gathered round is written to the run log once the batch commits, and a batch that rolls back
+    /// writes nothing.
+    #[test]
+    fn a_gathered_round_is_written_after_the_commit_and_not_on_a_rollback() {
+        let dir = amenbo_scratch::scratch("write-run-log");
+        let place = crate::run_log::Place { runs: dir.join("runs"), blobs: dir.join("blobs") };
+        let mut e = StoreEngine::open_in_memory().unwrap();
+        e.keep_run_logs_in(place.clone());
+
+        {
+            let tx = e.write().unwrap();
+            tx.rounds.borrow_mut().push(a_round(1));
+        }
+        assert!(!place.runs.exists(), "a rolled-back batch writes no round");
+
+        let tx = e.write().unwrap();
+        tx.rounds.borrow_mut().push(a_round(2));
+        tx.commit().unwrap();
+        let folder = crate::run_log::dir_of(&place.runs, &a_round(2).run);
+        assert!(folder.join(crate::run_log::round_file_name(1)).exists(), "written once committed");
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// Dropping the guard without committing rolls back — the plain-`?` early return above relies on

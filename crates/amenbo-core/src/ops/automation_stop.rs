@@ -204,6 +204,10 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
     };
     close_stretch(tx, stretch.as_ref(), now, incident, incident.and(seat))?;
     let after = file_for_the_trigger(tx, after, incident, ending)?;
+    // The run's last stretch is over with it: it goes to the run log (`WriteTx::record_round`).
+    if let Some(stretch) = &stretch {
+        tx.record_round(after.id, stretch.id);
+    }
     Ok(Ended { run: after })
 }
 
@@ -1422,6 +1426,39 @@ mod tests {
                 None,
                 "a run with no task in hand files nothing",
             );
+        });
+    }
+
+    /// **A run's last round goes to the run log when the run ends**, written as the run and the round
+    /// stood once both were closed.
+    #[test]
+    fn the_last_round_is_gathered_for_the_run_log_when_the_run_ends() {
+        crate::ops::test_support::with_tx_keeping_runs(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let opening = opened(tx, &run, &p.first);
+            assert!(tx.queued_rounds().is_empty());
+
+            let now = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
+            ended(tx, now, Ending::Canceled).expect("cancel");
+
+            let rounds = tx.queued_rounds();
+            assert_eq!(rounds.len(), 1);
+            assert!(rounds[0].run.ended_at.is_some(), "the run as it ended");
+            assert!(rounds[0].round.ended_at.is_some(), "the round as it was closed");
+            assert_eq!(rounds[0].steps.len(), 1);
+            assert_eq!(rounds[0].steps[0]["step"]["id"], serde_json::json!(opening.run_step.id));
+        });
+    }
+
+    /// A run that ends before any round began has nothing to write.
+    #[test]
+    fn a_run_with_no_round_gathers_nothing_for_the_run_log() {
+        crate::ops::test_support::with_tx_keeping_runs(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            ended(tx, run, Ending::Failed(AutomationStoppedReason::Crashed)).expect("fail");
+            assert!(tx.queued_rounds().is_empty());
         });
     }
 

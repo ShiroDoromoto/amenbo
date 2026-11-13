@@ -203,6 +203,16 @@ pub(crate) mod test_support {
         f(&tx);
     }
 
+    /// [`with_tx`], on an engine that keeps a run log ([`crate::run_log`]) — so the rounds a run finishes
+    /// are gathered, and [`WriteTx::queued_rounds`] can read them before the commit writes them.
+    pub(crate) fn with_tx_keeping_runs(f: impl FnOnce(&WriteTx<'_>)) {
+        let mut engine = new_engine();
+        let base = std::path::Path::new("/nonexistent-run-log");
+        engine.keep_run_logs_in(crate::run_log::Place { runs: base.join("runs"), blobs: base.join("blobs") });
+        let tx = engine.write().expect("write transaction");
+        f(&tx);
+    }
+
     /// **Open one step of a run, the work outside the store and all**, in the one transaction a test
     /// runs in ([`crate::ops::automation_step::open`] takes that work done beforehand).
     pub(crate) fn open(

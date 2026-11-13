@@ -674,6 +674,10 @@ fn gave_up(tx: &WriteTx<'_>, before: AutomationRun) -> Result<Ended> {
 }
 
 /// Begin the next stretch of a run, and close the one before it.
+///
+/// **The one before it is over here**, so it goes to the run log ([`WriteTx::record_round`]) — here and
+/// not where it was given its `ended_at`: a stretch that handed its task back was closed then, and the
+/// steps after that still belonged to it.
 fn new_stretch(
     tx: &WriteTx<'_>,
     run_id: i64,
@@ -691,6 +695,7 @@ fn new_stretch(
                 record::automation_run_task(&ended),
             )?;
         }
+        tx.record_round(run_id, before.id);
     }
     let stretch = AutomationRunTask {
         id: read::next_id(tx.conn(), "automation_run_task")?,
@@ -1342,6 +1347,37 @@ mod tests {
             assert_eq!(stretch.seq, 1);
             assert_eq!(opening.run_step.run_task_id, Some(stretch.id));
             assert_eq!(stretch.task_id, None, "nothing has handed a task over yet");
+        });
+    }
+
+    /// **A round goes to the run log when the next one begins** — with every step it walked, their
+    /// reports and values, and the step copies they were opened from — and not before.
+    #[test]
+    fn a_round_is_gathered_for_the_run_log_when_the_next_one_begins() {
+        crate::ops::test_support::with_tx_keeping_runs(|tx| {
+            let p = picture(tx, false, true);
+            let run = a_run(tx, &p.automation);
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            reported(tx, &first.run_step, "found", "Alice looked", "the note");
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            assert!(tx.queued_rounds().is_empty(), "the round is not over while nothing has begun after it");
+
+            ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open again"));
+
+            let rounds = tx.queued_rounds();
+            assert_eq!(rounds.len(), 1);
+            let round = &rounds[0];
+            assert_eq!(round.run.id, run.id);
+            assert_eq!(round.round.seq, 1);
+            assert!(round.round.ended_at.is_some(), "written as it stood once closed");
+            let reports: Vec<&str> = round.steps.iter().map(|s| s["step"]["report"].as_str().unwrap()).collect();
+            assert_eq!(reports, vec!["Alice looked", ""]);
+            assert_eq!(round.steps[0]["values"][0]["value"], serde_json::json!("the note"));
+            let mut defs: Vec<i64> = round.defs.iter().map(|d| d.id).collect();
+            let mut used = vec![first.run_def.id, second.run_def.id];
+            defs.sort();
+            used.sort();
+            assert_eq!(defs, used);
         });
     }
 

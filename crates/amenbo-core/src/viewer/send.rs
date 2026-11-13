@@ -13,7 +13,8 @@
 //!
 //! **What is placed is what the store holds, one record per row, sealed.** The Worker runs somewhere the
 //! reader merely rents, so it is handed ciphertext and an ordering and nothing that says what any of it
-//! means ([`super::sealing`]).
+//! means ([`super::sealing`]). An automation run's working rows are the exception: the phone shows none
+//! of them, so they are not placed at all ([`WITHHELD_FROM_THE_VIEWER`]).
 //!
 //! **What it reads the store through is the roads that were already there** — [`crate::sync_snapshot`]
 //! for the whole picture and for reading rows back by id, the change feed for what moved. They are asked
@@ -53,6 +54,31 @@ pub const SPEC_V: i64 = 1;
 /// `tests::the_worker_takes_the_number_of_records_this_sends` reads the limit out of the script it
 /// carries.
 pub const RECORDS_PER_WRITE: usize = 500;
+
+/// The tables the Viewer is never sent, on top of what [`crate::export::WITHHELD_ON_THE_WAY_OUT`] keeps on
+/// this machine for every road out.
+///
+/// **They are an automation run's working rows**: the run, the copy of its definition, the tasks it
+/// carried, its passes, its steps and the values they handed on. The phone shows none of them, and they
+/// are written on every step of every run — sent, they are what fills the feed this carrier reads and the
+/// server it writes to. They stay on the export's road, which is why this is a list of its own rather than
+/// more lines on that one.
+///
+/// Both halves of a turn answer to it — the feed's stretch and the whole picture — and so does what was
+/// queued before it was drawn ([`super::carried::drop_withheld`]).
+pub(super) const WITHHELD_FROM_THE_VIEWER: &[&str] = &[
+    "automation_run",
+    "automation_run_def",
+    "automation_run_pass",
+    "automation_run_step",
+    "automation_run_task",
+    "automation_run_value",
+];
+
+/// Whether a dataset is one the Viewer is sent.
+fn carried_to_the_viewer(dataset: &str) -> bool {
+    !WITHHELD_FROM_THE_VIEWER.contains(&dataset)
+}
 
 /// How many changes one read of the feed takes. It is [`crate::sync_snapshot::RECORDS_PER_READ`] because
 /// that is where the ids in it go next: a page that was drained can always be read back in one ask.
@@ -384,6 +410,9 @@ pub fn carry_at(store: &Store, now: DateTime<Utc>) -> Result<Sent> {
     // A queue filled before a key's older version was taken off as the newer was queued still holds
     // them, and each would cost the day's rows (`AMB-T-5812`).
     store.fold_viewer()?;
+    // A queue filled before the run's working rows were withheld from the Viewer still holds them. Once
+    // they are gone nothing puts them back, so every later turn finds nothing to take.
+    store.drop_viewer_withheld()?;
     let placed = drain(store, &server, &mut left, sending, now);
     store.set_viewer_carried(&left)?;
     let placed = placed?;
@@ -527,6 +556,9 @@ fn carried_out_of(whole: &[u8]) -> Result<(Vec<Waiting>, i64)> {
     };
     let mut records = Vec::new();
     for (dataset, rows) in &picture.tables {
+        if !carried_to_the_viewer(dataset) {
+            continue;
+        }
         for row in rows {
             records.push(placed(dataset, row)?);
         }
@@ -550,9 +582,10 @@ fn the_records_that_moved(store: &Store, rows: &[FeedRow]) -> Result<Vec<Waiting
     let mut drops = Vec::new();
     for (dataset, ids) in &read {
         for page in ids.chunks(crate::sync_snapshot::RECORDS_PER_READ) {
-            // A dataset the feed names is one this road carries: both lines are drawn by
+            // A dataset the feed names is one the read-back answers for: both lines are drawn by
             // `export::WITHHELD_ON_THE_WAY_OUT`, the feed's and the read-back's alike. A refusal here is
-            // therefore a build that has grown two registries, which is worth stopping over.
+            // therefore a build that has grown two registries, which is worth stopping over. What the
+            // Viewer alone is not sent was taken out before this (`collapse`).
             let mut back = Vec::new();
             crate::sync_snapshot::records_from(
                 &store.paths.store_file,
@@ -580,10 +613,10 @@ fn the_records_that_moved(store: &Store, rows: &[FeedRow]) -> Result<Vec<Waiting
 }
 
 /// Reduce a stretch of the feed to what has to be carried: the ids to read back and the ids to drop, both
-/// gathered by dataset and both in a settled order.
+/// gathered by dataset and both in a settled order. A dataset in [`WITHHELD_FROM_THE_VIEWER`] is neither.
 fn collapse(rows: &[FeedRow]) -> (BTreeMap<String, Vec<i64>>, BTreeMap<String, Vec<i64>>) {
     let mut last: BTreeMap<(&str, i64), &str> = BTreeMap::new();
-    for moved in rows {
+    for moved in rows.iter().filter(|moved| carried_to_the_viewer(&moved.dataset)) {
         last.insert((&moved.dataset, moved.row_id), &moved.op);
     }
     let (mut read, mut dropped) = (BTreeMap::new(), BTreeMap::new());
@@ -1081,6 +1114,95 @@ mod tests {
         let unpositioned =
             serde_json::json!({ "amenbo_sync": {}, "tables": {} }).to_string();
         assert!(carried_out_of(unpositioned.as_bytes()).is_err());
+    }
+
+    /// **An automation run's working rows are not sent to the Viewer**, and the list that says so is the
+    /// registry's own `automation_run*` tables, no more and no fewer — a table added beside them is one
+    /// this list has to be told about.
+    #[test]
+    fn the_viewer_is_sent_none_of_a_runs_working_rows() {
+        let in_the_schema: Vec<&str> = crate::store_engine::schema::DATASETS
+            .iter()
+            .map(|d| d.name)
+            .filter(|name| *name == "automation_run" || name.starts_with("automation_run_"))
+            .collect();
+        let mut withheld = WITHHELD_FROM_THE_VIEWER.to_vec();
+        withheld.sort_unstable();
+        let mut in_the_schema = in_the_schema;
+        in_the_schema.sort_unstable();
+        assert_eq!(withheld, in_the_schema);
+        for table in WITHHELD_FROM_THE_VIEWER {
+            assert!(
+                !crate::export::WITHHELD_ON_THE_WAY_OUT.contains(table),
+                "`{table}` still leaves by the export"
+            );
+        }
+    }
+
+    /// A stretch of the feed that names a run's working rows reads none of them back and drops none of
+    /// them, and what else it names is carried as before.
+    #[test]
+    fn a_stretch_of_the_feed_carries_nothing_of_a_run() {
+        let moved = |dataset: &str, row_id: i64, op: &str| FeedRow {
+            id: 0,
+            dataset: dataset.into(),
+            row_id,
+            op: op.into(),
+        };
+        let (read, dropped) = collapse(&[
+            moved("automation_run", 1, "insert"),
+            moved("automation_run_step", 4, "update"),
+            moved("automation_run_value", 7, "delete"),
+            moved("task", 3, "update"),
+        ]);
+        assert_eq!(read.keys().map(String::as_str).collect::<Vec<_>>(), ["task"]);
+        assert!(dropped.is_empty());
+    }
+
+    /// The whole picture leaves a run's working rows out too, so neither a first run nor a gap places
+    /// them — and a repair, which compares against the same picture, counts any the server still holds as
+    /// gone.
+    #[test]
+    fn the_whole_picture_carries_nothing_of_a_run() {
+        let whole = serde_json::json!({
+            "amenbo_sync": { "format": "amenbo-sync-json", "cursor": 5 },
+            "tables": {
+                "automation_run": [{ "id": 1 }],
+                "automation_run_step": [{ "id": 2 }],
+                "task": [{ "id": 3, "title": "c" }],
+            },
+        })
+        .to_string();
+        let (records, _) = carried_out_of(whole.as_bytes()).unwrap();
+        assert_eq!(records.iter().map(|r| r.record_key.as_str()).collect::<Vec<_>>(), ["task/3"]);
+    }
+
+    /// A queue filled before the run's rows were withheld is cleared of them by the next turn, whether or
+    /// not that turn can place anything — and where the feed was read to stays where it was.
+    #[test]
+    fn a_turn_takes_a_runs_rows_off_the_queue_and_leaves_the_cursor() {
+        let mut store = store_at("withheld-queue");
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        host.set_reply("/records", Reply::status(503, "down"));
+        set_up(&mut store, &host);
+        let version = store.device_sync_version().unwrap();
+        store
+            .set_viewer_carried(&Carried { cursor: 1, version, ..Carried::default() })
+            .unwrap();
+        store
+            .enqueue_viewer(&[
+                waiting("automation_run/1"),
+                waiting("task/9"),
+                waiting("automation_run_step/2"),
+            ])
+            .unwrap();
+
+        let _ = carry_at(&store, at("2026-11-13T00:00:00Z"));
+
+        let left: Vec<String> =
+            store.viewer_front(10).unwrap().into_iter().map(|w| w.record_key).collect();
+        assert_eq!(left, ["task/9"]);
+        assert_eq!(store.viewer_carried().unwrap().cursor, 1);
     }
 
     /// A device nobody has set the Viewer up on is not failing at anything: it places nothing and says so.

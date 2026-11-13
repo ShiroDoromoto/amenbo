@@ -306,6 +306,27 @@ pub fn fold(engine: &StoreEngine) -> Result<()> {
     Ok(())
 }
 
+/// Take every record off the queue whose table is one the Viewer is not sent
+/// ([`super::send::WITHHELD_FROM_THE_VIEWER`]) — writes and deletes alike, wherever they wait.
+///
+/// **The cursor is not moved** (`AMB-D-809`): it says how far the feed was read into this queue, and that
+/// stays true of what is left. A key is `<table>/<id>`, so a table is matched up to its slash and no
+/// further — `automation_run/` is not `automation_run_step/`.
+pub fn drop_withheld(engine: &StoreEngine) -> Result<()> {
+    let tables = super::send::WITHHELD_FROM_THE_VIEWER.iter().map(|table| {
+        Pred::like(VP.record_key, format!("{}/%", crate::store_engine::search::escape_like(table)))
+    });
+    let Some(withheld) = Pred::any(tables) else {
+        return Ok(());
+    };
+    Delete::from(VP.table)
+        .filter(withheld)
+        .sql()
+        .execute(engine.conn())
+        .map_err(StoreEngineError::from)?;
+    Ok(())
+}
+
 /// The first `how_many` records waiting, oldest first — what one turn takes.
 pub fn front(engine: &StoreEngine, how_many: i64) -> Result<Vec<Waiting>> {
     let conn = engine.conn();
@@ -499,6 +520,41 @@ mod tests {
         let read: Vec<(&str, Option<&str>)> =
             waiting.iter().map(|w| (w.record_key.as_str(), w.body.as_deref())).collect();
         assert_eq!(read, [("task/2", Some("v1")), ("task/1", Some("v2")), ("task/3", Some("v1"))]);
+    }
+
+    /// **What waits for a table the Viewer is not sent is taken off, and nothing else is**: not a table
+    /// whose name only starts the same way, not the order of what is left, and not the numbers above the
+    /// queue.
+    #[test]
+    fn a_runs_rows_are_taken_off_the_queue_and_the_rest_stays() {
+        let store = store_at("withheld");
+        store.set_viewer_carried(&Carried { cursor: 900, version: 12, ..Carried::default() }).unwrap();
+        let gone = Waiting { record_key: "automation_run_value/5".into(), op: Op::Deleted, body: None };
+        store
+            .enqueue_viewer(&[
+                placed("automation_run/1"),
+                placed("task/1"),
+                placed("automation_run_def/2"),
+                placed("automation_run_pass/3"),
+                placed("automation_runXstep/4"),
+                gone,
+                placed("automation_run_task/6"),
+                placed("automation/7"),
+                placed("automation_run_step/8"),
+            ])
+            .unwrap();
+
+        drop_withheld(&store.engine).unwrap();
+        drop_withheld(&store.engine).unwrap();
+
+        let waiting = store.viewer_front(20).unwrap();
+        assert_eq!(waiting.iter().map(|w| w.record_key.as_str()).collect::<Vec<_>>(), [
+            "task/1",
+            "automation_runXstep/4",
+            "automation/7"
+        ]);
+        let left = store.viewer_carried().unwrap();
+        assert_eq!((left.cursor, left.version), (900, 12));
     }
 
     /// Records added later go behind the ones already waiting, however many turns apart they were read

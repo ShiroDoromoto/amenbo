@@ -159,6 +159,8 @@ fn compared_with(store: &Store, holds: &Holding, queue: bool) -> Result<Option<D
     let Some(turn) = super::lock::take_the_turn(&store.paths)? else {
         return Ok(None);
     };
+    // The picture leaves out what the Viewer is not sent (`send::WITHHELD_FROM_THE_VIEWER`), so a record
+    // of those tables the server still holds is counted as gone and dropped there.
     let (here, _) = the_whole_picture(store)?;
     let (mut missing, gone) = the_difference(&here, &holds.keys);
     let drift = Drift { to_place: missing.len(), to_drop: gone.len() };

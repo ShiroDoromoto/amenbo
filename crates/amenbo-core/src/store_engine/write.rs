@@ -72,6 +72,9 @@ pub struct WriteTx<'a> {
     /// The finished rounds this operation gathered ([`record_round`](Self::record_round)) — written to
     /// the run log by [`commit`](Self::commit), only after the SQLite commit succeeds.
     rounds: std::cell::RefCell<Vec<crate::run_log::Round>>,
+    /// The runs this operation deleted ([`forget_run`](Self::forget_run)) — whose folders in the run log
+    /// [`commit`](Self::commit) removes, only after the SQLite commit succeeds.
+    forgotten: std::cell::RefCell<Vec<crate::model::AutomationRun>>,
 }
 
 impl<'a> WriteTx<'a> {
@@ -89,6 +92,7 @@ impl<'a> WriteTx<'a> {
             language: "en".to_string(),
             activity: Default::default(),
             rounds: Default::default(),
+            forgotten: Default::default(),
         })
     }
 
@@ -181,6 +185,32 @@ impl<'a> WriteTx<'a> {
         }
     }
 
+    /// **Say a run is being deleted**, so [`commit`](Self::commit) removes its folder from the run log
+    /// ([`crate::run_log::forget`]) **after** the SQLite commit succeeds — on an earlier `?` it goes with
+    /// the guard and the folder stays with the run. Pass the run row as it stood: the folder is named by
+    /// it ([`crate::run_log::dir_of`]). An engine with no run log has no folder to remove.
+    pub fn forget_run(&self, run: &crate::model::AutomationRun) {
+        if self.engine.run_logs().is_some() {
+            self.forgotten.borrow_mut().push(run.clone());
+        }
+    }
+
+    /// The runs this operation has said it deleted so far, in order — for a test to read before the
+    /// commit removes their folders.
+    #[cfg(test)]
+    pub(crate) fn forgotten_runs(&self) -> Vec<crate::model::AutomationRun> {
+        self.forgotten.borrow().clone()
+    }
+
+    /// How many change-feed rows this operation has earned so far — what it will append to the feed when
+    /// it commits, counted before the commit ([`StoreEngine::changes_pending`]), once per project it
+    /// declared it touches. Read by an operation that deletes in bulk, to stop before the feed outruns its
+    /// readers.
+    pub(crate) fn feed_rows_pending(&self) -> i64 {
+        let windows = self.projects.borrow().len().max(1);
+        (self.engine.changes_pending() * windows) as i64
+    }
+
     /// Where this engine's run log is kept, or `None` on an engine opened on its own (a test, a
     /// migration), which keeps none ([`record_round`](Self::record_round)).
     pub(crate) fn run_logs(&self) -> Option<&crate::run_log::Place> {
@@ -239,13 +269,16 @@ impl<'a> WriteTx<'a> {
     ///
     /// **The rounds it gathered are written after the commit too** ([`record_round`](Self::record_round)),
     /// to the run log the engine was opened with ([`StoreEngine::keep_run_logs_in`]). Like the ledger, it
-    /// cannot fail the operation ([`crate::run_log::write`]).
+    /// cannot fail the operation ([`crate::run_log::write`]). **Then the folders of the runs it deleted
+    /// are removed** ([`forget_run`](Self::forget_run)): a round of a run deleted in the same operation is
+    /// not written, so nothing is left behind of it.
     pub fn commit(self) -> Result<()> {
         // Copied out of the guard: `self.tx` is moved by the commit below, the ledger path outlives it.
         let engine = self.engine;
         let ledger = engine.activity_file();
         let activity = self.activity.take();
         let rounds = self.rounds.take();
+        let forgotten = self.forgotten.take();
         if ledger.is_none() && !activity.is_empty() {
             return Err(StoreEngineError::ActivityWithoutLedger(activity.len()));
         }
@@ -257,8 +290,14 @@ impl<'a> WriteTx<'a> {
             }
         }
         if let Some(place) = engine.run_logs() {
-            for round in &rounds {
+            let gone = |run: &crate::model::AutomationRun| {
+                forgotten.iter().any(|f| f.id == run.id && f.created_at == run.created_at)
+            };
+            for round in rounds.iter().filter(|r| !gone(&r.run)) {
                 crate::run_log::write(place, round);
+            }
+            for run in &forgotten {
+                crate::run_log::forget(place, run);
             }
         }
         Ok(())

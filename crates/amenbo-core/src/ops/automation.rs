@@ -1,6 +1,7 @@
 //! Building an automation's definition — the tables of the definition side. Of the run side
-//! there is one op here, [`run_delete`], and it is a sweep rather than a launch: the definition and what
-//! was launched from it go down together when the project does.
+//! there are two ops here, both deletes rather than launches: [`run_delete`], as the definition and what
+//! was launched from it go down together with the project or the archived automation, and
+//! [`let_old_runs_go`], the cap on how many runs a role keeps.
 //!
 //! **Three layers, one word each** (`AMB-D-949`). An automation places library actions; an action holds
 //! steps; one step is one terminal. It stops there — an action places no action — so nothing here has to
@@ -2397,18 +2398,25 @@ pub(crate) fn launch_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 /// Delete one run and everything filed under it — the values each step execution carried, the
 /// executions themselves with whatever was attached to them, the tasks the run worked on, and the step
 /// snapshots it took at launch and on each resume that copied it down afresh. Returns the blob hashes
-/// those attachments pointed at, for the caller to reclaim once the transaction commits.
+/// those attachments pointed at, for the caller to reclaim once the transaction commits. **Its folder in
+/// the run log goes too**, once the transaction commits ([`WriteTx::forget_run`]).
 ///
-/// **Nothing refuses this, and only a delete of what it is filed under calls it** — the project's, or
-/// an archived automation's ([`delete`]). A run is the record of what happened, so there is no reason to
-/// reach for it while what it is filed under is still there — and no reason to keep it once that is
-/// gone.
+/// **Nothing refuses this, and nobody reaches for one run by hand** — what calls it is a delete of what
+/// it is filed under, the project's or an archived automation's ([`delete`]), and the cap on how many
+/// runs a role keeps ([`let_old_runs_go`]). A run is the record of what happened, so there is no reason
+/// to keep it once what it is filed under is gone.
 ///
 /// The order is what the `RESTRICT` clauses insist on: a value names the execution that produced it as
 /// well as the one that received it (`from_run_step_id`), so every value of the run goes before any
 /// execution does; and an execution names the task row and the snapshot it was run from, so those go
 /// after it.
 pub(crate) fn run_delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
+    // The row is read only for the folder's name, so a store keeping no run log never reads it.
+    if tx.run_logs().is_some() {
+        if let Some(run) = read::automation_run(tx.conn(), id)? {
+            tx.forget_run(&run);
+        }
+    }
     let steps = read::automation_run_step_ids(tx.conn(), id)?;
     for step in &steps {
         for value in read::automation_run_value_ids(tx.conn(), *step)? {
@@ -2434,6 +2442,81 @@ pub(crate) fn run_delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     orphaned.extend(crate::ops::sweep_polymorphic(tx, AttachmentTarget::AutomationRun, id)?);
     tx.delete_record("automation_run", id)?;
     Ok(orphaned)
+}
+
+/// **How many runs one role keeps** — the newest of them. A run bound to no role, its role deleted since,
+/// is kept in a group of its own per automation, which keeps as many.
+pub const RUNS_KEPT_PER_ROLE: usize = 1_000;
+
+/// **Let the old runs of one role go** — those of `run`'s role past the newest [`RUNS_KEPT_PER_ROLE`],
+/// each deleted whole with its rounds and its folder in the run log ([`run_delete`]), oldest first.
+/// Answers how many went. Asked as each run ends (`ops::automation_stop`'s `ended`): a failure seen
+/// since, or a run whose filed task was closed since, goes the next time a run of its role ends.
+///
+/// - **Only a run that is over goes** — completed, failed or canceled; a failure only once somebody has
+///   seen it (`AMB-D-989`); and only once every task filed for it — on the run and on each of its rounds
+///   — is closed. A run held back stays past the cap until it can go, and the next time asks again.
+/// - **`run` itself stays**: the operation that asked is still answering with it.
+/// - **The rounds go with it**, and nothing reads past it: the count of rounds stopped in a row and the
+///   runs by task read the runs that are left (`AMB-D-1139`).
+/// - **It stops before the change feed outruns the Viewer** — once what the feed holds past where the
+///   Viewer's carrier read up to, this operation's rows counted in, comes to more than half the window
+///   the feed keeps ([`crate::store_engine::CHANGE_FEED_RETAIN`], `AMB-D-726`). What is left goes the
+///   next time. A carrier that has read nothing out, or one already left behind the window, is reading
+///   the whole store again anyway, and then it is this operation's own rows that are held to half the
+///   window.
+/// - **The blobs** of the files that go are left to the store's sweep ([`crate::store::Store::gc_blobs`]),
+///   as a round's are: reclaiming them belongs after the commit.
+pub(crate) fn let_old_runs_go(tx: &WriteTx<'_>, run: &crate::model::AutomationRun) -> Result<usize> {
+    let_old_runs_go_past(tx, run, RUNS_KEPT_PER_ROLE, crate::store_engine::CHANGE_FEED_RETAIN / 2)
+}
+
+/// [`let_old_runs_go`], keeping `keep` runs a role and stopping once the feed is `room` rows past the
+/// Viewer.
+pub(crate) fn let_old_runs_go_past(tx: &WriteTx<'_>, run: &crate::model::AutomationRun, keep: usize, room: i64) -> Result<usize> {
+    let conn = tx.conn();
+    let head = read::change_feed_head(conn)?;
+    let read_up_to = viewer_read_up_to(conn, head)?.unwrap_or(head);
+    let mut gone = 0;
+    for old in read::automation_runs_past(conn, run.automation_id, run.role_id, keep)? {
+        if old.id == run.id || !may_go(conn, &old)? {
+            continue;
+        }
+        if head + tx.feed_rows_pending() - read_up_to > room {
+            break;
+        }
+        run_delete(tx, old.id)?;
+        gone += 1;
+    }
+    Ok(gone)
+}
+
+/// Where the Viewer's carrier read the change feed up to, or `None` where it is reading nothing from it:
+/// it has read nothing out yet, or it fell behind the window the feed keeps and will read the whole store
+/// again.
+fn viewer_read_up_to(conn: &Connection, head: i64) -> Result<Option<i64>> {
+    let left = crate::viewer::carried::read_on(conn)?;
+    let read_nothing = left.cursor == 0 && left.version == 0;
+    let left_behind = head - left.cursor > crate::store_engine::CHANGE_FEED_RETAIN;
+    Ok((!read_nothing && !left_behind).then_some(left.cursor))
+}
+
+/// Whether one old run may go ([`let_old_runs_go`]): over, seen if it failed, and every task filed for it
+/// closed. A task deleted since names nothing, so it holds nothing back.
+fn may_go(conn: &Connection, run: &crate::model::AutomationRun) -> Result<bool> {
+    use crate::model::AutomationRunStatus as S;
+    let over = matches!(run.status, S::Completed | S::Failed | S::Canceled) && run.ended_at.is_some();
+    if !over || (run.status == S::Failed && run.acknowledged_at.is_none()) {
+        return Ok(false);
+    }
+    let mut filed: Vec<i64> = run.incident_task_id.into_iter().collect();
+    filed.extend(read::automation_run_tasks_of(conn, run.id)?.into_iter().filter_map(|r| r.incident_task_id));
+    for task in filed {
+        if read::task_status(conn, task)?.is_some_and(|s| !s.is_closed()) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 // ───────────────────────────── placements ─────────────────────────────

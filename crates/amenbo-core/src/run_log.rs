@@ -30,6 +30,11 @@
 //!   file to interleave in. A definition file and a copied blob are written the same way, and one that is
 //!   already there is left alone: neither changes once written.
 //!
+//! - **Removed with its run.** Whoever deletes a run row says so ([`crate::store_engine::WriteTx::forget_run`]),
+//!   and the commit removes the run's folder after it succeeds ([`forget`]) — the run of a deleted
+//!   automation or project, and an old run let go once its role holds more than it keeps
+//!   (`ops::automation`'s `let_old_runs_go`). A crash between the two leaves a folder no run names.
+//!
 //! Machine-local, and outside every backup and export, as the other logs are (`AMB-D-149`, `AMB-D-361`).
 //! Failure is never fatal here: a full disk or a read-only directory produces a `warn` and the mutation
 //! carries on.
@@ -159,6 +164,17 @@ pub fn write(place: &Place, round: &Round) {
     let lines = round.to_lines();
     if let Err(e) = write_whole(&dir.join(round_file_name(round.round.seq)), |f| f.write_all(&lines)) {
         tracing::warn!(run = round.run.id, round = round.round.seq, error = %e, "run log: round not written");
+    }
+}
+
+/// **Remove the folder of a run that was deleted**, everything in it. A folder that is not there is
+/// nothing to do; one that cannot be removed is a `warn`.
+pub fn forget(place: &Place, run: &AutomationRun) {
+    let dir = dir_of(&place.runs, run);
+    match std::fs::remove_dir_all(&dir) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => tracing::warn!(run = run.id, error = %e, "run log: the deleted run's folder not removed"),
     }
 }
 
@@ -326,6 +342,24 @@ mod tests {
             assert_eq!(lines.len(), 3);
             assert_eq!(lines[2]["step"]["report"], json!(format!("{seq}").repeat(100_000)));
         }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A deleted run's folder goes whole, and only its own: a run with the same number made at another
+    /// time keeps its folder, and a run that never wrote one is nothing to remove.
+    #[test]
+    fn a_deleted_runs_folder_goes_whole() {
+        let (dir, place) = place("forget");
+        let old = run(9, "2026-11-01T10:00:00Z");
+        let new = run(9, "2026-11-13T10:00:00Z");
+        write(&place, &round(&old, 1, "old"));
+        write(&place, &round(&new, 1, "new"));
+
+        forget(&place, &old);
+        forget(&place, &run(10, "2026-11-13T10:00:00Z"));
+
+        assert!(!dir_of(&place.runs, &old).exists());
+        assert!(dir_of(&place.runs, &new).join(round_file_name(1)).exists());
         std::fs::remove_dir_all(&dir).ok();
     }
 

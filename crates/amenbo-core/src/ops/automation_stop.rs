@@ -175,6 +175,9 @@ fn under_way(status: AutomationRunStatus) -> bool {
 ///
 /// **The launch it was started in stays open**, even where it was the last of that launch under way:
 /// a launch ends only where a person stops it ([`stop_launch`], [`cancel_launch`]).
+///
+/// **Its role's oldest runs may go with it** (`ops::automation`'s `let_old_runs_go`), where the role
+/// holds more than it keeps.
 pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<Ended> {
     // Read before the stretch is closed below: whether it was already ended is what says the run
     // handed its task back on the way.
@@ -208,6 +211,8 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
     if let Some(stretch) = &stretch {
         tx.record_round(after.id, stretch.id);
     }
+    // Over now, it may be what takes its role past the runs it keeps.
+    crate::ops::automation::let_old_runs_go(tx, &after)?;
     Ok(Ended { run: after })
 }
 
@@ -514,7 +519,9 @@ fn failure_notes(tx: &WriteTx<'_>, run: &AutomationRun, task_id: Option<i64>, en
 /// latest until one ended otherwise, and one for the round failing now. The round failing now is not
 /// filed yet, and a stretch still open — this one, or another run's — has not ended either way, so
 /// neither is counted among them. A failure deleted since names nothing, so the count starts again past
-/// it. How many there are changes nothing about where the failure is filed (`AMB-D-1139`).
+/// it. Only the runs still kept are counted: a run let go past its role's cap took its stretches with it
+/// (`ops::automation`'s `let_old_runs_go`). How many there are changes nothing about where the failure
+/// is filed (`AMB-D-1139`).
 fn stopped_in_a_row(conn: &Connection, task_id: i64) -> Result<usize> {
     let before = read::automation_run_tasks_for_task(conn, task_id)?
         .into_iter()
@@ -1449,6 +1456,218 @@ mod tests {
             assert_eq!(rounds[0].steps.len(), 1);
             assert_eq!(rounds[0].steps[0]["step"]["id"], serde_json::json!(opening.run_step.id));
         });
+    }
+
+    // ─────────────── how many runs a role keeps (`automation::let_old_runs_go`) ───────────────
+
+    /// A run of the picture, one round in, ended as `ending`.
+    fn over(tx: &WriteTx<'_>, p: &Picture, ending: Ending) -> AutomationRun {
+        let run = a_run(tx, &p.automation);
+        opened(tx, &run, &p.first);
+        let now = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
+        ended(tx, now, ending).expect("end").run
+    }
+
+    /// Rewrite one run row as `change` says — what a test reaches for where no op writes it that way.
+    fn rewrite(tx: &WriteTx<'_>, run_id: i64, change: impl FnOnce(&mut AutomationRun)) -> AutomationRun {
+        let before = read::automation_run(tx.conn(), run_id).expect("read").expect("the run");
+        let mut after = before.clone();
+        change(&mut after);
+        crate::ops::emit_update(tx, record::automation_run(&before), record::automation_run(&after)).expect("rewrite");
+        after
+    }
+
+    /// Whether the run and every round of it have gone from the store.
+    fn gone(tx: &WriteTx<'_>, run_id: i64) -> bool {
+        let run = read::automation_run(tx.conn(), run_id).expect("read");
+        let rounds = read::automation_run_task_ids(tx.conn(), run_id).expect("rounds");
+        if run.is_none() {
+            assert!(rounds.is_empty(), "a run's rounds go with it");
+        }
+        run.is_none()
+    }
+
+    /// The runs whose folders the commit will remove.
+    fn forgotten(tx: &WriteTx<'_>) -> Vec<i64> {
+        tx.forgotten_runs().into_iter().map(|r| r.id).collect()
+    }
+
+    /// The feed is far from outrunning anybody.
+    const ROOM: i64 = crate::store_engine::CHANGE_FEED_RETAIN / 2;
+
+    /// **The oldest runs past what a role keeps go**, each with its rounds and its folder in the run log,
+    /// and the newest stay.
+    #[test]
+    fn the_oldest_runs_past_what_a_role_keeps_go_with_their_rounds_and_folders() {
+        crate::ops::test_support::with_tx_keeping_runs(|tx| {
+            let p = picture(tx, false);
+            let runs: Vec<AutomationRun> = (0..4).map(|_| over(tx, &p, Ending::Canceled)).collect();
+            assert!(runs.iter().all(|r| !read::automation_run_task_ids(tx.conn(), r.id).expect("rounds").is_empty()));
+            assert!(tx.forgotten_runs().is_empty(), "a role well within what it keeps lets nothing go");
+
+            let went = automation::let_old_runs_go_past(tx, &runs[3], 2, ROOM).expect("let go");
+
+            assert_eq!(went, 2);
+            assert!(gone(tx, runs[0].id) && gone(tx, runs[1].id));
+            assert!(!gone(tx, runs[2].id) && !gone(tx, runs[3].id));
+            assert_eq!(forgotten(tx), vec![runs[0].id, runs[1].id], "their folders go once it commits");
+        });
+    }
+
+    /// **The runs whose role was deleted are counted as one group per automation** — apart from the runs
+    /// still in a role.
+    #[test]
+    fn runs_with_no_role_are_kept_as_a_group_of_their_own() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let role = read::automation_roles_of(tx.conn(), p.automation.id).expect("roles").remove(0).id;
+            let in_role: Vec<AutomationRun> = (0..3)
+                .map(|_| {
+                    let run = over(tx, &p, Ending::Completed);
+                    rewrite(tx, run.id, |r| r.role_id = Some(role))
+                })
+                .collect();
+            let no_role: Vec<AutomationRun> = (0..3)
+                .map(|_| {
+                    let run = over(tx, &p, Ending::Completed);
+                    rewrite(tx, run.id, |r| r.role_id = None)
+                })
+                .collect();
+
+            let went = automation::let_old_runs_go_past(tx, &no_role[2], 2, ROOM).expect("let go");
+
+            assert_eq!(went, 1);
+            assert!(gone(tx, no_role[0].id));
+            assert!(!gone(tx, no_role[1].id));
+            assert!(in_role.iter().all(|r| !gone(tx, r.id)), "the role's own runs are another group");
+        });
+    }
+
+    /// **A run held back stays past the cap** — one still going, a failure nobody has seen, and one whose
+    /// filed task, on the run or on a round, is still open — and goes once nothing holds it back.
+    #[test]
+    fn a_run_held_back_stays_until_nothing_holds_it() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let unseen = over(tx, &p, Ending::Failed(AutomationStoppedReason::Crashed));
+            let filed_on_run = over(tx, &p, Ending::Canceled);
+            let on_run = mk_task_in(tx, "Alice の失敗", Some(p.project));
+            rewrite(tx, filed_on_run.id, |r| r.incident_task_id = Some(on_run));
+            let filed_on_round = over(tx, &p, Ending::Canceled);
+            let on_round = mk_task_in(tx, "Bob の失敗", Some(p.project));
+            let round = read::automation_run_task_last(tx.conn(), filed_on_round.id).expect("read").expect("a round");
+            let mut named = round.clone();
+            named.incident_task_id = Some(on_round);
+            crate::ops::emit_update(tx, record::automation_run_task(&round), record::automation_run_task(&named))
+                .expect("file the round");
+            let going = a_run(tx, &p.automation);
+
+            assert_eq!(automation::let_old_runs_go_past(tx, &going, 0, ROOM).expect("let go"), 0);
+
+            acknowledge(tx, unseen.id, ActorKind::Human).expect("seen");
+            assert_eq!(automation::let_old_runs_go_past(tx, &going, 0, ROOM).expect("let go"), 1);
+            assert!(gone(tx, unseen.id), "seen, the failure goes");
+            assert!(!gone(tx, filed_on_run.id) && !gone(tx, filed_on_round.id));
+
+            for task in [on_run, on_round] {
+                crate::ops::task::set_status(tx, task, TaskStatus::Done, ActorKind::Human).expect("close the filed task");
+            }
+            assert_eq!(automation::let_old_runs_go_past(tx, &going, 0, ROOM).expect("let go"), 2);
+            assert!(gone(tx, filed_on_run.id) && gone(tx, filed_on_round.id));
+            assert!(!gone(tx, going.id), "a run still going never goes");
+        });
+    }
+
+    /// **It stops before the feed outruns the Viewer**, and what is left goes the next time — once the
+    /// Viewer has read on.
+    #[test]
+    fn letting_runs_go_stops_before_the_feed_outruns_the_viewer() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let runs: Vec<AutomationRun> = (0..3).map(|_| over(tx, &p, Ending::Canceled)).collect();
+            tx.conn()
+                .execute_batch(
+                    "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 3000) \
+                     INSERT INTO change_feed (dataset, row_id, op) SELECT 'task', i, 'update' FROM n",
+                )
+                .expect("a feed already 3000 rows on");
+            let head = read::change_feed_head(tx.conn()).expect("head");
+            let viewer_at = |cursor: i64| {
+                let left = crate::viewer::carried::Carried { version: 1, cursor, ..Default::default() };
+                crate::viewer::carried::write_on(tx.conn(), &left).expect("where the Viewer read up to");
+            };
+
+            viewer_at(0);
+            assert_eq!(automation::let_old_runs_go_past(tx, &runs[2], 0, ROOM).expect("let go"), 0);
+
+            // Right at the edge, the row this write may add to the feed counted in: one run fits, and the
+            // rows it takes put the feed past the edge.
+            viewer_at(head + tx.feed_rows_pending() + 1 - ROOM);
+            assert_eq!(automation::let_old_runs_go_past(tx, &runs[2], 0, ROOM).expect("let go"), 1);
+            assert!(gone(tx, runs[0].id) && !gone(tx, runs[1].id), "one run, and then it stopped");
+
+            viewer_at(head);
+            assert_eq!(automation::let_old_runs_go_past(tx, &runs[2], 0, ROOM).expect("let go"), 1);
+            assert!(gone(tx, runs[1].id), "the rest went the next time");
+        });
+    }
+
+    /// **Deleting an archived automation takes each run's folder in the run log with it.**
+    #[test]
+    fn deleting_an_archived_automation_takes_its_runs_folders() {
+        crate::ops::test_support::with_tx_keeping_runs(|tx| {
+            let p = picture(tx, false);
+            let runs = [over(tx, &p, Ending::Completed), over(tx, &p, Ending::Canceled)];
+            for launch in runs.iter().filter_map(|r| r.launch_id).collect::<std::collections::BTreeSet<_>>() {
+                stop_launch(tx, launch).expect("stop the launch");
+            }
+            automation::update(tx, p.automation.id, None, None, Some(true), None, None).expect("archive");
+            automation::delete(tx, p.automation.id).expect("delete the automation");
+            assert_eq!(forgotten(tx), vec![runs[0].id, runs[1].id]);
+        });
+    }
+
+    /// **Deleting a project takes each run's folder in the run log with it.**
+    #[test]
+    fn deleting_a_project_takes_its_runs_folders() {
+        crate::ops::test_support::with_tx_keeping_runs(|tx| {
+            let p = picture(tx, false);
+            let run = over(tx, &p, Ending::Completed);
+            crate::ops::project::delete(tx, p.project, ActorKind::Human).expect("delete the project");
+            assert_eq!(forgotten(tx), vec![run.id]);
+        });
+    }
+
+    /// **A deleted run's folder goes once the deletion commits**, and stays where it rolls back.
+    #[test]
+    fn a_deleted_runs_folder_goes_once_the_deletion_commits() {
+        let base = std::env::temp_dir().join(format!("amenbo-forget-run-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let place = crate::run_log::Place { runs: base.join("runs"), blobs: base.join("blobs") };
+        let mut engine = crate::ops::test_support::new_engine();
+        engine.keep_run_logs_in(place.clone());
+        engine.keep_activity_in(base.join("activity.jsonl"));
+        let run = {
+            let tx = engine.write().expect("write");
+            let p = picture(&tx, false);
+            let run = over(&tx, &p, Ending::Completed);
+            tx.commit().expect("commit");
+            run
+        };
+        let dir = crate::run_log::dir_of(&place.runs, &run);
+        assert!(dir.join(crate::run_log::round_file_name(1)).exists(), "its round was written");
+
+        {
+            let tx = engine.write().expect("write");
+            automation::run_delete(&tx, run.id).expect("delete");
+        }
+        assert!(dir.exists(), "a deletion rolled back leaves the folder");
+
+        let tx = engine.write().expect("write");
+        automation::run_delete(&tx, run.id).expect("delete");
+        tx.commit().expect("commit");
+        assert!(!dir.exists());
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     /// A run that ends before any round began has nothing to write.

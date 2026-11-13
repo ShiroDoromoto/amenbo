@@ -7475,6 +7475,26 @@ pub fn automation_run_ids_under_way(conn: &Connection, automation_id: i64) -> Re
     select_ids(conn, R.id, Some(&pred))
 }
 
+/// **The runs of one role past the newest `keep`**, oldest first — those of `automation_id` bound to
+/// `role_id`, or, for `None`, those bound to no role (a run whose role was deleted). What the cap on how
+/// many runs a role keeps reads (`ops::automation`'s `let_old_runs_go`).
+pub fn automation_runs_past(
+    conn: &Connection,
+    automation_id: i64,
+    role_id: Option<i64>,
+    keep: usize,
+) -> Result<Vec<crate::model::AutomationRun>> {
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    let in_role = match role_id {
+        Some(role) => Pred::eq(R.role_id, role),
+        None => Pred::is_null(R.role_id),
+    };
+    let pred = Pred::eq(R.automation_id, automation_id).and(in_role);
+    let mut runs = automation_run_rows(conn, &pred, None, keep as i64)?;
+    runs.reverse();
+    Ok(runs)
+}
+
 /// [`automation_run_ids_under_way`], of the runs sitting in one role's seats — those bound to `role_id`
 /// ([`crate::model::AutomationRun::role_id`]). A run bound to no role is in none of them.
 pub fn automation_run_ids_under_way_as(conn: &Connection, automation_id: i64, role_id: i64) -> Result<Vec<i64>> {

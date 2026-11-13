@@ -1023,14 +1023,6 @@ impl Store {
         crate::ops::automation_run::waits_for_room(self.engine.conn(), run_id)
     }
 
-    /// The stretches one run walked, in order — each one a task it worked.
-    pub fn automation_run_tasks(&self, run_id: i64) -> Result<Vec<crate::model::AutomationRunTask>> {
-        self.reachable(&format!("automation run #{run_id}"), |c| {
-            super::owner::automation_run(c, run_id)
-        })?;
-        Ok(crate::store_engine::read::automation_run_tasks_of(self.engine.conn(), run_id)?)
-    }
-
     /// The step executions of one run, in the order they happened.
     pub fn automation_run_steps(&self, run_id: i64) -> Result<Vec<crate::model::AutomationRunStep>> {
         self.reachable(&format!("automation run #{run_id}"), |c| {
@@ -1048,15 +1040,16 @@ impl Store {
         Ok(crate::store_engine::read::automation_run_defs_of(self.engine.conn(), run_id)?)
     }
 
-    /// The values one step execution received and produced.
-    pub fn automation_run_values(
-        &self,
-        run_step_id: i64,
-    ) -> Result<Vec<crate::model::AutomationRunValue>> {
-        self.reachable(&format!("automation run step #{run_step_id}"), |c| {
-            super::owner::automation_run_step(c, run_step_id)
+    /// **One run read back whole** — every round, every step execution with its values and every copy
+    /// of the steps it took, joined from the run log and the store ([`crate::run_log::detail`]): a
+    /// finished round from its file, the round under way from the store. `None` where there is no such
+    /// run.
+    pub fn automation_run_detail(&self, run_id: i64) -> Result<Option<crate::run_log::Detail>> {
+        self.reachable(&format!("automation run #{run_id}"), |c| {
+            super::owner::automation_run(c, run_id)
         })?;
-        Ok(crate::store_engine::read::automation_run_values_of(self.engine.conn(), run_step_id)?)
+        let runs = self.engine.run_logs().map(|place| place.runs.as_path());
+        Ok(crate::run_log::detail(self.engine.conn(), runs, run_id)?)
     }
 
     /// **What one of a step's declared outputs carries**, by its id — `None` where the step declares

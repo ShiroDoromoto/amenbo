@@ -1564,6 +1564,47 @@ mod tests {
         });
     }
 
+    /// **A run reads back whole after its first round's detail went** — the finished rounds from the run
+    /// log, the round under way from the store, each step once, in the order they happened, with their
+    /// reports, values and the copies they were opened from.
+    #[test]
+    fn a_run_reads_back_whole_from_the_run_log_and_the_store() {
+        in_a_run_log("read-back", |tx| {
+            let p = picture(tx, false, true);
+            let run = a_run(tx, &p.automation);
+            let mut walked = Vec::new();
+            for _ in 0..3 {
+                let (a, b) = a_round(tx, &p, &run);
+                written(tx);
+                walked.extend([a.id, b.id]);
+            }
+            let a4 = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open the fourth")).run_step;
+            reported(tx, &a4, "found", "Carol is still at it", "the last note");
+            walked.push(a4.id);
+            assert!(!steps_left(tx, &run).contains(&walked[0]), "the first round's detail went from the store");
+
+            let runs = tx.run_logs().map(|place| place.runs.clone());
+            let detail = crate::run_log::detail(tx.conn(), runs.as_deref(), run.id).expect("read").expect("the run");
+
+            let ids: Vec<i64> = detail.steps.iter().map(|s| s.step.id).collect();
+            assert_eq!(ids, walked, "every step once, in the order they happened");
+            let first = &detail.steps[0];
+            assert_eq!(first.step.report, "Alice looked", "a report the store let go is read from the run log");
+            assert_eq!(first.values[0].value.as_deref(), Some("the note"));
+            let last = detail.steps.iter().find(|s| s.step.id == a4.id).expect("the round under way");
+            assert_eq!(last.step.report, "Carol is still at it", "the round under way is read from the store");
+            assert_eq!(last.values[0].value.as_deref(), Some("the last note"));
+            assert_eq!(detail.rounds.iter().map(|r| r.seq).collect::<Vec<_>>(), vec![1, 2, 3, 4]);
+            for s in &detail.steps {
+                assert!(detail.defs.iter().any(|d| d.id == s.step.run_def_id), "each step's copy is there");
+            }
+
+            let store_alone = crate::run_log::detail(tx.conn(), None, run.id).expect("read").expect("the run");
+            assert!(!store_alone.steps.iter().any(|s| s.step.id == walked[0]), "with no run log, the store alone");
+            assert!(crate::run_log::detail(tx.conn(), runs.as_deref(), run.id + 1000).expect("read").is_none());
+        });
+    }
+
     /// **A round the run log does not hold stays** — on an engine with no run log, and where its file
     /// is not there.
     #[test]

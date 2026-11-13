@@ -1615,6 +1615,14 @@ pub const STEPS: &[Step] = &[
         // reads as not waiting; the next look finds the ones that are. No task is touched.
         apply: Apply::Custom(let_a_trigger_keep_since_when_it_waits),
     },
+    Step {
+        to: 147,
+        name: "bring the ways out of every built-in that splits by an axis to the axis's values as they stand",
+        // **Only the split's own ways out move**, on the library action and its step, with the lines
+        // hanging on a way out that goes. Placements, saved versions and runs' copies are not touched,
+        // and no task is.
+        apply: Apply::Custom(bring_the_splits_to_their_axes),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -2341,6 +2349,190 @@ fn let_a_trigger_keep_since_when_it_waits(ctx: &Ctx<'_>) -> Result<()> {
     }
     Ok(())
 }
+
+/// v147: **every built-in that splits by an axis is brought to the axis's values as they stand**
+/// (`AMB-D-972`, `AMB-D-973`). The ways out stopped following the axis while the built-in was gone, and
+/// came back without being brought up to date, so a store whose axis moved in between kept ways out its
+/// values no longer name and lacked ones they do — a task carrying a value added then left by
+/// [`V147_UNSORTED`]. An action placed on an archived automation cannot be deleted and written again,
+/// so the chain is what puts it right.
+///
+/// What following the axis wrote then is written here, in the same order, on each split's action and on
+/// the step inside it alike:
+///
+/// - a way out its axis's values no longer name goes — the error way out [`V147_ERROR_EXIT`] stays —
+///   with every line hanging on it, inside the action and on the automations: an edge that leaves by
+///   it or returns to it, a wire that carries what it hands on, and what it declares it hands on;
+/// - a value with no way out is given one at the bottom, on the step and on the action, and the line
+///   inside the action that returns it from the step to the action. **No line is drawn on an
+///   automation** (`AMB-D-1140`);
+/// - the ways out are put in the axis's order after the error way out, only where they stand in
+///   another.
+///
+/// The ways out are the axis's values in its order, closed ones too, a name once, none for a value
+/// named [`V147_UNSORTED`] or [`V147_ERROR_EXIT`], and [`V147_UNSORTED`] last. **A value renamed is
+/// not followed as a rename**: which name it had before is kept nowhere, so its old way out goes and a
+/// new one is written.
+///
+/// **An action left with no axis is skipped**, since running it already leaves by the error way out,
+/// and so is one holding no step, which following the axis refused. Placements, the action's saved
+/// versions and runs' copies are not touched, and no task is.
+fn bring_the_splits_to_their_axes(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let mut splits: Vec<(i64, i64, i64)> = Vec::new();
+    {
+        let mut stmt = tx.prepare(
+            "SELECT id, entry_step_id, builtin_dimension_id FROM automation_action \
+             WHERE builtin = ?1 AND builtin_dimension_id IS NOT NULL AND entry_step_id IS NOT NULL ORDER BY id",
+        )?;
+        let rows = stmt.query_map([V147_SPLIT_BY_DIM], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+        for row in rows {
+            splits.push(row?);
+        }
+    }
+    if splits.is_empty() {
+        return Ok(());
+    }
+    let now = crate::time::Timestamp::now().to_rfc3339_z();
+    // One owner's ways out in display order, as `(id, name)`.
+    let exits_of = |kind: &str, owner: i64| -> Result<Vec<(i64, String)>> {
+        let mut stmt = tx.prepare(
+            "SELECT id, name FROM automation_exit WHERE owner_kind = ?1 AND owner_id = ?2 ORDER BY order_key, id",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![kind, owner], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
+    };
+    let named = |kind: &str, owner: i64, name: &str| -> Result<Option<i64>> {
+        Ok(tx
+            .query_row(
+                "SELECT id FROM automation_exit WHERE owner_kind = ?1 AND owner_id = ?2 AND name = ?3 \
+                 ORDER BY id LIMIT 1",
+                rusqlite::params![kind, owner, name],
+                |r| r.get(0),
+            )
+            .optional()?)
+    };
+    // The key after the last way out of one owner, leaving one out where it is the one being moved.
+    let bottom = |kind: &str, owner: i64, moving: Option<i64>| -> Result<String> {
+        let last: Option<String> = tx
+            .query_row(
+                "SELECT order_key FROM automation_exit WHERE owner_kind = ?1 AND owner_id = ?2 AND id IS NOT ?3 \
+                 ORDER BY order_key DESC LIMIT 1",
+                rusqlite::params![kind, owner, moving],
+                |r| r.get(0),
+            )
+            .optional()?;
+        Ok(crate::order::key_between(last.as_deref(), None))
+    };
+    let written = |kind: &str, owner: i64, name: &str| -> Result<i64> {
+        if let Some(id) = named(kind, owner, name)? {
+            return Ok(id);
+        }
+        tx.execute(
+            "INSERT INTO automation_exit (owner_kind, owner_id, name, order_key, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
+            rusqlite::params![kind, owner, name, bottom(kind, owner, None)?, now],
+        )?;
+        Ok(tx.last_insert_rowid())
+    };
+
+    for (action_id, step_id, axis) in splits {
+        let mut wanted: Vec<String> = Vec::new();
+        {
+            let mut stmt =
+                tx.prepare("SELECT name FROM dimension_value WHERE dimension_id = ?1 ORDER BY order_key, id")?;
+            let rows = stmt.query_map([axis], |r| r.get::<_, String>(0))?;
+            for name in rows {
+                let name = name?;
+                if name != V147_UNSORTED && name != V147_ERROR_EXIT && !wanted.contains(&name) {
+                    wanted.push(name);
+                }
+            }
+        }
+        wanted.push(V147_UNSORTED.to_string());
+        let owners = [("step", step_id), ("action", action_id)];
+
+        let mut gone: Vec<i64> = Vec::new();
+        for (kind, owner) in owners {
+            for (id, name) in exits_of(kind, owner)? {
+                if name != V147_ERROR_EXIT && !wanted.contains(&name) {
+                    gone.push(id);
+                }
+            }
+        }
+        if !gone.is_empty() {
+            let exits = gone.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+            let ports = format!("SELECT id FROM automation_port WHERE owner_kind = 'exit' AND owner_id IN ({exits})");
+            tx.execute_batch(&format!(
+                "DELETE FROM automation_wire WHERE from_exit_id IN ({exits}) \
+                     OR from_port_id IN ({ports}) OR to_port_id IN ({ports});
+                 DELETE FROM automation_edge WHERE exit_id IN ({exits}) OR exit_to_id IN ({exits});
+                 DELETE FROM automation_port WHERE owner_kind = 'exit' AND owner_id IN ({exits});
+                 DELETE FROM automation_exit WHERE id IN ({exits});"
+            ))?;
+        }
+
+        for name in &wanted {
+            let from = written("step", step_id, name)?;
+            let to = written("action", action_id, name)?;
+            let drawn: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM automation_edge WHERE owner_kind = 'action' AND from_id = ?1 AND exit_id = ?2)",
+                rusqlite::params![step_id, from],
+                |r| r.get(0),
+            )?;
+            if drawn {
+                continue;
+            }
+            let last: Option<String> = tx
+                .query_row(
+                    "SELECT order_key FROM automation_edge WHERE owner_kind = 'action' AND owner_id = ?1 \
+                     ORDER BY order_key DESC LIMIT 1",
+                    [action_id],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            tx.execute(
+                "INSERT INTO automation_edge (owner_kind, owner_id, from_id, exit_id, to_id, ends, exit_to_id, \
+                     max_times, order_key, created_at, updated_at) \
+                 VALUES ('action', ?1, ?2, ?3, NULL, 'exit', ?4, NULL, ?5, ?6, ?6)",
+                rusqlite::params![
+                    action_id,
+                    step_id,
+                    from,
+                    to,
+                    crate::order::key_between(last.as_deref(), None),
+                    now
+                ],
+            )?;
+        }
+
+        for (kind, owner) in owners {
+            let standing: Vec<String> =
+                exits_of(kind, owner)?.into_iter().map(|(_, name)| name).filter(|n| n != V147_ERROR_EXIT).collect();
+            if standing == wanted {
+                continue;
+            }
+            for name in &wanted {
+                let Some(id) = named(kind, owner, name)? else { continue };
+                tx.execute(
+                    "UPDATE automation_exit SET order_key = ?1, updated_at = ?2 WHERE id = ?3",
+                    rusqlite::params![bottom(kind, owner, Some(id))?, now, id],
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The key of the built-in that splits by an axis, as it stood at v147.
+const V147_SPLIT_BY_DIM: &str = "split_by_dim";
+
+/// The way out of the built-in that splits by an axis which a task carrying no value leaves by, as it
+/// stood at v147.
+const V147_UNSORTED: &str = "分類なし";
+
+/// The name of the error way out every step and action holds, as it stood at v147.
+const V147_ERROR_EXIT: &str = "*";
 
 /// The key of the built-in that takes a task, as it stood at v138.
 const V138_TAKE_TASK: &str = "take_task";
@@ -14805,6 +14997,257 @@ mod tests {
             engine.conn().execute("UPDATE automation_trigger SET waiting_since = 'yesterday' WHERE id = 1", []).is_err(),
             "an instant, as every time is",
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The ways out of one owner in display order, read the way the build screen lists them.
+    fn v147_exits(conn: &rusqlite::Connection, kind: &str, owner: i64) -> Vec<String> {
+        let mut stmt = conn
+            .prepare("SELECT name FROM automation_exit WHERE owner_kind = ?1 AND owner_id = ?2 ORDER BY order_key, id")
+            .unwrap();
+        stmt.query_map(rusqlite::params![kind, owner], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+    }
+
+    /// v147: a split written while its axis moved without it is given a way out for every value it
+    /// lacked, on its step and on its action, with the line inside the action that returns each, and the
+    /// ways out come out in the axis's order, closed values too, a name once, the unsorted one last.
+    #[test]
+    fn a_split_is_given_the_ways_out_its_axis_gained_at_v147() {
+        let dir = scratch("split-follows-gained");
+        let engine = store_at(&dir, 146);
+        let at = "2026-11-12T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"BEGIN;
+                 INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO dimension (id, project_id, name, cardinality, applies_to, order_key, created_at, updated_at)
+                 VALUES (1, 1, '作業種別', 'single', 'task', 'm', '{at}', '{at}');
+                 INSERT INTO dimension_value (id, dimension_id, name, order_key, closed, created_at, updated_at)
+                 VALUES (1, 1, '設計', 'b', 0, '{at}', '{at}'), (2, 1, '実装', 'a', 0, '{at}', '{at}'),
+                        (3, 1, '調査', 'c', 1, '{at}', '{at}'), (4, 1, '実装', 'd', 0, '{at}', '{at}'),
+                        (5, 1, '分類なし', 'e', 0, '{at}', '{at}'), (6, 1, '*', 'f', 0, '{at}', '{at}');
+                 INSERT INTO automation_action (id, project_id, name, entry_step_id, builtin, builtin_dimension_id, builtin_version, order_key)
+                 VALUES (1, 1, '分類で分ける', 1, 'split_by_dim', 1, 1, 'm');
+                 INSERT INTO automation_action_step (id, action_id, name, builtin) VALUES (1, 1, '分類で分ける', 'split_by_dim');
+                 INSERT INTO automation_exit (id, owner_kind, owner_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 'action', 1, '*', 'a', '{at}', '{at}'), (2, 'action', 1, '設計', 'b', '{at}', '{at}'),
+                        (3, 'action', 1, '分類なし', 'c', '{at}', '{at}'),
+                        (4, 'step', 1, '*', 'a', '{at}', '{at}'), (5, 'step', 1, '設計', 'b', '{at}', '{at}'),
+                        (6, 'step', 1, '分類なし', 'c', '{at}', '{at}');
+                 INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_id, to_id, ends, exit_to_id, order_key, created_at, updated_at)
+                 VALUES (1, 'action', 1, 1, 5, NULL, 'exit', 2, 'm', '{at}', '{at}'),
+                        (2, 'action', 1, 1, 6, NULL, 'exit', 3, 'n', '{at}', '{at}');
+                 COMMIT;"#
+            ))
+            .unwrap();
+
+        run(&engine, &dir, steps_through(147), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 147);
+        let conn = engine.conn();
+        let wanted = ["*", "実装", "設計", "調査", "分類なし"];
+        assert_eq!(v147_exits(conn, "step", 1), wanted, "the step's ways out follow the axis");
+        assert_eq!(v147_exits(conn, "action", 1), wanted, "the action's ways out follow the axis");
+        let mut stmt = conn
+            .prepare(
+                "SELECT e.id, s.name, a.name FROM automation_edge e \
+                 JOIN automation_exit s ON s.id = e.exit_id AND s.owner_kind = 'step' AND s.owner_id = 1 \
+                 JOIN automation_exit a ON a.id = e.exit_to_id AND a.owner_kind = 'action' AND a.owner_id = 1 \
+                 WHERE e.owner_kind = 'action' AND e.owner_id = 1 AND e.from_id = 1 AND e.ends = 'exit' \
+                   AND e.to_id IS NULL AND e.max_times IS NULL \
+                 ORDER BY e.order_key, e.id",
+            )
+            .unwrap();
+        let lines: Vec<(i64, String, String)> =
+            stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap().map(|r| r.unwrap()).collect();
+        let named: Vec<(&str, &str)> = lines.iter().map(|(_, s, a)| (s.as_str(), a.as_str())).collect();
+        assert_eq!(
+            named,
+            vec![("設計", "設計"), ("分類なし", "分類なし"), ("実装", "実装"), ("調査", "調査")],
+            "each way out added is returned from the step to the action, after the lines already drawn",
+        );
+        assert_eq!((lines[0].0, lines[1].0), (1, 2), "the lines already drawn stay");
+        let edges: i64 = conn.query_row("SELECT COUNT(*) FROM automation_edge", [], |r| r.get(0)).unwrap();
+        assert_eq!(edges, 4, "no line is drawn on an automation");
+        let values: i64 =
+            conn.query_row("SELECT COUNT(*) FROM dimension_value WHERE updated_at = ?1", [at], |r| r.get(0)).unwrap();
+        assert_eq!(values, 6, "the axis is not touched");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v147: a way out its axis no longer names goes with every line hanging on it — inside the action
+    /// and on an automation alike — and what it hands on; the error way out stays, and so does what a
+    /// saved version holds.
+    #[test]
+    fn a_way_out_its_axis_no_longer_names_goes_with_its_lines_at_v147() {
+        let dir = scratch("split-follows-lost");
+        let engine = store_at(&dir, 146);
+        let at = "2026-11-12T00:00:00Z";
+        let edges_saved = r#"[{"id":4,"from_id":1,"exit_id":3,"to_id":2,"ends":"go"}]"#;
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"BEGIN;
+                 INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO dimension (id, project_id, name, cardinality, applies_to, order_key, created_at, updated_at)
+                 VALUES (1, 1, '作業種別', 'single', 'task', 'm', '{at}', '{at}');
+                 INSERT INTO dimension_value (id, dimension_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 1, '設計', 'a', '{at}', '{at}');
+                 INSERT INTO automation_action (id, project_id, name, entry_step_id, builtin, builtin_dimension_id, builtin_version, order_key)
+                 VALUES (1, 1, '分類で分ける', 1, 'split_by_dim', 1, 1, 'm'), (2, 1, 'mine', 2, NULL, NULL, NULL, 'n');
+                 INSERT INTO automation_action_step (id, action_id, name) VALUES (1, 1, '分類で分ける'), (2, 2, 'mine');
+                 INSERT INTO automation_exit (id, owner_kind, owner_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 'action', 1, '*', 'a', '{at}', '{at}'), (2, 'action', 1, '設計', 'b', '{at}', '{at}'),
+                        (3, 'action', 1, '企画', 'c', '{at}', '{at}'), (4, 'action', 1, '分類なし', 'd', '{at}', '{at}'),
+                        (5, 'step', 1, '*', 'a', '{at}', '{at}'), (6, 'step', 1, '設計', 'b', '{at}', '{at}'),
+                        (7, 'step', 1, '企画', 'c', '{at}', '{at}'), (8, 'step', 1, '分類なし', 'd', '{at}', '{at}'),
+                        (9, 'action', 2, '企画', 'a', '{at}', '{at}');
+                 INSERT INTO automation_port (id, owner_kind, owner_id, direction, name, kind)
+                 VALUES (1, 'exit', 3, 'out', 'メモ', 'value'), (2, 'exit', 9, 'out', 'メモ', 'value');
+                 INSERT INTO automation (id, project_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 1, '開発', 'm', '{at}', '{at}');
+                 INSERT INTO automation_placement (id, automation_id, action_id, order_key, created_at, updated_at)
+                 VALUES (1, 1, 1, 'm', '{at}', '{at}'), (2, 1, 2, 'n', '{at}', '{at}');
+                 INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_id, to_id, ends, exit_to_id, order_key, created_at, updated_at)
+                 VALUES (1, 'action', 1, 1, 6, NULL, 'exit', 2, 'm', '{at}', '{at}'),
+                        (2, 'action', 1, 1, 7, NULL, 'exit', 3, 'n', '{at}', '{at}'),
+                        (3, 'action', 1, 1, 8, NULL, 'exit', 4, 'o', '{at}', '{at}'),
+                        (4, 'automation', 1, 1, 3, 2, 'go', NULL, 'm', '{at}', '{at}'),
+                        (5, 'automation', 1, 1, 2, 2, 'go', NULL, 'n', '{at}', '{at}'),
+                        (6, 'automation', 1, 2, 9, NULL, 'done', NULL, 'o', '{at}', '{at}');
+                 INSERT INTO automation_wire (id, owner_kind, owner_id, from_id, from_exit_id, from_port_id, to_id, to_port_id)
+                 VALUES (1, 'automation', 1, 1, 3, 1, 2, 0), (2, 'automation', 1, 1, 2, 0, 2, 0),
+                        (3, 'automation', 1, 2, 9, 2, 1, 0);
+                 INSERT INTO automation_version (id, automation_id, version, placements, cfgs, placement_steps, edges, wires, roles, created_at, updated_at)
+                 VALUES (1, 1, 1, '[]', '[]', '[]', '{edges_saved}', '[]', '[]', '{at}', '{at}');
+                 COMMIT;"#
+            ))
+            .unwrap();
+
+        run(&engine, &dir, steps_through(147), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 147);
+        let conn = engine.conn();
+        let ids = |sql: &str| -> Vec<i64> {
+            let mut stmt = conn.prepare(sql).unwrap();
+            stmt.query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+        };
+        assert_eq!(ids("SELECT id FROM automation_exit ORDER BY id"), vec![1, 2, 4, 5, 6, 8, 9], "企画 is gone from the split alone");
+        assert_eq!(ids("SELECT id FROM automation_port ORDER BY id"), vec![2], "what 企画 handed on is gone");
+        assert_eq!(ids("SELECT id FROM automation_edge ORDER BY id"), vec![1, 3, 5, 6], "the lines on 企画 are gone");
+        assert_eq!(ids("SELECT id FROM automation_wire ORDER BY id"), vec![2, 3], "the wire from 企画 is gone");
+        let moved: i64 =
+            conn.query_row("SELECT COUNT(*) FROM automation_exit WHERE updated_at <> ?1", [at], |r| r.get(0)).unwrap();
+        assert_eq!(moved, 0, "the ways out left already stand in the axis's order, so none is moved");
+        let saved: String = conn.query_row("SELECT edges FROM automation_version WHERE id = 1", [], |r| r.get(0)).unwrap();
+        assert_eq!(saved, edges_saved, "a saved version is not touched");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v147: a split whose axis was deleted is left as it was, while one beside it with an axis follows.
+    #[test]
+    fn a_split_left_with_no_axis_is_not_touched_at_v147() {
+        let dir = scratch("split-follows-no-axis");
+        let engine = store_at(&dir, 146);
+        let at = "2026-11-12T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"BEGIN;
+                 INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO dimension (id, project_id, name, cardinality, applies_to, order_key, created_at, updated_at)
+                 VALUES (1, 1, '作業種別', 'single', 'task', 'm', '{at}', '{at}');
+                 INSERT INTO dimension_value (id, dimension_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 1, '実装', 'a', '{at}', '{at}');
+                 INSERT INTO automation_action (id, project_id, name, entry_step_id, builtin, builtin_dimension_id, builtin_version, order_key)
+                 VALUES (1, 1, '分類で分ける', 1, 'split_by_dim', NULL, 1, 'm'), (2, 1, '分類で分ける', 2, 'split_by_dim', 1, 1, 'n');
+                 INSERT INTO automation_action_step (id, action_id, name) VALUES (1, 1, '分類で分ける'), (2, 2, '分類で分ける');
+                 INSERT INTO automation_exit (id, owner_kind, owner_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 'action', 1, '*', 'a', '{at}', '{at}'), (2, 'action', 1, '設計', 'b', '{at}', '{at}'),
+                        (3, 'action', 1, '分類なし', 'c', '{at}', '{at}'),
+                        (4, 'step', 1, '*', 'a', '{at}', '{at}'), (5, 'step', 1, '設計', 'b', '{at}', '{at}'),
+                        (6, 'step', 1, '分類なし', 'c', '{at}', '{at}'),
+                        (7, 'action', 2, '*', 'a', '{at}', '{at}'), (8, 'action', 2, '分類なし', 'b', '{at}', '{at}'),
+                        (9, 'step', 2, '*', 'a', '{at}', '{at}'), (10, 'step', 2, '分類なし', 'b', '{at}', '{at}');
+                 INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_id, to_id, ends, exit_to_id, order_key, created_at, updated_at)
+                 VALUES (1, 'action', 1, 1, 5, NULL, 'exit', 2, 'm', '{at}', '{at}'),
+                        (2, 'action', 1, 1, 6, NULL, 'exit', 3, 'n', '{at}', '{at}'),
+                        (3, 'action', 2, 2, 10, NULL, 'exit', 8, 'm', '{at}', '{at}');
+                 COMMIT;"#
+            ))
+            .unwrap();
+
+        run(&engine, &dir, steps_through(147), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 147);
+        let conn = engine.conn();
+        let untouched = ["*", "設計", "分類なし"];
+        assert_eq!(v147_exits(conn, "step", 1), untouched, "the split with no axis keeps its ways out");
+        assert_eq!(v147_exits(conn, "action", 1), untouched);
+        let moved: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM automation_exit WHERE owner_kind = 'action' AND owner_id = 1 AND updated_at <> ?1 \
+                 OR owner_kind = 'step' AND owner_id = 1 AND updated_at <> ?1",
+                [at],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(moved, 0);
+        let lines: i64 = conn
+            .query_row("SELECT COUNT(*) FROM automation_edge WHERE owner_kind = 'action' AND owner_id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(lines, 2, "nor a line inside it");
+        let followed = ["*", "実装", "分類なし"];
+        assert_eq!(v147_exits(conn, "step", 2), followed, "the split beside it follows its axis");
+        assert_eq!(v147_exits(conn, "action", 2), followed);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v147: a store with no split is raised past it with nothing written.
+    #[test]
+    fn a_store_with_no_split_is_raised_past_v147_with_nothing_written() {
+        let dir = scratch("split-follows-none");
+        let engine = store_at(&dir, 146);
+        let at = "2026-11-12T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"BEGIN;
+                 INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO dimension (id, project_id, name, cardinality, applies_to, order_key, created_at, updated_at)
+                 VALUES (1, 1, '作業種別', 'single', 'task', 'm', '{at}', '{at}');
+                 INSERT INTO dimension_value (id, dimension_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 1, '実装', 'a', '{at}', '{at}');
+                 INSERT INTO automation_action (id, project_id, name, entry_step_id, builtin, builtin_dimension_id, builtin_version, order_key)
+                 VALUES (1, 1, 'タスクに着手する', 1, 'take_task', NULL, 1, 'm'), (2, 1, 'mine', 2, NULL, NULL, NULL, 'n');
+                 INSERT INTO automation_action_step (id, action_id, name) VALUES (1, 1, 'タスクに着手する'), (2, 2, 'mine');
+                 INSERT INTO automation_exit (id, owner_kind, owner_id, name, order_key, created_at, updated_at)
+                 VALUES (1, 'action', 1, '*', 'a', '{at}', '{at}'), (2, 'action', 1, '着手した', 'b', '{at}', '{at}'),
+                        (3, 'step', 1, '*', 'a', '{at}', '{at}'), (4, 'step', 1, '着手した', 'b', '{at}', '{at}'),
+                        (5, 'action', 2, '分類なし', 'a', '{at}', '{at}'), (6, 'step', 2, '設計', 'a', '{at}', '{at}');
+                 INSERT INTO automation_edge (id, owner_kind, owner_id, from_id, exit_id, to_id, ends, exit_to_id, order_key, created_at, updated_at)
+                 VALUES (1, 'action', 1, 1, 4, NULL, 'exit', 2, 'm', '{at}', '{at}');
+                 COMMIT;"#
+            ))
+            .unwrap();
+        let dump = |conn: &rusqlite::Connection| -> Vec<String> {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT 'x' || id || owner_kind || owner_id || name || order_key || updated_at FROM automation_exit \
+                     UNION ALL SELECT 'e' || id || owner_id || exit_id || order_key || updated_at FROM automation_edge \
+                     UNION ALL SELECT 'p' || id FROM automation_port UNION ALL SELECT 'w' || id FROM automation_wire \
+                     ORDER BY 1",
+                )
+                .unwrap();
+            stmt.query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+        };
+        let before = dump(engine.conn());
+
+        run(&engine, &dir, steps_through(147), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 147);
+        assert_eq!(dump(engine.conn()), before, "nothing is written");
         std::fs::remove_dir_all(&dir).ok();
     }
 

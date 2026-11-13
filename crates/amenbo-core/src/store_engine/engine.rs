@@ -333,6 +333,18 @@ impl StoreEngine {
         trim_change_feed(tx)
     }
 
+    /// How many change-feed rows the transaction in flight has collected so far, for one window — a row
+    /// reported once per column it wrote counted once, as [`super::write::WriteTx::commit`] writes it.
+    pub(super) fn changes_pending(&self) -> usize {
+        let count = |buf: &[RowChange]| {
+            buf.iter().map(|c| (c.dataset, c.row_id, c.op)).collect::<std::collections::HashSet<_>>().len()
+        };
+        match self.changes.lock() {
+            Ok(buf) => count(buf.as_slice()),
+            Err(poisoned) => count(poisoned.into_inner().as_slice()),
+        }
+    }
+
     /// Forget whatever the hook has collected so far, and hand it back — how [`super::write::WriteTx`]
     /// starts a transaction with an empty ledger and ends it with exactly that transaction's rows.
     /// Anything a write outside a `WriteTx` leaves here is dropped at the next `BEGIN` rather than

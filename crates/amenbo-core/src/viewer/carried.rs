@@ -117,7 +117,12 @@ impl Op {
 /// Where the carrier was left. A store nothing has been sent from answers the default, which is the state
 /// a first run is in.
 pub fn read(engine: &StoreEngine) -> Result<Carried> {
-    let conn = engine.conn();
+    read_on(engine.conn())
+}
+
+/// [`read()`], on a connection — a write transaction's, for an operation that asks where the carrier was
+/// left before it writes (`ops::automation`'s `let_old_runs_go`).
+pub(crate) fn read_on(conn: &rusqlite::Connection) -> Result<Carried> {
     let mut sel = Select::new();
     let (version, cursor, placed, seq) =
         (sel.col(VS.version), sel.col(VS.cursor), sel.col(VS.placed), sel.col(VS.seq));
@@ -150,6 +155,11 @@ pub fn read(engine: &StoreEngine) -> Result<Carried> {
 /// Write where the carrier was left. The whole row goes at once — there is no writing one of these
 /// numbers without the others.
 pub fn write(engine: &StoreEngine, left: &Carried) -> Result<()> {
+    write_on(engine.conn(), left)
+}
+
+/// [`write()`], on a connection.
+pub(crate) fn write_on(conn: &rusqlite::Connection, left: &Carried) -> Result<()> {
     Insert::into(VS.table)
         .set(VS.id, THE_ROW)
         .set(VS.version, left.version)
@@ -163,7 +173,7 @@ pub fn write(engine: &StoreEngine, left: &Carried) -> Result<()> {
         .set(VS.build, left.build)
         .on_conflict_update(VS.id)
         .sql()
-        .execute(engine.conn())
+        .execute(conn)
         .map_err(StoreEngineError::from)?;
     Ok(())
 }

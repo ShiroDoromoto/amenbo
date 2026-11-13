@@ -463,6 +463,19 @@ impl Paths {
         self.base_dir.join(crate::delivery_log::FILE_NAME)
     }
 
+    /// The **run log**, `<base>/runs/` ([`crate::run_log`]): one folder per automation run, holding the
+    /// detail of each round it finished. Beside the store rather than under `logs/`, because a report is
+    /// the user's own content (`AMB-D-382`); machine-local and outside every backup and export, as the
+    /// other logs are (`AMB-D-149`).
+    pub fn runs_dir(&self) -> PathBuf {
+        self.base_dir.join(crate::run_log::DIR_NAME)
+    }
+
+    /// Where the run log is written and where the files it copies are read from.
+    pub fn run_log_place(&self) -> crate::run_log::Place {
+        crate::run_log::Place { runs: self.runs_dir(), blobs: self.base_dir.join(crate::blob::BLOBS_SUBDIR) }
+    }
+
     /// Where skins are kept, `<base>/skins`. Beside the store rather than inside it, because a skin
     /// is a file a person was handed and may hand on — it is opened, copied and deleted as a file,
     /// and the one that is on is named from [`Config::skin`].

@@ -8026,6 +8026,22 @@ pub fn automation_run_values_of(
     )
 }
 
+/// **The values handed on from any of these step executions** (`from_run_step_id`), wherever they went
+/// in.
+pub fn automation_run_values_handed_from(
+    conn: &Connection,
+    run_step_ids: &[i64],
+) -> Result<Vec<crate::model::AutomationRunValue>> {
+    const V: col::automation_run_value::Cols = col::automation_run_value::ALL;
+    automation_rows(
+        conn,
+        V.table,
+        &Pred::is_in(V.from_run_step_id, run_step_ids.iter().copied()),
+        &[Sort::by(V.id)],
+        super::hydrate::automation_run_value_row,
+    )
+}
+
 /// The run a step execution belongs to — the first hop of its reach, since the run knows the project.
 pub fn automation_run_step_run(conn: &Connection, id: i64) -> Result<Option<i64>> {
     const S: col::automation_run_step::Cols = col::automation_run_step::ALL;

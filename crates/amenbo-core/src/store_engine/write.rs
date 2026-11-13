@@ -181,6 +181,12 @@ impl<'a> WriteTx<'a> {
         }
     }
 
+    /// Where this engine's run log is kept, or `None` on an engine opened on its own (a test, a
+    /// migration), which keeps none ([`record_round`](Self::record_round)).
+    pub(crate) fn run_logs(&self) -> Option<&crate::run_log::Place> {
+        self.engine.run_logs()
+    }
+
     /// The rounds this operation has gathered so far, in order — for a test to read before the commit
     /// writes them.
     #[cfg(test)]

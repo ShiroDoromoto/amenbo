@@ -677,7 +677,7 @@ fn gave_up(tx: &WriteTx<'_>, before: AutomationRun) -> Result<Ended> {
 ///
 /// **The one before it is over here**, so it goes to the run log ([`WriteTx::record_round`]) — here and
 /// not where it was given its `ended_at`: a stretch that handed its task back was closed then, and the
-/// steps after that still belonged to it.
+/// steps after that still belonged to it. **An older one lets its detail go** ([`let_go_of_a_round`]).
 fn new_stretch(
     tx: &WriteTx<'_>,
     run_id: i64,
@@ -696,6 +696,7 @@ fn new_stretch(
             )?;
         }
         tx.record_round(run_id, before.id);
+        let_go_of_a_round(tx, run_id, before, now)?;
     }
     let stretch = AutomationRunTask {
         id: read::next_id(tx.conn(), "automation_run_task")?,
@@ -712,6 +713,69 @@ fn new_stretch(
     };
     emit_create(tx, record::automation_run_task(&stretch))?;
     Ok(stretch)
+}
+
+/// **Let the detail of one old round go from the store**, as the next round begins — the oldest round
+/// before `before` that still has step executions and whose file the run log already holds. Its step
+/// executions go, with their values and the files attached to them, and so does every copy of the
+/// definition no step left names ([`super::automation_run::copies_let_go`]).
+///
+/// - **What stays** is every round row (`automation_run_task`), which the run's list by task and the
+///   count of rounds stopped in a row read; every task a round passed on (`automation_run_pass`); the
+///   round under way and the one just closed, whose detail the next steps still read (`latest_for`);
+///   and the copy the run reads now. The steps no round holds (`run_task_id` NULL) stay too: no round
+///   file has them.
+/// - **Only a round the run log holds goes.** An engine with no run log lets none go, and nor is a
+///   round let go whose file is not there — one written before the run log was kept, or lost to a crash
+///   after its commit. Those stay, and the next round asks of the one after them.
+/// - **One round a transaction**, so what one commit writes to the change feed stays well within what
+///   it keeps ([`crate::store_engine::CHANGE_FEED_RETAIN`]). A run carrying many rounds lets one go each
+///   time it begins another.
+/// - **A value handed on from a step that goes** keeps its value and loses where it came from: the first
+///   step of a round is handed what the round before produced. A file handed on loses the file too, as
+///   it hangs off the step that made it and goes with it. The run log holds the round it came from, and
+///   the file's bytes.
+/// - **The blobs** of the files that go are left to the store's sweep ([`crate::store::Store::gc_blobs`]):
+///   reclaiming them belongs after the commit, and nothing here outlives it.
+fn let_go_of_a_round(tx: &WriteTx<'_>, run_id: i64, before: &AutomationRunTask, now: Timestamp) -> Result<()> {
+    let Some(place) = tx.run_logs() else { return Ok(()) };
+    let conn = tx.conn();
+    let Some(run) = read::automation_run(conn, run_id)? else { return Ok(()) };
+    let steps = read::automation_run_steps_of(conn, run_id)?;
+    let with_detail: BTreeSet<i64> = steps.iter().filter_map(|s| s.run_task_id).collect();
+    let dir = crate::run_log::dir_of(&place.runs, &run);
+    let Some(round) = read::automation_run_tasks_of(conn, run_id)?
+        .into_iter()
+        .filter(|r| r.seq < before.seq && with_detail.contains(&r.id))
+        .find(|r| dir.join(crate::run_log::round_file_name(r.seq)).exists())
+    else {
+        return Ok(());
+    };
+    let (going, staying): (Vec<_>, Vec<_>) = steps.into_iter().partition(|s| s.run_task_id == Some(round.id));
+    let going: Vec<i64> = going.iter().map(|s| s.id).collect();
+    for step in &going {
+        for value in read::automation_run_value_ids(conn, *step)? {
+            tx.delete_record("automation_run_value", value)?;
+        }
+    }
+    for value in read::automation_run_values_handed_from(conn, &going)? {
+        let mut cut = value.clone();
+        cut.from_run_step_id = None;
+        if cut.kind == AutomationPortKind::File {
+            cut.attachment_id = None;
+        }
+        cut.updated_at = now;
+        crate::ops::emit_update(tx, record::automation_run_value(&value), record::automation_run_value(&cut))?;
+    }
+    for step in &going {
+        crate::ops::sweep_polymorphic(tx, AttachmentTarget::AutomationRunStep, *step)?;
+        tx.delete_record("automation_run_step", *step)?;
+    }
+    let named: BTreeSet<i64> = staying.iter().map(|s| s.run_def_id).collect();
+    for def in super::automation_run::copies_let_go(conn, &run, &named)? {
+        tx.delete_record("automation_run_def", def)?;
+    }
+    Ok(())
 }
 
 /// Write the execution row. `seq` is the move number within the whole run, so a step the run comes back
@@ -1378,6 +1442,192 @@ mod tests {
             defs.sort();
             used.sort();
             assert_eq!(defs, used);
+        });
+    }
+
+    /// [`with_tx`], on an engine whose run log is a real folder of its own, cleared before and after.
+    fn in_a_run_log(name: &str, f: impl FnOnce(&WriteTx<'_>)) {
+        let base = std::env::temp_dir().join(format!("amenbo-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let mut engine = crate::ops::test_support::new_engine();
+        engine.keep_run_logs_in(crate::run_log::Place { runs: base.join("runs"), blobs: base.join("blobs") });
+        {
+            let tx = engine.write().expect("write transaction");
+            f(&tx);
+        }
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Write the rounds gathered so far to the run log, as the commit would.
+    fn written(tx: &WriteTx<'_>) {
+        if let Some(place) = tx.run_logs().cloned() {
+            for round in tx.queued_rounds() {
+                crate::run_log::write(&place, &round);
+            }
+        }
+    }
+
+    /// One round of the picture: the first spot, which opens it and hands a note on, then the second.
+    fn a_round(tx: &WriteTx<'_>, p: &Picture, run: &AutomationRun) -> (AutomationRunStep, AutomationRunStep) {
+        let first = ready(open(tx, run.id, def_of(tx, run, &p.first).id, None).expect("open the first"));
+        reported(tx, &first.run_step, "found", "Alice looked", "the note");
+        let second = ready(open(tx, run.id, def_of(tx, run, &p.second).id, None).expect("open the second"));
+        (first.run_step, second.run_step)
+    }
+
+    /// The step executions of a run still in the store.
+    fn steps_left(tx: &WriteTx<'_>, run: &AutomationRun) -> Vec<i64> {
+        read::automation_run_steps_of(tx.conn(), run.id).expect("steps").into_iter().map(|s| s.id).collect()
+    }
+
+    /// **The third round lets the first one's detail go** — its step executions, their values and the
+    /// files attached to them — once the run log holds it. Every round row stays, as does the task a
+    /// round passed on, the detail of the second and third, and the copy the run reads.
+    #[test]
+    fn the_third_round_lets_the_first_ones_detail_go() {
+        in_a_run_log("let-go", |tx| {
+            let p = picture(tx, false, true);
+            let run = a_run(tx, &p.automation);
+            let defs = read::automation_run_def_ids(tx.conn(), run.id).expect("defs");
+            let (a1, b1) = a_round(tx, &p, &run);
+            written(tx);
+            crate::ops::attachment::add_url(
+                tx,
+                AttachmentTarget::AutomationRunStep,
+                b1.id,
+                "https://example.com/round-1",
+                None,
+                ActorKind::Ai,
+            )
+            .expect("a file on the first round");
+            let round_1 = read::automation_run_task_last(tx.conn(), run.id).expect("read").expect("round 1");
+            let now = Timestamp::now();
+            let pass = crate::model::AutomationRunPass {
+                id: read::next_id(tx.conn(), "automation_run_pass").expect("id"),
+                run_id: run.id,
+                run_task_id: round_1.id,
+                to_role_id: None,
+                task_id: None,
+                placement_id: Some(p.first.id),
+                created_at: now,
+                updated_at: now,
+            };
+            emit_create(tx, record::automation_run_pass(&pass)).expect("a task passed on");
+
+            let (a2, b2) = a_round(tx, &p, &run);
+            written(tx);
+            assert_eq!(steps_left(tx, &run), vec![a1.id, b1.id, a2.id, b2.id], "the round just closed stays");
+            // The first step of a round is handed what the round before produced.
+            let from_before = AutomationRunValue {
+                id: read::next_id(tx.conn(), "automation_run_value").expect("id"),
+                run_step_id: a2.id,
+                direction: AutomationPortDirection::In,
+                exit_id: None,
+                port_id: 1,
+                kind: AutomationPortKind::Value,
+                value: Some("Bob's note".into()),
+                attachment_id: None,
+                task_id: None,
+                from_run_step_id: Some(a1.id),
+                created_at: now,
+                updated_at: now,
+            };
+            emit_create(tx, record::automation_run_value(&from_before)).expect("handed across rounds");
+
+            let (a3, b3) = a_round(tx, &p, &run);
+            written(tx);
+
+            assert_eq!(steps_left(tx, &run), vec![a2.id, b2.id, a3.id, b3.id]);
+            assert!(read::automation_run_values_of(tx.conn(), a1.id).expect("values").is_empty());
+            assert!(read::automation_run_values_of(tx.conn(), b1.id).expect("values").is_empty());
+            assert!(read::attachments_for_target(tx.conn(), AttachmentTarget::AutomationRunStep, b1.id)
+                .expect("files")
+                .is_empty());
+            let seqs: Vec<i64> =
+                read::automation_run_tasks_of(tx.conn(), run.id).expect("rounds").iter().map(|r| r.seq).collect();
+            assert_eq!(seqs, vec![1, 2, 3], "every round row stays");
+            assert_eq!(read::automation_run_pass_ids(tx.conn(), run.id).expect("passes"), vec![pass.id]);
+            assert_eq!(read::automation_run_def_ids(tx.conn(), run.id).expect("defs"), defs, "the copy it reads stays");
+            assert_eq!(read::automation_run_values_of(tx.conn(), b2.id).expect("values").len(), 1);
+            let kept = read::automation_run_values_of(tx.conn(), a2.id).expect("values");
+            let kept = kept.iter().find(|v| v.id == from_before.id).expect("the value handed across stays");
+            assert_eq!(kept.value.as_deref(), Some("Bob's note"));
+            assert_eq!(kept.from_run_step_id, None, "where it came from is gone");
+            {
+                let mut check = tx.conn().prepare("PRAGMA foreign_key_check(automation_run_value)").expect("check the references");
+                let broken = check.query_map([], |_| Ok(())).expect("check").count();
+                assert_eq!(broken, 0, "no row is left naming one that went");
+            }
+
+            let (a4, b4) = a_round(tx, &p, &run);
+            assert_eq!(steps_left(tx, &run), vec![a3.id, b3.id, a4.id, b4.id], "one round goes each time");
+        });
+    }
+
+    /// **A round the run log does not hold stays** — on an engine with no run log, and where its file
+    /// is not there.
+    #[test]
+    fn a_round_the_run_log_does_not_hold_stays() {
+        fn three_rounds(tx: &WriteTx<'_>) {
+            let p = picture(tx, false, true);
+            let run = a_run(tx, &p.automation);
+            let (a1, _) = a_round(tx, &p, &run);
+            a_round(tx, &p, &run);
+            a_round(tx, &p, &run);
+            assert!(steps_left(tx, &run).contains(&a1.id), "the first round's detail stays");
+        }
+        with_tx(three_rounds);
+        crate::ops::test_support::with_tx_keeping_runs(three_rounds);
+    }
+
+    /// **A copy goes whole, and only once no step left names any row of it** — and never the one the
+    /// run reads now, so the run reads the same copy after as before.
+    #[test]
+    fn an_old_copy_goes_whole_once_no_step_names_it() {
+        with_tx(|tx| {
+            let p = picture(tx, false, true);
+            let run = a_run(tx, &p.automation);
+            assert!(run.role_id.is_some(), "the run sits in its role's seats");
+            let first = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
+            assert_eq!(first.len(), 2);
+            let copied = || -> Vec<i64> {
+                first
+                    .iter()
+                    .map(|def| {
+                        let mut again = def.clone();
+                        again.id = read::next_id(tx.conn(), "automation_run_def").expect("id");
+                        emit_create(tx, record::automation_run_def(&again)).expect("copy down again");
+                        again.id
+                    })
+                    .collect()
+            };
+            let second = copied();
+            let third = copied();
+            let first: Vec<i64> = first.iter().map(|d| d.id).collect();
+            let let_go = |named: Vec<i64>| {
+                let run = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
+                crate::ops::automation_run::copies_let_go(tx.conn(), &run, &named.into_iter().collect())
+                    .expect("copies")
+            };
+            let reads_now = || -> Vec<i64> {
+                crate::ops::automation_run::current_defs(tx.conn(), run.id).expect("now").iter().map(|d| d.id).collect()
+            };
+
+            assert_eq!(let_go(vec![]), [first.clone(), second.clone()].concat());
+            assert_eq!(let_go(vec![second[1]]), first, "a copy one of whose rows is named stays whole");
+            for def in let_go(vec![second[1]]) {
+                tx.delete_record("automation_run_def", def).expect("let go");
+            }
+            assert_eq!(reads_now(), third);
+            for def in let_go(vec![]) {
+                tx.delete_record("automation_run_def", def).expect("let go");
+            }
+            assert_eq!(reads_now(), third, "the copy it reads now is left alone");
+            assert!(let_go(vec![]).is_empty());
+
+            copied();
+            tx.conn().execute("UPDATE automation_run SET role_id = NULL WHERE id = ?1", [run.id]).expect("no role");
+            assert!(let_go(vec![]).is_empty(), "a run in the seats of no role reads all of its copies");
         });
     }
 

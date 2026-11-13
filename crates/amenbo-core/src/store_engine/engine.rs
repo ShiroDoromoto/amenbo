@@ -170,7 +170,8 @@ pub struct StoreEngine {
     /// Where the rounds a transaction gathers ([`super::WriteTx::record_round`]) are written once it
     /// commits — the store's `runs/` folder, named by the `Store` that opened this engine
     /// ([`keep_run_logs_in`](Self::keep_run_logs_in)). `None` on an engine opened on its own, which
-    /// gathers no round: the run log is a copy, and nothing is lost by not writing one.
+    /// gathers no round and lets no round's detail go from the store
+    /// (`ops::automation_step`'s `let_go_of_a_round`), so nothing is lost by not writing one.
     run_logs: Option<crate::run_log::Place>,
 }
 

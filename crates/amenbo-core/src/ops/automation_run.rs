@@ -5279,6 +5279,38 @@ pub(crate) fn current_defs(conn: &Connection, run_id: i64) -> Result<Vec<Automat
     Ok(defs)
 }
 
+/// **The copies a run has stopped reading and no step execution of it names** — the row ids of each
+/// whole copy before the one it reads now ([`current_defs`]) that none of `named` points into. Each
+/// copy runs from where the round of its seat's role starts to the row before the next one does, and
+/// rows before the first such row go with the first copy.
+///
+/// **A copy goes whole or not at all.** Were its first row to go with the rows after it kept, the run
+/// would be left with fewer such rows than copies, and [`current_defs`] would read a copy it has moved
+/// on from. A run carrying a single such row, and one in the seats of no role, has nothing to let go:
+/// it reads all of its copies.
+pub(crate) fn copies_let_go(conn: &Connection, run: &AutomationRun, named: &BTreeSet<i64>) -> Result<Vec<i64>> {
+    let Some(role) = run.role_id else { return Ok(Vec::new()) };
+    let defs = read::automation_run_defs_of(conn, run.id)?;
+    let starts = |def: &AutomationRunDef| def.role_ids().contains(&role);
+    if defs.iter().filter(|def| starts(def)).count() < 2 {
+        return Ok(Vec::new());
+    }
+    let Some(now) = defs.iter().rposition(starts) else { return Ok(Vec::new()) };
+    let mut copies: Vec<Vec<&AutomationRunDef>> = Vec::new();
+    for def in &defs[..now] {
+        match copies.last_mut() {
+            Some(copy) if !starts(def) || !copy.iter().any(|d| starts(d)) => copy.push(def),
+            _ => copies.push(vec![def]),
+        }
+    }
+    Ok(copies
+        .into_iter()
+        .filter(|copy| copy.iter().all(|def| !named.contains(&def.id)))
+        .flatten()
+        .map(|def| def.id)
+        .collect())
+}
+
 /// The copy a run took of one step of one placement, the last time it was copied down.
 fn copy_of(
     conn: &Connection,

@@ -20,7 +20,8 @@
 //! - **Written after the commit** succeeds, as the activity ledger is — gathered inside the transaction
 //!   ([`crate::store_engine::WriteTx::record_round`]) and written by
 //!   [`crate::store_engine::WriteTx::commit`]. A crash before the commit leaves no file; a crash after it
-//!   loses the round. The round is not lost from the store by that: what is here is a copy.
+//!   loses the round. The round is not lost from the store by that: the store lets a round's detail go
+//!   only once its file is here (`ops::automation_step`'s `let_go_of_a_round`).
 //! - **When a round is over** is when the next one begins or the run ends — not when the round row is
 //!   given its `ended_at`. A step that hands its task back closes the round there, and the steps after it
 //!   still belong to it.

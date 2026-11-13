@@ -30,6 +30,8 @@
 //!   file to interleave in. A definition file and a copied blob are written the same way, and one that is
 //!   already there is left alone: neither changes once written.
 //!
+//! - **Read back with the store** ([`detail`]): a finished round from its file, the round under way and
+//!   a round no file holds from the store, joined into one account of the run.
 //! - **Removed with its run.** Whoever deletes a run row says so ([`crate::store_engine::WriteTx::forget_run`]),
 //!   and the commit removes the run's folder after it succeeds ([`forget`]) — the run of a deleted
 //!   automation or project, and an old run let go once its role holds more than it keeps
@@ -44,7 +46,9 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 
-use crate::model::{Attachment, AttachmentTarget, AutomationRun, AutomationRunDef, AutomationRunStep, AutomationRunTask};
+use crate::model::{
+    Attachment, AttachmentTarget, AutomationRun, AutomationRunDef, AutomationRunStep, AutomationRunTask, AutomationRunValue,
+};
 use crate::store_engine::read;
 
 /// Name of the folder that holds every run's folder, kept in the base directory.
@@ -176,6 +180,120 @@ pub fn forget(place: &Place, run: &AutomationRun) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => tracing::warn!(run = run.id, error = %e, "run log: the deleted run's folder not removed"),
     }
+}
+
+/// **One run read back whole** — the run log's rounds and the store's, joined ([`detail`]).
+#[derive(Clone, Debug, Default)]
+pub struct Detail {
+    /// Every copy of the steps the run took, the run log's and the store's, by id: the order they were
+    /// taken in.
+    pub defs: Vec<AutomationRunDef>,
+    /// Every round of the run, from the store, which keeps each round row.
+    pub rounds: Vec<AutomationRunTask>,
+    /// Every step execution, each with its values, in the order they happened.
+    pub steps: Vec<StepDetail>,
+}
+
+/// One step execution, with the values that went in and out of it.
+#[derive(Clone, Debug)]
+pub struct StepDetail {
+    pub step: AutomationRunStep,
+    pub values: Vec<AutomationRunValue>,
+}
+
+/// **Read one run back whole**: each round whose file the run log holds from that file, and the rest
+/// from the store — the round under way, a round written before the run log was kept or lost to a
+/// crash, and the steps no round holds. A round in both is read from its file once, as the store may
+/// already be letting its detail go. `None` where the store has no such run: a folder no run names is
+/// not read.
+///
+/// `runs` is `<base>/runs`, or `None` for a store that keeps no run log, which reads the store alone.
+pub fn detail(conn: &rusqlite::Connection, runs: Option<&Path>, run_id: i64) -> crate::store_engine::Result<Option<Detail>> {
+    let Some(run) = read::automation_run(conn, run_id)? else { return Ok(None) };
+    let rounds = read::automation_run_tasks_of(conn, run_id)?;
+    let mut defs: std::collections::BTreeMap<i64, AutomationRunDef> =
+        read::automation_run_defs_of(conn, run_id)?.into_iter().map(|d| (d.id, d)).collect();
+    let mut steps = Vec::new();
+    let mut from_file = std::collections::BTreeSet::new();
+    if let Some(runs) = runs {
+        let dir = dir_of(runs, &run);
+        for round in &rounds {
+            if let Some(read) = read_round(&dir, round.seq) {
+                from_file.insert(round.id);
+                steps.extend(read);
+            }
+        }
+        if !from_file.is_empty() {
+            for def in read_defs(&dir) {
+                defs.entry(def.id).or_insert(def);
+            }
+        }
+    }
+    for step in read::automation_run_steps_of(conn, run_id)? {
+        if step.run_task_id.is_some_and(|id| from_file.contains(&id)) {
+            continue;
+        }
+        let values = read::automation_run_values_of(conn, step.id)?;
+        steps.push(StepDetail { step, values });
+    }
+    steps.sort_by_key(|s| (s.step.seq, s.step.id));
+    Ok(Some(Detail { defs: defs.into_values().collect(), rounds, steps }))
+}
+
+/// The step executions of one round, read from its file in the run's folder `dir`. `None` where there
+/// is no file, or it cannot be read whole — a `warn`, and the caller reads the store instead.
+fn read_round(dir: &Path, seq: i64) -> Option<Vec<StepDetail>> {
+    let path = dir.join(round_file_name(seq));
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(e) => {
+            tracing::warn!(path = %path.display(), error = %e, "run log: round not read");
+            return None;
+        }
+    };
+    let parsed: Result<Vec<Option<StepDetail>>, serde_json::Error> = text
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|line| {
+            let line: Value = serde_json::from_str(line)?;
+            if line["kind"] != "step" {
+                return Ok(None);
+            }
+            let step = serde_json::from_value(line["step"].clone())?;
+            let values = serde_json::from_value(line["values"].clone())?;
+            Ok(Some(StepDetail { step, values }))
+        })
+        .collect();
+    match parsed {
+        Ok(steps) => Some(steps.into_iter().flatten().collect()),
+        Err(e) => {
+            tracing::warn!(path = %path.display(), error = %e, "run log: round not read");
+            None
+        }
+    }
+}
+
+/// The copies of the steps written in the run's folder `dir`. One that cannot be read is a `warn` and
+/// is left out.
+fn read_defs(dir: &Path) -> Vec<AutomationRunDef> {
+    let Ok(entries) = std::fs::read_dir(dir.join("defs")) else { return Vec::new() };
+    let mut defs = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_none_or(|e| e != "json") {
+            continue;
+        }
+        let read = std::fs::read(&path)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).map_err(|e| e.to_string()))
+            .and_then(|file| serde_json::from_value::<AutomationRunDef>(file["def"].clone()).map_err(|e| e.to_string()));
+        match read {
+            Ok(def) => defs.push(def),
+            Err(e) => tracing::warn!(path = %path.display(), error = %e, "run log: step definition not read"),
+        }
+    }
+    defs
 }
 
 /// Write `path` unless it is already there — for what never changes once written.
@@ -360,6 +478,30 @@ mod tests {
 
         assert!(!dir_of(&place.runs, &old).exists());
         assert!(dir_of(&place.runs, &new).join(round_file_name(1)).exists());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A round written is read back as it was written: its steps with their values, and the copies of
+    /// the steps beside it. A round with no file, or one that does not read whole, is `None`.
+    #[test]
+    fn a_written_round_reads_back() {
+        let (dir, place) = place("read");
+        let run = run(11, "2026-11-13T10:00:00Z");
+        let long = "さくら".repeat(10_000);
+        write(&place, &round(&run, 1, &long));
+        let folder = dir_of(&place.runs, &run);
+
+        let steps = read_round(&folder, 1).expect("the round reads back");
+        assert_eq!(steps.len(), 1);
+        assert_eq!(steps[0].step.report, long);
+        assert!(steps[0].values.is_empty());
+        let defs = read_defs(&folder);
+        assert_eq!(defs.len(), 1);
+        assert_eq!(defs[0].name, "Alice");
+
+        assert!(read_round(&folder, 2).is_none(), "no file, nothing read");
+        std::fs::write(folder.join(round_file_name(3)), b"{\"v\":1,\"kind\":\"step\",\"step\":{}}\n").unwrap();
+        assert!(read_round(&folder, 3).is_none(), "a round that does not read whole is not read");
         std::fs::remove_dir_all(&dir).ok();
     }
 

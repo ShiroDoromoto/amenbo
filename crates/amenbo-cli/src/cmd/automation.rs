@@ -23,7 +23,7 @@ use amenbo_core::model::{
     AutomationPortOwner, DEFAULT_MAX_TIMES,
 };
 use amenbo_core::model::{
-    AutomationRun, AutomationRunDef, AutomationRunStatus, AutomationRunStep, AutomationRunTask, AutomationRunValue,
+    AutomationRun, AutomationRunDef, AutomationRunStatus, AutomationRunStep, AutomationRunValue,
 };
 use amenbo_core::model::AttachmentTarget;
 use amenbo_core::ops::automation_stop::Ending;
@@ -35,6 +35,7 @@ use amenbo_core::ops::automation_run::{
     Carrier, ChosenAt, ForRoom, HandedAtLaunch, LaunchLimit, LaunchRoleState, Launcher, ReadsFrom, RoleHeadcount, Started,
 };
 use amenbo_core::ops::automation_stop::{Paused, Resumed};
+use amenbo_core::run_log::{Detail as RunDetail, StepDetail};
 use amenbo_core::ops::automation_view::{
     ActionView, AutomationView, PlacementView, SavedVersion, Showing, StepView,
 };
@@ -1263,35 +1264,36 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 .ok_or_else(|| {
                     CliError::from(amenbo_core::Error::not_found(format!("run '{id}' not found")))
                 })?;
-            let defs = store.automation_run_defs(id).map_err(CliError::from)?;
-            let stretches = store.automation_run_tasks(id).map_err(CliError::from)?;
-            let moves = store.automation_run_steps(id).map_err(CliError::from)?;
+            // A finished round is read from the run log, the round under way from the store, joined into
+            // one account: the store lets an old round's detail go once the run log holds it.
+            let detail = store.automation_run_detail(id).map_err(CliError::from)?.unwrap_or_default();
             let room = store.automation_run_waits_for_room(id).map_err(CliError::from)?;
             if flags.json {
-                let mut walked = Vec::with_capacity(moves.len());
-                for m in &moves {
-                    walked.push(json!({
-                        "step": serde_json::to_value(m).unwrap(),
-                        "name": named_step(&defs, m),
-                        "automation_version": version_of(&defs, m),
-                        "values": serde_json::to_value(
-                            store.automation_run_values(m.id).map_err(CliError::from)?,
-                        )
-                        .unwrap(),
-                    }));
-                }
+                let defs = &detail.defs;
+                let walked: Vec<Value> = detail
+                    .steps
+                    .iter()
+                    .map(|s| {
+                        json!({
+                            "step": serde_json::to_value(&s.step).unwrap(),
+                            "name": named_step(defs, &s.step),
+                            "automation_version": version_of(defs, &s.step),
+                            "values": serde_json::to_value(&s.values).unwrap(),
+                        })
+                    })
+                    .collect();
                 print_json(&json!({
                     "run": serde_json::to_value(&run).unwrap(),
                     "waits_for_room": serde_json::to_value(room).unwrap(),
-                    "versions": taken_up(&defs)
+                    "versions": taken_up(defs)
                         .iter()
                         .map(|(version, at)| json!({ "version": version, "taken_at": at.to_rfc3339_z() }))
                         .collect::<Vec<_>>(),
-                    "tasks": serde_json::to_value(&stretches).unwrap(),
+                    "tasks": serde_json::to_value(&detail.rounds).unwrap(),
                     "steps": walked,
                 }));
             } else {
-                render_run(store, flags, &run, room, &defs, &stretches, &moves)?;
+                render_run(flags, &run, room, &detail);
             }
         }
 
@@ -2454,15 +2456,9 @@ fn one_edge(
 ///
 /// No run waits for a task: one that would ends, and its seat is filled once a task turns up
 /// (`AMB-D-1126`).
-fn render_run(
-    store: &mut Store,
-    flags: &Flags,
-    run: &AutomationRun,
-    room: Option<ForRoom>,
-    defs: &[AutomationRunDef],
-    stretches: &[AutomationRunTask],
-    moves: &[AutomationRunStep],
-) -> Result<(), CliError> {
+fn render_run(flags: &Flags, run: &AutomationRun, room: Option<ForRoom>, detail: &RunDetail) {
+    let defs = &detail.defs;
+    let moves: Vec<AutomationRunStep> = detail.steps.iter().map(|s| s.step.clone()).collect();
     let launch = run.launch_id.map(|l| format!("  launch {l}")).unwrap_or_default();
     human(flags, format!("Run {}  automation {}{launch}", run.id, run.automation_id));
     let stopped = run
@@ -2508,8 +2504,8 @@ fn render_run(
             ),
         );
     }
-    let switched = switches(defs, moves);
-    for stretch in stretches {
+    let switched = switches(defs, &moves);
+    for stretch in &detail.rounds {
         let about = match stretch.task_id {
             Some(task_id) => task_label(task_id),
             None => "no task".to_string(),
@@ -2520,33 +2516,27 @@ fn render_run(
         if let Some(filed) = stretch.incident_task_id {
             human(flags, format!("  failure filed as {}", task_label(filed)));
         }
-        for m in moves.iter().filter(|m| m.run_task_id == Some(stretch.id)) {
-            render_move(store, flags, defs, &switched, m)?;
+        for m in detail.steps.iter().filter(|m| m.step.run_task_id == Some(stretch.id)) {
+            render_move(flags, defs, &switched, m);
         }
     }
     // A step that went looking for a task and found none belongs to no stretch, and is the whole of
     // what the run did — so it is written out rather than left off the account.
-    let loose: Vec<&AutomationRunStep> = moves.iter().filter(|m| m.run_task_id.is_none()).collect();
+    let loose: Vec<&StepDetail> = detail.steps.iter().filter(|m| m.step.run_task_id.is_none()).collect();
     if !loose.is_empty() {
         human(flags, "\nno task");
         for m in loose {
-            render_move(store, flags, defs, &switched, m)?;
+            render_move(flags, defs, &switched, m);
         }
     }
-    Ok(())
 }
 
 /// One step execution: which step it was, how it left, how long it stood, what it carried, and the
 /// whole of what it said. The report is written out in full — a run read back months later is read for
 /// exactly this, and a snippet would send the reader somewhere else to finish the sentence. A script
 /// step's last output follows, as much of it as was kept.
-fn render_move(
-    store: &mut Store,
-    flags: &Flags,
-    defs: &[AutomationRunDef],
-    switched: &[(i64, Option<i64>, Option<i64>)],
-    m: &AutomationRunStep,
-) -> Result<(), CliError> {
+fn render_move(flags: &Flags, defs: &[AutomationRunDef], switched: &[(i64, Option<i64>, Option<i64>)], one: &StepDetail) {
+    let m = &one.step;
     if let Some((_, from, to)) = switched.iter().find(|(id, _, _)| *id == m.id) {
         human(flags, format!("  ({} → {} from here)", version_label(*from), version_label(*to)));
     }
@@ -2562,8 +2552,8 @@ fn render_move(
         ),
     );
     let def = defs.iter().find(|d| d.id == m.run_def_id);
-    for v in store.automation_run_values(m.id).map_err(CliError::from)? {
-        human(flags, format!("      {}", one_run_value(def, &v)));
+    for v in &one.values {
+        human(flags, format!("      {}", one_run_value(def, v)));
     }
     for line in m.report.lines().filter(|l| !l.trim().is_empty()) {
         human(flags, format!("      | {line}"));
@@ -2575,7 +2565,6 @@ fn render_move(
     for line in tail_lines(&m.output_tail) {
         human(flags, line);
     }
-    Ok(())
 }
 
 /// The end of what a script step printed to stdout and stderr (`AMB-D-1016`), or the screen an agent's

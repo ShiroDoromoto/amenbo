@@ -574,6 +574,11 @@ impl Store {
         crate::viewer::carried::fold(&self.engine)
     }
 
+    /// Take off that queue every record of a table the Viewer is not sent.
+    pub fn drop_viewer_withheld(&self) -> Result<()> {
+        crate::viewer::carried::drop_withheld(&self.engine)
+    }
+
     /// The first `how_many` records waiting, oldest first — what one turn takes.
     pub fn viewer_front(
         &self,

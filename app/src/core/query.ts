@@ -150,6 +150,9 @@ export const SCOPE_WATCHERS: Readonly<Record<string, readonly string[]>> = {
   // putting it there would double the feed for a number a person glances at rather than watches.
   "viewer-state": ["viewer"],
   "viewer-pairing": ["viewer"],
+  // Whether to ask for setup again. A setup from the CLI moves it the same way; the build a send brings
+  // back does not reach the feed, so the band also asks again on a timer (`recheckSetupAgain`).
+  "viewer-setup-again": ["viewer"],
   // The device's shelf of notification targets, and one project's notification pane. Both are moved
   // from the CLI (`notify target-add`, `notify on`, `notify use` …), which the feed folds here.
   "notify-targets": ["notifyTargets"],

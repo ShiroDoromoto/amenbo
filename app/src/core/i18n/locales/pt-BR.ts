@@ -122,6 +122,7 @@ export const ptBR: Translation = {
     "viewer.recreate": "Criar o servidor de novo",
     "viewer.buildCurrent": "O servidor está na build {n}, a mesma que este Amenbo carrega.",
     "viewer.buildBehind": "O servidor está na build {have}. Este Amenbo carrega a {want} — crie de novo para subir.",
+    "viewer.setupAgain": "Configure o Viewer de novo para atualizar o servidor.",
     "viewer.buildUnknown": "Nada foi enviado ao servidor ainda, então não se sabe em que build ele está.",
     "viewer.createNote": "Isto cria um Worker e um banco de dados na sua própria conta da Cloudflare. O Amenbo não hospeda nada disso.",
     "viewer.recreateNote": "Isto cria por cima do servidor que já está na sua conta. As chaves daqui são mantidas, então todo celular pareado continua lendo.",

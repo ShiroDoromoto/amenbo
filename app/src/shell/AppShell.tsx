@@ -14,6 +14,7 @@ import { AutomationsScreen, type AutoPlace, type AutoTab } from "../screens/Auto
 import { UpdateBanner, UpdateCheckFeedback } from "../components/UpdateBanner";
 import { HealthBanner } from "../components/HealthBanner";
 import { ManagedBlockBanner } from "../components/ManagedBlockBanner";
+import { SetupAgainBanner } from "../components/SetupAgainBanner";
 import { OrphanBindingBanner } from "../components/OrphanBindingBanner";
 import { HandoverBanner } from "../components/HandoverBanner";
 import { HookSetupBanner } from "../components/HookSetupBanner";
@@ -761,6 +762,7 @@ export function AppShell() {
         <UpdateCheckFeedback state={updateCheck} onDismiss={() => setUpdateCheck(null)} />
         <HealthBanner />
         <ManagedBlockBanner />
+        <SetupAgainBanner />
         <OrphanBindingBanner />
         {/* Ahead of the hooks warning: this one explains something that has already happened to the
             app the reader just opened, and reading it first is what makes the missing plugin screens

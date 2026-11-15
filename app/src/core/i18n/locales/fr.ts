@@ -121,6 +121,7 @@ export const fr: Translation = {
     "viewer.recreate": "Créer le serveur à nouveau",
     "viewer.buildCurrent": "Le serveur tourne sur la version {n}, celle que porte cet Amenbo.",
     "viewer.buildBehind": "Le serveur tourne sur la version {have}. Cet Amenbo porte la {want} — recréez-le pour le mettre à niveau.",
+    "viewer.setupAgain": "Reconfigurez le Viewer pour mettre à jour son serveur.",
     "viewer.buildUnknown": "Rien n'a encore été envoyé au serveur, donc sa version n'est pas connue.",
     "viewer.createNote": "Cela crée un Worker et une base de données dans votre propre compte Cloudflare. Amenbo n'en héberge rien.",
     "viewer.recreateNote": "Cela se crée par-dessus le serveur déjà présent dans votre compte. Les clés d'ici sont conservées, donc tout téléphone appairé continue de lire.",

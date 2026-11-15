@@ -135,6 +135,7 @@ const ui = {
   "viewer.recreate": "Create the server again",
   "viewer.buildCurrent": "The server is running build {n}, which is the one this Amenbo carries.",
   "viewer.buildBehind": "The server is running build {have}. This Amenbo carries build {want} — create it again to move it up.",
+  "viewer.setupAgain": "Set up again to update the Viewer's server.",
   "viewer.buildUnknown": "Nothing has been sent to the server yet, so which build it is running is not known.",
   "viewer.createNote": "This builds a Worker and a database in your own Cloudflare account. Amenbo hosts none of it.",
   "viewer.recreateNote": "This builds over the server already in your account. The keys here are kept, so every phone paired to it keeps reading.",

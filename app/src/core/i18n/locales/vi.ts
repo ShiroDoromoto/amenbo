@@ -119,6 +119,7 @@ export const vi: Translation = {
     "viewer.recreate": "Tạo lại máy chủ",
     "viewer.buildCurrent": "Máy chủ đang chạy bản dựng {n}, đúng bản mà Amenbo này mang theo.",
     "viewer.buildBehind": "Máy chủ đang chạy bản dựng {have}. Amenbo này mang bản {want} — tạo lại để nâng lên.",
+    "viewer.setupAgain": "Hãy thiết lập lại Viewer để cập nhật máy chủ.",
     "viewer.buildUnknown": "Chưa gửi gì tới máy chủ nên chưa biết nó chạy bản dựng nào.",
     "viewer.createNote": "Việc này tạo một Worker và một cơ sở dữ liệu trong tài khoản Cloudflare của chính bạn. Amenbo không lưu trữ bất kỳ phần nào.",
     "viewer.recreateNote": "Việc này tạo đè lên máy chủ đã có trong tài khoản của bạn. Khóa ở đây được giữ lại, nên mọi điện thoại đã ghép đôi vẫn đọc được.",

@@ -117,6 +117,7 @@ export const nl: Translation = {
     "viewer.recreate": "De server opnieuw maken",
     "viewer.buildCurrent": "De server draait build {n}, dezelfde die deze Amenbo meedraagt.",
     "viewer.buildBehind": "De server draait build {have}. Deze Amenbo draagt build {want} — maak hem opnieuw om hem bij te werken.",
+    "viewer.setupAgain": "Stel de Viewer opnieuw in om de server bij te werken.",
     "viewer.buildUnknown": "Er is nog niets naar de server verzonden, dus welke build hij draait is onbekend.",
     "viewer.createNote": "Dit bouwt een Worker en een database in je eigen Cloudflare-account. Amenbo host er niets van.",
     "viewer.recreateNote": "Dit bouwt over de server die al in je account staat. De sleutels hier blijven, dus elke gekoppelde telefoon blijft lezen.",

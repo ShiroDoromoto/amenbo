@@ -117,6 +117,7 @@ export const tr: Translation = {
     "viewer.recreate": "Sunucuyu yeniden oluştur",
     "viewer.buildCurrent": "Sunucu {n} numaralı yapıyı çalıştırıyor; bu Amenbo'nun taşıdığı yapı da o.",
     "viewer.buildBehind": "Sunucu {have} numaralı yapıyı çalıştırıyor. Bu Amenbo {want} numaralı yapıyı taşıyor — yükseltmek için yeniden oluşturun.",
+    "viewer.setupAgain": "Sunucusunu güncellemek için Viewer'ı yeniden kurun.",
     "viewer.buildUnknown": "Sunucuya henüz hiçbir şey gönderilmedi, bu yüzden hangi yapıyı çalıştırdığı bilinmiyor.",
     "viewer.createNote": "Bu, kendi Cloudflare hesabınızda bir Worker ve bir veritabanı kurar. Amenbo bunların hiçbirini barındırmaz.",
     "viewer.recreateNote": "Bu, hesabınızda zaten duran sunucunun üzerine kurar. Buradaki anahtarlar korunur, eşleşmiş her telefon okumayı sürdürür.",

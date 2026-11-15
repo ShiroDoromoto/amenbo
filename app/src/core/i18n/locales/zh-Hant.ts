@@ -117,6 +117,7 @@ export const zhHant: Translation = {
     "viewer.recreate": "重新建立伺服器",
     "viewer.buildCurrent": "伺服器執行的是版本 {n}，與這個 Amenbo 攜帶的一致。",
     "viewer.buildBehind": "伺服器執行的是版本 {have}。這個 Amenbo 攜帶的是 {want}——重新建立即可升上去。",
+    "viewer.setupAgain": "請重新設定 Viewer，以更新它的伺服器。",
     "viewer.buildUnknown": "還沒有向伺服器傳送過任何內容，因此不知道它執行的是哪個版本。",
     "viewer.createNote": "這會在你自己的 Cloudflare 帳號裡建立一個 Worker 和一個資料庫。Amenbo 不代管其中任何部分。",
     "viewer.recreateNote": "這會覆蓋帳號裡已有的伺服器。這裡的金鑰會保留，已配對的手機可以繼續讀取。",

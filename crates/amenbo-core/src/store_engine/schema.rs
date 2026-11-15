@@ -477,6 +477,7 @@ macro_rules! plain_decl {
     (bigint)              => { "BIGINT NOT NULL" };
     (bigint, $c:literal)  => { concat!("BIGINT ", $c, " NOT NULL") };
     (bigint_opt)          => { "BIGINT" };
+    (bigint_opt, $c:literal) => { concat!("BIGINT ", $c) };
 }
 
 /// The same line → the **type** of the column it declares, the way [`column_type!`] does for the
@@ -2134,6 +2135,14 @@ plain_tables! {
     /// turns — what is not copied out in time is not copied out at all. `placed` is the number the server
     /// was last left standing at, `seq` the ordering it answered with, and `version` the backlog version
     /// last sent.
+    ///
+    /// The last three are about **the server's leftover run rows** — `automation_run_*` keys a build
+    /// before the Worker's build 4 placed there, and nothing reads any more. `strays` is whether any are
+    /// there: `NULL` is "not read yet", `0` "none", `1` "some". It is read once per server, which is why
+    /// it lives here: standing a server up throws this row away, and the next server is read anew.
+    /// `strays_read_to` is the last key a reading that stopped part way got to (`NULL` is "from the
+    /// first key"), and `strays_gone_at` is the moment the last of those rows was deleted from the server
+    /// (`NULL` is "not yet"), so deleting a few a day can go on across days and stop once it is done.
     viewer_send {
         id: integer("PRIMARY KEY CHECK (id = 1)"),
         version: bigint,
@@ -2145,6 +2154,9 @@ plain_tables! {
         spent_on: text_opt,
         build: bigint,
         last_placed_at: text_opt,
+        strays: bigint_opt("CHECK(strays IN (0, 1))"),
+        strays_read_to: text_opt,
+        strays_gone_at: text_opt,
     }
 
     /// **What has been read out of the backlog for the Viewer and has not landed yet**, oldest first

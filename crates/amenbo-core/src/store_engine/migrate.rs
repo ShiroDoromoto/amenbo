@@ -1623,6 +1623,58 @@ pub const STEPS: &[Step] = &[
         // and no task is.
         apply: Apply::Custom(bring_the_splits_to_their_axes),
     },
+    Step {
+        to: 148,
+        name: "let go of what an ended run kept of its steps: their executions, values, attachments and the run's copies of the definitions",
+        // **Only a run that has ended** (`completed`, `failed`, `canceled`) is let go of, and only its
+        // detail: the run's own row, its rounds (`automation_run_task`, which the runs of a task and the
+        // failures in a row are read from), what its rounds passed on and the files on the run itself
+        // stay. A run still going keeps everything. A round closed from now on lets go of the same detail
+        // as it closes; this step is for what piled up before that.
+        //
+        // The order is the one a closing round lets go in: the values, then the values elsewhere that
+        // were handed on from a step going here are cut loose (a file's attachment with it), then the
+        // steps' attachments with their words in the index, then the steps, then the copies. A task or a
+        // comment that named a step going here keeps its row and forgets the step. No `updated_at` is
+        // moved, and nothing is written to the change feed: the store is swapped as a whole, and every
+        // reader reads it again.
+        //
+        // **The blobs stay on disk.** An attachment's file may be shared with another's, and a file
+        // removed here would not come back if the migration failed and the store were restored from the
+        // pre-migration backup; the blob collector finds the ones nothing names any more.
+        apply: Apply::Sql(
+            "UPDATE automation_run_value
+                SET from_run_step_id = NULL,
+                    attachment_id = CASE WHEN kind = 'file' THEN NULL ELSE attachment_id END
+              WHERE from_run_step_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
+                                          WHERE r.status IN ('completed', 'failed', 'canceled'))
+                AND run_step_id NOT IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
+                                         WHERE r.status IN ('completed', 'failed', 'canceled'));
+             DELETE FROM automation_run_value
+              WHERE run_step_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
+                                     WHERE r.status IN ('completed', 'failed', 'canceled'));
+             DELETE FROM search_doc
+              WHERE owner_kind = 'attachment'
+                AND owner_id IN (SELECT a.id FROM attachment a
+                                  WHERE a.target_type = 'automation_run_step'
+                                    AND a.target_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
+                                                         WHERE r.status IN ('completed', 'failed', 'canceled')));
+             DELETE FROM attachment
+              WHERE target_type = 'automation_run_step'
+                AND target_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
+                                   WHERE r.status IN ('completed', 'failed', 'canceled'));
+             UPDATE task SET made_in_run_step_id = NULL
+              WHERE made_in_run_step_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
+                                             WHERE r.status IN ('completed', 'failed', 'canceled'));
+             UPDATE task_comment SET automation_run_step_id = NULL
+              WHERE automation_run_step_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
+                                                WHERE r.status IN ('completed', 'failed', 'canceled'));
+             DELETE FROM automation_run_step
+              WHERE run_id IN (SELECT id FROM automation_run WHERE status IN ('completed', 'failed', 'canceled'));
+             DELETE FROM automation_run_def
+              WHERE run_id IN (SELECT id FROM automation_run WHERE status IN ('completed', 'failed', 'canceled'));",
+        ),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -12348,9 +12400,10 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        // Stop at v147: v148 lets go of an ended run's copies, and the one in run 2 is read below.
+        run(&engine, &dir, steps_through(147), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 147);
         let ins = |id: i64| -> Vec<crate::model::RunDefIn> {
             let json: String = engine
                 .conn()
@@ -13614,9 +13667,10 @@ mod tests {
             )
             .unwrap();
 
-        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        // Stop at v147: v148 lets go of an ended run's steps, and this one is in a failed run.
+        run(&engine, &dir, steps_through(147), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        assert_eq!(engine.format_version().unwrap(), 147);
         let code: Option<i64> = engine
             .conn()
             .query_row("SELECT exit_code FROM automation_run_step WHERE id = 1", [], |r| r.get(0))
@@ -16143,6 +16197,121 @@ mod tests {
         };
         assert_eq!(copy(81), vec!["完了".to_string(), "*".to_string()]);
         assert_eq!(copy(82), vec!["完了 (23)".to_string(), "完了".to_string()]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v148: an ended run lets go of its steps, their values and attachments and its copies of the
+    /// definitions, and keeps its own row, its rounds, what they passed on and the files on the run. A run
+    /// still going keeps everything; a value it holds that was handed on from a step going is cut loose,
+    /// and a task or a comment that named such a step keeps its row and forgets the step.
+    #[test]
+    fn an_ended_run_lets_go_of_its_steps_at_v148() {
+        let dir = scratch("ended-run-lets-go");
+        let engine = store_at(&dir, 147);
+        let at = "2026-11-15T00:00:00Z";
+        let hash = "a".repeat(64);
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"BEGIN;
+                 INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES
+                     (1, 1, 1, 'completed'), (2, 1, 1, 'failed'), (3, 1, 1, 'canceled'),
+                     (4, 1, 1, 'running'), (5, 1, 1, 'paused');
+                 INSERT INTO automation_run_task (id, run_id, seq) VALUES (101, 1, 1), (104, 4, 1);
+                 INSERT INTO automation_run_pass (id, run_id, run_task_id) VALUES (1, 1, 101);
+                 INSERT INTO automation_run_def (id, run_id, name) VALUES
+                     (10, 1, '書く'), (20, 2, '書く'), (30, 3, '書く'), (40, 4, '書く'), (50, 5, '書く');
+                 INSERT INTO automation_run_step (id, run_id, run_def_id, run_task_id, seq, status) VALUES
+                     (11, 1, 10, 101, 1, 'done'), (12, 1, 10, NULL, 2, 'done'), (21, 2, 20, NULL, 1, 'failed'),
+                     (31, 3, 30, NULL, 1, 'stopped'), (41, 4, 40, 104, 1, 'done'), (51, 5, 50, NULL, 1, 'done');
+                 INSERT INTO attachment (id, target_type, target_id, kind, blob_hash, filename, created_at, updated_at) VALUES
+                     (201, 'automation_run_step', 11, 'blob', '{hash}', 'step.txt', '{at}', '{at}'),
+                     (202, 'automation_run', 1, 'blob', '{hash}', 'run.txt', '{at}', '{at}'),
+                     (203, 'automation_run_step', 41, 'blob', '{hash}', 'going.txt', '{at}', '{at}'),
+                     (204, 'automation_run_step', 21, 'blob', '{hash}', 'failed.txt', '{at}', '{at}');
+                 INSERT INTO search_doc (id, owner_kind, owner_id, field, norm) VALUES
+                     (1, 'attachment', 201, 'filename', 'step.txt'), (2, 'attachment', 202, 'filename', 'run.txt'),
+                     (3, 'attachment', 203, 'filename', 'going.txt'), (4, 'attachment', 204, 'filename', 'failed.txt');
+                 INSERT INTO automation_run_value (id, run_step_id, direction, port_id, kind, value, attachment_id, from_run_step_id) VALUES
+                     (1, 11, 'out', 1, 'value', 'x', NULL, NULL),
+                     (2, 12, 'in', 1, 'file', NULL, 201, 11),
+                     (4, 41, 'in', 1, 'file', NULL, 201, 11),
+                     (5, 51, 'in', 1, 'value', 'y', NULL, 41);
+                 INSERT INTO task (id, title, project_id, made_in_run_step_id) VALUES (1, 'a', 1, 11), (2, 'b', 1, 41);
+                 INSERT INTO task_comment (id, task_id, text, automation_run_step_id) VALUES (1, 1, 'a', 21), (2, 1, 'b', 51);
+                 COMMIT;"#
+            ))
+            .unwrap();
+        let count = |sql: &str| -> i64 { engine.conn().query_row(sql, [], |r| r.get(0)).unwrap() };
+        let ids = |sql: &str| -> Vec<i64> {
+            let conn = engine.conn();
+            let mut stmt = conn.prepare(sql).unwrap();
+            stmt.query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+        };
+        let feed = count("SELECT COUNT(*) FROM change_feed");
+
+        run(&engine, &dir, steps_through(148), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 148);
+        let steps = ids("SELECT id FROM automation_run_step ORDER BY id");
+        assert_eq!(steps, [41, 51], "only a run still going keeps its steps");
+        assert_eq!(ids("SELECT id FROM automation_run_def ORDER BY id"), [40, 50]);
+        assert_eq!(ids("SELECT id FROM automation_run_value ORDER BY id"), [4, 5]);
+        assert_eq!(ids("SELECT id FROM attachment ORDER BY id"), [202, 203], "the files on the run stay");
+        assert_eq!(ids("SELECT owner_id FROM search_doc ORDER BY owner_id"), [202, 203], "the words go with the files");
+        assert_eq!(ids("SELECT id FROM automation_run ORDER BY id"), [1, 2, 3, 4, 5]);
+        assert_eq!(ids("SELECT id FROM automation_run_task ORDER BY id"), [101, 104], "the rounds stay");
+        assert_eq!(ids("SELECT id FROM automation_run_pass"), [1]);
+
+        let cut: (Option<i64>, Option<i64>) = engine
+            .conn()
+            .query_row("SELECT from_run_step_id, attachment_id FROM automation_run_value WHERE id = 4", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!(cut, (None, None), "a file handed on from a step going is cut loose");
+        assert_eq!(count("SELECT from_run_step_id FROM automation_run_value WHERE id = 5"), 41);
+
+        assert_eq!(count("SELECT COUNT(*) FROM task WHERE id = 1 AND made_in_run_step_id IS NULL"), 1);
+        assert_eq!(count("SELECT made_in_run_step_id FROM task WHERE id = 2"), 41);
+        assert_eq!(count("SELECT COUNT(*) FROM task_comment WHERE id = 1 AND automation_run_step_id IS NULL"), 1);
+        assert_eq!(count("SELECT automation_run_step_id FROM task_comment WHERE id = 2"), 51);
+
+        assert_eq!(count("SELECT COUNT(*) FROM change_feed"), feed, "nothing is written to the change feed");
+        assert_eq!(count("SELECT COUNT(*) FROM pragma_foreign_key_check"), 0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v148: a store with no ended run is raised past it with nothing let go of.
+    #[test]
+    fn a_store_with_no_ended_run_is_raised_past_v148_with_nothing_let_go_of() {
+        let dir = scratch("ended-run-lets-go-none");
+        let engine = store_at(&dir, 147);
+        engine
+            .conn()
+            .execute_batch(
+                "BEGIN;
+                 INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_run (id, automation_id, project_id, status) VALUES (1, 1, 1, 'running');
+                 INSERT INTO automation_run_def (id, run_id, name) VALUES (10, 1, '書く');
+                 INSERT INTO automation_run_step (id, run_id, run_def_id, seq, status) VALUES (11, 1, 10, 1, 'running');
+                 INSERT INTO automation_run_value (id, run_step_id, direction, port_id, kind, value) VALUES (1, 11, 'in', 1, 'value', 'x');
+                 COMMIT;",
+            )
+            .unwrap();
+
+        run(&engine, &dir, steps_through(148), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 148);
+        let count = |table: &str| -> i64 {
+            engine.conn().query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0)).unwrap()
+        };
+        assert_eq!(count("automation_run_def"), 1);
+        assert_eq!(count("automation_run_step"), 1);
+        assert_eq!(count("automation_run_value"), 1);
         std::fs::remove_dir_all(&dir).ok();
     }
 

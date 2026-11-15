@@ -763,6 +763,7 @@ pub fn run() {
       commands::project_notify_select_target,
       commands::project_notify_set_event,
       viewer::viewer_state,
+      viewer::viewer_asks_for_setup_again,
       viewer::viewer_app,
       viewer::viewer_setup,
       viewer::viewer_set_carrying,

@@ -97,8 +97,8 @@ const STRAY_PAGES_PER_TURN: usize = 10;
 
 /// The first build of the Worker that deletes the keys it is handed (`DELETE /records`). A server
 /// answering as an older one has no such door, so a run's leftover rows on it are left alone until it is
-/// set up again.
-const BUILD_THAT_TAKES_KEYS_OUT: i64 = 4;
+/// set up again — which is what [`super::asks_for_setup_again`] says out loud.
+pub(super) const BUILD_THAT_TAKES_KEYS_OUT: i64 = 4;
 
 /// What one call to the Worker gets. A send nobody is waiting on must still end, so a call that is not
 /// going to answer gives the run back rather than holding it.

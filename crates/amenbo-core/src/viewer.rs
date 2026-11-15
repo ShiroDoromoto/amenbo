@@ -780,6 +780,51 @@ mod tests {
         }
     }
 
+    /// A ledger may name a migration this build no longer carries — one a development build applied and
+    /// a later one dropped. Only what this build carries and the ledger lacks goes over, so a database
+    /// that has had all of those is left alone, and the extra name is never read back as something to run.
+    #[test]
+    fn a_ledger_naming_a_migration_no_longer_carried_is_still_up_to_date() {
+        let host = cloudflare_standing_in();
+        host.set_reply(
+            "/client/v4/accounts/acc1/d1/database?name=amenbo-viewer",
+            said(serde_json::json!([{ "uuid": "db1", "name": "amenbo-viewer" }])),
+        );
+        const DROPPED: &str = "0007_the_runs_the_viewer_never_needed.sql";
+        assert!(migrate::MIGRATIONS.iter().all(|(name, _)| *name != DROPPED));
+        let mut had: Vec<serde_json::Value> = migrate::MIGRATIONS
+            .iter()
+            .map(|(name, _)| serde_json::json!({ "name": name }))
+            .collect();
+        had.push(serde_json::json!({ "name": DROPPED }));
+        host.set_replies(
+            "/client/v4/accounts/acc1/d1/database/db1/query",
+            [
+                said(serde_json::json!([{
+                    "success": true,
+                    "results": [{ "name": "records" }, { "name": "d1_migrations" }],
+                }])),
+                said(serde_json::json!([{ "success": true, "results": had }])),
+                said(serde_json::json!([{ "success": true, "results": [] }])),
+            ],
+        );
+        let mut store = store_at("ledger-names-a-dropped-migration");
+        // Named, for the reason the tests above name it.
+        let named = Some(SERVER_NAME);
+        setup_reaching(&mut store, "a-pasted-token", None, named, &reaching(&host)).expect("setup");
+
+        for heard in host.heard() {
+            if heard.target != "/client/v4/accounts/acc1/d1/database/db1/query" {
+                continue;
+            }
+            let body: serde_json::Value =
+                serde_json::from_slice(&heard.body).expect("D1 is asked in JSON");
+            let sql = body["sql"].as_str().expect("the statements");
+            assert!(!sql.contains("INSERT INTO d1_migrations"), "nothing was due, yet: {sql}");
+            assert!(!sql.contains(DROPPED), "the dropped name went over: {sql}");
+        }
+    }
+
     /// Standing a server up forgets what the carrier was holding, so the next turn places the whole
     /// backlog. A memory that says "level" behind a server that has taken nothing would hand it the next
     /// edit and nothing else — and nothing can ask the server which it is, the write token being refused

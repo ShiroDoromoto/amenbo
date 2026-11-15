@@ -27,7 +27,7 @@ const hoisted = vi.hoisted(() => ({
 }));
 
 vi.mock("../core/automations", () => ({
-  // The rows number their step by the automation's picture; none is read here.
+  // A row of the history names no step, so it numbers none either; the line still asks, and none is read here.
   useAutomation: () => null,
   useRunHistory: (filter: string, project: number | null, page: number): AutomationRunHistoryDto => {
     hoisted.asked.push(`${filter} ${page}`);
@@ -56,9 +56,10 @@ function run(id: number): AutomationRunCardDto {
     pausableBeforeNextTask: false,
     waiting: false,
     waitsForRoom: false,
-    stepsDone: 3,
+    stepsDone: 0,
     passes: [],
     reportWithheld: id === 1000 ? hoisted.withheld : [],
+    ...(id === 1000 && hoisted.withheld.length > 0 ? { stepName: "Merge", actionName: "Ship" } : {}),
     acknowledged: false,
     endedAt: "2026-09-23T00:00:00Z",
     ...(id === 1000 && hoisted.seenBy !== null
@@ -67,7 +68,7 @@ function run(id: number): AutomationRunCardDto {
   };
 }
 
-import { formatNumber, listLabel } from "../core/i18n/format";
+import { formatNumber } from "../core/i18n/format";
 import { t, tf } from "../core/i18n";
 import { HistoryTab, pageNumbers } from "./HistoryTab";
 
@@ -141,15 +142,15 @@ describe("the history tab", () => {
     expect(hoisted.asked[hoisted.asked.length - 1]).toBe("failed 0");
   });
 
-  it("marks a run whose step kept its report off a closed task, and names the steps", async () => {
+  // A row here is read off the run's row alone: what an ended run did step by step is in its log, so
+  // a step, its action, and the mark for a report kept off a closed task are not drawn even where
+  // they come.
+  it("names no step and marks no report kept off a task, even where they come", async () => {
     hoisted.withheld = ["Review", "Merge"];
     await render();
-    const marks = container.querySelectorAll(".autorun__withheld");
-    expect(marks).toHaveLength(1);
-    expect(marks[0]!.closest(".autorun")).toBe(container.querySelector(".autorun"));
-    expect(marks[0]!.getAttribute("title")).toBe(
-      tf("auto.run.reportWithheld", { steps: listLabel(["Review", "Merge"]) }),
-    );
+    expect(container.querySelector(".autorun__step")).toBeNull();
+    expect(container.querySelector(".autorun__withheld")).toBeNull();
+    expect(container.textContent).not.toContain("Ship");
   });
 
   it("says who acknowledged a failure, and nothing on a run nobody had to", async () => {

@@ -17,7 +17,9 @@
 //! of them, so they are not placed at all ([`WITHHELD_FROM_THE_VIEWER`]).
 //!
 //! **A server set up before that may still hold them**, and nothing on it reads them any more. Whether it
-//! does is read once per server, a few pages a turn, and kept on this device ([`look_for_strays`]).
+//! does is read once per server, a few pages a turn, and kept on this device ([`look_for_strays`]). Where
+//! it does, they are deleted from it — only on a turn that has nothing else to send, and out of the same
+//! day's allowance the sending spends ([`clear_strays`]).
 //!
 //! **What it reads the store through is the roads that were already there** — [`crate::sync_snapshot`]
 //! for the whole picture and for reading rows back by id, the change feed for what moved. They are asked
@@ -88,10 +90,15 @@ fn carried_to_the_viewer(dataset: &str) -> bool {
 /// that is where the ids in it go next: a page that was drained can always be read back in one ask.
 const CHANGES_PER_READ: i64 = crate::sync_snapshot::RECORDS_PER_READ as i64;
 
-/// How many pages of the server's keys one turn reads while it looks for a run's leftover rows. A page is
-/// at most the Worker's `PER_KEY_PAGE` keys, so a turn reads at most twenty thousand, and a server holding
-/// more is read on from where the last turn stopped.
+/// How many pages of the server's keys one turn reads while it looks for a run's leftover rows, or while
+/// it deletes them. A page is at most the Worker's `PER_KEY_PAGE` keys, so a turn reads at most twenty
+/// thousand, and a server holding more is read on from where the last turn stopped.
 const STRAY_PAGES_PER_TURN: usize = 10;
+
+/// The first build of the Worker that deletes the keys it is handed (`DELETE /records`). A server
+/// answering as an older one has no such door, so a run's leftover rows on it are left alone until it is
+/// set up again.
+const BUILD_THAT_TAKES_KEYS_OUT: i64 = 4;
 
 /// What one call to the Worker gets. A send nobody is waiting on must still end, so a call that is not
 /// going to answer gives the run back rather than holding it.
@@ -448,7 +455,33 @@ pub fn carry_at(store: &Store, now: DateTime<Utc>) -> Result<Sent> {
         store.set_viewer_carried(&left)?;
     }
 
-    let sent = Sent { placed, waiting: store.viewer_waiting()?, held_back: None };
+    // **Only once the ordinary sending has nothing left.** Deleting a run's leftover rows spends the same
+    // day's rows the sending does, so it takes what the sending did not need and never the other way
+    // round: a day that runs out on it leaves the next change to go after midnight UTC.
+    let waiting = store.viewer_waiting()?;
+    if waiting == 0
+        && strays_to_clear(&left)
+        && quiet(&left, now).is_none()
+        && !out_of_budget(&left, now)
+    {
+        let cleared = clear_strays(&server, &mut left, now);
+        store.set_viewer_carried(&left)?;
+        match cleared {
+            Ok(taken) if taken > 0 || left.strays_gone_at.is_some() => tracing::info!(
+                taken,
+                done = left.strays_gone_at.is_some(),
+                "deleted a run's leftover rows from the Viewer's server"
+            ),
+            Ok(_) => {}
+            Err(rebuffed) => tracing::info!(
+                error = %rebuffed.in_words(now),
+                "could not finish deleting a run's leftover rows from the Viewer's server — the next \
+                 turn goes on"
+            ),
+        }
+    }
+
+    let sent = Sent { placed, waiting, held_back: None };
     drop(turn);
     Ok(sent)
 }
@@ -494,38 +527,175 @@ fn the_number_to_send(version: i64, left: &Carried) -> i64 {
 /// What was read is written into `left` page by page, so a reading cut short by a refusal or by
 /// [`STRAY_PAGES_PER_TURN`] is gone on from where it got to.
 fn look_for_strays(server: &Server, left: &mut Carried) -> std::result::Result<(), Rebuffed> {
-    let mut since = left.strays_read_to.as_deref().and_then(|at| at.parse::<i64>().ok()).unwrap_or(0);
+    let mut since = where_the_strays_were_read_to(left);
     for _ in 0..STRAY_PAGES_PER_TURN {
-        let answered = match server.ask("GET", &format!("/records?since={since}&keys=1"), None) {
-            Ok(answered) => answered,
-            Err(Rebuffed::Refused(refused)) if refused.status == 409 => {
-                left.strays_read_to = None;
-                return Err(Rebuffed::Refused(refused));
-            }
-            Err(rebuffed) => return Err(rebuffed),
-        };
-        let page: KeysHeld = serde_json::from_slice(&answered).map_err(|err| {
-            Rebuffed::Unreadable(Error::invalid(format!(
-                "/records answered with something this build cannot read: {err}"
-            )))
-        })?;
-        let found = page.records.iter().any(|record| {
-            record.key.split_once('/').is_some_and(|(dataset, _)| !carried_to_the_viewer(dataset))
-        });
+        let page = keys_held_after(server, left, since)?;
+        let found = page.records.iter().any(|record| is_a_stray(&record.key));
         if found || !page.more {
             left.strays = Some(found);
             left.strays_read_to = None;
             return Ok(());
         }
-        if page.seq <= since {
-            return Err(Rebuffed::Unreadable(Error::invalid(format!(
-                "the Viewer's server claims another page of records and its ordering did not move \
-                 past {since}"
-            ))));
-        }
-        since = page.seq;
+        since = read_on_past(&page, since)?;
         left.strays_read_to = Some(since.to_string());
     }
+    Ok(())
+}
+
+/// Whether this device has a run's leftover rows to delete from its server: it found some, has not
+/// finished deleting them, and the server answers as a build that can.
+///
+/// **Zero is "not known"**, as everywhere [`Carried::build`] is read, and is not taken as new enough.
+fn strays_to_clear(left: &Carried) -> bool {
+    left.strays == Some(true)
+        && left.strays_gone_at.is_none()
+        && left.build >= BUILD_THAT_TAKES_KEYS_OUT
+}
+
+/// Delete from the server the run's working rows a build before the Worker's build 4 placed there, and
+/// answer how many keys went.
+///
+/// **The keys are chosen here, and the Worker deletes what it is handed.** The server is read from the
+/// beginning of its ordering, page by page as [`look_for_strays`] reads it, and every key whose dataset is
+/// in [`WITHHELD_FROM_THE_VIEWER`] is handed to `DELETE /records`, [`RECORDS_PER_WRITE`] at a time.
+///
+/// **It spends the day's rows the sending spends**, and stops where they run out — asked between
+/// requests, as [`drain`] asks it, so it overshoots by at most one. Deleting a key does not move the
+/// server's ordering, so where it stopped is the start of the page it was on: the next turn reads that
+/// page again, and finds only what is still there.
+///
+/// **Once the last page is behind it, every phone is asked to read again** (`reread`). The Worker moves
+/// where its holdings begin up to where they stand, so a phone reading on from before that is answered
+/// `409`, throws its copy away — the run's rows with it — and reads the store again. Only then is
+/// `strays_gone_at` written, which is what says this is done.
+fn clear_strays(
+    server: &Server,
+    left: &mut Carried,
+    now: DateTime<Utc>,
+) -> std::result::Result<usize, Rebuffed> {
+    let mut since = where_the_strays_were_read_to(left);
+    let mut taken = 0;
+    for _ in 0..STRAY_PAGES_PER_TURN {
+        if out_of_budget(left, now) {
+            return Ok(taken);
+        }
+        let page = keys_held_after(server, left, since)?;
+        let strays: Vec<String> = page
+            .records
+            .iter()
+            .filter(|record| is_a_stray(&record.key))
+            .map(|record| record.key.clone())
+            .collect();
+        for keys in strays.chunks(RECORDS_PER_WRITE) {
+            if out_of_budget(left, now) {
+                return Ok(taken);
+            }
+            take_out(server, left, keys, false, now)?;
+            taken += keys.len();
+        }
+        if !page.more {
+            if out_of_budget(left, now) {
+                return Ok(taken);
+            }
+            take_out(server, left, &[], true, now)?;
+            left.strays_read_to = None;
+            left.strays_gone_at = Some(crate::time::Timestamp(now).to_rfc3339_z());
+            return Ok(taken);
+        }
+        since = read_on_past(&page, since)?;
+        left.strays_read_to = Some(since.to_string());
+    }
+    Ok(taken)
+}
+
+/// Where a reading of the server's keys that stopped part way got to, or the beginning.
+fn where_the_strays_were_read_to(left: &Carried) -> i64 {
+    left.strays_read_to.as_deref().and_then(|at| at.parse::<i64>().ok()).unwrap_or(0)
+}
+
+/// Whether a key on the server is one of a run's working rows.
+fn is_a_stray(key: &str) -> bool {
+    key.split_once('/').is_some_and(|(dataset, _)| !carried_to_the_viewer(dataset))
+}
+
+/// Read one page of the server's keys after `since`.
+///
+/// A server that answers `409` has had what it held replaced since, so the position is thrown away and
+/// the next turn reads from the beginning.
+fn keys_held_after(
+    server: &Server,
+    left: &mut Carried,
+    since: i64,
+) -> std::result::Result<KeysHeld, Rebuffed> {
+    let answered = match server.ask("GET", &format!("/records?since={since}&keys=1"), None) {
+        Ok(answered) => answered,
+        Err(Rebuffed::Refused(refused)) if refused.status == 409 => {
+            left.strays_read_to = None;
+            return Err(Rebuffed::Refused(refused));
+        }
+        Err(rebuffed) => return Err(rebuffed),
+    };
+    serde_json::from_slice(&answered).map_err(|err| {
+        Rebuffed::Unreadable(Error::invalid(format!(
+            "/records answered with something this build cannot read: {err}"
+        )))
+    })
+}
+
+/// Where the next page is read from: past the last key this one held. A server that claims more and did
+/// not move would be read in a circle, so that is refused.
+fn read_on_past(page: &KeysHeld, since: i64) -> std::result::Result<i64, Rebuffed> {
+    if page.seq <= since {
+        return Err(Rebuffed::Unreadable(Error::invalid(format!(
+            "the Viewer's server claims another page of records and its ordering did not move past \
+             {since}"
+        ))));
+    }
+    Ok(page.seq)
+}
+
+/// The body of one `DELETE /records`: the keys to delete, and whether every phone is to read again.
+#[derive(Debug, serde::Serialize)]
+struct Removal<'a> {
+    keys: &'a [String],
+    reread: bool,
+}
+
+/// Hand the server keys to delete, and write down what it answered — what it cost, which build it is, and
+/// where its ordering stands.
+///
+/// **Where the ordering stands is taken from the answer**, because the next placement is checked against
+/// it ([`drain`]) and a `reread` moves it.
+fn take_out(
+    server: &Server,
+    left: &mut Carried,
+    keys: &[String],
+    reread: bool,
+    now: DateTime<Utc>,
+) -> std::result::Result<(), Rebuffed> {
+    let raw = serde_json::to_vec(&Removal { keys, reread }).map_err(|err| {
+        Rebuffed::Unreadable(Error::invalid(format!(
+            "this build could not put the removal together: {err}"
+        )))
+    })?;
+    let answered = match server.ask("DELETE", "/records", Some(raw)) {
+        Ok(answered) => answered,
+        Err(rebuffed) => {
+            if let Some(wait) = rebuffed.asks_to_be_left_for(now) {
+                *left = be_quiet_for(left, wait, now);
+            }
+            return Err(rebuffed);
+        }
+    };
+    let answered: Written = serde_json::from_slice(&answered).map_err(|err| {
+        Rebuffed::Unreadable(Error::invalid(format!(
+            "/records answered with something this build cannot read: {err}"
+        )))
+    })?;
+    *left = spend(left, answered.rows_written, now);
+    left.build = the_build_that_answered(answered.build);
+    left.seq = answered.seq;
+    left.quiet_until = None;
     Ok(())
 }
 
@@ -1835,6 +2005,202 @@ mod tests {
 
         assert!(sent.placed > 0, "{sent:?}");
         assert_eq!(store.viewer_carried().unwrap().strays, None);
+    }
+
+    /// A device that found a run's rows on a server new enough to delete them, with nothing queued and
+    /// nothing in the store left to read out.
+    fn holding_strays(store: &Store, left: Carried) {
+        let version = store.device_sync_version().unwrap();
+        store
+            .set_viewer_carried(&Carried {
+                cursor: 1,
+                version,
+                seq: 10,
+                build: 4,
+                strays: Some(true),
+                ..left
+            })
+            .unwrap();
+    }
+
+    /// A Worker deleting keys and answering where its ordering stands.
+    fn removed(seq: i64, rows: i64) -> Reply {
+        Reply::ok(serde_json::json!({ "seq": seq, "rows_written": rows, "build": 4 }).to_string())
+    }
+
+    /// The removals a host was sent, oldest first.
+    fn removals(host: &StaticHost) -> Vec<serde_json::Value> {
+        host.heard()
+            .iter()
+            .filter(|heard| heard.method == "DELETE" && heard.target == "/records")
+            .map(|heard| serde_json::from_slice(&heard.body).expect("a removal is JSON"))
+            .collect()
+    }
+
+    /// **With nothing to send, a run's rows are deleted from the server**, and only theirs. The last
+    /// request asks every phone to read again, and only then is the deleting written down as done.
+    #[test]
+    fn an_idle_turn_deletes_a_runs_rows_and_asks_the_phones_to_read_again() {
+        let mut store = store_at("strays-clear");
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        set_up(&mut store, &host);
+        holding_strays(&store, Carried::default());
+        host.set_reply(
+            "/records?since=0&keys=1",
+            keys_page(
+                &[("task/1", "put"), ("automation_run/2", "put"), ("automation_run_step/3", "del")],
+                12,
+                false,
+            ),
+        );
+        host.set_replies("/records", [removed(10, 2), removed(20, 3)]);
+        let now = at("2026-11-16T00:00:00Z");
+
+        let sent = carry_at(&store, now).unwrap();
+
+        assert_eq!(sent.placed, 0);
+        let sent = removals(&host);
+        assert_eq!(sent.len(), 2);
+        assert_eq!(sent[0]["keys"], serde_json::json!(["automation_run/2", "automation_run_step/3"]));
+        assert_eq!(sent[0]["reread"], false);
+        assert_eq!(sent[1]["keys"], serde_json::json!([]));
+        assert_eq!(sent[1]["reread"], true);
+
+        let left = store.viewer_carried().unwrap();
+        assert_eq!(left.strays_gone_at.as_deref(), Some("2026-11-16T00:00:00Z"));
+        assert_eq!(left.strays_read_to, None);
+        assert_eq!(
+            left.seq, 20,
+            "the reread moves the ordering, and the next placement is checked against it"
+        );
+        assert_eq!(left.spent, 5, "the deleting spends the sending's own allowance");
+
+        // Done is done: the next turn reads no page and deletes nothing.
+        carry_at(&store, at("2026-11-16T01:00:00Z")).unwrap();
+        assert_eq!(key_reads(&host), 1);
+        assert_eq!(removals(&host).len(), 2);
+    }
+
+    /// More run rows on a page than one request carries go in parts of [`RECORDS_PER_WRITE`].
+    #[test]
+    fn a_page_of_run_rows_goes_out_in_parts() {
+        let mut store = store_at("strays-parts");
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        set_up(&mut store, &host);
+        holding_strays(&store, Carried::default());
+        let keys: Vec<String> =
+            (1..=RECORDS_PER_WRITE + 1).map(|n| format!("automation_run_value/{n}")).collect();
+        let held: Vec<(&str, &str)> = keys.iter().map(|k| (k.as_str(), "put")).collect();
+        host.set_reply("/records?since=0&keys=1", keys_page(&held, 600, false));
+        host.set_reply("/records", removed(10, 1));
+
+        carry_at(&store, at("2026-11-16T00:00:00Z")).unwrap();
+
+        let sent = removals(&host);
+        assert_eq!(sent.len(), 3);
+        assert_eq!(sent[0]["keys"].as_array().unwrap().len(), RECORDS_PER_WRITE);
+        assert_eq!(sent[1]["keys"].as_array().unwrap().len(), 1);
+        assert_eq!(sent[2]["reread"], true);
+    }
+
+    /// **The deleting stops where the day's rows run out, and goes on the next day.** Deleting does not
+    /// move the ordering, so where it stopped is the page it was on, read again from the same place.
+    #[test]
+    fn the_deleting_stops_with_the_days_rows_and_goes_on_the_next_day() {
+        let mut store = store_at("strays-budget");
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        set_up(&mut store, &host);
+        holding_strays(&store, Carried::default());
+        let keys: Vec<String> =
+            (1..=RECORDS_PER_WRITE + 1).map(|n| format!("automation_run/{n}")).collect();
+        let held: Vec<(&str, &str)> = keys.iter().map(|k| (k.as_str(), "put")).collect();
+        host.set_reply("/records?since=0&keys=1", keys_page(&held, 600, false));
+        // The first request spends the whole day.
+        host.set_replies("/records", [removed(10, ROWS_WE_MAY_SPEND_A_DAY), removed(10, 1)]);
+
+        carry_at(&store, at("2026-11-16T10:00:00Z")).unwrap();
+        assert_eq!(removals(&host).len(), 1, "nothing more goes out once the day is spent");
+        let left = store.viewer_carried().unwrap();
+        assert_eq!(left.strays_gone_at, None);
+        assert_eq!(left.strays_read_to, None, "the page it was on is read again");
+
+        // Later the same day: nothing is read and nothing is deleted.
+        carry_at(&store, at("2026-11-16T20:00:00Z")).unwrap();
+        assert_eq!(key_reads(&host), 1);
+        assert_eq!(removals(&host).len(), 1);
+
+        // After midnight UTC it goes on, from the same page.
+        host.set_reply(
+            "/records?since=0&keys=1",
+            keys_page(&[("automation_run/501", "put")], 600, false),
+        );
+        carry_at(&store, at("2026-11-17T00:00:01Z")).unwrap();
+        let sent = removals(&host);
+        assert_eq!(sent.len(), 3);
+        assert_eq!(sent[1]["keys"], serde_json::json!(["automation_run/501"]));
+        assert_eq!(sent[2]["reread"], true);
+        assert!(store.viewer_carried().unwrap().strays_gone_at.is_some());
+    }
+
+    /// **Anything queued goes first, and a turn that could not send it deletes nothing.**
+    #[test]
+    fn nothing_is_deleted_while_something_waits_to_be_sent() {
+        let mut store = store_at("strays-queue");
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        set_up(&mut store, &host);
+        holding_strays(&store, Carried::default());
+        store.enqueue_viewer(&[waiting("task/1")]).unwrap();
+        host.set_reply("/records?since=0&keys=1", keys_page(&[("automation_run/1", "put")], 3, false));
+        host.set_reply("/records", Reply::status(503, "down"));
+
+        assert!(carry_at(&store, at("2026-11-16T00:00:00Z")).is_err());
+
+        assert!(removals(&host).is_empty());
+        assert_eq!(key_reads(&host), 0);
+        assert_eq!(store.viewer_waiting().unwrap(), 1);
+    }
+
+    /// A server answering as a build with no door for deleting keys is left alone, and so is one whose
+    /// build is not known yet.
+    #[test]
+    fn a_server_too_old_to_delete_keys_is_left_alone() {
+        for (tag, build) in [("strays-old", 3), ("strays-unknown", 0)] {
+            let mut store = store_at(tag);
+            let host = StaticHost::serve(Vec::<(String, String)>::new());
+            set_up(&mut store, &host);
+            holding_strays(&store, Carried::default());
+            store
+                .set_viewer_carried(&Carried { build, ..store.viewer_carried().unwrap() })
+                .unwrap();
+            host.set_reply("/records?since=0&keys=1", keys_page(&[("automation_run/1", "put")], 3, false));
+
+            carry_at(&store, at("2026-11-16T00:00:00Z")).unwrap();
+
+            assert!(removals(&host).is_empty(), "build {build}");
+            assert_eq!(key_reads(&host), 0, "build {build}");
+        }
+    }
+
+    /// The deleting reads a few pages a turn, and the turn after it goes on from where it got to.
+    #[test]
+    fn the_deleting_goes_on_from_where_the_last_turn_got_to() {
+        let mut store = store_at("strays-resume-clear");
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        set_up(&mut store, &host);
+        holding_strays(&store, Carried { strays_read_to: Some("40".into()), ..Carried::default() });
+        host.set_reply("/records?since=40&keys=1", keys_page(&[("automation_run/9", "put")], 50, false));
+        host.set_reply("/records", removed(10, 1));
+
+        carry_at(&store, at("2026-11-16T00:00:00Z")).unwrap();
+
+        let targets: Vec<String> = host
+            .heard()
+            .iter()
+            .filter(|heard| heard.method == "GET")
+            .map(|heard| heard.target.clone())
+            .collect();
+        assert_eq!(targets, ["/records?since=40&keys=1"]);
+        assert!(store.viewer_carried().unwrap().strays_gone_at.is_some());
     }
 
     /// A cursor the feed can no longer reach is answered with the whole store rather than an empty page:

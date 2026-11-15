@@ -1675,6 +1675,13 @@ pub const STEPS: &[Step] = &[
               WHERE run_id IN (SELECT id FROM automation_run WHERE status IN ('completed', 'failed', 'canceled'));",
         ),
     },
+    Step {
+        to: 149,
+        name: "add viewer_send.strays, strays_read_to and strays_gone_at, what this device found and deleted of the server's leftover run rows",
+        // **Unseeded.** No server has been read for leftover run rows yet, so the row already there reads
+        // as "not read yet" and "not deleted yet"; the next turn finds out. No task is touched.
+        apply: Apply::Custom(let_the_carrier_keep_the_servers_leftover_runs),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -2398,6 +2405,27 @@ fn let_a_trigger_keep_since_when_it_waits(ctx: &Ctx<'_>) -> Result<()> {
             "ALTER TABLE automation_trigger ADD COLUMN waiting_since TEXT CHECK(waiting_since GLOB \
              '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');",
         )?;
+    }
+    Ok(())
+}
+
+/// v149: `viewer_send.strays`, `strays_read_to` and `strays_gone_at` — whether the server holds run rows
+/// an older build placed, how far reading it for them got, and when the last of them was deleted. NULL on
+/// the row already there, which reads as "not read yet" and "not deleted yet".
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. Nullable with no default but NULL,
+/// so `ALTER TABLE` adds each as it stands.
+fn let_the_carrier_keep_the_servers_leftover_runs(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let there = column_names(tx, "viewer_send")?;
+    for (name, decl) in [
+        ("strays", "BIGINT CHECK(strays IN (0, 1))"),
+        ("strays_read_to", "TEXT"),
+        ("strays_gone_at", "TEXT"),
+    ] {
+        if !there.iter().any(|c| c == name) {
+            tx.execute_batch(&format!("ALTER TABLE viewer_send ADD COLUMN {name} {decl};"))?;
+        }
     }
     Ok(())
 }
@@ -16312,6 +16340,51 @@ mod tests {
         assert_eq!(count("automation_run_def"), 1);
         assert_eq!(count("automation_run_step"), 1);
         assert_eq!(count("automation_run_value"), 1);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v149: where the carrier was left at v148 reads as "not read yet" and "not deleted yet", what is
+    /// written afterwards comes back, and the finding takes no word but none or some.
+    #[test]
+    fn a_carrier_left_before_v149_has_not_read_the_server_for_leftover_runs() {
+        let dir = scratch("viewer-strays");
+        let engine = store_at(&dir, 148);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO viewer_send (id, version, cursor, placed, seq, spent, build)
+                 VALUES (1, 12, 900, 12, 41, 0, 3);",
+            )
+            .unwrap();
+
+        run(&engine, &dir, steps_through(149), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 149);
+        let read = || -> (i64, Option<i64>, Option<String>, Option<String>) {
+            engine
+                .conn()
+                .query_row("SELECT cursor, strays, strays_read_to, strays_gone_at FROM viewer_send WHERE id = 1", [], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+                })
+                .unwrap()
+        };
+        assert_eq!(read(), (900, None, None, None), "the row stays, and nothing was read or deleted yet");
+        engine
+            .conn()
+            .execute(
+                "UPDATE viewer_send SET strays = 1, strays_read_to = 'automation_run/7', \
+                 strays_gone_at = '2026-11-16T00:00:00Z' WHERE id = 1",
+                [],
+            )
+            .unwrap();
+        assert_eq!(
+            read(),
+            (900, Some(1), Some("automation_run/7".into()), Some("2026-11-16T00:00:00Z".into()))
+        );
+        assert!(
+            engine.conn().execute("UPDATE viewer_send SET strays = 2 WHERE id = 1", []).is_err(),
+            "none or some, and nothing else",
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 

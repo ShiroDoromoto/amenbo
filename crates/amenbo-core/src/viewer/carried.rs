@@ -78,6 +78,18 @@ pub struct Carried {
     /// nowhere else, so the only place it can be had is a write that already happened. Zero is "nothing
     /// has been written yet", not "an old Worker".
     pub build: i64,
+    /// Whether the server holds run rows a build before the Worker's build 4 placed there: `None` is
+    /// "not read yet", `Some(false)` "none", `Some(true)` "some".
+    ///
+    /// **It is read once per server.** Standing a server up throws this row away ([`forget()`]), so the
+    /// next server is read anew and no other one is ever read twice.
+    pub strays: Option<bool>,
+    /// The last key a reading of the server that stopped part way got to, so the next turn goes on from
+    /// there. `None` is "from the first key".
+    pub strays_read_to: Option<String>,
+    /// When the last of those rows was deleted from the server. `None` is "not yet": the deleting goes a
+    /// few at a time inside a day's allowance, so it runs across days and this is what says it is done.
+    pub strays_gone_at: Option<String>,
 }
 
 /// One record as it waits: the key it is filed under, what happened to it, and — for everything but a
@@ -129,6 +141,8 @@ pub(crate) fn read_on(conn: &rusqlite::Connection) -> Result<Carried> {
     let (quiet_until, spent, spent_on, build) =
         (sel.col(VS.quiet_until), sel.col(VS.spent), sel.col(VS.spent_on), sel.col(VS.build));
     let last_placed_at = sel.col(VS.last_placed_at);
+    let (strays, strays_read_to, strays_gone_at) =
+        (sel.col(VS.strays), sel.col(VS.strays_read_to), sel.col(VS.strays_gone_at));
     let mut sql = Sql::from(&sel, VS.table);
     sql.push_where(Some(&Pred::eq(VS.id, THE_ROW)));
 
@@ -145,6 +159,9 @@ pub(crate) fn read_on(conn: &rusqlite::Connection) -> Result<Carried> {
                 spent_on: spent_on.get(r)?,
                 last_placed_at: last_placed_at.get(r)?,
                 build: build.get(r)?,
+                strays: strays.get(r)?.map(|found: i64| found != 0),
+                strays_read_to: strays_read_to.get(r)?,
+                strays_gone_at: strays_gone_at.get(r)?,
             })
         })
         .optional()
@@ -171,6 +188,9 @@ pub(crate) fn write_on(conn: &rusqlite::Connection, left: &Carried) -> Result<()
         .set_opt(VS.spent_on, left.spent_on.as_deref())
         .set_opt(VS.last_placed_at, left.last_placed_at.as_deref())
         .set(VS.build, left.build)
+        .set_opt(VS.strays, left.strays.map(i64::from))
+        .set_opt(VS.strays_read_to, left.strays_read_to.as_deref())
+        .set_opt(VS.strays_gone_at, left.strays_gone_at.as_deref())
         .on_conflict_update(VS.id)
         .sql()
         .execute(conn)
@@ -441,6 +461,9 @@ mod tests {
             spent_on: Some("2026-09-14".into()),
             last_placed_at: Some("2026-09-14T09:04:00Z".into()),
             build: 3,
+            strays: Some(true),
+            strays_read_to: Some("automation_run/7".into()),
+            strays_gone_at: Some("2026-09-14T10:00:00Z".into()),
         };
         store.set_viewer_carried(&left).unwrap();
         assert_eq!(store.viewer_carried().unwrap(), left);

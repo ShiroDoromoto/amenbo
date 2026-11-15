@@ -173,7 +173,8 @@
 //! | v145 | `f31759cd6` | |
 //! | v146 | `be3ed3d14` | |
 //! | v147 | `d1cf35af2` | byte-identical to v146 (v147 rewrites ways out in rows) |
-//! | v148 | this commit | byte-identical to v147 (v148 lets go of rows); held equal to the live registry by the test below |
+//! | v148 | `1c9b202c8` | byte-identical to v147 (v148 lets go of rows) |
+//! | v149 | this commit | held equal to the live registry by the test below |
 //!
 //! [`super::migrate::BASELINE_VERSION`] itself is **not** here: this repository's history begins with the
 //! chain already at [`OLDEST_FROZEN_VERSION`], so no build in it ever emitted a v2 store and there is no
@@ -343,6 +344,7 @@ pub fn frozen(version: i64) -> Option<&'static str> {
         146 => include_str!("schema_frozen/v146.sql"),
         147 => include_str!("schema_frozen/v147.sql"),
         148 => include_str!("schema_frozen/v148.sql"),
+        149 => include_str!("schema_frozen/v149.sql"),
         _ => return None,
     })
 }

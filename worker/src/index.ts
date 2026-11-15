@@ -83,10 +83,13 @@ const SPEC_V = 1;
  * **It moves when a Worker already standing has to be replaced for something to work.** `3` is
  * the reading door opening to the write token, and the single pairing code that came with it
  * (migration `0006`): against a `2` the PC can write and cannot read back what it wrote, so
- * `repair` compares against nothing. Amenbo carries this same number for the Worker it
- * deploys, and compares the two — which is how a settings screen can say the server is behind.
+ * `repair` compares against nothing. `4` is `DELETE /records`: against a `3` the PC has no way to
+ * take a row out of the store, so a record the phone never needed stays here and on every phone for
+ * good. Amenbo carries this same number for the Worker it deploys, and compares the two — which is
+ * how a settings screen can say the server is behind, and how a sender knows whether the door to
+ * take rows out is there before it knocks.
  */
-const BUILD = 3;
+const BUILD = 4;
 
 /**
  * How many records one read hands back before saying there are more.
@@ -104,7 +107,7 @@ const PER_PAGE = 200;
  *
  * A backlog outgrows this the moment it is placed whole, so the refusal is not the end of the
  * road: a sender that has more than this splits it into parts and says which one each is — see
- * `place`.
+ * `place`. Taking rows out is bounded by the same number, for the same reason — see `remove`.
  */
 const PER_WRITE = 500;
 
@@ -167,13 +170,20 @@ export default {
 		try {
 			switch (pathname) {
 				case "/records":
-					return request.method === "PUT" ? await place(env, request) : await read(env, url);
+					switch (request.method) {
+						case "PUT":
+							return await place(env, request);
+						case "DELETE":
+							return await remove(env, request);
+						default:
+							return await read(env, url);
+					}
 				case "/reset":
 					return gone();
 				case "/meta":
 					return await meta(env);
 				default:
-					// The routes are the four above and `/tokens`, and anything else was turned
+					// The routes are the ones above and `/tokens`, and anything else was turned
 					// away as a missing endpoint before it got here.
 					return await tokens(env, request);
 			}
@@ -200,6 +210,7 @@ const READING: Kind[] = ["read", "write"];
  * | | |
  * |---|---|
  * | `PUT /records` | takes the records that moved, deletions among them, and answers with where the order now stands |
+ * | `DELETE /records` | takes the rows under the keys it is handed out of the store, and can ask every phone to read again |
  * | `GET /records` | hands back everything after a point in the order, a page at a time — or, with `keys=1`, the keys alone |
  * | `GET /meta`    | the version, the order, when it last moved and which key sealed the records — the cheap question |
  * | `PUT /reset`   | **gone.** It is still routed so that what a caller gets is a sentence rather than a guess — see `gone` |
@@ -208,7 +219,7 @@ const READING: Kind[] = ["read", "write"];
  * | `GET /tokens`    | whether there is one, and when it was issued — the write token's question, not a phone's |
  */
 const ROUTES: Record<string, Record<string, Kind[]>> = {
-	"/records": { PUT: ["write"], GET: READING, HEAD: READING },
+	"/records": { PUT: ["write"], DELETE: ["write"], GET: READING, HEAD: READING },
 	"/reset": { PUT: ["write"] },
 	"/meta": { GET: READING, HEAD: READING },
 	"/tokens": { PUT: ["write"], DELETE: ["write"], GET: ["write"], HEAD: ["write"] },
@@ -292,8 +303,9 @@ interface Standing {
 	seq: number;
 	updated_at: string | null;
 	/**
-	 * The point the placement now standing in the records began above. A cursor that has not
-	 * passed it holds nothing from that placement — see `read`.
+	 * The point the placement now standing in the records began above, or where the order stood
+	 * when rows were last taken out and the phones asked to read again. A cursor that has not
+	 * passed it holds what is no longer so — see `read` and `remove`.
 	 */
 	placed_from: number;
 	/**
@@ -367,8 +379,9 @@ function unavailable(thrown: unknown): Response {
  * one it holds rather than fetching to find out.
  *
  * `placed_from` is the other number it compares against: a cursor that has not passed it holds
- * nothing from the placement standing here, so the answer is to throw that copy away rather than
- * read on from it. A phone that acts on it here is spared the refusal `read` would give it.
+ * what is no longer so — rows from before the placement standing here, or rows taken out since by
+ * a `reread` — so the answer is to throw that copy away rather than read on from it. A phone that
+ * acts on it here is spared the refusal `read` would give it.
  *
  * `key_fingerprint` is the third, and it is the one that saves a sync rather than a page: a phone
  * whose own key hashes to something else cannot open a single row here, and learning that costs
@@ -408,17 +421,22 @@ interface Stored extends Landing {
  * time. `more` is how it knows to come straight back rather than wait for the next write: the
  * version only becomes the phone's once `more` is false, since until then it holds half a turn.
  *
+ * **The last page carries where the order stands, not where its last row sits.** The two part
+ * when the rows at the end were taken out, or when `reread` moved the order past them: a phone
+ * handed the last row's place would stay behind `seq` and ask again for nothing, and after a
+ * `reread` that took out every row it would hold `0` and read from the beginning on every read.
+ *
  * **A cursor past the end is refused rather than answered.** The order never rewinds, so being
  * ahead of it means these are not the records that cursor was counted against — a store rebuilt
  * from nothing under a phone that was paired with the old one. Answering the tail would hand it
  * somebody else's rows under numbers it recognises.
  *
- * **A cursor that has not passed the current placement is refused too**, and for a reason that
- * looks nothing like it from the phone's side. Reading on from there would succeed and return
- * rows, which is what makes it dangerous: a record deleted before the placement is in neither
- * what is here nor what is coming, so the phone would keep it and call itself level. The remedy
- * is the same either way — throw the copy away and read again — so both refusals are the same
- * status, differing in what they say.
+ * **A cursor that has not passed `placed_from` is refused too** — the current placement, or the
+ * last `reread` — and for a reason that looks nothing like it from the phone's side. Reading on
+ * from there would succeed and return rows, which is what makes it dangerous: a record deleted
+ * before the placement is in neither what is here nor what is coming, so the phone would keep it
+ * and call itself level. The remedy is the same either way — throw the copy away and read again
+ * — so both refusals are the same status, differing in what they say.
  *
  * **Being refused is not left to the phone to avoid.** `GET /meta` carries `placed_from` so a
  * phone can check before asking, but a phone that does not check must not be handed a quiet
@@ -454,8 +472,8 @@ async function read(env: Env, url: URL): Promise<Response> {
 	if (since > 0 && since <= now.placed_from) {
 		return problem(
 			409,
-			`the whole of this store was placed again above ${now.placed_from}, and you asked to read on from ${since}` +
-				" — everything you have from before that has been made again, so throw it away and read from the beginning",
+			`what this store held up to ${now.placed_from} has changed under you, and you asked to read on from ${since}` +
+				" — what you have from before that is not what is here, so throw it away and read from the beginning",
 		);
 	}
 
@@ -474,10 +492,11 @@ async function read(env: Env, url: URL): Promise<Response> {
 
 	const more = results.length > most;
 	const page = more ? results.slice(0, most) : results;
+	const last = page.length ? page[page.length - 1].seq : since;
 	return Response.json({
 		spec_v: SPEC_V,
 		version: now.version,
-		seq: page.length ? page[page.length - 1].seq : since,
+		seq: more ? last : Math.max(last, now.seq),
 		more,
 		records: page.map(keysOnly ? keyOnly : travelling),
 	});
@@ -625,6 +644,102 @@ async function place(env: Env, request: Request): Promise<Response> {
 					env.RECORDS.prepare(
 						"UPDATE store SET version = ?, updated_at = ?, key_fingerprint = ? WHERE id = 1",
 					).bind(version, new Date().toISOString(), sealedWith),
+				]
+			: []),
+		env.RECORDS.prepare("SELECT seq FROM store WHERE id = 1"),
+	];
+	const done = await env.RECORDS.batch<{ seq: number }>(statements);
+
+	return Response.json({
+		seq: done[done.length - 1].results[0].seq,
+		rows_written: rowsWritten(done),
+		build: BUILD,
+	});
+}
+
+/**
+ * `DELETE /records` — takes the rows under the keys it is handed out of the store.
+ *
+ * The body is `{"keys":[…],"reread":true}`, both optional. **Which keys go is the sender's call
+ * alone.** This Worker does not know what a key means, so it neither picks them nor reads them for
+ * sense: any non-empty string is a key, and a key with no row under it is nothing to take out.
+ *
+ * **This is not a deletion record.** `PUT /records` with `op: "del"` leaves a row behind so a phone
+ * that was away hears the record went. This leaves nothing, which is the point — a row that only
+ * says something went is still a row in a store with a size limit — and it is also why a phone
+ * reading on cannot learn of it. So the order does not move: nothing was placed, and a phone that
+ * reads on from its cursor finds nothing new, and keeps what it holds.
+ *
+ * **`reread` is how the phones hear of it.** It moves `placed_from` up to where the order now
+ * stands, so every phone holding rows is refused its next read on (`read`'s 409), throws its copy
+ * away and reads again from the beginning — and what was taken out here is not in what it reads.
+ * **It moves every row that stays above `placed_from` as it does**, by adding where the order
+ * stood to each row's number and doubling the order. A phone reading again from the beginning is
+ * handed cursors along the way, and each of them has to be past `placed_from`: were the rows left
+ * where they were, a store of more than one page would hand that phone a cursor at or below
+ * `placed_from` with its first page, and refuse it the second — sent back to the beginning, over
+ * and over. The order of the rows among themselves does not change, and neither number winds back.
+ * **It costs a write for every row the store holds**, which `rows_written` reports — the price a
+ * placement used to pay, paid once after the rows went rather than once per send.
+ * It belongs to this door rather than to one of its own because it is what makes this one
+ * finished: a sender taking rows out over several requests asks for it on the last, or on an empty
+ * request after them, and the phones read once rather than once per request.
+ *
+ * **The order is never wound back.** A phone ahead of the order is refused as a cursor from
+ * another store, so winding back would turn every phone that was level into a stranger.
+ *
+ * The answer is the shape `PUT /records` gives — `seq`, `rows_written`, `build` — so a sender keeps
+ * one budget over both doors.
+ */
+async function remove(env: Env, request: Request): Promise<Response> {
+	let asked: unknown;
+	try {
+		asked = await request.json();
+	} catch {
+		return problem(400, "the body has to be a JSON object");
+	}
+	if (typeof asked !== "object" || asked === null || Array.isArray(asked)) {
+		return problem(400, "the body has to be a JSON object");
+	}
+	const { keys, reread } = asked as { keys?: unknown; reread?: unknown };
+
+	const taking = keys === undefined ? [] : keys;
+	if (!Array.isArray(taking)) {
+		return problem(400, "keys has to be a list of the keys to take out, empty or otherwise");
+	}
+	if (taking.length > PER_WRITE) {
+		return problem(
+			413,
+			`one write takes ${PER_WRITE} keys at most, and this one carried ${taking.length} — send it in parts`,
+		);
+	}
+	for (const k of taking) {
+		if (typeof k !== "string" || k === "") {
+			return problem(
+				400,
+				`every key is a non-empty string — the string a record is filed under,` +
+					` and ${JSON.stringify(k) ?? "nothing"} is not one`,
+			);
+		}
+	}
+	if (reread !== undefined && typeof reread !== "boolean") {
+		return problem(
+			400,
+			"reread has to be true or false — whether every phone should throw its copy away and read again",
+		);
+	}
+
+	// One batch, so the rows go and the phones are told in one step: a phone told to read again
+	// before the rows went would read them back.
+	const take = env.RECORDS.prepare("DELETE FROM records WHERE k = ?");
+	const statements = [
+		...(taking as string[]).map((k) => take.bind(k)),
+		// Every row left is at or below where the order stands, so adding that number lands each one
+		// above every number in use: the unique index on `seq` never sees two rows meet on the way.
+		...(reread
+			? [
+					env.RECORDS.prepare("UPDATE records SET seq = seq + (SELECT seq FROM store WHERE id = 1)"),
+					env.RECORDS.prepare("UPDATE store SET placed_from = seq, seq = seq * 2 WHERE id = 1"),
 				]
 			: []),
 		env.RECORDS.prepare("SELECT seq FROM store WHERE id = 1"),

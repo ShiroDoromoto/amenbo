@@ -70,7 +70,7 @@ pub const WORKER_SCRIPT: &str = include_str!("viewer/worker.js");
 ///
 /// `tests::the_baked_script_is_the_build_this_says_it_is` keeps the two level: a `make -C worker baked`
 /// that was never run is a build claiming a Worker it does not carry.
-pub const WORKER_BUILD: u32 = 3;
+pub const WORKER_BUILD: u32 = 4;
 
 /// Where the number sits in the built script. esbuild emits the constant as a plain declaration, so the
 /// name and the assignment are the whole of what has to be found.
@@ -522,7 +522,7 @@ mod tests {
         assert!(sent.contains(&format!("\"name\":\"{WRITE_TOKEN_BINDING}\"")), "the token is sealed in");
         let token = store.secret_value(None, SecretArea::Viewer, None, AUTH_TOKEN).unwrap().unwrap();
         assert!(sent.contains(&token), "what the Worker compares against is what the store kept");
-        assert!(sent.contains("var BUILD = 3;"), "and the script uploaded is the one baked in");
+        assert!(sent.contains(&format!("var BUILD = {WORKER_BUILD};")), "and the script uploaded is the one baked in");
     }
 
     /// Keys already in the store are kept. A key that opens the records on the server is the only copy

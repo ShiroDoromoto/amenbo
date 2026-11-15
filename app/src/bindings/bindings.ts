@@ -1228,6 +1228,11 @@ taskTitle?: string, };
  *
  * **The name each row is read by is the automation's, not the run's.** A run has no name — what a
  * person recognises is the automation they started and the task it is on.
+ *
+ * **The "history" tab's rows are read off the run's row and its rounds' rows alone.** There the
+ * step, its action and spot, how far in, the way out, the version, and the steps that kept their
+ * report off a closed task are left empty: what an ended run did step by step is read in its log
+ * (`automation run-show`).
  */
 export type AutomationRunCardDto = { run: number, 
 /**

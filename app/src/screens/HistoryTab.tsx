@@ -15,6 +15,8 @@
 //
 // **A row here is read, not pressed.** What it did is over, and its pane with it; the line is the same
 // one the "running" tab draws (`./RunningTab`), so a run reads the same on either side of ending.
+// It is read off the run's row and its rounds' rows alone, so it names no step: what an ended run did
+// step by step is read in its log.
 import { useState } from "react";
 import { useRunHistory, type RunHistoryFilter } from "../core/automations";
 import { t, tf } from "../core/i18n";

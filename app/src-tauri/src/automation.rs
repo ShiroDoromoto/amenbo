@@ -2055,7 +2055,7 @@ pub fn automation_history_page(
     )?;
     let mut runs = Vec::with_capacity(found.runs.len());
     for run in found.runs {
-        runs.push(run_card(&store, run)?);
+        runs.push(history_card(&store, run)?);
     }
     let by_ending = AutomationRunEndingsDto {
         completed: found.by_ending.completed,
@@ -2094,7 +2094,6 @@ fn placed_action_name(
     Ok(read::automation_action(conn, placement.action_id)?.map(|one| one.name))
 }
 
-/// One run as the tab draws it: what it is, how far in, and what it is on.
 /// The rows of the runs named, in the order named — a run gone from under an id is left out.
 fn run_cards(store: &amenbo_core::Store, ids: Vec<i64>) -> Result<Vec<AutomationRunCardDto>, CmdError> {
     let mut out = Vec::new();
@@ -2106,6 +2105,7 @@ fn run_cards(store: &amenbo_core::Store, ids: Vec<i64>) -> Result<Vec<Automation
     Ok(out)
 }
 
+/// One run as the tab draws it: what it is, how far in, and what it is on.
 fn run_card(
     store: &amenbo_core::Store,
     run: amenbo_core::model::AutomationRun,
@@ -2174,6 +2174,60 @@ fn run_card(
         incident: incident_of(store, stretch.as_ref())?,
         passes: passes_of(store, run.id, stretch.as_ref().map(|one| one.id))?,
         report_withheld,
+        acknowledged: run.acknowledged_at.is_some(),
+        acknowledged_by: run.acknowledged_by_kind.map(|by| by.as_str()),
+        output_tail: None,
+        exit_code: None,
+    })
+}
+
+/// **One ended run as the "history" tab draws it** — read off the run's row and its rounds' rows
+/// alone: what it is, how it ended, who saw it fail, and the task it was on.
+///
+/// It reads no step and no copy of the definition. What a run did step by step is let go of from the
+/// store once it has ended, and lives on in its log (`automation run-show`); a card that read the
+/// steps would name them for a run that ended lately and say nothing for one that ended before, so
+/// the history says neither. The step, the action, how far in, and the steps that kept their report
+/// off a closed task are left empty here, and stay on the "running" tab's card ([`run_card`]).
+fn history_card(
+    store: &amenbo_core::Store,
+    run: amenbo_core::model::AutomationRun,
+) -> Result<AutomationRunCardDto, CmdError> {
+    let conn = store.read_model().conn();
+    let stretch = read::automation_run_task_last(conn, run.id)?;
+    Ok(AutomationRunCardDto {
+        run: run.id,
+        project: run.project_id,
+        project_name: read::project(conn, run.project_id)?.map(|p| p.name).unwrap_or_default(),
+        automation: run.automation_id,
+        launch: run.launch_id,
+        automation_name: read::automation(conn, run.automation_id)?
+            .map(|one| one.name)
+            .unwrap_or_default(),
+        status: run.status.as_str(),
+        started_at: run.started_at.map(|at| at.to_rfc3339_z()),
+        ended_at: run.ended_at.map(|at| at.to_rfc3339_z()),
+        pause_requested: run.pause_requested,
+        pause_before_next_task: run.pause_before_next_task,
+        pausable_before_next_task: amenbo_core::ops::automation_stop::pauses_before_next_task(&run),
+        // Read only of a run still going, which no run in the history is.
+        waiting: false,
+        waits_for_room: false,
+        stopped_reason: run.stopped_reason.map(|one| one.as_str()),
+        version: None,
+        step_name: None,
+        interactive: false,
+        builtin: None,
+        action_name: None,
+        placement: None,
+        steps_done: 0,
+        exit_name: None,
+        task: worked_task(store, stretch.as_ref().map(|one| one.id))?,
+        role: stretch.as_ref().and_then(|one| one.role_id),
+        role_started_at: stretch.as_ref().and_then(|one| one.started_at).map(|at| at.to_rfc3339_z()),
+        incident: incident_of(store, stretch.as_ref())?,
+        passes: passes_of(store, run.id, stretch.as_ref().map(|one| one.id))?,
+        report_withheld: Vec::new(),
         acknowledged: run.acknowledged_at.is_some(),
         acknowledged_by: run.acknowledged_by_kind.map(|by| by.as_str()),
         output_tail: None,
@@ -3954,6 +4008,46 @@ mod tests {
             }),
         );
         assert_eq!(json(ChosenAt::Amenbo)["chosenAt"], serde_json::json!({ "kind": "amenbo" }));
+    }
+
+    /// **A row of the history is read off the run's row alone** — how it ended, why, and who saw it
+    /// fail go out as the row says them, and the step, its action and spot, how far in, and the steps
+    /// that kept their report off a closed task go out empty: what an ended run did step by step is
+    /// read in its log.
+    #[test]
+    fn a_history_card_is_read_off_the_runs_row_alone() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("automation-history-card");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        let store = amenbo_core::Store::open().unwrap();
+        let at = |s: &str| amenbo_core::time::Timestamp::parse_rfc3339(s).expect("a time");
+        let run = amenbo_core::model::AutomationRun {
+            id: 404,
+            automation_id: 7,
+            project_id: 1,
+            launch_id: Some(3),
+            status: AutomationRunStatus::Failed,
+            stopped_reason: Some(amenbo_core::model::AutomationStoppedReason::Crashed),
+            started_at: Some(at("2026-11-08T05:00:00Z")),
+            ended_at: Some(at("2026-11-08T05:05:00Z")),
+            acknowledged_at: Some(at("2026-11-08T06:00:00Z")),
+            acknowledged_by_kind: Some(ActorKind::Ai),
+            ..Default::default()
+        };
+
+        let card = history_card(&store, run).expect("the card");
+        assert_eq!(card.run, 404);
+        assert_eq!(card.launch, Some(3));
+        assert_eq!(card.status, "failed");
+        assert_eq!(card.stopped_reason, Some("crashed"));
+        assert_eq!(card.ended_at.as_deref(), Some("2026-11-08T05:05:00Z"));
+        assert!(card.acknowledged);
+        assert_eq!(card.acknowledged_by, Some("ai"));
+        assert!(card.step_name.is_none() && card.action_name.is_none() && card.builtin.is_none());
+        assert!(card.placement.is_none() && card.exit_name.is_none() && card.version.is_none());
+        assert_eq!(card.steps_done, 0);
+        assert!(card.report_withheld.is_empty());
+        assert!(!card.interactive && !card.waiting && !card.waits_for_room);
     }
 
     /// **A failed round's task goes out with when the round failed** — the end its stretch was closed

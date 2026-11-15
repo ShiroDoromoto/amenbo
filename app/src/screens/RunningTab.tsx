@@ -30,6 +30,10 @@
 // **A step that could not leave its report on the task is marked on the row** (`AMB-D-963`): a step
 // built to carry its report onto the task leaves none on a closed one, and without the mark nothing
 // on screen would say why the task holds no report.
+//
+// **A row of the history names no step and carries no such mark.** It is read off the run's row and
+// its rounds' rows alone; what an ended run did step by step is let go of from the store and read in
+// its log (`automation run-show`).
 import { useState, type ReactNode } from "react";
 import { acknowledgeRun, useLiveRuns } from "../core/automations";
 import { errText, t, tf } from "../core/i18n";
@@ -74,10 +78,11 @@ function WithheldMark({ steps }: { steps: readonly string[] }) {
  * on either side of ending.
  *
  * The first line is the automation and its run number, with the state's chip beside them where it
- * has one; the line under it is the project, the step, and the task it is on — or why it failed. How
- * long since stands at the end: the time it ended once it has, the time it began while it has not.
- * `acts` are the buttons that move the run; the history passes none, and says `ended` instead. The
- * project is left off a list that is one project's already.
+ * has one; the line under it is the project, the step, and the task it is on — or why it failed. A
+ * row of the history leaves the step off. How long since stands at the end: the time it ended once
+ * it has, the time it began while it has not. `acts` are the buttons that move the run; the history
+ * passes none, and says `ended` instead. The project is left off a list that is one project's
+ * already.
  */
 export function RunLine({
   run,
@@ -104,7 +109,9 @@ export function RunLine({
   const forRoom = run.waitsForRoom && run.status === "running" && !pausing;
   // The step as its box reads, and the action it was opened from only where that says something
   // more — a spot whose action is one step of the same name would say the one name twice.
-  const step = run.stepName === undefined
+  // Not on a row of the history, which is read off the run's row alone: what an ended run did step
+  // by step is read in its log.
+  const step = ended || run.stepName === undefined
     ? undefined
     : run.actionName === undefined || run.actionName === run.stepName
       ? builtinWord(run.builtin, run.stepName)
@@ -153,7 +160,7 @@ export function RunLine({
             ) : (
               run.task !== undefined && <span className="autorun__task">{`${run.task.ref} ${run.task.title}`}</span>
             )}
-            {run.reportWithheld.length > 0 && <WithheldMark steps={run.reportWithheld} />}
+            {!ended && run.reportWithheld.length > 0 && <WithheldMark steps={run.reportWithheld} />}
             {reason !== null && <span className="autorun__why">{reason}</span>}
             {/* Who said a failure had been seen — a person's AI may say it for them (`AMB-D-989`). */}
             {run.status === "failed" && run.acknowledgedBy != null && (

@@ -86,6 +86,10 @@ pub struct Carried {
     pub strays: Option<bool>,
     /// Where in the server's ordering a reading of it that stopped part way got to — the `seq` to read on
     /// from, in decimal — so the next turn goes on from there. `None` is "from the beginning".
+    ///
+    /// **Two readings keep it, one after the other**: the one that looks for those rows while
+    /// [`Self::strays`] is `None`, and the one that deletes them once it is `Some(true)`. The first hands
+    /// over at the beginning, since it stops at the first row it finds.
     pub strays_read_to: Option<String>,
     /// When the last of those rows was deleted from the server. `None` is "not yet": the deleting goes a
     /// few at a time inside a day's allowance, so it runs across days and this is what says it is done.

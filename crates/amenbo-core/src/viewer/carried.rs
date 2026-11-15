@@ -84,8 +84,8 @@ pub struct Carried {
     /// **It is read once per server.** Standing a server up throws this row away ([`forget()`]), so the
     /// next server is read anew and no other one is ever read twice.
     pub strays: Option<bool>,
-    /// The last key a reading of the server that stopped part way got to, so the next turn goes on from
-    /// there. `None` is "from the first key".
+    /// Where in the server's ordering a reading of it that stopped part way got to — the `seq` to read on
+    /// from, in decimal — so the next turn goes on from there. `None` is "from the beginning".
     pub strays_read_to: Option<String>,
     /// When the last of those rows was deleted from the server. `None` is "not yet": the deleting goes a
     /// few at a time inside a day's allowance, so it runs across days and this is what says it is done.
@@ -462,7 +462,7 @@ mod tests {
             last_placed_at: Some("2026-09-14T09:04:00Z".into()),
             build: 3,
             strays: Some(true),
-            strays_read_to: Some("automation_run/7".into()),
+            strays_read_to: Some("4000".into()),
             strays_gone_at: Some("2026-09-14T10:00:00Z".into()),
         };
         store.set_viewer_carried(&left).unwrap();

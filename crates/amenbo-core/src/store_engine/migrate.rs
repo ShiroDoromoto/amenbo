@@ -16372,14 +16372,14 @@ mod tests {
         engine
             .conn()
             .execute(
-                "UPDATE viewer_send SET strays = 1, strays_read_to = 'automation_run/7', \
+                "UPDATE viewer_send SET strays = 1, strays_read_to = '4000', \
                  strays_gone_at = '2026-11-16T00:00:00Z' WHERE id = 1",
                 [],
             )
             .unwrap();
         assert_eq!(
             read(),
-            (900, Some(1), Some("automation_run/7".into()), Some("2026-11-16T00:00:00Z".into()))
+            (900, Some(1), Some("4000".into()), Some("2026-11-16T00:00:00Z".into()))
         );
         assert!(
             engine.conn().execute("UPDATE viewer_send SET strays = 2 WHERE id = 1", []).is_err(),

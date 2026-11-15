@@ -224,21 +224,23 @@ struct Holding {
 
 /// One page of what the server holds. Only the key and what happened to it are read: the envelope is the
 /// phone's business, and this is not reading the backlog, it is counting it.
+///
+/// The sending reads the same pages when it looks for a run's leftover rows ([`super::send`]).
 #[derive(serde::Deserialize)]
-struct KeysHeld {
+pub(super) struct KeysHeld {
     #[serde(default)]
-    seq: i64,
+    pub(super) seq: i64,
     #[serde(default)]
-    more: bool,
+    pub(super) more: bool,
     #[serde(default)]
-    records: Vec<KeyHeld>,
+    pub(super) records: Vec<KeyHeld>,
 }
 
 #[derive(serde::Deserialize)]
-struct KeyHeld {
+pub(super) struct KeyHeld {
     #[serde(rename = "k")]
-    key: String,
-    op: String,
+    pub(super) key: String,
+    pub(super) op: String,
 }
 
 /// Read every key the server is holding, what it last heard about each, and where its ordering stands.

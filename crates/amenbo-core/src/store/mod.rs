@@ -529,8 +529,8 @@ impl Store {
     }
 
     /// Throw away what the carrier was holding — the numbers and the queue — so the next turn places the
-    /// whole backlog again. What standing a server up runs, that being the only place the two can be
-    /// settled.
+    /// whole backlog again. What setup runs when the server it stands up is not the one this store
+    /// already sent to.
     pub fn forget_viewer_carried(&self) -> Result<()> {
         crate::viewer::carried::forget(&self.engine)
     }

@@ -175,7 +175,10 @@ pub fn preamble(cmd: &str) -> String {
          - **What has happened so far** — one line per step of this run that has already reported, \
          oldest first, where this step was built to be shown them. A line is the first line of that \
          step's report; the whole of what each one said is kept on the run, which \
-         `{cmd} automation run-show <run>` prints and `{cmd} automation run-list --task <task>` names.\n\
+         `{cmd} automation run-show <run>` prints and `{cmd} automation run-list --task <task>` names, \
+         for as long as the run is kept. An old run may be gone: past the newest 1,000 of its role, a \
+         finished run is deleted. What the steps of a finished run said is read from this machine's \
+         run log, so a run whose log is gone reads back only in part.\n\
          - **What the trigger that started this run handed on** — at the step a run started by a \
          trigger starts at, the title, notes, data (JSON) and files it handed on, each under a heading \
          of its own. A file arrives as `AMB-ATT-<n>`, as above. No later step is shown it: it travels \

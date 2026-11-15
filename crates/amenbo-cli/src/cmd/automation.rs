@@ -2532,8 +2532,8 @@ fn render_run(flags: &Flags, run: &AutomationRun, room: Option<ForRoom>, detail:
 }
 
 /// One step execution: which step it was, how it left, how long it stood, what it carried, and the
-/// whole of what it said. The report is written out in full — a run read back months later is read for
-/// exactly this, and a snippet would send the reader somewhere else to finish the sentence. A script
+/// whole of what it said. The report is written out in full — a snippet would send the reader somewhere
+/// else to finish the sentence, and while the run is kept this is the place it is read whole. A script
 /// step's last output follows, as much of it as was kept.
 fn render_move(flags: &Flags, defs: &[AutomationRunDef], switched: &[(i64, Option<i64>, Option<i64>)], one: &StepDetail) {
     let m = &one.step;

@@ -248,17 +248,23 @@ fn setup_reaching(
 
     await_the_worker(&endpoint)?;
 
-    // A server that has just been stood up is one nothing has been sent to, whatever this device
-    // remembers sending to the last one. Forgetting here is what makes the next turn place the whole
-    // backlog rather than the next edit alone — and it is the only place it can be settled, since the
-    // write token is refused at the server's reading door.
+    // **Pressing setup again at the server this store already sends to renews the Worker and nothing
+    // else.** The database was already there, the keys are the ones it already holds, and the address is
+    // the one it already sent to: every row the carrier remembers sending is still up there and still
+    // opens. Sending the whole backlog again would spend a day's writes on rows that are already in place,
+    // and the count of what today has spent stays with it for the same reason (`AMB-D-1161`).
     //
-    // **Forgetting is the whole of what this does to the store's own rows**, and nothing else is written
-    // from here. A key drawn just now opens nothing already up there; the forgotten carrier sends the
-    // whole backlog next, key by key, so every row the backlog still holds is written again under the new
-    // key. What is left over is the rows the backlog no longer holds, which open for nobody — and a phone
-    // reads that as its key not fitting, which is answered by the PC writing.
-    store.forget_viewer_carried()?;
+    // **Anything else is a server the carrier has not sent to**, whatever this device remembers sending
+    // to the last one. Forgetting here is what makes the next turn place the whole backlog rather than the
+    // next edit alone.
+    //
+    // A send is key by key, so the whole backlog going again writes every row it holds — under a key
+    // drawn just now, if one was — and takes away nothing. What is left over is the rows the backlog no
+    // longer holds, which a repair squares up, as it squares up a server that is missing rows.
+    let same_server = !fresh && keys == Keys::Kept && kept_url.as_deref() == Some(endpoint.as_str());
+    if !same_server {
+        store.forget_viewer_carried()?;
+    }
 
     tracing::info!(url = %endpoint, ?keys, "the Viewer's server is up");
 
@@ -825,10 +831,9 @@ mod tests {
         }
     }
 
-    /// Standing a server up forgets what the carrier was holding, so the next turn places the whole
+    /// Standing a new server up forgets what the carrier was holding, so the next turn places the whole
     /// backlog. A memory that says "level" behind a server that has taken nothing would hand it the next
-    /// edit and nothing else — and nothing can ask the server which it is, the write token being refused
-    /// at its reading door.
+    /// edit and nothing else.
     #[test]
     fn standing_a_server_up_forgets_what_was_sent_to_the_last_one() {
         let host = cloudflare_standing_in();
@@ -852,6 +857,77 @@ mod tests {
 
         assert_eq!(store.viewer_carried().unwrap(), crate::viewer::carried::Carried::default());
         assert_eq!(store.viewer_waiting().unwrap(), 0, "what was read out under the old cursor goes too");
+    }
+
+    /// A store that already holds the address, the token and the key at its own server is only renewing
+    /// the Worker there, so what the carrier was holding stays — the place it had reached, the queue, and
+    /// what today has spent. Sending the whole backlog again would spend a day's writes on rows already up
+    /// there (`AMB-D-1161`).
+    #[test]
+    fn standing_the_same_server_up_again_keeps_what_was_sent_to_it() {
+        let host = already_standing();
+        let mut store = store_at("keeps-the-carrier");
+        let endpoint = format!("{}/worker", host.url("").trim_end_matches('/'));
+        store.set_secret(None, SecretArea::Viewer, None, AUTH_TOKEN, Some("the-token")).unwrap();
+        store.set_secret(None, SecretArea::Viewer, None, ENCRYPTION_KEY, Some("the-key")).unwrap();
+        store.set_secret(None, SecretArea::Viewer, None, WORKER_URL, Some(&endpoint)).unwrap();
+        let left = crate::viewer::carried::Carried {
+            version: 12_345,
+            cursor: 980,
+            spent: 4_200,
+            spent_on: Some("2026-11-16".into()),
+            ..Default::default()
+        };
+        store.set_viewer_carried(&left).unwrap();
+        store
+            .enqueue_viewer(&[crate::viewer::carried::Waiting {
+                record_key: "task/1".into(),
+                op: crate::viewer::carried::Op::Placed,
+                body: Some("{}".into()),
+            }])
+            .unwrap();
+
+        setup_reaching(&mut store, "a-pasted-token", None, None, &reaching(&host)).expect("setup");
+
+        assert_eq!(store.viewer_carried().unwrap(), left);
+        assert_eq!(store.viewer_waiting().unwrap(), 1, "and what waits to go still waits");
+    }
+
+    /// Any one of the three gone is a server the carrier has not sent to, and it is forgotten as before:
+    /// an address other than the one it sent to, a database made just now, a key drawn just now.
+    #[test]
+    fn a_server_other_than_the_one_sent_to_is_sent_everything_again() {
+        let left = crate::viewer::carried::Carried {
+            version: 12_345,
+            cursor: 980,
+            spent: 4_200,
+            spent_on: Some("2026-11-16".into()),
+            ..Default::default()
+        };
+        for (tag, standing, url_kept, key_kept) in [
+            ("elsewhere", true, false, true),
+            ("database-new", false, true, true),
+            ("key-new", true, true, false),
+        ] {
+            let host = if standing { already_standing() } else { cloudflare_standing_in() };
+            let mut store = store_at(&format!("forgets-{tag}"));
+            let endpoint = format!("{}/worker", host.url("").trim_end_matches('/'));
+            let kept_url = if url_kept { endpoint } else { "http://127.0.0.1:9/worker".to_string() };
+            store.set_secret(None, SecretArea::Viewer, None, AUTH_TOKEN, Some("the-token")).unwrap();
+            if key_kept {
+                store.set_secret(None, SecretArea::Viewer, None, ENCRYPTION_KEY, Some("the-key")).unwrap();
+            }
+            store.set_secret(None, SecretArea::Viewer, None, WORKER_URL, Some(&kept_url)).unwrap();
+            store.set_viewer_carried(&left).unwrap();
+
+            setup_reaching(&mut store, "a-pasted-token", None, None, &reaching(&host)).expect("setup");
+
+            assert_eq!(
+                store.viewer_carried().unwrap(),
+                crate::viewer::carried::Carried::default(),
+                "{tag}: forgotten"
+            );
+        }
     }
 
     /// The token is used and not written down. What is left in the store can create nothing in that

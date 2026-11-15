@@ -717,8 +717,8 @@ mod tests {
         );
     }
 
-    /// Standing a server up throws away what this device remembers of the last one — the count a repair
-    /// showed included, since it says how far apart the two ends were.
+    /// Pointing the store at another server throws away what this device remembers of the last one — the
+    /// count a repair showed included, since it says how far apart the two ends were.
     #[test]
     fn forgetting_the_carrier_takes_the_count_with_it() {
         let store = store_at("forget-the-count");

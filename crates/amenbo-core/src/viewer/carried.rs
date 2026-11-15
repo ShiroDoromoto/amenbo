@@ -81,8 +81,9 @@ pub struct Carried {
     /// Whether the server holds run rows a build before the Worker's build 4 placed there: `None` is
     /// "not read yet", `Some(false)` "none", `Some(true)` "some".
     ///
-    /// **It is read once per server.** Standing a server up throws this row away ([`forget()`]), so the
-    /// next server is read anew and no other one is ever read twice.
+    /// **It is read once per server.** Pointing the store at a server it has not sent to throws this row
+    /// away ([`forget()`]), so the next server is read anew and no other one is ever read twice. Pressing
+    /// setup again at the same server keeps it.
     pub strays: Option<bool>,
     /// Where in the server's ordering a reading of it that stopped part way got to — the `seq` to read on
     /// from, in decimal — so the next turn goes on from there. `None` is "from the beginning".
@@ -205,15 +206,17 @@ pub(crate) fn write_on(conn: &rusqlite::Connection, left: &Carried) -> Result<()
 /// Throw away what the carrier was holding, so the next turn places the whole backlog again.
 ///
 /// **What this remembers is what it sent, not what the server holds**, and the two part company whenever
-/// that server is stood up anew: an empty one behind a memory that says "level" would be handed the next
-/// edit and nothing else. Nothing can ask the server which it is — the write token is refused at its
-/// reading door on purpose — so the moment of standing one up is the only place this can be settled.
+/// the store is pointed at a server it has not sent to: an empty one behind a memory that says "level"
+/// would be handed the next edit and nothing else. So setup runs this when the server it stands up is not
+/// the one this store already sent to — a database made just now, a key drawn just now, or another
+/// address. Pressing setup again at the same server keeps all of it, the count of what today has spent
+/// included, since every row it remembers sending is still up there.
 ///
 /// The queue goes with the numbers. What waits in it was read out under a cursor this forgets, so keeping
 /// it would send the same records twice and place them a second time under the new key besides.
 ///
-/// The count a repair last showed goes too. It says how far apart the two ends were, and a server stood
-/// up anew is one nobody has been shown anything about.
+/// The count a repair last showed goes too. It says how far apart the two ends were, and a server this
+/// store has not sent to is one nobody has been shown anything about.
 pub fn forget(engine: &StoreEngine) -> Result<()> {
     let tx = engine.transaction()?;
     for sql in [Delete::from(VS.table).sql(), Delete::from(VP.table).sql()] {

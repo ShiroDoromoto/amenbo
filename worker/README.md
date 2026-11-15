@@ -132,6 +132,7 @@ store carries on against a store that is not empty.
 | route | |
 |---|---|
 | `PUT /records` | place the records that moved, deletions included. The answer is `{"seq":…,"rows_written":…,"build":…}` |
+| `DELETE /records` | **take the rows under the keys handed over out of the store** (write token only). `{"keys":[…],"reread":true}`, both optional. Same answer shape as `PUT` (see "Taking rows out") |
 | `GET /records?since=<seq>` | what follows that point in the order, in pages (200 per page) |
 | `GET /records?since=<seq>&keys=1` | **keys and their last word only** (2,000 per page — see "Reading the keys alone") |
 | `GET /meta` | version, where the order stands, last write, where the placement began, **the fingerprint of the sealing key**. **The cheap question to ask before fetching** |
@@ -216,6 +217,36 @@ an answer that turns on strings** (measured: 24,541 records, 27.12 MB over 123 p
 rather than something the store holds. A sender that cannot tell the two apart **sends `del` for every
 one of them, every time**, and each of those raises another headstone.
 
+### Taking rows out
+
+`DELETE /records` takes `{"keys":[…],"reread":true}` and removes the rows under those keys. **Which keys
+go is the sender's call.** This Worker does not know what a key means: any non-empty string is a key,
+and a key with no row under it is nothing to do. At most 500 keys per request (`413` past that). Only the
+write token gets through (`403` for a read code).
+
+**This is not `op: "del"`.** A deletion record leaves a row behind so a phone that was away hears the
+record went. This leaves nothing — that is the point, in a store with a size limit — and it is also why
+a phone reading on cannot learn of it. **Taking rows out alone does not move `seq`**: nothing was placed, and winding it back
+would make every level phone a cursor from another store (see "The order never rewinds").
+
+**`reread: true` is how the phones hear of it.** It sets `placed_from` to where the order now stands, so
+every phone holding rows is refused its next read on with `409`, drops its copy and reads from the
+beginning — without what was taken out (see "A cursor a placement overtook is refused"). A sender taking
+rows out over several requests asks for it on the last one, or on a request with no keys after them, so
+the phones read again once.
+
+**`reread` also moves every row that stays above `placed_from`**: it adds where the order stood to each
+row's `seq` and doubles `seq`. The rows keep their order among themselves. A phone reading again from
+the beginning is handed a cursor with every page, and each has to be past `placed_from` — left where
+they were, the rows of a store larger than one page would hand that phone a cursor at or below
+`placed_from` with its first page, and its second read would be refused, over and over. **This costs a
+write for every row the store holds**, and `rows_written` in the answer says so. The last page of a read
+carries where the order stands rather than where its last row sits, so a phone comes level with `seq`
+even when the rows at the end were taken out.
+
+The answer is `{"seq":…,"rows_written":…,"build":…}`, as for `PUT /records`, so one budget covers both.
+This route is what `build` `4` adds.
+
 ### The order never rewinds
 
 `seq` lives in **`store`'s single row**, not in the maximum of `records`. Counting it off the rows would
@@ -238,8 +269,9 @@ reset as a copy of where the order stood just before the emptying. A placement's
 next number, so **every row a cursor at or below that points to has been rebuilt** — "what you hold is
 not a continuation" follows from the definition of a placement rather than from a guess.
 
-**Nothing writes it any more, and reading it does not stop.** A store that was reset stands in a user's
-account right now, and the number left in it is still what protects that phone. Reading costs **one more
+**Resets no longer write it, and reading it does not stop.** A store that was reset stands in a user's
+account right now, and the number left in it is still what protects that phone. **`DELETE /records` with
+`reread: true` is what writes it now** (see "Taking rows out"). Reading costs **one more
 column on a row already being read**; stopping costs **a phone its ledger**, on a Worker that cannot be
 corrected afterwards.
 

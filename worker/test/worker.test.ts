@@ -176,6 +176,7 @@ describe("the two kinds of token", () => {
 describe("the routes", () => {
 	it.each([
 		["PUT", "/records", WRITE_TOKEN],
+		["DELETE", "/records", WRITE_TOKEN],
 		["GET", "/records", "the-phone's-own-token"],
 		["GET", "/meta", "the-phone's-own-token"],
 		["GET", "/records", WRITE_TOKEN],
@@ -183,7 +184,8 @@ describe("the routes", () => {
 	])("%s %s is dispatched", async (method, path, token) => {
 		await pair("the-phone's-own-token");
 
-		const response = await carrying(token, path, { method, body: method === "PUT" ? placement(1, []) : undefined });
+		const body = method === "PUT" ? placement(1, []) : method === "DELETE" ? "{}" : undefined;
+		const response = await carrying(token, path, { method, body });
 
 		expect(response.status).toBe(200);
 	});
@@ -218,7 +220,7 @@ describe("the routes", () => {
 	// A method the endpoint does not take is not a missing endpoint, and the difference is what
 	// tells a caller with a typo from one pointed at the wrong Worker entirely.
 	it.each([
-		["DELETE", "/records", "PUT, GET, HEAD"],
+		["POST", "/records", "PUT, DELETE, GET, HEAD"],
 		["GET", "/reset", "PUT"],
 		["PUT", "/meta", "GET, HEAD"],
 		["POST", "/meta", "GET, HEAD"],
@@ -858,6 +860,203 @@ describe("sending one turn in more than one request", () => {
 		const response = await signed("/records", { method: "PUT", body });
 
 		expect(response.status).toBe(400);
+	});
+});
+
+/** Takes rows out the way the PC does. */
+function taking(body: unknown): Promise<Response> {
+	return signed("/records", { method: "DELETE", body: JSON.stringify(body) });
+}
+
+describe("taking rows out", () => {
+	it("takes out the rows under the keys it is handed, and leaves the rest", async () => {
+		await sending("/records", 1, [sealed("task/1"), sealed("automation_run/7"), sealed("anything/at-all")]);
+
+		const response = await taking({ keys: ["automation_run/7", "anything/at-all"] });
+
+		expect(response.status).toBe(200);
+		const answered = (await reading("/records?since=0").then((it) => it.json())) as { records: unknown[] };
+		expect(answered.records).toEqual([sealed("task/1")]);
+	});
+
+	// A key with no row is nothing to take out, not a mistake: the sender may be repeating a request
+	// whose answer never reached it.
+	it("takes a key that is not here as nothing to do", async () => {
+		await sending("/records", 1, [sealed("task/1")]);
+
+		const response = await taking({ keys: ["task/never-placed"] });
+
+		expect(response.status).toBe(200);
+		const { results } = await env.RECORDS.prepare("SELECT k FROM records").all();
+		expect(results).toEqual([{ k: "task/1" }]);
+	});
+
+	// A phone ahead of the order is refused as a cursor from another store, so winding back would
+	// turn every phone that was level into a stranger.
+	it("never winds the order back", async () => {
+		await sending("/records", 1, [sealed("task/1"), sealed("task/2")]);
+
+		const response = await taking({ keys: ["task/1", "task/2"] });
+
+		expect(await response.json()).toMatchObject({ seq: 2 });
+		expect(await reading("/meta").then((it) => it.json())).toMatchObject({ seq: 2, placed_from: 0 });
+	});
+
+	it("answers in the shape a write does", async () => {
+		await sending("/records", 1, [sealed("task/1")]);
+
+		const response = await taking({ keys: ["task/1"] });
+
+		expect(await response.json()).toEqual({ seq: 1, rows_written: expect.any(Number), build: expect.any(Number) });
+	});
+
+	it("answers with the rows the database wrote", async () => {
+		await sending("/records", 1, [sealed("task/1"), sealed("task/2")]);
+
+		const response = await taking({ keys: ["task/1", "task/2"] });
+
+		const { rows_written } = (await response.json()) as { rows_written: number };
+		expect(rows_written).toBeGreaterThanOrEqual(2);
+	});
+
+	// **Without `reread` a phone that is level keeps what was taken out**: nothing was placed, so
+	// reading on finds nothing new.
+	it("leaves a phone reading on where it was without reread", async () => {
+		await sending("/records", 1, [sealed("task/1")]);
+
+		await taking({ keys: ["task/1"] });
+
+		expect((await reading("/records?since=1")).status).toBe(200);
+	});
+
+	// The whole of why `reread` is here: a phone that held the row is refused its next read on, and
+	// reading again from the beginning hands it a store without the row.
+	it("sends every phone back to the beginning with reread", async () => {
+		await sending("/records", 1, [sealed("task/1"), sealed("task/2")]);
+
+		await taking({ keys: ["task/1"], reread: true });
+
+		expect((await reading("/records?since=1")).status).toBe(409);
+		expect((await reading("/records?since=2")).status).toBe(409);
+		expect(await reading("/meta").then((it) => it.json())).toMatchObject({ seq: 4, placed_from: 2 });
+		const answered = (await reading("/records?since=0").then((it) => it.json())) as {
+			seq: number;
+			records: unknown[];
+		};
+		expect(answered.records).toEqual([sealed("task/2")]);
+		expect(answered.seq).toBe(4);
+	});
+
+	// A store larger than a page is read again a page at a time, and the cursor the first page hands
+	// back has to be past `placed_from`, or the second read is refused and the phone goes round.
+	it("lets a phone read again a store larger than one page", async () => {
+		const records = Array.from({ length: 201 }, (_, i) => sealed(`task/${i}`));
+		await sending("/records", 1, records);
+
+		await taking({ reread: true });
+
+		const first = (await reading("/records?since=0").then((it) => it.json())) as {
+			seq: number;
+			more: boolean;
+			records: unknown[];
+		};
+		expect(first.more).toBe(true);
+		expect(first.records).toEqual(records.slice(0, 200));
+		const second = await reading(`/records?since=${first.seq}`);
+		expect(second.status).toBe(200);
+		expect(((await second.json()) as { records: unknown[] }).records).toEqual(records.slice(200));
+	});
+
+	// Moving the rows above `placed_from` is a write for each of them, and the answer has to say so
+	// for a sender keeping a budget.
+	it("counts the rows it moves for reread in what it answers", async () => {
+		await sending("/records", 1, [sealed("task/1"), sealed("task/2"), sealed("task/3")]);
+
+		const response = await taking({ reread: true });
+
+		const { rows_written } = (await response.json()) as { rows_written: number };
+		expect(rows_written).toBeGreaterThanOrEqual(3);
+	});
+
+	// A sender that took rows out over several requests asks once, after the last of them.
+	it("takes reread on its own", async () => {
+		await sending("/records", 1, [sealed("task/1")]);
+
+		const response = await taking({ reread: true });
+
+		expect(response.status).toBe(200);
+		expect(await reading("/meta").then((it) => it.json())).toMatchObject({ placed_from: 1 });
+	});
+
+	// A phone that read again holds a cursor past `placed_from`, so it is not sent back a second
+	// time, even before anything new is placed.
+	it("does not send a phone that read again back a second time", async () => {
+		await sending("/records", 1, [sealed("task/1")]);
+		await taking({ reread: true });
+
+		const again = (await reading("/records?since=0").then((it) => it.json())) as { seq: number };
+
+		expect(again.seq).toBe(2);
+		expect((await reading(`/records?since=${again.seq}`)).status).toBe(200);
+	});
+
+	// What is placed after the phones were sent back is read on from as usual.
+	it("lets a phone that read again read on from what comes after", async () => {
+		await sending("/records", 1, [sealed("task/1")]);
+		await taking({ reread: true });
+		const again = (await reading("/records?since=0").then((it) => it.json())) as { seq: number };
+		await sending("/records", 2, [sealed("task/2")]);
+
+		const answered = (await reading(`/records?since=${again.seq}`).then((it) => it.json())) as {
+			records: unknown[];
+		};
+		expect(answered.records).toEqual([sealed("task/2")]);
+	});
+
+	// Without `reread` the rows at the end can go, and a phone still has to come level with `seq`.
+	it("hands a phone where the order stands when the rows at the end were taken out", async () => {
+		await sending("/records", 1, [sealed("task/1"), sealed("task/2")]);
+		await taking({ keys: ["task/2"] });
+
+		const answered = (await reading("/records?since=0").then((it) => it.json())) as { seq: number };
+
+		expect(answered.seq).toBe(2);
+	});
+
+	it("is the write token's alone", async () => {
+		await pair("the-phone's-own-token");
+
+		const response = await carrying("the-phone's-own-token", "/records", {
+			method: "DELETE",
+			body: JSON.stringify({ keys: ["task/1"] }),
+		});
+
+		expect(response.status).toBe(403);
+	});
+
+	it("refuses more keys than one write takes", async () => {
+		const keys = Array.from({ length: 501 }, (_, i) => `task/${i}`);
+
+		const response = await taking({ keys });
+
+		expect(response.status).toBe(413);
+	});
+
+	it.each([
+		["a body that is not JSON", "…"],
+		["a body that is not an object", JSON.stringify(["task/1"])],
+		["keys that are not a list", JSON.stringify({ keys: "task/1" })],
+		["an empty key", JSON.stringify({ keys: [""] })],
+		["a key that is not a string", JSON.stringify({ keys: [7] })],
+		["reread that is not true or false", JSON.stringify({ reread: "yes" })],
+	])("refuses %s", async (_, body) => {
+		await sending("/records", 1, [sealed("task/1")]);
+
+		const response = await signed("/records", { method: "DELETE", body });
+
+		expect(response.status).toBe(400);
+		const { results } = await env.RECORDS.prepare("SELECT k FROM records").all();
+		expect(results).toEqual([{ k: "task/1" }]);
 	});
 });
 

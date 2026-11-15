@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // src/index.ts
 var SPEC_V = 1;
-var BUILD = 3;
+var BUILD = 4;
 var PER_PAGE = 200;
 var PER_WRITE = 500;
 var PER_KEY_PAGE = 2e3;
@@ -36,7 +36,14 @@ var index_default = {
     try {
       switch (pathname) {
         case "/records":
-          return request.method === "PUT" ? await place(env, request) : await read(env, url);
+          switch (request.method) {
+            case "PUT":
+              return await place(env, request);
+            case "DELETE":
+              return await remove(env, request);
+            default:
+              return await read(env, url);
+          }
         case "/reset":
           return gone();
         case "/meta":
@@ -51,7 +58,7 @@ var index_default = {
 };
 var READING = ["read", "write"];
 var ROUTES = {
-  "/records": { PUT: ["write"], GET: READING, HEAD: READING },
+  "/records": { PUT: ["write"], DELETE: ["write"], GET: READING, HEAD: READING },
   "/reset": { PUT: ["write"] },
   "/meta": { GET: READING, HEAD: READING },
   "/tokens": { PUT: ["write"], DELETE: ["write"], GET: ["write"], HEAD: ["write"] }
@@ -151,7 +158,7 @@ async function read(env, url) {
   if (since > 0 && since <= now.placed_from) {
     return problem(
       409,
-      `the whole of this store was placed again above ${now.placed_from}, and you asked to read on from ${since} \u2014 everything you have from before that has been made again, so throw it away and read from the beginning`
+      `what this store held up to ${now.placed_from} has changed under you, and you asked to read on from ${since} \u2014 what you have from before that is not what is here, so throw it away and read from the beginning`
     );
   }
   const most = keysOnly ? PER_KEY_PAGE : PER_PAGE;
@@ -160,10 +167,11 @@ async function read(env, url) {
   ).bind(since, most + 1).all();
   const more = results.length > most;
   const page = more ? results.slice(0, most) : results;
+  const last = page.length ? page[page.length - 1].seq : since;
   return Response.json({
     spec_v: SPEC_V,
     version: now.version,
-    seq: page.length ? page[page.length - 1].seq : since,
+    seq: more ? last : Math.max(last, now.seq),
     more,
     records: page.map(keysOnly ? keyOnly : travelling)
   });
@@ -249,6 +257,60 @@ async function place(env, request) {
   });
 }
 __name(place, "place");
+async function remove(env, request) {
+  let asked;
+  try {
+    asked = await request.json();
+  } catch {
+    return problem(400, "the body has to be a JSON object");
+  }
+  if (typeof asked !== "object" || asked === null || Array.isArray(asked)) {
+    return problem(400, "the body has to be a JSON object");
+  }
+  const { keys, reread } = asked;
+  const taking = keys === void 0 ? [] : keys;
+  if (!Array.isArray(taking)) {
+    return problem(400, "keys has to be a list of the keys to take out, empty or otherwise");
+  }
+  if (taking.length > PER_WRITE) {
+    return problem(
+      413,
+      `one write takes ${PER_WRITE} keys at most, and this one carried ${taking.length} \u2014 send it in parts`
+    );
+  }
+  for (const k of taking) {
+    if (typeof k !== "string" || k === "") {
+      return problem(
+        400,
+        `every key is a non-empty string \u2014 the string a record is filed under, and ${JSON.stringify(k) ?? "nothing"} is not one`
+      );
+    }
+  }
+  if (reread !== void 0 && typeof reread !== "boolean") {
+    return problem(
+      400,
+      "reread has to be true or false \u2014 whether every phone should throw its copy away and read again"
+    );
+  }
+  const take = env.RECORDS.prepare("DELETE FROM records WHERE k = ?");
+  const statements = [
+    ...taking.map((k) => take.bind(k)),
+    // Every row left is at or below where the order stands, so adding that number lands each one
+    // above every number in use: the unique index on `seq` never sees two rows meet on the way.
+    ...reread ? [
+      env.RECORDS.prepare("UPDATE records SET seq = seq + (SELECT seq FROM store WHERE id = 1)"),
+      env.RECORDS.prepare("UPDATE store SET placed_from = seq, seq = seq * 2 WHERE id = 1")
+    ] : [],
+    env.RECORDS.prepare("SELECT seq FROM store WHERE id = 1")
+  ];
+  const done = await env.RECORDS.batch(statements);
+  return Response.json({
+    seq: done[done.length - 1].results[0].seq,
+    rows_written: rowsWritten(done),
+    build: BUILD
+  });
+}
+__name(remove, "remove");
 function rowsWritten(done) {
   return done.reduce((all, one) => all + (one.meta?.rows_written ?? 0), 0);
 }

@@ -365,6 +365,37 @@ pub fn build_in_the_script(script: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
+/// **Whether to ask the user to press setup again**: this device's server holds a run's leftover rows,
+/// and answers as a Worker too old to delete them (`AMB-D-1160`).
+///
+/// The deleting is done from here a few at a time, but only by a Worker of build 4 or later; on an older
+/// one those rows stay until setup is pressed again. Pressing it at the same server keeps what was found
+/// (`AMB-D-1161`), so what ends the asking is the build the next write answers with, and nothing else.
+///
+/// **The condition is here and the words are not** (`AMB-D-544`). The command line and the screen both
+/// ask this, and each says it in its own place. Nothing about how far the deleting got is answered: the
+/// question is only whether to ask.
+///
+/// It goes to no network. The build is the one the last write was answered with
+/// ([`carried::Carried::build`]), since a write's answer is the only place the server says it
+/// (`AMB-D-811`). A device with no server is not asked.
+pub fn asks_for_setup_again(store: &Store) -> Result<bool> {
+    if send::Server::of_device(store)?.is_none() {
+        return Ok(false);
+    }
+    Ok(left_asks_for_setup_again(&store.viewer_carried()?))
+}
+
+/// The condition [`asks_for_setup_again`] reads off where the carrier was left.
+///
+/// **A build of zero does not ask.** Zero is "nothing has been written yet", not an old Worker, and the
+/// leftover rows are looked for before the first write comes back — so a device can hold `Some(true)`
+/// before it knows which Worker it is talking to. Asking then would ask everyone whose server is already
+/// new enough, for the one turn it takes the first write to answer.
+fn left_asks_for_setup_again(left: &carried::Carried) -> bool {
+    left.strays == Some(true) && left.build > 0 && left.build < send::BUILD_THAT_TAKES_KEYS_OUT
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -408,6 +439,55 @@ mod tests {
         assert_ne!(one, two);
         let raw = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&one).expect("base64");
         assert_eq!(raw.len(), SECRET_SIZE);
+    }
+
+    /// The asking turns on the two together: leftover rows found, and a server known to be older than
+    /// build 4. A build not known yet (zero) does not ask, and neither does a reading not done yet.
+    #[test]
+    fn setup_is_asked_for_again_only_where_an_old_worker_holds_leftover_rows() {
+        for build in [0, 1, 3, 4, 5] {
+            for strays in [None, Some(false), Some(true)] {
+                let left = carried::Carried { build, strays, ..Default::default() };
+                let asks = strays == Some(true) && (1..=3).contains(&build);
+                assert_eq!(left_asks_for_setup_again(&left), asks, "build {build}, strays {strays:?}");
+            }
+        }
+    }
+
+    /// How far the deleting got is not part of the condition: a row saying it finished still asks while
+    /// the build is older than 4, since only setup makes the server one that deletes.
+    #[test]
+    fn the_asking_is_not_ended_by_anything_but_the_build() {
+        let left = carried::Carried {
+            build: 3,
+            strays: Some(true),
+            strays_gone_at: Some("2026-11-01T00:00:00Z".into()),
+            ..Default::default()
+        };
+        assert!(left_asks_for_setup_again(&left));
+    }
+
+    /// A device with no server is not asked, whatever its carrier row says; one with a server is asked
+    /// off that row.
+    #[test]
+    fn a_device_with_no_server_is_not_asked() {
+        let mut store = store_at("asks-again");
+        let left = carried::Carried { build: 3, strays: Some(true), ..Default::default() };
+        store.set_viewer_carried(&left).unwrap();
+        assert!(!asks_for_setup_again(&store).unwrap());
+
+        let key = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode([7u8; sealing::KEY_SIZE]);
+        for (field, value) in [
+            (WORKER_URL, "https://viewer.example.com".to_string()),
+            (AUTH_TOKEN, "write-token".to_string()),
+            (ENCRYPTION_KEY, key),
+        ] {
+            store.set_secret(None, SecretArea::Viewer, None, field, Some(&value)).unwrap();
+        }
+        assert!(asks_for_setup_again(&store).unwrap());
+
+        store.set_viewer_carried(&carried::Carried { build: 4, ..left }).unwrap();
+        assert!(!asks_for_setup_again(&store).unwrap());
     }
 
     /// A store on a scratch base, so the settings setup writes land somewhere.

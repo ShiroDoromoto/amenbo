@@ -116,6 +116,7 @@ export const ja: Translation = {
     "viewer.recreate": "サーバーを作り直す",
     "viewer.buildCurrent": "サーバーはバージョン {n} で動いています。この Amenbo が持っているものと同じです。",
     "viewer.buildBehind": "サーバーはバージョン {have} で動いています。この Amenbo が持っているのは {want} です。作り直すと上がります。",
+    "viewer.setupAgain": "Viewer のサーバーを更新するため、再セットアップしてください",
     "viewer.buildUnknown": "まだサーバーへ1件も送っていないので、どのバージョンで動いているかは分かりません。",
     "viewer.createNote": "あなた自身の Cloudflare アカウントに Worker とデータベースを作ります。Amenbo 側では何も預かりません。",
     "viewer.recreateNote": "アカウントにすでにあるサーバーへ、上から作り直します。手元の鍵はそのまま使うので、ペアリング済みの端末は読み続けられます。",

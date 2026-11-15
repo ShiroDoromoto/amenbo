@@ -121,6 +121,7 @@ export const it: Translation = {
     "viewer.recreate": "Creare di nuovo il server",
     "viewer.buildCurrent": "Il server esegue la build {n}, la stessa che porta questo Amenbo.",
     "viewer.buildBehind": "Il server esegue la build {have}. Questo Amenbo porta la {want}: crealo di nuovo per allinearlo.",
+    "viewer.setupAgain": "Configura di nuovo il Viewer per aggiornarne il server.",
     "viewer.buildUnknown": "Al server non è ancora stato inviato nulla, quindi non si sa quale build esegua.",
     "viewer.createNote": "Crea un Worker e un database nel tuo account Cloudflare. Amenbo non ospita nulla di tutto ciò.",
     "viewer.recreateNote": "Ricrea sopra il server già presente nel tuo account. Le chiavi qui restano, quindi ogni telefono abbinato continua a leggere.",

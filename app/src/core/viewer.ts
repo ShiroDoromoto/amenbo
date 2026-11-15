@@ -66,6 +66,31 @@ export function useViewerState(): { state: ViewerState; loading: boolean; error:
 }
 
 /**
+ * Whether the reader should be asked to set up again: an old Worker is holding rows a run left behind,
+ * which only build 4 and later can take out. The judgement is core's whole (`asks_for_setup_again`); this
+ * side only draws it. `false` outside Tauri, where there is no store to ask.
+ */
+export async function fetchViewerAsksForSetupAgain(): Promise<boolean> {
+  if (!inTauri()) return false;
+  return invoke<boolean>("viewer_asks_for_setup_again");
+}
+
+/** That answer, for the band at the top of the app. Until it arrives the band stays down. */
+export function useViewerAsksForSetupAgain(): boolean {
+  const { data } = useQuery<boolean>(["viewer-setup-again"], fetchViewerAsksForSetupAgain);
+  return data ?? false;
+}
+
+/**
+ * Ask again whether to ask for setup. The build that turns the answer to `false` comes back on a send
+ * that runs in its own process, and the row it is written to is not on the change feed — so nothing
+ * would ever tell this window. The band calls this on a timer while it is up.
+ */
+export function recheckSetupAgain(): void {
+  invalidateQueries((key) => key[0] === "viewer-setup-again");
+}
+
+/**
  * Whether a phone may read. `null` where no server has been stood up — and where there is no store to
  * ask at all.
  *
@@ -90,9 +115,12 @@ export function useViewerPairing(): {
   return { pairing: data ?? null, loading, error };
 }
 
-/** Refetch what this device holds — after a setup, a send, a repair or the switch. */
+/**
+ * Refetch what this device holds — after a setup, a send, a repair or the switch. Whether to ask for
+ * setup again is read off the same rows, so it is refetched with it.
+ */
 function reloadState(): void {
-  invalidateQueries((key) => key[0] === "viewer-state");
+  invalidateQueries((key) => key[0] === "viewer-state" || key[0] === "viewer-setup-again");
 }
 
 /** Refetch whether a phone may read — after a code was issued or taken away. */

@@ -117,6 +117,7 @@ export const hi: Translation = {
     "viewer.recreate": "सर्वर फिर से बनाएँ",
     "viewer.buildCurrent": "सर्वर बिल्ड {n} पर चल रहा है, वही जो यह Amenbo साथ लाता है।",
     "viewer.buildBehind": "सर्वर बिल्ड {have} पर चल रहा है। यह Amenbo बिल्ड {want} लाता है — ऊपर लाने के लिए इसे फिर से बनाएँ।",
+    "viewer.setupAgain": "Viewer के सर्वर को अपडेट करने के लिए, इसे फिर से सेट अप करें।",
     "viewer.buildUnknown": "सर्वर को अभी कुछ नहीं भेजा गया, इसलिए वह किस बिल्ड पर है यह पता नहीं।",
     "viewer.createNote": "यह आपके अपने Cloudflare खाते में एक Worker और एक डेटाबेस बनाता है। Amenbo इनमें से कुछ भी होस्ट नहीं करता।",
     "viewer.recreateNote": "यह आपके खाते में पहले से मौजूद सर्वर के ऊपर बनाता है। यहाँ की कुंजियाँ रखी जाती हैं, इसलिए हर जुड़ा फ़ोन पढ़ता रहता है।",

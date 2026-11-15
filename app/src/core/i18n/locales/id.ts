@@ -119,6 +119,7 @@ export const id: Translation = {
     "viewer.recreate": "Buat ulang server",
     "viewer.buildCurrent": "Server menjalankan build {n}, sama dengan yang dibawa Amenbo ini.",
     "viewer.buildBehind": "Server menjalankan build {have}. Amenbo ini membawa build {want} — buat ulang untuk menaikkannya.",
+    "viewer.setupAgain": "Siapkan ulang Viewer untuk memperbarui servernya.",
     "viewer.buildUnknown": "Belum ada yang dikirim ke server, jadi build yang dijalankannya belum diketahui.",
     "viewer.createNote": "Ini membuat sebuah Worker dan sebuah basis data di akun Cloudflare Anda sendiri. Amenbo tidak menampung apa pun dari itu.",
     "viewer.recreateNote": "Ini dibuat di atas server yang sudah ada di akun Anda. Kunci di sini dipertahankan, jadi setiap ponsel yang dipasangkan tetap bisa membaca.",

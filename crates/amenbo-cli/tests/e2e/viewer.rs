@@ -85,3 +85,44 @@ fn setup_takes_the_api_token_on_stdin_and_refuses_an_empty_one() {
     // The link that opens Cloudflare's token screen with the permissions already ticked.
     assert!(stderr.contains("dash.cloudflare.com"), "it says where to make one: {stderr}");
 }
+
+/// **An old Worker holding leftover rows asks for setup again**, in one line on stderr on any command, and
+/// stops asking once a write has answered as build 4. Whether to ask is core's; this checks the line is
+/// said where it says so, and not said where it does not.
+#[test]
+fn an_old_worker_with_leftover_rows_asks_for_setup_again() {
+    use amenbo_core::model::SecretArea;
+    use amenbo_core::viewer::carried::Carried;
+
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let open = || amenbo_core::Store::open_at(amenbo_core::config::Paths::at(cli.home.clone())).expect("the store");
+
+    let left = Carried { build: 3, strays: Some(true), ..Default::default() };
+    open().set_viewer_carried(&left).unwrap();
+    // `viewer app` is answered from this build alone, so nothing here reaches the made-up server.
+    let ask = "Set up the Viewer again";
+    let (_, stderr, code) = cli.run_both(&["viewer", "app"]);
+    assert_eq!(code, 0, "{stderr}");
+    assert!(!stderr.contains(ask), "a device with no server is not asked: {stderr}");
+
+    {
+        let mut store = open();
+        for (field, value) in [
+            (amenbo_core::viewer::WORKER_URL, "https://viewer.example.com"),
+            (amenbo_core::viewer::AUTH_TOKEN, "write-token"),
+            (amenbo_core::viewer::ENCRYPTION_KEY, "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc"),
+        ] {
+            store.set_secret(None, SecretArea::Viewer, None, field, Some(value)).unwrap();
+        }
+    }
+    let (stdout, stderr, code) = cli.run_both(&["viewer", "app"]);
+    assert_eq!(code, 0, "{stderr}");
+    assert_eq!(stderr.matches(ask).count(), 1, "one line, on stderr: {stderr}");
+    assert!(stderr.contains("viewer setup"), "it names the command: {stderr}");
+    assert!(!stdout.contains(ask), "stdout is left to the command: {stdout}");
+
+    open().set_viewer_carried(&Carried { build: 4, ..left }).unwrap();
+    let (_, stderr, _) = cli.run_both(&["viewer", "app"]);
+    assert!(!stderr.contains(ask), "a build-4 Worker is not asked about: {stderr}");
+}

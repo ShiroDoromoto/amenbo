@@ -1642,8 +1642,20 @@ pub const STEPS: &[Step] = &[
         // **The blobs stay on disk.** An attachment's file may be shared with another's, and a file
         // removed here would not come back if the migration failed and the store were restored from the
         // pre-migration backup; the blob collector finds the ones nothing names any more.
+        //
+        // **The columns that point at the rows going get an index for this step only.** None of them has
+        // one, so each `WHERE … IN` and each foreign-key check on a parent row going read the whole child
+        // table, and on a store with tens of thousands of steps this step ran for many minutes; with the
+        // indexes it takes seconds. They are dropped at the end, so the store leaves this step in the
+        // shape frozen for v148, the same as v147's.
         apply: Apply::Sql(
-            "UPDATE automation_run_value
+            "CREATE INDEX v148_run_value_by_step ON automation_run_value(run_step_id);
+             CREATE INDEX v148_run_value_by_from_step ON automation_run_value(from_run_step_id);
+             CREATE INDEX v148_run_value_by_attachment ON automation_run_value(attachment_id);
+             CREATE INDEX v148_task_by_run_step ON task(made_in_run_step_id);
+             CREATE INDEX v148_task_comment_by_run_step ON task_comment(automation_run_step_id);
+             CREATE INDEX v148_run_step_by_def ON automation_run_step(run_def_id);
+             UPDATE automation_run_value
                 SET from_run_step_id = NULL,
                     attachment_id = CASE WHEN kind = 'file' THEN NULL ELSE attachment_id END
               WHERE from_run_step_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
@@ -1672,7 +1684,13 @@ pub const STEPS: &[Step] = &[
              DELETE FROM automation_run_step
               WHERE run_id IN (SELECT id FROM automation_run WHERE status IN ('completed', 'failed', 'canceled'));
              DELETE FROM automation_run_def
-              WHERE run_id IN (SELECT id FROM automation_run WHERE status IN ('completed', 'failed', 'canceled'));",
+              WHERE run_id IN (SELECT id FROM automation_run WHERE status IN ('completed', 'failed', 'canceled'));
+             DROP INDEX v148_run_value_by_step;
+             DROP INDEX v148_run_value_by_from_step;
+             DROP INDEX v148_run_value_by_attachment;
+             DROP INDEX v148_task_by_run_step;
+             DROP INDEX v148_task_comment_by_run_step;
+             DROP INDEX v148_run_step_by_def;",
         ),
     },
     Step {
@@ -16279,10 +16297,19 @@ mod tests {
             stmt.query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
         };
         let feed = count("SELECT COUNT(*) FROM change_feed");
+        let shape = || -> Vec<String> {
+            let conn = engine.conn();
+            let mut stmt = conn
+                .prepare("SELECT type || ' ' || name || ' ' || IFNULL(sql, '') FROM sqlite_master ORDER BY type, name")
+                .unwrap();
+            stmt.query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+        };
+        let shape_at_147 = shape();
 
         run(&engine, &dir, steps_through(148), &mut crate::progress::ignore).unwrap();
 
         assert_eq!(engine.format_version().unwrap(), 148);
+        assert_eq!(shape(), shape_at_147, "the indexes made for the step are dropped, so the shape stays v147's");
         let steps = ids("SELECT id FROM automation_run_step ORDER BY id");
         assert_eq!(steps, [41, 51], "only a run still going keeps its steps");
         assert_eq!(ids("SELECT id FROM automation_run_def ORDER BY id"), [40, 50]);

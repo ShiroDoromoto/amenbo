@@ -12,6 +12,9 @@
 // brings build 4 back from the server. That send runs in its own process and the row it writes is not on the
 // change feed, so while the band is up it asks again on a timer.
 //
+// Its button opens the update screen, which asks for the API token and nothing else (`ViewerUpdate`). The
+// screen is the shell's to hold, so a band that goes down while it is open does not take it along.
+//
 // No cross: the band is about the server, not this session, and it goes away by itself once the reason is
 // gone. Outside Tauri (in the browser) the answer is always `false`, hence hidden.
 import { useEffect } from "react";
@@ -22,7 +25,7 @@ import { recheckSetupAgain, useViewerAsksForSetupAgain } from "../core/viewer";
 /** How often the band asks core again while it is up. A local read, so a minute costs next to nothing. */
 export const RECHECK_MS = 60_000;
 
-export function SetupAgainBanner() {
+export function SetupAgainBanner({ onUpdate }: { onUpdate: () => void }) {
   const asks = useViewerAsksForSetupAgain();
 
   useEffect(() => {
@@ -39,6 +42,9 @@ export function SetupAgainBanner() {
       <div className="healthbanner__body">
         <div className="healthbanner__title">{t("viewer.setupAgain")}</div>
       </div>
+      <button className="healthbanner__action" onClick={onUpdate}>
+        {t("viewer.update.open")}
+      </button>
     </div>
   );
 }

@@ -25,6 +25,7 @@ import { SettingsScreen } from "../screens/SettingsScreen";
 import { CreditsScreen } from "../screens/CreditsScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { HookConsentModal } from "../screens/HookConsentModal";
+import { ViewerUpdate } from "../screens/ViewerUpdate";
 import { NudgeHost } from "../screens/NudgeHost";
 import { NewProjectScreen } from "../screens/NewProjectScreen";
 import { ProjectSettingsScreen } from "../screens/ProjectSettingsScreen";
@@ -131,6 +132,9 @@ export function AppShell() {
   // Bumped each time a manual check surfaces an offer, so the UpdateBanner can lift a session dismissal the user has
   // now explicitly overridden by asking again (its persistent dismissal is already cleared in `checkForUpdatesFresh`).
   const [updateRecheck, setUpdateRecheck] = useState(0);
+  // Whether the Viewer update screen is up. Held here rather than in the band that opens it: the band goes down
+  // once the server answers with the new build, and the screen saying how the press went must outlive that.
+  const [viewerUpdateOpen, setViewerUpdateOpen] = useState(false);
   // The slot the project header (the board toolbar) renders into. grid-area:header is a row spanning the full width
   // of main plus the right pane; BoardScreen portals its toolbar in here and the right pane sits below it.
   // A callback ref keeps the DOM node in state so the re-render after it settles can hand the portal target to the child.
@@ -762,7 +766,7 @@ export function AppShell() {
         <UpdateCheckFeedback state={updateCheck} onDismiss={() => setUpdateCheck(null)} />
         <HealthBanner />
         <ManagedBlockBanner />
-        <SetupAgainBanner />
+        <SetupAgainBanner onUpdate={() => setViewerUpdateOpen(true)} />
         <OrphanBindingBanner />
         {/* Ahead of the hooks warning: this one explains something that has already happened to the
             app the reader just opened, and reading it first is what makes the missing plugin screens
@@ -956,6 +960,8 @@ export function AppShell() {
           Amenbo has been used, which is exactly what someone still being asked the first question has not
           done yet. `hooksAsked` is that turn being over, the same latch the setup banner waits on. */}
       {hooksAsked && <NudgeHost />}
+      {/* Opened only by the reader pressing the setup-again band, so it waits on no question above. */}
+      {viewerUpdateOpen && <ViewerUpdate onClose={() => setViewerUpdateOpen(false)} />}
     </div>
     </PaneSlotProvider>
     </RefNavProvider>

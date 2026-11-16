@@ -15,6 +15,8 @@ const hoisted = vi.hoisted(() => ({
   asks: true,
   /** How many times it was asked. */
   asked: 0,
+  /** How many times the band's button asked for the update screen. */
+  opened: 0,
 }));
 
 vi.mock("../core/snapshot", async (importOriginal) => {
@@ -38,7 +40,7 @@ let root: Root;
 
 async function render() {
   await act(async () => {
-    root.render(createElement(SetupAgainBanner));
+    root.render(createElement(SetupAgainBanner, { onUpdate: () => { hoisted.opened += 1; } }));
   });
 }
 
@@ -48,6 +50,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
   hoisted.asks = true;
   hoisted.asked = 0;
+  hoisted.opened = 0;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -66,7 +69,19 @@ describe("SetupAgainBanner", () => {
     expect(b).not.toBeNull();
     expect(b!.classList.contains("healthbanner--offer")).toBe(true);
     expect(b!.getAttribute("role")).toBe("alert");
-    expect(b!.textContent).toBe(t("viewer.setupAgain"));
+    expect(b!.querySelector(".healthbanner__title")!.textContent).toBe(t("viewer.setupAgain"));
+  });
+
+  it("opens the update screen from its one button", async () => {
+    await render();
+    const action = banner()!.querySelector<HTMLButtonElement>("button.healthbanner__action");
+    expect(action).not.toBeNull();
+    expect(action!.textContent).toBe(t("viewer.update.open"));
+    expect(banner()!.querySelectorAll("button")).toHaveLength(1);
+    await act(async () => {
+      action!.click();
+    });
+    expect(hoisted.opened).toBe(1);
   });
 
   it("stays down when core does not ask", async () => {

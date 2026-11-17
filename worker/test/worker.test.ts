@@ -1042,6 +1042,41 @@ describe("taking rows out", () => {
 		expect(response.status).toBe(413);
 	});
 
+	// The ceiling is the most one write takes, not one past it: a sender splitting a long list into
+	// parts of exactly that size has every part taken, with or without `reread`.
+	it("takes as many keys as one write takes without reread", async () => {
+		const taken = Array.from({ length: 500 }, (_, i) => sealed(`task/${i}`));
+		await sending("/records", 1, taken);
+		await sending("/records", 2, [sealed("task/kept")]);
+
+		const response = await taking({ keys: taken.map(({ k }) => k), reread: false });
+
+		expect(response.status).toBe(200);
+		const answer = (await response.json()) as { seq: number; rows_written: number };
+		expect(answer.seq).toBe(501);
+		expect(answer.rows_written).toBeGreaterThanOrEqual(500);
+		const { results } = await env.RECORDS.prepare("SELECT k FROM records").all();
+		expect(results).toEqual([{ k: "task/kept" }]);
+		expect(await reading("/meta").then((it) => it.json())).toMatchObject({ seq: 501, placed_from: 0 });
+	});
+
+	it("takes as many keys as one write takes with reread", async () => {
+		const taken = Array.from({ length: 500 }, (_, i) => sealed(`task/${i}`));
+		await sending("/records", 1, taken);
+		await sending("/records", 2, [sealed("task/kept")]);
+
+		const response = await taking({ keys: taken.map(({ k }) => k), reread: true });
+
+		expect(response.status).toBe(200);
+		const answer = (await response.json()) as { seq: number; rows_written: number };
+		expect(answer.seq).toBe(1002);
+		expect(answer.rows_written).toBeGreaterThanOrEqual(500);
+		expect(await reading("/meta").then((it) => it.json())).toMatchObject({ seq: 1002, placed_from: 501 });
+		expect((await reading("/records?since=1")).status).toBe(409);
+		const answered = (await reading("/records?since=0").then((it) => it.json())) as { records: unknown[] };
+		expect(answered.records).toEqual([sealed("task/kept")]);
+	});
+
 	it.each([
 		["a body that is not JSON", "…"],
 		["a body that is not an object", JSON.stringify(["task/1"])],

@@ -346,9 +346,9 @@ impl Store {
     /// order, and only the second of the two is what a wait or a spent budget is about
     /// ([`crate::viewer::pace`]): what has moved is read out of the change feed whatever the network is
     /// doing. Stopping this on a quiet window would leave the copying undone for as long as the window
-    /// lasted — and the feed keeps [`crate::store_engine::CHANGE_FEED_RETAIN`] rows, so a cursor left
-    /// behind it is answered with a gap and paid for by copying the whole store out again. So the pause
-    /// belongs where the sending is and stays there.
+    /// lasted — and the feed waits for a carrier that is reading only until what it has not read outgrows
+    /// the whole store, so a cursor left behind that is answered with a gap and paid for by copying the
+    /// whole store out again. So the pause belongs where the sending is and stays there.
     ///
     /// Nothing here fails the write: it has already committed, and a carrier that did not start costs the
     /// turn and no records — what has moved is still ahead of the cursor for the next one.

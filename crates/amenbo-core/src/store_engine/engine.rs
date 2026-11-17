@@ -19,9 +19,10 @@ use super::search;
 use super::sql::{Delete, Exists, Expr, Insert, Pred, Select, Sql, Update};
 
 /// The plain tables this module speaks to, named through the generated identifiers: the store's
-/// scalars and the change feed.
+/// scalars, the change feed, and the readers that keep their place in the feed here.
 const META: col::store_meta::Cols = col::store_meta::ALL;
 const FEED: col::change_feed::Cols = col::change_feed::ALL;
+const READER: col::feed_reader::Cols = col::feed_reader::ALL;
 
 /// `SELECT EXISTS(… store_meta WHERE key = ?)` — the "has this scalar been written?" probe, shared by
 /// the engine's own [`StoreEngine::is_populated`] and the DDL-free [`probe_is_populated`].
@@ -119,17 +120,23 @@ pub struct RowChange {
     pub op: &'static str,
 }
 
-/// How many feed rows a store keeps. The feed is a window a reader catches up through, not a history: a
-/// reader that has been away longer than this is told its cursor is gone and re-reads the store, which
-/// costs one reconcile — cheaper than an unbounded table nobody ever prunes. Sized so an ordinary
-/// session never sees a gap: a busy day is a few hundred operations, and one operation writes a handful
-/// of rows; a reader away longer than that was going to re-read the store on startup anyway.
+/// How many feed rows a store keeps for the readers that keep their own place. The feed is a window a
+/// reader catches up through, not a history: a reader that has been away longer than this is told its
+/// cursor is gone and re-reads the store, which costs one reconcile — cheaper than an unbounded table
+/// nobody ever prunes. Sized so an ordinary session never sees a gap: a busy day is a few hundred
+/// operations, and one operation writes a handful of rows; a reader away longer than that was going to
+/// re-read the store on startup anyway.
+///
+/// A reader that keeps its place among the store's readers (`feed_reader`) and is reading can hold the
+/// window open further back than this, up to what re-reading the whole store would cost it — see
+/// `trim_change_feed`.
 pub const CHANGE_FEED_RETAIN: i64 = 5_000;
 
 /// How many rows may be written between two trims. The bound is enforced amortised — a trim runs on the
 /// commit that crosses this, not on every commit — so the write path pays one extra DELETE per thousands
 /// of rows instead of a scan per operation. The feed therefore sits at `CHANGE_FEED_RETAIN` plus at most
-/// this many rows, which is the bound, not an exact length.
+/// this many rows — or at the place of the reader furthest behind, while one is reading and waiting
+/// for it costs less than its reading the whole store again.
 const CHANGE_FEED_TRIM_EVERY: u64 = 500;
 
 /// `store_meta` key: the highest feed id truncation has removed. A reader whose cursor is at or below it
@@ -309,7 +316,8 @@ impl StoreEngine {
         &self.conn
     }
 
-    /// Trim the change feed back to [`CHANGE_FEED_RETAIN`] rows, but only once every
+    /// Trim the change feed back to [`CHANGE_FEED_RETAIN`] rows — no further than the reader furthest
+    /// behind has read ([`trim_change_feed`]) — but only once every
     /// [`CHANGE_FEED_TRIM_EVERY`] rows written, so no single commit carries the whole cost (`written` is
     /// what this commit just appended) — and **on this engine's first commit**, which is where the bound
     /// on a CLI-only store is enforced ([`trim_due_at_once`]). Runs **inside the caller's transaction**,
@@ -605,17 +613,26 @@ pub fn at_rest_status(db_path: &Path) -> AtRestStatus {
 /// cursor is older than the watermark has lost changes it never saw, and an empty result would otherwise
 /// read as "nothing changed" and freeze a stale screen; recording the cut is what lets
 /// [`super::read::changes_since`] answer *"your cursor is gone, re-read the store"* instead.
+///
+/// **The cut stops at the reader furthest behind** ([`trim_through`]), so a registered reader that is
+/// reading does not lose its place to one large write — a project deleted while it was away. The
+/// watermark is written where the cut actually stopped, which is what keeps that reader clear of a gap.
 fn trim_change_feed(conn: &Connection) -> Result<()> {
-    // Everything at or below this id goes. The retention window is arithmetic, not a query: SQL is asked
-    // only for the newest id, and an empty feed answers `NULL` — nothing to cut.
+    // The retention window is arithmetic, not a query: SQL is asked only for the newest id, and an empty
+    // feed answers `NULL` — nothing to cut.
     let mut sel = Select::new();
     let newest = sel.expr::<Option<i64>>(format!("MAX({})", FEED.id.to_sql()));
     let sql = Sql::from(&sel, FEED.table);
     let newest: Option<i64> =
         conn.query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| newest.get(r))?;
-    let Some(cut) = newest.map(|n| n - CHANGE_FEED_RETAIN).filter(|c| *c > 0) else {
-        return Ok(())
+    let Some(newest) = newest else {
+        return Ok(());
     };
+    // Everything at or below this id goes.
+    let cut = trim_through(conn, newest)?;
+    if cut <= 0 {
+        return Ok(());
+    }
     let removed = Delete::from(FEED.table)
         .filter(Pred::cmp(FEED.id, "<=", cut))
         .sql()
@@ -625,6 +642,54 @@ fn trim_change_feed(conn: &Connection) -> Result<()> {
     }
     upsert_meta(conn, META_FEED_TRUNCATED_THROUGH, Some(&cut.to_string()))?;
     Ok(())
+}
+
+/// The highest feed id a trim may take, the feed's newest being `newest`: [`CHANGE_FEED_RETAIN`] rows
+/// back from the head, or the place of the reader furthest behind if that is further back.
+///
+/// A reader is waited for when it is reading (`reading = 1`) and its place is still in the feed — at or
+/// above the watermark, since a reader below it is told of a gap whatever stays. It is **not** waited
+/// for once what it has not read outgrows what re-reading the whole store would hand it: from there the
+/// re-read is the cheaper road, and the feed would only grow for nobody. What a re-read hands is counted
+/// as the rows of the tables a road out carries ([`crate::export::datasets_carried_out`]), the same for
+/// every reader. A reader switched off, one that has read nothing yet, and one without a line are not
+/// waited for; nor is a reader that does not register, which keeps the window [`CHANGE_FEED_RETAIN`]
+/// gives it.
+fn trim_through(conn: &Connection, newest: i64) -> Result<i64> {
+    let retained = newest - CHANGE_FEED_RETAIN;
+    if retained <= 0 {
+        return Ok(retained);
+    }
+    let floor = super::read::feed_floor(conn, None)?;
+    let mut sel = Select::new();
+    let cursor = sel.col(READER.cursor);
+    let mut sql = Sql::from(&sel, READER.table);
+    sql.push_where(Some(
+        &Pred::eq(READER.reading, 1_i64)
+            .and(Pred::cmp(READER.cursor, "<", retained))
+            .and(Pred::cmp(READER.cursor, ">=", floor)),
+    ));
+    let behind: Vec<i64> = conn
+        .prepare(sql.text())?
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| cursor.get(r))?
+        .collect::<rusqlite::Result<Vec<i64>>>()?;
+    if behind.is_empty() {
+        return Ok(retained);
+    }
+    let whole = rows_carried_out(conn)?;
+    Ok(behind.into_iter().filter(|c| newest - c <= whole).fold(retained, i64::min))
+}
+
+/// How many rows re-reading the whole store hands a reader: the rows of every table a road out carries.
+fn rows_carried_out(conn: &Connection) -> Result<i64> {
+    let mut whole = 0;
+    for dataset in crate::export::datasets_carried_out() {
+        let mut sel = Select::new();
+        let count = sel.expr::<i64>("COUNT(*)");
+        let sql = Sql::from(&sel, dataset.as_table());
+        whole += conn.query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| count.get(r))?;
+    }
+    Ok(whole)
 }
 
 /// A [`StoreEngine::rows_since_trim`] that is already due, so the engine's first commit trims. Written
@@ -1058,4 +1123,134 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// A store holding `tasks` tasks, so re-reading the whole of it hands a reader at least that many rows.
+    fn store_of(tasks: i64) -> StoreEngine {
+        let e = StoreEngine::open_in_memory().unwrap();
+        e.conn()
+            .execute(
+                "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?1) \
+                 INSERT INTO task (id, title) SELECT i, 'task' FROM n",
+                [tasks],
+            )
+            .unwrap();
+        e
+    }
+
+    /// Append `rows` records to the change feed, as one write that touched that many rows would.
+    fn write_feed(e: &StoreEngine, rows: i64) {
+        e.conn()
+            .execute(
+                "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?1) \
+                 INSERT INTO change_feed (dataset, row_id, op) SELECT 'task', i, 'delete' FROM n",
+                [rows],
+            )
+            .unwrap();
+    }
+
+    fn reader(e: &StoreEngine, name: &str, cursor: i64, reading: bool) {
+        e.conn()
+            .execute(
+                "INSERT INTO feed_reader (name, cursor, reading) VALUES (?1, ?2, ?3)",
+                rusqlite::params![name, cursor, i64::from(reading)],
+            )
+            .unwrap();
+    }
+
+    fn trim(e: &StoreEngine) {
+        let tx = e.transaction().unwrap();
+        trim_change_feed(&tx).unwrap();
+        tx.commit().unwrap();
+    }
+
+    fn truncated_through(e: &StoreEngine) -> i64 {
+        super::super::read::feed_floor(e.conn(), None).unwrap()
+    }
+
+    fn reads_on(e: &StoreEngine, cursor: i64) -> bool {
+        matches!(
+            super::super::read::changes_since(e.conn(), cursor, 100, None).unwrap(),
+            super::super::read::FeedSlice::Changes { .. }
+        )
+    }
+
+    fn feed_starts_at(e: &StoreEngine) -> i64 {
+        e.conn().query_row("SELECT MIN(id) FROM change_feed", [], |r| r.get(0)).unwrap()
+    }
+
+    /// The Viewer has read up to 100 when a project goes, and its going writes 5,500 records — more than
+    /// the feed keeps for a reader nobody can see. The Viewer is reading, so the trim stops at its place
+    /// and writes the watermark there: it reads on from 100, with no reading of the whole store.
+    #[test]
+    fn a_large_write_while_a_reader_is_behind_leaves_it_its_place() {
+        let e = store_of(6_000);
+        write_feed(&e, 100);
+        reader(&e, "viewer", 100, true);
+        write_feed(&e, 5_500);
+
+        trim(&e);
+
+        assert_eq!(truncated_through(&e), 100, "the watermark is where the cut stopped");
+        assert_eq!(feed_starts_at(&e), 101);
+        assert!(reads_on(&e, 100), "the reader carries on from its place");
+    }
+
+    /// With several readers reading, the one furthest behind is where the cut stops.
+    #[test]
+    fn the_cut_stops_at_the_reader_furthest_behind() {
+        let e = store_of(6_000);
+        write_feed(&e, 5_600);
+        reader(&e, "viewer", 700, true);
+        reader(&e, "other", 300, true);
+
+        trim(&e);
+
+        assert_eq!(truncated_through(&e), 300);
+        assert!(reads_on(&e, 300));
+    }
+
+    /// A reader that is switched off, or has read nothing yet, is not waited for: the feed keeps
+    /// `CHANGE_FEED_RETAIN` rows, and that reader is told its place is gone.
+    #[test]
+    fn a_reader_that_is_not_reading_is_not_waited_for() {
+        let e = store_of(6_000);
+        write_feed(&e, 100);
+        reader(&e, "viewer", 100, false);
+        write_feed(&e, 5_500);
+
+        trim(&e);
+
+        assert_eq!(truncated_through(&e), 5_600 - CHANGE_FEED_RETAIN);
+        assert!(!reads_on(&e, 100), "the reader re-reads the whole store");
+    }
+
+    /// A reader whose unread records outnumber what re-reading the whole store would hand it is not
+    /// waited for: the re-read is the cheaper road, so the feed keeps `CHANGE_FEED_RETAIN` rows.
+    #[test]
+    fn a_reader_further_behind_than_the_whole_store_is_not_waited_for() {
+        let e = store_of(100);
+        write_feed(&e, 100);
+        reader(&e, "viewer", 100, true);
+        write_feed(&e, 5_900);
+
+        trim(&e);
+
+        assert_eq!(truncated_through(&e), 6_000 - CHANGE_FEED_RETAIN);
+        assert!(!reads_on(&e, 100));
+    }
+
+    /// A reader whose place is already below the watermark has lost it whatever stays, so it holds
+    /// nothing back.
+    #[test]
+    fn a_reader_already_past_the_watermark_holds_nothing_back() {
+        let e = store_of(6_000);
+        write_feed(&e, 5_600);
+        trim(&e);
+        assert_eq!(truncated_through(&e), 600);
+        reader(&e, "viewer", 300, true);
+        write_feed(&e, 500);
+
+        trim(&e);
+
+        assert_eq!(truncated_through(&e), 6_100 - CHANGE_FEED_RETAIN);
+    }
 }

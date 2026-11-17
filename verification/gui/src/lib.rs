@@ -2350,6 +2350,12 @@ impl Instructor {
             (Domain::Workspace, "open-start") =>
                 "On the empty frame, press what opens a pane — the press under the rows, the one the frame has been saying would run that line. Choose nothing first: what is on the row of agents and what is named on the model row under it are what the steps before this one set, and pressing anything else now would open the pane on a different answer. A pane comes up in the frame's place, with the program running in it."
                     .to_string(),
+            // The project's own answer, given where it is given: the settings screen's Agent field. It is
+            // saved with the rest of the screen, so the press is part of the move.
+            (Domain::Workspace, "project-agent") => format!(
+                "Open this project's settings, choose **{}** in its Agent field by its name, and press Save. Confirm the screen says it saved.",
+                req(with, "agent")?
+            ),
             // ── Moving a pane that is already running ─────────────────────────────────────────────
             // Opening the candidates. The row is under the box a pane is written in — the last line
             // of the pane's own column — and it says the model the pane was last moved to, or simply

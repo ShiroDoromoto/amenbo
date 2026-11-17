@@ -1596,7 +1596,7 @@ fn a_tasks_folder_is_read_from_what_its_own_project_offers() {
 }
 
 /// **Amenbo's own default agent is read when it is asked for, and never written onto a placement** — the
-/// one a pane would open with in the automation's project, else the person's. Placing an action, or
+/// one chosen for the automation's project, and never the one a pane was last opened with. Placing an action, or
 /// adding a step to one already placed, leaves the step with nobody chosen there, so it falls back to
 /// its role's default before Amenbo's rather than to a row placing wrote.
 #[test]
@@ -1618,12 +1618,12 @@ fn amenbos_default_agent_is_read_and_not_written_at_placing() {
 
     assert_eq!(s.automation_default_agent(automation.id).unwrap(), None, "nobody has answered");
     s.config.last_agent = Some("codex-cli".to_string());
-    assert_eq!(s.automation_default_agent(automation.id).unwrap().as_deref(), Some("codex-cli"), "the person's");
+    assert_eq!(s.automation_default_agent(automation.id).unwrap(), None, "the last pane's agent is not read");
     s.config.remember_agent(p.id, "claude-code");
     assert_eq!(
         s.automation_default_agent(automation.id).unwrap().as_deref(),
         Some("claude-code"),
-        "the project's comes first",
+        "the project's",
     );
 
     // A built-in is placed first, and the action goes on after it.

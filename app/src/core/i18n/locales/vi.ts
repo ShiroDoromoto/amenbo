@@ -2030,7 +2030,7 @@ export const vi: Translation = {
     not_ready_automation_cfg_not_found: "{step}: thiết lập “{cfg}” ghi “{line}”, nhưng dự án này không có",
     not_ready_automation_cfg_value_closed: "{step}: thiết lập “{cfg}” ghi “{line}”, một giá trị đã đóng",
     not_ready_automation_folder_unchosen: "{step}: thiết lập “{cfg}” đang trống, và dự án này có {count} thư mục đã liên kết — hãy ghi rõ thư mục nào",
-    not_ready_automation_agent_unchosen: "{step}: chưa chọn tác nhân",
+    not_ready_automation_agent_unchosen: "{step}: chưa chọn tác nhân — chọn ở mục “Tác nhân” trong Cài đặt dự án",
     not_ready_automation_agent_missing: "{step}: máy này không chạy được “{agent}”",
     not_ready_automation_model_missing: "{step}: tác nhân ở đây không có mô hình “{model}”",
     not_ready_automation_script_missing: "{step}: không có tệp nào ở “{program}”",

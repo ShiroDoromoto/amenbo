@@ -2,9 +2,9 @@
 # chose for is one the launch check refuses, so a reader once had to choose again for every step of
 # every placement before a run could start. Nothing is written on a placement now: who carries a step
 # out is decided in order — what the step names, then the role's default, then Amenbo's own
-# (`amenbo_core::wake::step_agent`: the project's answer, else the agent the reader last opened a pane
-# with). So a step nobody chose for is carried out by the agent the reader has already given, and the
-# placement's own line for it stays on nobody chosen.
+# (`amenbo_core::wake::step_agent`: the agent chosen for the project, and never the one a pane was
+# last opened with). So a step nobody chose for is carried out by the agent the project's panes open
+# with, and the placement's own line for it stays on nobody chosen.
 #
 # ── Where it is read ────────────────────────────────────────────────────────────────────────────
 # The panel of a pressed placement says only what the step itself names, and this one names nothing.
@@ -13,25 +13,25 @@
 # (`app/src/screens/AutomationRoleCarriers.tsx`). A cell the step chose is marked ●; one it falls back
 # to is muted and unmarked, which is the reading here.
 #
-# ── Why the answer is given by opening a pane ───────────────────────────────────────────────────
-# Both answers are written by the screen and by nothing else. The last agent is what a press on the
-# empty frame's row leaves behind (`app/src-tauri/src/wake.rs`, `wake_chose`), and it is the one every
-# reader has given by the time they build anything — so it is the rank this road walks. There is no
-# terminal road to either answer, which is why this goal is the screen's alone.
+# ── Why the answer is given on the project's settings ───────────────────────────────────────────
+# The project's answer is written by its settings screen and by nothing else
+# (`app/src/screens/ProjectSettingsScreen.tsx`, `wake_remember`). The agent a pane was last opened
+# with is not an answer for a step: it is a habit of opening panes, and reading it put steps on
+# agents nobody had chosen for the automation. There is no terminal road to the project's answer,
+# which is why this goal is the screen's alone.
 #
 # ── Why the agent is named ──────────────────────────────────────────────────────────────────────
 # The cell reads the agent's own name, and a road reading a name has to have chosen it. The machine is
-# stood up (`can-start`), which is what lets a road name one at all; two of them, so that nobody has
-# chosen when the frame comes up and the press is the reader's rather than the only thing there was.
+# stood up (`can-start`), which is what lets a road name one at all; two of them, so that the
+# settings screen draws its Agent field, which it leaves out where there is nothing to choose between.
 id: find-the-agent-you-open-with-already-chosen-on-a-step-you-place
-title: A step of an action placed on an automation is carried out by the agent the reader last opened a pane with
+title: A step of an action placed on an automation is carried out by the agent chosen for its project
 description: >
-  Stand a machine up with two agents on it, open a pane in the project on one of them by name, and go
-  to the project's automations. On an automation that starts at the built-in that takes a task, put a
-  library action of one step in on the line leaving it: the table under the picture says that step is
-  carried out by the agent the pane was opened with, muted and unmarked as a value it falls back to
-  rather than one anybody chose on it.
-
+  Stand a machine up with two agents on it, choose one of them by name as the project's agent on its
+  settings screen, and go to the project's automations. On an automation that starts at the built-in
+  that takes a task, put a library action of one step in on the line leaving it: the table under the
+  picture says that step is carried out by the project's agent, muted and unmarked as a value it falls
+  back to rather than one anybody chose on it.
 given:
   - type: action
     domain: project
@@ -74,13 +74,9 @@ steps_gui:
 
   - type: action
     domain: workspace
-    op: pick-start
+    op: project-agent
     with:
       agent: Claude Code
-
-  - type: action
-    domain: workspace
-    op: open-start
 
   # ── And the placement whose step falls back to it ─────────────────────────────────────────────
   - type: action
@@ -104,8 +100,8 @@ steps_gui:
       action: draft
 
   # The reading. Nobody chose on this placement, and the role has no default, so the step falls back
-  # to Amenbo's — the agent the pane was opened with. A build that forgot the last agent draws no row
-  # for the step, since nobody carries it out, or names another agent in the cell.
+  # to Amenbo's — the agent chosen for the project. A build that forgot the project's answer draws no
+  # row for the step, since nobody carries it out, or names another agent in the cell.
   - type: assert
     domain: automation
     op: carrier-shows

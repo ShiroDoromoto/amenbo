@@ -2056,7 +2056,7 @@ export const uk: Translation = {
     not_ready_automation_cfg_not_found: "{step}: налаштування «{cfg}» називає «{line}», чого в цьому проєкті немає",
     not_ready_automation_cfg_value_closed: "{step}: налаштування «{cfg}» називає «{line}» — це закрите значення",
     not_ready_automation_folder_unchosen: "{step}: налаштування «{cfg}» порожнє, а в цього проєкту {count} пов’язаних папок — вкажіть одну",
-    not_ready_automation_agent_unchosen: "{step}: не обрано агента",
+    not_ready_automation_agent_unchosen: "{step}: не обрано агента — оберіть його в полі «Агент» у налаштуваннях проєкту",
     not_ready_automation_agent_missing: "{step}: ця машина не може запустити «{agent}»",
     not_ready_automation_model_missing: "{step}: тутешній агент не пропонує модель «{model}»",
     not_ready_automation_script_missing: "{step}: за шляхом «{program}» немає файлу",

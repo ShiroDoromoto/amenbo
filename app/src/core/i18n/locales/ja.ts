@@ -2045,7 +2045,7 @@ export const ja: Translation = {
     not_ready_automation_cfg_not_found: "{step}：設定「{cfg}」の「{line}」が、このプロジェクトに無い",
     not_ready_automation_cfg_value_closed: "{step}：設定「{cfg}」の「{line}」は、閉じた値",
     not_ready_automation_folder_unchosen: "{step}：設定「{cfg}」が空で、このプロジェクトには紐付いたフォルダが {count} 個ある。どれかを書く",
-    not_ready_automation_agent_unchosen: "{step}：エージェントを選んでいない",
+    not_ready_automation_agent_unchosen: "{step}：エージェントを選んでいない。プロジェクト設定の「使うエージェント」で選べる",
     not_ready_automation_agent_missing: "{step}：「{agent}」は手元に無い",
     not_ready_automation_model_missing: "{step}：ここのエージェントはモデル「{model}」を持っていない",
     not_ready_automation_script_missing: "{step}：「{program}」にファイルが無い",

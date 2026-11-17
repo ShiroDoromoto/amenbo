@@ -2031,7 +2031,7 @@ export const zhHans: Translation = {
     not_ready_automation_cfg_not_found: "{step}：设置“{cfg}”写的“{line}”，本项目里没有",
     not_ready_automation_cfg_value_closed: "{step}：设置“{cfg}”写的“{line}”是已关闭的值",
     not_ready_automation_folder_unchosen: "{step}：设置“{cfg}”为空，而此项目关联了 {count} 个文件夹，请写明是哪一个",
-    not_ready_automation_agent_unchosen: "{step}：未选择智能体",
+    not_ready_automation_agent_unchosen: "{step}：未选择智能体，可在“项目设置”的“智能体”中选择",
     not_ready_automation_agent_missing: "{step}：这台机器启动不了“{agent}”",
     not_ready_automation_model_missing: "{step}：这里的智能体不提供“{model}”模型",
     not_ready_automation_script_missing: "{step}：“{program}”处没有文件",

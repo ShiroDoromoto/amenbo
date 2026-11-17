@@ -193,7 +193,7 @@ pub enum Unmet {
     /// would file nothing and halt the run there.
     FolderUnchosen { step: String, cfg: String, count: usize, builtin: Option<String>, placement: i64 },
     /// A step nobody carries out: no agent is chosen for it where its action is placed, the role whose
-    /// round reaches it names none, and Amenbo has no default either ([`carrier`]). A pane opened on it
+    /// round reaches it names none, and its project has no agent chosen either ([`carrier`]). A pane opened on it
     /// would have no agent to start.
     AgentUnchosen { step: String, placement: i64 },
     /// A step asking for an agent this machine cannot start. A pane opened on it would come up on
@@ -336,7 +336,7 @@ impl Unmet {
             Unmet::AgentUnchosen { step, .. } => {
                 format!(
                     "nobody is chosen to carry out '{step}' — not where its action is placed, not by its role, \
-                     and Amenbo has no default agent"
+                     and the project has no agent chosen (Agent in the app's Project settings)"
                 )
             }
             Unmet::AgentMissing { step, agent, .. } => {
@@ -568,8 +568,9 @@ pub struct Launcher<'a> {
     /// asked nobody, which is every caller outside the app.
     pub models: &'a ModelsHere,
     /// **Amenbo's own default agent** — the last of the three a step's agent is chosen from, after the
-    /// step at its placement and the role whose round reaches it ([`carrier`]). It is the answer a pane
-    /// would open with for the automation's project ([`crate::wake::step_agent`]), and names no model.
+    /// step at its placement and the role whose round reaches it ([`carrier`]). It is the agent chosen
+    /// for the automation's project ([`crate::wake::step_agent`]) — never the one a pane was last
+    /// opened with — and names no model.
     ///
     /// The store fills it from its configuration on every launch it carries
     /// ([`crate::store::Store::automation_launch`]), so a caller going through the store writes `None`.

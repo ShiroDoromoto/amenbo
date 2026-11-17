@@ -2030,7 +2030,7 @@ export const th: Translation = {
     not_ready_automation_cfg_not_found: "{step}: การตั้งค่า “{cfg}” ระบุ “{line}” ซึ่งไม่มีในโปรเจกต์นี้",
     not_ready_automation_cfg_value_closed: "{step}: การตั้งค่า “{cfg}” ระบุ “{line}” ซึ่งเป็นค่าที่ปิดแล้ว",
     not_ready_automation_folder_unchosen: "{step}: การตั้งค่า “{cfg}” ว่างอยู่ และโปรเจกต์นี้มีโฟลเดอร์ที่ผูกไว้ {count} โฟลเดอร์ — ระบุว่าใช้โฟลเดอร์ใด",
-    not_ready_automation_agent_unchosen: "{step}: ยังไม่ได้เลือกเอเจนต์",
+    not_ready_automation_agent_unchosen: "{step}: ยังไม่ได้เลือกเอเจนต์ — เลือกได้ที่ “เอเจนต์” ใน ตั้งค่าโปรเจกต์",
     not_ready_automation_agent_missing: "{step}: เครื่องนี้เริ่ม “{agent}” ไม่ได้",
     not_ready_automation_model_missing: "{step}: เอเจนต์ที่นี่ไม่มีโมเดล “{model}”",
     not_ready_automation_script_missing: "{step}: ไม่มีไฟล์ที่ “{program}”",

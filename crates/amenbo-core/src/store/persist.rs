@@ -34,10 +34,10 @@ fn exit_name_of(
     Ok(crate::store_engine::read::automation_exit(tx.conn(), edge.exit_id)?.map(|exit| exit.name))
 }
 
-/// **Amenbo's own default agent for an automation** — the answer a pane would open with in the
-/// project it belongs to ([`crate::wake::step_agent`]), the last of the three a step's agent is chosen
-/// from ([`crate::ops::automation_run::Launcher::default_agent`]). `None` where nobody has answered, or
-/// where the automation is not there to say which project.
+/// **Amenbo's own default agent for an automation** — the agent chosen for the project it belongs
+/// to ([`crate::wake::step_agent`]), the last of the three a step's agent is chosen from
+/// ([`crate::ops::automation_run::Launcher::default_agent`]). `None` where the project has no agent
+/// chosen, or where the automation is not there to say which project.
 fn default_agent(
     conn: &rusqlite::Connection,
     config: &crate::config::Config,
@@ -1474,7 +1474,8 @@ impl Store {
     /// **Amenbo's own default agent for an automation** — the last of the three a step's agent is chosen
     /// from, after the step at its placement and the role whose round reaches it
     /// ([`crate::ops::automation_run::Launcher::default_agent`]). Read off this store's configuration
-    /// for the automation's project ([`crate::wake::step_agent`]); `None` where nobody has answered.
+    /// for the automation's project ([`crate::wake::step_agent`]); `None` where the project has no
+    /// agent chosen.
     pub fn automation_default_agent(&self, automation_id: i64) -> Result<Option<String>> {
         default_agent(self.engine.conn(), &self.config, automation_id)
     }

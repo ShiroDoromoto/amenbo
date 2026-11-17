@@ -2031,7 +2031,7 @@ export const zhHant: Translation = {
     not_ready_automation_cfg_not_found: "{step}：設定「{cfg}」寫的「{line}」，本專案裡沒有",
     not_ready_automation_cfg_value_closed: "{step}：設定「{cfg}」寫的「{line}」是已關閉的值",
     not_ready_automation_folder_unchosen: "{step}：設定「{cfg}」為空，而此專案連結了 {count} 個資料夾，請寫明是哪一個",
-    not_ready_automation_agent_unchosen: "{step}：未選擇代理",
+    not_ready_automation_agent_unchosen: "{step}：未選擇代理，可在「專案設定」的「代理」中選擇",
     not_ready_automation_agent_missing: "{step}：這台機器啟動不了「{agent}」",
     not_ready_automation_model_missing: "{step}：這裡的代理不提供「{model}」模型",
     not_ready_automation_script_missing: "{step}：「{program}」處沒有檔案",

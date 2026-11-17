@@ -2030,7 +2030,7 @@ export const nl: Translation = {
     not_ready_automation_cfg_not_found: "{step}: de instelling ‘{cfg}’ noemt ‘{line}’, dat dit project niet heeft",
     not_ready_automation_cfg_value_closed: "{step}: de instelling ‘{cfg}’ noemt ‘{line}’, een gesloten waarde",
     not_ready_automation_folder_unchosen: "{step}: de instelling ‘{cfg}’ is leeg en dit project heeft {count} gekoppelde mappen — vul in welke",
-    not_ready_automation_agent_unchosen: "{step}: er is geen agent gekozen",
+    not_ready_automation_agent_unchosen: "{step}: er is geen agent gekozen — kies er een bij ‘Agent’ in Projectinstellingen",
     not_ready_automation_agent_missing: "{step}: deze machine kan ‘{agent}’ niet starten",
     not_ready_automation_model_missing: "{step}: de agent hier biedt het model ‘{model}’ niet aan",
     not_ready_automation_script_missing: "{step}: er staat geen bestand op ‘{program}’",

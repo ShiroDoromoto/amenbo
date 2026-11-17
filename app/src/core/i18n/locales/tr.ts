@@ -2030,7 +2030,7 @@ export const tr: Translation = {
     not_ready_automation_cfg_not_found: "{step}: “{cfg}” ayarı “{line}” diyor, bu projede böyle bir şey yok",
     not_ready_automation_cfg_value_closed: "{step}: “{cfg}” ayarı “{line}” diyor, bu kapatılmış bir değer",
     not_ready_automation_folder_unchosen: "{step}: “{cfg}” ayarı boş ve bu projeye bağlı {count} klasör var — hangisi olduğunu yazın",
-    not_ready_automation_agent_unchosen: "{step}: ajan seçilmedi",
+    not_ready_automation_agent_unchosen: "{step}: ajan seçilmedi — Proje ayarları’ndaki “Ajan” alanından seçin",
     not_ready_automation_agent_missing: "{step}: bu makine “{agent}” başlatamıyor",
     not_ready_automation_model_missing: "{step}: buradaki ajan “{model}” modelini sunmuyor",
     not_ready_automation_script_missing: "{step}: “{program}” konumunda dosya yok",

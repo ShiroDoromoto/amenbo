@@ -303,15 +303,7 @@ impl<'a> WriteTx<'a> {
         Ok(())
     }
 
-    /// Drain the transaction's collected row changes into `change_feed`. The feed's own INSERTs fire the
-    /// hook too; they are filtered out at the source (`change_feed` is not a registry table), so this
-    /// cannot feed on itself. **The same `(dataset, row_id, op)` is written once per transaction**: a
-    /// record is written column by column ([`StoreEngine::set_field`]), so one `task update` reports the
-    /// same row to the hook once per field it touched — five UPDATEs where the reader has one thing to
-    /// do, re-read that one task. Collapsing repeats keeps the feed small without losing anything a
-    /// reader could act on. Distinct ops are *not* collapsed (an insert followed by a delete of the same
-    /// id stays two rows), and the order SQLite reported them in is kept, so "everything after id N"
-    /// replays as it happened.
+    /// Drain the transaction's collected row changes into `change_feed` ([`append_to_change_feed`]).
     ///
     /// **Each instruction is stamped with the window it belongs to** — one row per project this operation
     /// declared it touches ([`touches_project`](Self::touches_project)), so a reader closed to one
@@ -325,9 +317,8 @@ impl<'a> WriteTx<'a> {
         if changes.is_empty() {
             return Ok(());
         }
-        let feed = col::change_feed::ALL;
         // The windows this operation is in, or a single `None` — "no window" is a place too, and writing
-        // it as one keeps the loop below from having a second shape for the empty case.
+        // it as one keeps the writer from having a second shape for the empty case.
         let windows: Vec<Option<i64>> = {
             let declared = self.projects.borrow();
             match declared.is_empty() {
@@ -335,24 +326,7 @@ impl<'a> WriteTx<'a> {
                 false => declared.iter().map(|&p| Some(p)).collect(),
             }
         };
-        let mut collapsed = std::collections::HashSet::new();
-        let mut rows = 0u64;
-        for c in &changes {
-            if !collapsed.insert((c.dataset, c.row_id, c.op)) {
-                continue;
-            }
-            for window in &windows {
-                Insert::into(feed.table)
-                    .set(feed.dataset, c.dataset)
-                    .set(feed.row_id, c.row_id)
-                    .set(feed.op, c.op)
-                    .set_opt(feed.project, *window)
-                    .sql()
-                    .execute(&self.tx)
-                    .map_err(StoreEngineError::from)?;
-                rows += 1;
-            }
-        }
+        let rows = append_to_change_feed(&self.tx, &changes, &windows)?;
         // The version is the carrier's number, so only a record moves it: a transaction that touched
         // nothing but this device's own tables is on the feed for the screen here and is nothing a copy
         // outside could re-read (`AMB-D-856`).
@@ -431,6 +405,45 @@ impl<'a> WriteTx<'a> {
             parent: None,
         })
     }
+}
+
+/// Write the row changes a transaction collected into `change_feed`, inside that transaction, once for
+/// each of `windows` — and hand back how many feed rows that made. The one road onto the feed: an
+/// operation's commit ([`WriteTx::commit`]) and a migration step's ([`super::migrate::run`]) both take it.
+///
+/// The feed's own INSERTs fire the hook too; they are filtered out at the source (`change_feed` is not a
+/// registry table), so this cannot feed on itself. **The same `(dataset, row_id, op)` is written once**:
+/// a record is written column by column ([`StoreEngine::set_field`]), so one `task update` reports the
+/// same row to the hook once per field it touched — five UPDATEs where the reader has one thing to do,
+/// re-read that one task. Collapsing repeats keeps the feed small without losing anything a reader could
+/// act on. Distinct ops are *not* collapsed (an insert followed by a delete of the same id stays two
+/// rows), and the order SQLite reported them in is kept, so "everything after id N" replays as it
+/// happened.
+pub(super) fn append_to_change_feed(
+    conn: &Connection,
+    changes: &[super::RowChange],
+    windows: &[Option<i64>],
+) -> Result<u64> {
+    let feed = col::change_feed::ALL;
+    let mut collapsed = std::collections::HashSet::new();
+    let mut rows = 0u64;
+    for c in changes {
+        if !collapsed.insert((c.dataset, c.row_id, c.op)) {
+            continue;
+        }
+        for window in windows {
+            Insert::into(feed.table)
+                .set(feed.dataset, c.dataset)
+                .set(feed.row_id, c.row_id)
+                .set(feed.op, c.op)
+                .set_opt(feed.project, *window)
+                .sql()
+                .execute(conn)
+                .map_err(StoreEngineError::from)?;
+            rows += 1;
+        }
+    }
+    Ok(rows)
 }
 
 impl StoreEngine {

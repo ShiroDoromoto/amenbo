@@ -14,7 +14,8 @@
 // the reader is pointed at Settings, where there is one.
 //
 // It says nothing of the cleanup the new Worker makes possible — no progress and no stretch of time
-// (`AMB-D-1160`). The band goes down by itself once a send brings the new build back.
+// (`AMB-D-1160`). The band goes down with the press itself: core writes down the build it placed
+// (`AMB-D-1167`), and the band is asked again once the press is answered.
 import { useEffect, useState } from "react";
 import { errText, t, tf } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";

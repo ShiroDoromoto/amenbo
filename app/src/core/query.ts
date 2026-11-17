@@ -119,10 +119,11 @@ export function invalidateScopes(scopes: ReadonlySet<string>): void {
 }
 
 /**
- * Ask again whether to ask for setup. The build that turns the answer to `false` comes back on a send
- * that runs in its own process, and the row it is written to is not on the change feed — so nothing
- * would ever tell this window by name. The store watcher calls this on every commit the feed names no
- * row for, and the band also calls it on a timer while it is up.
+ * Ask again whether to ask for setup. The build that turns the answer to `false` is written down by a
+ * setup, or comes back on a send that runs in its own process (`AMB-D-1167`), and the row it is written to
+ * is not on the change feed — so nothing would ever tell this window by name. The store watcher calls this
+ * on every commit the feed names no row for, the band also calls it on a timer while it is up, and the
+ * screen that runs setup calls it once the press is answered.
  */
 export function recheckSetupAgain(): void {
   invalidateQueries((key) => key[0] === "viewer-setup-again");
@@ -160,9 +161,9 @@ export const SCOPE_WATCHERS: Readonly<Record<string, readonly string[]>> = {
   // putting it there would double the feed for a number a person glances at rather than watches.
   "viewer-state": ["viewer"],
   "viewer-pairing": ["viewer"],
-  // Whether to ask for setup again. A setup from the CLI moves it the same way; the build a send brings
-  // back does not reach the feed, so the store watcher asks again on an empty page of the feed, and the
-  // band also asks again on a timer while it is up (`recheckSetupAgain`).
+  // Whether to ask for setup again. A setup from the CLI moves it the same way; the build it writes down,
+  // and the one a send brings back, do not reach the feed, so the store watcher asks again on an empty
+  // page of the feed, and the band also asks again on a timer while it is up (`recheckSetupAgain`).
   "viewer-setup-again": ["viewer"],
   // The device's shelf of notification targets, and one project's notification pane. Both are moved
   // from the CLI (`notify target-add`, `notify on`, `notify use` …), which the feed folds here.

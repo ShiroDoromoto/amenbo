@@ -96,6 +96,11 @@ const CHECK_PAUSE: Duration = Duration::from_secs(3);
 /// How long the check after the deploy gives one attempt.
 const CHECK_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// How long setup waits for a send that is under way to end its turn before writing anything into the
+/// store. A turn places a stretch of the backlog over the network, each call bounded by its own timeout, so
+/// this is room for several of those rather than for one.
+const TURN_WAIT: Duration = Duration::from_secs(300);
+
 /// The permissions the API token has to carry, and nothing besides. They go into the link that opens
 /// Cloudflare's token screen with the boxes already ticked — the user presses Create, and is never asked
 /// which of Cloudflare's permission groups a drop box takes.
@@ -137,11 +142,13 @@ struct Reach {
     api: String,
     /// Where the deployed Worker answers, when it is not on workers.dev.
     worker: Option<String>,
+    /// How long setup waits for a send's turn to end before it writes (see [`TURN_WAIT`]).
+    turn_wait: Duration,
 }
 
 impl Default for Reach {
     fn default() -> Reach {
-        Reach { api: cloudflare::CLOUDFLARE_API.to_string(), worker: None }
+        Reach { api: cloudflare::CLOUDFLARE_API.to_string(), worker: None, turn_wait: TURN_WAIT }
     }
 }
 
@@ -235,6 +242,18 @@ fn setup_reaching(
         None => format!("https://{script}.{subdomain}.workers.dev"),
     };
 
+    // **What a send reads and writes is written under its turn** (`lock`). A turn reads the whole
+    // of where the carrier was left at its start and writes that row back more than once on the way, so
+    // anything setup wrote into it while one was running — the build below, or a memory thrown away — is
+    // put back the way the turn found it. Taking the turn before the address is written also keeps a turn
+    // from sending to the new address out of a memory of the old one.
+    let _turn = lock::wait_for_the_turn(&store.paths, reach.turn_wait).map_err(|err| {
+        Error::invalid(format!(
+            "the Worker is deployed, but {err} and setup wrote nothing — press setup again once the \
+             send is done"
+        ))
+    })?;
+
     // The endpoint is written last on purpose. Half a route is not a route — a send reads the URL and the
     // token together — so a run interrupted between these three leaves the store where it was rather than
     // pointing it at somewhere it cannot get into.
@@ -248,11 +267,12 @@ fn setup_reaching(
 
     await_the_worker(&endpoint)?;
 
-    // **Pressing setup again at the server this store already sends to renews the Worker and nothing
-    // else.** The database was already there, the keys are the ones it already holds, and the address is
-    // the one it already sent to: every row the carrier remembers sending is still up there and still
-    // opens. Sending the whole backlog again would spend a day's writes on rows that are already in place,
-    // and the count of what today has spent stays with it for the same reason (`AMB-D-1161`).
+    // **Pressing setup again at the server this store already sends to renews the Worker, and keeps what
+    // the carrier was holding.** The database was already there, the keys are the ones it already holds,
+    // and the address is the one it already sent to: every row the carrier remembers sending is still up
+    // there and still opens. Sending the whole backlog again would spend a day's writes on rows that are
+    // already in place, and the count of what today has spent stays with it for the same reason
+    // (`AMB-D-1161`, as `AMB-D-1167` amends it).
     //
     // **Anything else is a server the carrier has not sent to**, whatever this device remembers sending
     // to the last one. Forgetting here is what makes the next turn place the whole backlog rather than the
@@ -265,6 +285,16 @@ fn setup_reaching(
     if !same_server {
         store.forget_viewer_carried()?;
     }
+
+    // **The build placed just now is written down here, on either road.** The server the carrier sends to
+    // is the Worker this run deployed, so its build is known without asking — and waiting for the next
+    // write to say it would leave the asking for setup again (`asks_for_setup_again`) up until then,
+    // after the very press it asked for. A write's answer still writes over it whenever one comes back
+    // (`AMB-D-1167`).
+    store.set_viewer_carried(&carried::Carried {
+        build: i64::from(WORKER_BUILD),
+        ..store.viewer_carried()?
+    })?;
 
     tracing::info!(url = %endpoint, ?keys, "the Viewer's server is up");
 
@@ -370,15 +400,15 @@ pub fn build_in_the_script(script: &str) -> Option<u32> {
 ///
 /// The deleting is done from here a few at a time, but only by a Worker of build 4 or later; on an older
 /// one those rows stay until setup is pressed again. Pressing it at the same server keeps what was found
-/// (`AMB-D-1161`), so what ends the asking is the build the next write answers with, and nothing else.
+/// and writes down the build it placed (`AMB-D-1167`), so the asking ends with the press itself.
 ///
 /// **The condition is here and the words are not** (`AMB-D-544`). The command line and the screen both
 /// ask this, and each says it in its own place. Nothing about how far the deleting got is answered: the
 /// question is only whether to ask.
 ///
-/// It goes to no network. The build is the one the last write was answered with
-/// ([`carried::Carried::build`]), since a write's answer is the only place the server says it
-/// (`AMB-D-811`). A device with no server is not asked.
+/// It goes to no network. The build is the one [`carried::Carried::build`] remembers: the one setup placed,
+/// or the one a write was answered with since (`AMB-D-811`), whichever came last. A device with no server
+/// is not asked.
 pub fn asks_for_setup_again(store: &Store) -> Result<bool> {
     if send::Server::of_device(store)?.is_none() {
         return Ok(false);
@@ -476,11 +506,10 @@ mod tests {
         store.set_viewer_carried(&left).unwrap();
         assert!(!asks_for_setup_again(&store).unwrap());
 
-        let key = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode([7u8; sealing::KEY_SIZE]);
         for (field, value) in [
             (WORKER_URL, "https://viewer.example.com".to_string()),
             (AUTH_TOKEN, "write-token".to_string()),
-            (ENCRYPTION_KEY, key),
+            (ENCRYPTION_KEY, a_key()),
         ] {
             store.set_secret(None, SecretArea::Viewer, None, field, Some(&value)).unwrap();
         }
@@ -553,7 +582,7 @@ mod tests {
     }
 
     fn reaching(host: &StaticHost) -> Reach {
-        Reach { api: host.url("/client/v4"), worker: Some(host.url("")) }
+        Reach { api: host.url("/client/v4"), worker: Some(host.url("")), turn_wait: Duration::from_secs(30) }
     }
 
     /// A whole run: the account is found, the database is made and given the schema, the Worker is
@@ -935,30 +964,23 @@ mod tests {
 
         setup_reaching(&mut store, "a-pasted-token", None, None, &reaching(&host)).expect("setup");
 
-        assert_eq!(store.viewer_carried().unwrap(), crate::viewer::carried::Carried::default());
+        assert_eq!(
+            store.viewer_carried().unwrap(),
+            crate::viewer::carried::Carried { build: i64::from(WORKER_BUILD), ..Default::default() },
+            "forgotten, all but the build of the Worker just placed"
+        );
         assert_eq!(store.viewer_waiting().unwrap(), 0, "what was read out under the old cursor goes too");
     }
 
-    /// A store that already holds the address, the token and the key at its own server is only renewing
-    /// the Worker there, so what the carrier was holding stays — the place it had reached, the queue, and
-    /// what today has spent. Sending the whole backlog again would spend a day's writes on rows already up
-    /// there (`AMB-D-1161`).
+    /// A store that already holds the address, the token and the key at its own server is renewing the
+    /// Worker there, so what the carrier was holding stays — the place it had reached, the queue, what
+    /// today has spent, and the leftover rows it found. Sending the whole backlog again would spend a day's
+    /// writes on rows already up there (`AMB-D-1161`). Only the build moves, to the one just placed, and
+    /// with it the asking for setup again ends with this press (`AMB-D-1167`).
     #[test]
     fn standing_the_same_server_up_again_keeps_what_was_sent_to_it() {
         let host = already_standing();
-        let mut store = store_at("keeps-the-carrier");
-        let endpoint = format!("{}/worker", host.url("").trim_end_matches('/'));
-        store.set_secret(None, SecretArea::Viewer, None, AUTH_TOKEN, Some("the-token")).unwrap();
-        store.set_secret(None, SecretArea::Viewer, None, ENCRYPTION_KEY, Some("the-key")).unwrap();
-        store.set_secret(None, SecretArea::Viewer, None, WORKER_URL, Some(&endpoint)).unwrap();
-        let left = crate::viewer::carried::Carried {
-            version: 12_345,
-            cursor: 980,
-            spent: 4_200,
-            spent_on: Some("2026-11-16".into()),
-            ..Default::default()
-        };
-        store.set_viewer_carried(&left).unwrap();
+        let (mut store, left) = sent_to_already(&host, "keeps-the-carrier");
         store
             .enqueue_viewer(&[crate::viewer::carried::Waiting {
                 record_key: "task/1".into(),
@@ -967,10 +989,98 @@ mod tests {
             }])
             .unwrap();
 
+        assert!(asks_for_setup_again(&store).unwrap(), "an old Worker holding leftover rows asks");
+
         setup_reaching(&mut store, "a-pasted-token", None, None, &reaching(&host)).expect("setup");
 
-        assert_eq!(store.viewer_carried().unwrap(), left);
+        assert_eq!(
+            store.viewer_carried().unwrap(),
+            crate::viewer::carried::Carried { build: i64::from(WORKER_BUILD), ..left }
+        );
         assert_eq!(store.viewer_waiting().unwrap(), 1, "and what waits to go still waits");
+        assert!(!asks_for_setup_again(&store).unwrap(), "and the press that was asked for ends the asking");
+    }
+
+    /// A key a send can open the store's server with, for the tests that ask what a device with a server
+    /// is told.
+    fn a_key() -> String {
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode([7u8; sealing::KEY_SIZE])
+    }
+
+    /// The store at its own server, as the tests here find it: the three settings, and a carrier that
+    /// last heard build 3 and found leftover rows.
+    fn sent_to_already(host: &StaticHost, tag: &str) -> (Store, crate::viewer::carried::Carried) {
+        let mut store = store_at(tag);
+        let endpoint = format!("{}/worker", host.url("").trim_end_matches('/'));
+        store.set_secret(None, SecretArea::Viewer, None, AUTH_TOKEN, Some("the-token")).unwrap();
+        store.set_secret(None, SecretArea::Viewer, None, ENCRYPTION_KEY, Some(&a_key())).unwrap();
+        store.set_secret(None, SecretArea::Viewer, None, WORKER_URL, Some(&endpoint)).unwrap();
+        let left = crate::viewer::carried::Carried {
+            version: 12_345,
+            cursor: 980,
+            spent: 4_200,
+            spent_on: Some("2026-11-16".into()),
+            build: 3,
+            strays: Some(true),
+            ..Default::default()
+        };
+        store.set_viewer_carried(&left).unwrap();
+        (store, left)
+    }
+
+    /// **A send under way is waited for, and its last write does not undo setup's.** The turn below reads
+    /// where the carrier was left, and writes that row back after setup has started — as a turn does on a
+    /// day it sends nothing, so no answer brings the build back with it. Setup writing beside it would
+    /// have its build put back to 3 by that write; waiting for the turn to end, it writes last.
+    #[test]
+    fn a_send_under_way_is_waited_for_and_does_not_write_the_old_build_back() {
+        let host = already_standing();
+        let (mut store, left) = sent_to_already(&host, "waits-for-the-turn");
+
+        let turn = lock::take_the_turn(&store.paths).unwrap().expect("nobody holds it yet");
+        let read_at_its_start = store.viewer_carried().unwrap();
+        let file = store.paths.store_file.clone();
+        let sending = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(500));
+            let engine = crate::store_engine::StoreEngine::open(&file).unwrap();
+            carried::write(&engine, &read_at_its_start).unwrap();
+            drop(turn);
+        });
+
+        setup_reaching(&mut store, "a-pasted-token", None, None, &reaching(&host)).expect("setup");
+        sending.join().unwrap();
+
+        assert_eq!(
+            store.viewer_carried().unwrap(),
+            crate::viewer::carried::Carried { build: i64::from(WORKER_BUILD), ..left },
+            "the build setup placed is the one that stays"
+        );
+        assert!(!asks_for_setup_again(&store).unwrap());
+    }
+
+    /// A turn that does not end within the wait leaves setup writing nothing: the carrier is where the turn
+    /// will leave it, and the store still points where it did, so pressing setup again starts from the
+    /// same place.
+    #[test]
+    fn a_turn_that_does_not_end_leaves_setup_writing_nothing() {
+        let host = cloudflare_standing_in();
+        let (mut store, left) = sent_to_already(&host, "turn-not-let-go");
+        store
+            .set_secret(None, SecretArea::Viewer, None, WORKER_URL, Some("http://127.0.0.1:9/worker"))
+            .unwrap();
+
+        let _turn = lock::take_the_turn(&store.paths).unwrap().expect("nobody holds it yet");
+        let reach = Reach { turn_wait: Duration::from_millis(300), ..reaching(&host) };
+        let err = setup_reaching(&mut store, "a-pasted-token", None, None, &reach)
+            .expect_err("the turn is never let go");
+
+        assert!(err.to_string().contains("press setup again"), "{err}");
+        assert_eq!(store.viewer_carried().unwrap(), left, "nothing forgotten, no build written");
+        assert_eq!(
+            store.secret_value(None, SecretArea::Viewer, None, WORKER_URL).unwrap().as_deref(),
+            Some("http://127.0.0.1:9/worker"),
+            "and the store still points where it did"
+        );
     }
 
     /// Any one of the three gone is a server the carrier has not sent to, and it is forgotten as before:
@@ -1004,8 +1114,8 @@ mod tests {
 
             assert_eq!(
                 store.viewer_carried().unwrap(),
-                crate::viewer::carried::Carried::default(),
-                "{tag}: forgotten"
+                crate::viewer::carried::Carried { build: i64::from(WORKER_BUILD), ..Default::default() },
+                "{tag}: forgotten, all but the build of the Worker just placed"
             );
         }
     }

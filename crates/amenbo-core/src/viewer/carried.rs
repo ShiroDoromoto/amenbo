@@ -80,11 +80,12 @@ pub struct Carried {
     /// up to date" has no way to tell that from "nothing has gone out since Tuesday", and the queue's
     /// length cannot tell them either: an empty queue is both.
     pub last_placed_at: Option<String>,
-    /// Which build of the Worker the server last answered a write as being.
+    /// Which build of the Worker the server is: the one setup last placed there, or the one a write was
+    /// answered with since, whichever came last.
     ///
-    /// **It is remembered because a screen cannot ask.** The number travels on the answer to a write and
-    /// nowhere else, so the only place it can be had is a write that already happened. Zero is "nothing
-    /// has been written yet", not "an old Worker".
+    /// **It is remembered because a screen cannot ask.** The server says it on the answer to a write and
+    /// nowhere else, and setup knows it only because it is the one that placed the Worker (`AMB-D-1167`).
+    /// Zero is "neither has happened yet", not "an old Worker".
     pub build: i64,
     /// Whether the server holds run rows a build before the Worker's build 4 placed there: `None` is
     /// "not read yet", `Some(false)` "none", `Some(true)` "some".
@@ -263,6 +264,9 @@ pub(crate) fn write_on(conn: &rusqlite::Connection, left: &Carried) -> Result<()
 /// the one this store already sent to — a database made just now, a key drawn just now, or another
 /// address. Pressing setup again at the same server keeps all of it, the count of what today has spent
 /// included, since every row it remembers sending is still up there.
+///
+/// **Setup runs it under the sending turn** (`super::lock`). A turn writes back the row it read at its
+/// start, so a forgetting done while one was running would be put back the moment it wrote.
 ///
 /// The queue goes with the numbers. What waits in it was read out under a cursor this forgets, so keeping
 /// it would send the same records twice and place them a second time under the new key besides.

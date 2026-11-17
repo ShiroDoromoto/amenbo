@@ -169,4 +169,16 @@ describe("drainChanges — draining everything past the cursor and folding into 
     invoke.mockResolvedValueOnce(page([row("task")], 8));
     expect(await drainChanges()).toEqual({ scopes: new Set(["tasks"]), gap: false });
   });
+
+  it("still told there is more after twenty pages, it stops for a gap — a migration that rewrote over ten thousand rows is re-read whole — and the next wake-up reads on from the last page it took", async () => {
+    await startAt(0);
+    for (let n = 1; n <= 20; n++) invoke.mockResolvedValueOnce(page([row("task")], n * 500, true));
+    expect(await drainChanges()).toEqual({ scopes: new Set(), gap: true });
+    expect(invoke).toHaveBeenCalledTimes(20);
+
+    invoke.mockReset();
+    invoke.mockResolvedValueOnce(page([row("task")], 10_001));
+    expect(await drainChanges()).toEqual({ scopes: new Set(["tasks"]), gap: false });
+    expect(invoke).toHaveBeenLastCalledWith("changes_since", { cursor: 10_000, limit: null });
+  });
 });

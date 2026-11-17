@@ -3100,8 +3100,9 @@ pub struct TalkFrameDto {
 /// moved decides whether every query is re-read or one scope is.
 ///
 /// - `file` is the main file's identity (mtime and size). It moves when the file is **swapped out from
-///   under the app** — `fold`, `stage_and_swap`, a `backup` restore, a migration — and nothing the feed
-///   holds survives that, so a reader that sees this move re-reads everything.
+///   under the app** — `fold`, `stage_and_swap`, a `backup` restore — and nothing the feed holds
+///   survives that, so a reader that sees this move re-reads everything. A migration is not one: it
+///   runs in place and puts the records it rewrote on the feed (`AMB-D-1166`).
 /// - `config` is `config.json`'s identity. That file is not in the database at all, so no row in the feed
 ///   will ever speak for it: a language, a theme or a default view set from the CLI moves this and nothing
 ///   else. A reader that sees it move re-reads everything too.

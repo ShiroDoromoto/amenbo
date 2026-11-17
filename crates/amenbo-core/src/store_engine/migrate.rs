@@ -1636,8 +1636,10 @@ pub const STEPS: &[Step] = &[
         // were handed on from a step going here are cut loose (a file's attachment with it), then the
         // steps' attachments with their words in the index, then the steps, then the copies. A task or a
         // comment that named a step going here keeps its row and forgets the step. No `updated_at` is
-        // moved, and nothing is written to the change feed: the store is swapped as a whole, and every
-        // reader reads it again.
+        // moved. The rows it rewrites and deletes go on the change feed with the step, as every step's do
+        // (`run`), so the Viewer's carrier sends those tasks, comments and attachments and nothing else.
+        // A store that ran this step before that wrote nothing to the feed, and it is not sent again: the
+        // phone reads neither column nor a step's attachments.
         //
         // **The blobs stay on disk.** An attachment's file may be shared with another's, and a file
         // removed here would not come back if the migration failed and the store were restored from the
@@ -4491,8 +4493,8 @@ fn hold_every_way_out_to_its_name(ctx: &Ctx<'_>) -> Result<()> {
 /// device that runs it on the same rows lands on the same step. An action with no step keeps no entry,
 /// and one with an entry keeps it.
 ///
-/// **Nothing is written to the change feed**, as with v74's rewrite of rows: each device runs the step
-/// on its own rows, and a carrier's next whole placement reads the entry off the row.
+/// **The entries it gives go on the change feed with the step**, as v74's names do ([`run`]): the
+/// Viewer's carrier sends those actions the way it sends any write's.
 fn enter_each_action_at_its_first_step(ctx: &Ctx<'_>) -> Result<()> {
     ctx.tx.execute_batch(
         "UPDATE automation_action
@@ -4519,6 +4521,9 @@ fn enter_each_action_at_its_first_step(ctx: &Ctx<'_>) -> Result<()> {
 /// takes it with its row id after it, in brackets, instead.
 ///
 /// Spelled as frozen text, as every step's is: the name is written here, not read from the constant.
+///
+/// **The rows it names go on the change feed with the step** ([`run`]), so the Viewer's carrier sends
+/// them the way it sends any write's.
 fn name_the_unnamed_ways_out(ctx: &Ctx<'_>) -> Result<()> {
     let tx = ctx.tx;
     tx.execute_batch(
@@ -6343,9 +6348,9 @@ type PluginRows = std::collections::BTreeMap<(Option<i64>, String, String), Stri
 /// copied out and never sent, and those fall out of the ledger's window and are never readable again; a
 /// carrier that starts from nothing places the store whole, which costs one large send and no accuracy.
 ///
-/// **Nothing is written to the change feed.** The feed is what an incremental carrier reads, and the
-/// only carrier is the Viewer, whose memory this very step throws away — so the rows land in its next
-/// whole placement rather than as a page it would never come back for.
+/// **What it writes goes on the change feed with the step**, as every step's does ([`run`]), and asks
+/// nothing more of the Viewer: the only carrier, whose memory this very step throws away, places the
+/// store whole next and starts reading the feed after it.
 ///
 /// **The execution log is left where it lies.** `plugin-runs.jsonl` is a bounded, machine-local record of
 /// what ran and why it failed, and it is the last trace of these four ever having run here; `AMB-D-387`
@@ -7814,6 +7819,9 @@ impl Run {
 /// backup is the only thing that reports otherwise, and the longer the chain grows the longer the silence).
 /// A `Break` from it is **ignored**: a migration is not something to abandon halfway — stopping leaves the
 /// store at a version this build cannot open, so a cancel would be a button that only breaks things.
+///
+/// **The records a step rewrites go on the change feed with it** ([`put_the_rewrites_on_the_feed`]), so
+/// they reach the Viewer the way any write's do.
 pub fn run(
     engine: &StoreEngine,
     base_dir: &Path,
@@ -7830,16 +7838,51 @@ pub fn run(
     for (done, step) in todo.iter().enumerate() {
         let _ = progress(&Progress { phase: Phase::Migrating, done: done as u64, total: Some(total) });
         let tx = engine.transaction()?;
+        // Whatever the hook holds from before this `BEGIN` is not this step's to write.
+        engine.take_changes();
         match step.apply {
             Apply::Sql(sql) => tx.execute_batch(sql)?,
             Apply::Custom(f) => f(&Ctx { tx: &tx, base_dir })?,
         }
+        put_the_rewrites_on_the_feed(engine, &tx)?;
         stamp(&tx, step.to)?;
         tx.commit()?;
         run.to = step.to;
         run.applied.push(step.name);
     }
     Ok(run)
+}
+
+/// Write the records a step rewrote to the change feed (`AMB-D-1166`), **inside the step's
+/// transaction** — the road an operation's commit takes ([`super::write::append_to_change_feed`]), so
+/// the Viewer's carrier reads them off the feed and sends those rows and no others. A full re-send no
+/// longer comes after an upgrade to carry them: setting the Viewer up again only renews its Worker
+/// (`AMB-D-1161`).
+///
+/// **Only records** ([`super::schema::dataset`]) — the rows a carrier reads back and sends, the ones it
+/// withholds left to it as on every other page; this device's own tables are left off. A step declares
+/// no project, so each row is written once, with no window, the way a batch that declared none is.
+/// Nothing is trimmed here: the next write's commit does that, and a reader whose cursor a long step
+/// outruns re-reads the whole store, which is what it would have to do anyway.
+///
+/// **A store whose feed has no window yet writes nothing**: the row is written with the column v23 adds,
+/// and below it there is no such column to write.
+fn put_the_rewrites_on_the_feed(engine: &StoreEngine, tx: &Transaction<'_>) -> Result<()> {
+    let records: Vec<_> =
+        engine.take_changes().into_iter().filter(|c| super::schema::dataset(c.dataset).is_some()).collect();
+    if records.is_empty() {
+        return Ok(());
+    }
+    let windowed: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('change_feed') WHERE name = 'project'",
+        [],
+        |r| r.get(0),
+    )?;
+    if windowed == 0 {
+        return Ok(());
+    }
+    super::write::append_to_change_feed(tx, &records, &[None])?;
+    Ok(())
 }
 
 /// Stamp the store's format version **inside the step's transaction** — the version and the change it
@@ -10897,6 +10940,126 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// A step after the last one, rewriting every task's title — what a migration that touches the rows the
+    /// Viewer is sent looks like to the feed.
+    const RETITLE: &[Step] = &[Step {
+        to: LATEST_VERSION + 1,
+        name: "retitle every task",
+        apply: Apply::Sql("UPDATE task SET title = title || '!';"),
+    }];
+
+    /// A store at the latest version holding one project and `tasks` tasks, numbered from 1.
+    fn store_with_tasks(dir: &Path, tasks: i64) -> StoreEngine {
+        let engine = store_at(dir, LATEST_VERSION);
+        engine
+            .conn()
+            .execute_batch(&format!(
+                "BEGIN;
+                 INSERT INTO project (id, name) VALUES (1, 'A');
+                 WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < {tasks})
+                 INSERT INTO task (id, title, project_id) SELECT i, 't' || i, 1 FROM n;
+                 COMMIT;"
+            ))
+            .unwrap();
+        engine
+    }
+
+    /// What the feed holds past `cursor`, one page of `limit`.
+    fn feed_after(engine: &StoreEngine, cursor: i64, limit: i64) -> (Vec<(String, i64, String)>, bool) {
+        match crate::store_engine::read::changes_since(engine.conn(), cursor, limit, None).unwrap() {
+            crate::store_engine::read::FeedSlice::Changes { rows, more } => {
+                (rows.into_iter().map(|r| (r.dataset, r.row_id, r.op)).collect(), more)
+            }
+            crate::store_engine::read::FeedSlice::Gap => panic!("the feed answered a gap past {cursor}"),
+        }
+    }
+
+    /// **The rows a step rewrites go on the change feed, and only those.** Each once and with no window,
+    /// the way a write that declared no project puts them there; the version stamp and the rows written
+    /// before the step began are not the step's.
+    #[test]
+    fn a_step_writes_the_rows_it_rewrote_to_the_change_feed() {
+        let dir = scratch("feed-rewrites");
+        let engine = store_with_tasks(&dir, 2);
+        let before = crate::store_engine::read::change_feed_head(engine.conn()).unwrap();
+
+        run(&engine, &dir, RETITLE, &mut crate::progress::ignore).unwrap();
+
+        let (rows, more) = feed_after(&engine, before, 500);
+        assert_eq!(
+            rows,
+            [("task".to_string(), 1, "update".to_string()), ("task".to_string(), 2, "update".to_string())],
+            "the two retitled tasks and nothing else",
+        );
+        assert!(!more);
+        let windowed: i64 = engine
+            .conn()
+            .query_row("SELECT COUNT(*) FROM change_feed WHERE id > ?1 AND project IS NOT NULL", [before], |r| r.get(0))
+            .unwrap();
+        assert_eq!(windowed, 0, "a step declares no project");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// **The desktop does not read them at startup.** The migration runs before the screen opens the
+    /// store, and the screen takes its cursor at the feed's head before it reads the store whole
+    /// (`takeChangeCursor`), so what the step wrote is behind it.
+    #[test]
+    fn a_reader_that_takes_its_cursor_after_the_migration_reads_nothing_of_it() {
+        let dir = scratch("feed-rewrites-startup");
+        let engine = store_with_tasks(&dir, 2);
+
+        run(&engine, &dir, RETITLE, &mut crate::progress::ignore).unwrap();
+
+        let head = crate::store_engine::read::change_feed_head(engine.conn()).unwrap();
+        assert_eq!(feed_after(&engine, head, 500), (vec![], false));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// **A desktop left open while a newer CLI migrates the store re-reads what moved.** The file is not
+    /// swapped — the step runs in place and only `data_version` moves — so the screen drains the feed
+    /// from the cursor it already held (`drainChanges`) and is handed the retitled tasks.
+    #[test]
+    fn a_reader_that_held_its_cursor_through_the_migration_is_handed_the_rows_it_rewrote() {
+        let dir = scratch("feed-rewrites-open");
+        let engine = store_with_tasks(&dir, 2);
+        let held = crate::store_engine::read::change_feed_head(engine.conn()).unwrap();
+
+        run(&engine, &dir, RETITLE, &mut crate::progress::ignore).unwrap();
+
+        let (rows, _) = feed_after(&engine, held, 500);
+        let tasks: Vec<i64> = rows.iter().filter(|(d, _, _)| d == "task").map(|(_, id, _)| *id).collect();
+        assert_eq!(tasks, [1, 2]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// **Past ten thousand rows the desktop re-reads the store whole.** The screen drains at most twenty
+    /// pages of five hundred (`MAX_PAGES` × `CHANGES_PAGE`) and calls anything still waiting a gap; a step
+    /// that rewrote more rows than that leaves the twentieth page still saying there is more.
+    #[test]
+    fn a_step_that_rewrote_more_than_a_drain_reads_leaves_more_after_twenty_pages() {
+        let dir = scratch("feed-rewrites-many");
+        let engine = store_with_tasks(&dir, 10_001);
+        let mut cursor = crate::store_engine::read::change_feed_head(engine.conn()).unwrap();
+
+        run(&engine, &dir, RETITLE, &mut crate::progress::ignore).unwrap();
+
+        let mut read = 0;
+        let mut more = true;
+        for _ in 0..20 {
+            let crate::store_engine::read::FeedSlice::Changes { rows, more: m } =
+                crate::store_engine::read::changes_since(engine.conn(), cursor, 500, None).unwrap()
+            else {
+                panic!("the feed answered a gap past {cursor}")
+            };
+            read += rows.len();
+            more = m;
+            cursor = rows.last().map_or(cursor, |r| r.id);
+        }
+        assert_eq!(read, 10_000);
+        assert!(more, "the 10,001st rewrite is still waiting after twenty pages");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// **v23 says how far the feed is unattributable, instead of leaving a silent hole.** The rows a
     /// store already carries name no window and cannot be given one — the ones a deletion named are gone —
     /// so the step records where stamping begins, and a window whose cursor is below that is told its
@@ -10946,7 +11109,7 @@ mod tests {
 
         let named: Vec<String> = engine
             .conn()
-            .prepare("SELECT dataset FROM change_feed ORDER BY id")
+            .prepare("SELECT dataset FROM change_feed WHERE id <= 3 ORDER BY id")
             .unwrap()
             .query_map([], |r| r.get(0))
             .unwrap()
@@ -16345,7 +16508,7 @@ mod tests {
             let mut stmt = conn.prepare(sql).unwrap();
             stmt.query_map([], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
         };
-        let feed = count("SELECT COUNT(*) FROM change_feed");
+        let feed = count("SELECT COALESCE(MAX(id), 0) FROM change_feed");
         let shape = || -> Vec<String> {
             let conn = engine.conn();
             let mut stmt = conn
@@ -16383,7 +16546,34 @@ mod tests {
         assert_eq!(count("SELECT COUNT(*) FROM task_comment WHERE id = 1 AND automation_run_step_id IS NULL"), 1);
         assert_eq!(count("SELECT automation_run_step_id FROM task_comment WHERE id = 2"), 51);
 
-        assert_eq!(count("SELECT COUNT(*) FROM change_feed"), feed, "nothing is written to the change feed");
+        let written = |dataset: &str, row: i64, op: &str| -> i64 {
+            engine
+                .conn()
+                .query_row(
+                    "SELECT COUNT(*) FROM change_feed WHERE id > ?1 AND dataset = ?2 AND row_id = ?3 AND op = ?4 \
+                       AND project IS NULL",
+                    rusqlite::params![feed, dataset, row, op],
+                    |r| r.get(0),
+                )
+                .unwrap()
+        };
+        for (dataset, row, op) in
+            [("task", 1, "update"), ("task_comment", 1, "update"), ("attachment", 201, "delete"), ("attachment", 204, "delete")]
+        {
+            assert_eq!(written(dataset, row, op), 1, "{dataset} {row} {op} is on the change feed, once and with no window");
+        }
+        for (dataset, row) in [("task", 2), ("task_comment", 2), ("attachment", 202), ("attachment", 203)] {
+            assert_eq!(
+                count(&format!("SELECT COUNT(*) FROM change_feed WHERE id > {feed} AND dataset = '{dataset}' AND row_id = {row}")),
+                0,
+                "{dataset} {row} was not rewritten, so it is not on the feed",
+            );
+        }
+        assert_eq!(
+            count(&format!("SELECT COUNT(*) FROM change_feed WHERE id > {feed} AND dataset = 'search_doc'")),
+            0,
+            "a table that is not a record stays off the feed",
+        );
         assert_eq!(count("SELECT COUNT(*) FROM pragma_foreign_key_check"), 0);
         std::fs::remove_dir_all(&dir).ok();
     }

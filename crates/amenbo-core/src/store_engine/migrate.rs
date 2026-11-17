@@ -1700,6 +1700,14 @@ pub const STEPS: &[Step] = &[
         // as "not read yet" and "not deleted yet"; the next turn finds out. No task is touched.
         apply: Apply::Custom(let_the_carrier_keep_the_servers_leftover_runs),
     },
+    Step {
+        to: 150,
+        name: "add feed_reader, the change feed's registered readers, and move viewer_send.cursor into it as the Viewer's line",
+        // `AMB-D-582`, as amended: a reader that keeps its place in the store is one the trim can see. The
+        // Viewer's carrier is the first, and the cursor it kept beside its other numbers moves over as it
+        // stands — no record is read again and none is skipped.
+        apply: Apply::Custom(register_the_viewer_as_a_feed_reader),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -2445,6 +2453,47 @@ fn let_the_carrier_keep_the_servers_leftover_runs(ctx: &Ctx<'_>) -> Result<()> {
             tx.execute_batch(&format!("ALTER TABLE viewer_send ADD COLUMN {name} {decl};"))?;
         }
     }
+    Ok(())
+}
+
+/// v150: `feed_reader`, the change feed's registered readers, and the Viewer's carrier as the first of
+/// them — `viewer_send.cursor` moves to its line and leaves `viewer_send`.
+///
+/// **Created where missing**, since genesis already makes the table from today's registry before this
+/// chain runs. **Moved only where the column is there**, v68's guard and for v53's reason: a store that
+/// had no `viewer_send` before genesis made one has nothing to move, and its carrier has read nothing.
+///
+/// The line reads as "reading" where the carrier would be read for on its next turn: a server is set up
+/// (`worker_url` and `auth_token` both written), the switch is not off (an absent switch is on), and the
+/// carrier has read something out (a cursor and a version both at zero is a carrier that has not). Any
+/// other carrier is one nothing waits for, and its next turn writes its line again.
+///
+/// `cursor` is a plain column, named by no foreign key or index, so it is dropped as it is.
+fn register_the_viewer_as_a_feed_reader(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    tx.execute_batch(
+        "CREATE TABLE IF NOT EXISTS feed_reader (\
+             name TEXT PRIMARY KEY NOT NULL, \
+             cursor BIGINT NOT NULL, \
+             reading INTEGER CHECK(reading IN (0, 1)) NOT NULL\
+         );",
+    )?;
+    if !column_names(tx, "viewer_send")?.iter().any(|c| c == "cursor") {
+        return Ok(());
+    }
+    tx.execute_batch(
+        "INSERT OR IGNORE INTO feed_reader (name, cursor, reading) \
+         SELECT 'viewer', cursor, \
+                CASE WHEN (cursor <> 0 OR version <> 0) \
+                      AND COALESCE((SELECT sending FROM viewer_switch WHERE id = 1), 1) = 1 \
+                      AND EXISTS (SELECT 1 FROM secret WHERE area = 'viewer' AND project_id IS NULL \
+                                    AND owner_id IS NULL AND field_key = 'worker_url' AND trim(value) <> '') \
+                      AND EXISTS (SELECT 1 FROM secret WHERE area = 'viewer' AND project_id IS NULL \
+                                    AND owner_id IS NULL AND field_key = 'auth_token' AND trim(value) <> '') \
+                     THEN 1 ELSE 0 END \
+           FROM viewer_send WHERE id = 1;
+         ALTER TABLE viewer_send DROP COLUMN cursor;",
+    )?;
     Ok(())
 }
 
@@ -16412,6 +16461,88 @@ mod tests {
             engine.conn().execute("UPDATE viewer_send SET strays = 2 WHERE id = 1", []).is_err(),
             "none or some, and nothing else",
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v150: the carrier's cursor moves to its line among the feed's readers as it stands, and leaves
+    /// `viewer_send` with the rest of the row untouched. The line reads as "reading" only where a server
+    /// is set up, the switch is not off, and the carrier has read something out.
+    #[test]
+    fn a_carrier_left_before_v150_becomes_the_feeds_first_reader() {
+        // (what the store holds besides the carrier's row, its cursor and version, the line it ends with)
+        type Case = (&'static str, i64, i64, Option<(i64, i64)>);
+        let cases: [Case; 5] = [
+            ("server", 900, 12, Some((900, 1))),
+            ("server switch-on", 900, 12, Some((900, 1))),
+            ("server switch-off", 900, 12, Some((900, 0))),
+            ("", 900, 12, Some((900, 0))),
+            ("server", 0, 0, Some((0, 0))),
+        ];
+        for (at, (holds, cursor, version, line)) in cases.into_iter().enumerate() {
+            let dir = scratch(&format!("feed-reader-{at}"));
+            let engine = store_at(&dir, 149);
+            engine
+                .conn()
+                .execute(
+                    "INSERT INTO viewer_send (id, version, cursor, placed, seq, spent, build)
+                     VALUES (1, ?1, ?2, 12, 41, 0, 3)",
+                    [version, cursor],
+                )
+                .unwrap();
+            if holds.contains("server") {
+                engine
+                    .conn()
+                    .execute_batch(
+                        "INSERT INTO secret (area, field_key, value) VALUES ('viewer', 'worker_url', 'https://example.invalid');
+                         INSERT INTO secret (area, field_key, value) VALUES ('viewer', 'auth_token', 'token');",
+                    )
+                    .unwrap();
+            }
+            if holds.contains("switch-on") {
+                engine.conn().execute_batch("INSERT INTO viewer_switch (id, sending) VALUES (1, 1);").unwrap();
+            }
+            if holds.contains("switch-off") {
+                engine.conn().execute_batch("INSERT INTO viewer_switch (id, sending) VALUES (1, 0);").unwrap();
+            }
+
+            run(&engine, &dir, steps_through(150), &mut crate::progress::ignore).unwrap();
+
+            assert_eq!(engine.format_version().unwrap(), 150);
+            let found: Option<(i64, i64)> = engine
+                .conn()
+                .query_row("SELECT cursor, reading FROM feed_reader WHERE name = 'viewer'", [], |r| {
+                    Ok((r.get(0)?, r.get(1)?))
+                })
+                .optional()
+                .unwrap();
+            assert_eq!(found, line, "case {at}: {holds:?} at cursor {cursor}, version {version}");
+            let tx = engine.conn().unchecked_transaction().unwrap();
+            assert!(
+                !column_names(&tx, "viewer_send").unwrap().iter().any(|c| c == "cursor"),
+                "the cursor leaves viewer_send"
+            );
+            drop(tx);
+            let rest: (i64, i64, i64, i64) = engine
+                .conn()
+                .query_row("SELECT version, placed, seq, build FROM viewer_send WHERE id = 1", [], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+                })
+                .unwrap();
+            assert_eq!(rest, (version, 12, 41, 3), "and the rest of the row stays");
+            std::fs::remove_dir_all(&dir).ok();
+        }
+    }
+
+    /// v150 on a store whose carrier never wrote a row: there is nothing to move, and no line is written.
+    #[test]
+    fn a_store_with_no_carrier_row_has_no_reader_after_v150() {
+        let dir = scratch("feed-reader-none");
+        let engine = store_at(&dir, 149);
+
+        run(&engine, &dir, steps_through(150), &mut crate::progress::ignore).unwrap();
+
+        let lines: i64 = engine.conn().query_row("SELECT COUNT(*) FROM feed_reader", [], |r| r.get(0)).unwrap();
+        assert_eq!(lines, 0);
         std::fs::remove_dir_all(&dir).ok();
     }
 

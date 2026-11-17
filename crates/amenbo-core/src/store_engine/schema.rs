@@ -2129,12 +2129,12 @@ plain_tables! {
     /// which is exactly what a first run does — one large send and nothing else. What `viewer_pending`
     /// holds is the exception, and that is why it is a table rather than something worked out again.
     ///
-    /// The columns are four numbers that mean nothing apart. `cursor` is how far the backlog has been
-    /// **read out**, which is not how far the server has been **told**: holding them together is what
-    /// makes a server that will not take anything drag the reading back with it, and the feed's window
-    /// turns — what is not copied out in time is not copied out at all. `placed` is the number the server
-    /// was last left standing at, `seq` the ordering it answered with, and `version` the backlog version
-    /// last sent.
+    /// The columns are three numbers that mean nothing apart, and nothing apart from the carrier's line in
+    /// [`feed_reader`] either. That line's `cursor` is how far the backlog has been **read out**, which is
+    /// not how far the server has been **told**: holding them together is what makes a server that will
+    /// not take anything drag the reading back with it, and the feed's window turns — what is not copied
+    /// out in time is not copied out at all. `placed` is the number the server was last left standing at,
+    /// `seq` the ordering it answered with, and `version` the backlog version last sent.
     ///
     /// The last three are about **the server's leftover run rows** — `automation_run_*` keys a build
     /// before the Worker's build 4 placed there, and nothing reads any more. `strays` is whether any are
@@ -2147,7 +2147,6 @@ plain_tables! {
     viewer_send {
         id: integer("PRIMARY KEY CHECK (id = 1)"),
         version: bigint,
-        cursor: bigint,
         placed: bigint,
         seq: bigint,
         quiet_until: text_opt,
@@ -2169,8 +2168,9 @@ plain_tables! {
     ///
     /// **The queue is the mark.** A send takes from the front and drops what landed, so there is no
     /// separate record of how far it got — one that could disagree with the queue is one that can lose a
-    /// record. `viewer_send.cursor` above it already says the backlog was read that far, which is why
-    /// dropping these rows and keeping that number loses whatever had been copied out and not yet sent.
+    /// record. The carrier's cursor in [`feed_reader`] already says the backlog was read that far, which
+    /// is why dropping these rows and keeping that number loses whatever had been copied out and not yet
+    /// sent.
     ///
     /// `body` is the row as it was copied out, in the clear: sealing happens on the way out, so what waits
     /// here is what the backlog held. A deletion carries none — the key and the word are the whole of it.
@@ -2221,6 +2221,31 @@ plain_tables! {
     viewer_switch {
         id: integer("PRIMARY KEY CHECK (id = 1)"),
         sending: integer("CHECK(sending IN (0, 1))"),
+    }
+
+    /// **Who reads the change feed through the store, and how far each has read** — one line per reader
+    /// that registered (`AMB-D-582`).
+    ///
+    /// The feed only keeps a window, and the store trims it as it writes. A reader whose place nobody
+    /// but itself knows is one the trim cannot wait for, so the window turning under it costs a reading of
+    /// the whole store. A reader that keeps its place here is one the trim can see.
+    ///
+    /// `name` is the reader's own, a word compiled into the binary — today only the Viewer's carrier
+    /// (`viewer`). `cursor` is the feed's number it has read up to. `reading` is whether it reads now: `0`
+    /// for a reader that is switched off or has not read anything yet, which nothing waits for. **An absent
+    /// line is a reader that does not read**, which is also what a reader whose memory was thrown away
+    /// stands at.
+    ///
+    /// Readers that do not register — the desktop app's screen, whoever calls `Store::sync_changes` — keep
+    /// their own place, and read the whole store again when the window has turned past it.
+    ///
+    /// Not on the change feed ([`FEED_PLAIN_TABLES`](crate::store_engine::schema::FEED_PLAIN_TABLES)): a
+    /// reader writes its line every time it reads, and the feed would grow by one record for every reading
+    /// it carried.
+    feed_reader {
+        name: text("PRIMARY KEY"),
+        cursor: bigint,
+        reading: integer("CHECK(reading IN (0, 1))"),
     }
 }
 

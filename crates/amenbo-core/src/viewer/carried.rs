@@ -25,9 +25,14 @@ use crate::store_engine::{StoreEngine, StoreEngineError};
 const VS: col::viewer_send::Cols = col::viewer_send::ALL;
 const VP: col::viewer_pending::Cols = col::viewer_pending::ALL;
 const VW: col::viewer_switch::Cols = col::viewer_switch::ALL;
+const FR: col::feed_reader::Cols = col::feed_reader::ALL;
 
 /// The row this device's memory is, there being one.
 const THE_ROW: i64 = 1;
+
+/// The name the carrier reads the change feed under, as a registered reader (`AMB-D-582`): its line in
+/// `feed_reader` is where its cursor lives, so the store can see how far it has read.
+const AS_A_READER: &str = "viewer";
 
 /// What a carrier that has never sent anything stands at, and what one whose memory was thrown away
 /// stands at again. Zero on every number: a backlog version nothing was sent under, a cursor at the
@@ -42,6 +47,9 @@ pub struct Carried {
     /// back and the version with it.
     pub version: i64,
     /// Where to read changes on from. It is the feed's number, not ours.
+    ///
+    /// **It is kept on the carrier's line among the feed's readers**, not beside the other numbers, so
+    /// the store can see how far this reader has read. It is read and written with the rest all the same.
     pub cursor: i64,
     /// The number the server was last left standing at, which is `version` except where that number was
     /// already the one standing there. It is what keeps the server from reading two different turns as
@@ -141,8 +149,7 @@ pub fn read(engine: &StoreEngine) -> Result<Carried> {
 /// left before it writes (`ops::automation`'s `let_old_runs_go`).
 pub(crate) fn read_on(conn: &rusqlite::Connection) -> Result<Carried> {
     let mut sel = Select::new();
-    let (version, cursor, placed, seq) =
-        (sel.col(VS.version), sel.col(VS.cursor), sel.col(VS.placed), sel.col(VS.seq));
+    let (version, placed, seq) = (sel.col(VS.version), sel.col(VS.placed), sel.col(VS.seq));
     let (quiet_until, spent, spent_on, build) =
         (sel.col(VS.quiet_until), sel.col(VS.spent), sel.col(VS.spent_on), sel.col(VS.build));
     let last_placed_at = sel.col(VS.last_placed_at);
@@ -156,7 +163,7 @@ pub(crate) fn read_on(conn: &rusqlite::Connection) -> Result<Carried> {
         .query_row(rusqlite::params_from_iter(sql.params()), |r| {
             Ok(Carried {
                 version: version.get(r)?,
-                cursor: cursor.get(r)?,
+                cursor: 0,
                 placed: placed.get(r)?,
                 seq: seq.get(r)?,
                 quiet_until: quiet_until.get(r)?,
@@ -171,21 +178,66 @@ pub(crate) fn read_on(conn: &rusqlite::Connection) -> Result<Carried> {
         })
         .optional()
         .map_err(StoreEngineError::from)?;
-    Ok(found.unwrap_or_default())
+    let mut left = found.unwrap_or_default();
+    left.cursor = cursor_on(conn)?;
+    Ok(left)
 }
 
-/// Write where the carrier was left. The whole row goes at once — there is no writing one of these
-/// numbers without the others.
+/// How far the carrier has read the feed, off its line among the readers. No line is a carrier that has
+/// read nothing.
+fn cursor_on(conn: &rusqlite::Connection) -> Result<i64> {
+    let mut sel = Select::new();
+    let cursor = sel.col(FR.cursor);
+    let mut sql = Sql::from(&sel, FR.table);
+    sql.push_where(Some(&Pred::eq(FR.name, AS_A_READER)));
+
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let found: Option<i64> = stmt
+        .query_row(rusqlite::params_from_iter(sql.params()), |r| cursor.get(r))
+        .optional()
+        .map_err(StoreEngineError::from)?;
+    Ok(found.unwrap_or(0))
+}
+
+/// Whether the carrier reads the feed now, as its line among the readers says it: switched on, and having
+/// read something out. One that is off, or has not read anything yet, is one nothing waits for.
+///
+/// A device with no server never takes a turn, so it never writes a line, and a server stood up anew
+/// throws the line away ([`forget()`]) — both read as "not reading".
+fn reads_now(conn: &rusqlite::Connection, left: &Carried) -> Result<bool> {
+    let has_read_something = left.cursor != 0 || left.version != 0;
+    Ok(has_read_something && switched_on_on(conn)?)
+}
+
+/// Write the carrier's line among the feed's readers.
+fn write_reader_on(conn: &rusqlite::Connection, cursor: i64, reading: bool) -> Result<()> {
+    Insert::into(FR.table)
+        .set(FR.name, AS_A_READER)
+        .set(FR.cursor, cursor)
+        .set(FR.reading, i64::from(reading))
+        .on_conflict_update(FR.name)
+        .sql()
+        .execute(conn)
+        .map_err(StoreEngineError::from)?;
+    Ok(())
+}
+
+/// Write where the carrier was left. The whole of it goes at once — there is no writing one of these
+/// numbers without the others, and the cursor on the carrier's line among the feed's readers goes in the
+/// same transaction as the rest.
 pub fn write(engine: &StoreEngine, left: &Carried) -> Result<()> {
-    write_on(engine.conn(), left)
+    let tx = engine.transaction()?;
+    write_on(&tx, left)?;
+    tx.commit().map_err(StoreEngineError::from)?;
+    Ok(())
 }
 
-/// [`write()`], on a connection.
+/// [`write()`], on a connection — inside the caller's transaction, which is what keeps the two tables
+/// written together.
 pub(crate) fn write_on(conn: &rusqlite::Connection, left: &Carried) -> Result<()> {
     Insert::into(VS.table)
         .set(VS.id, THE_ROW)
         .set(VS.version, left.version)
-        .set(VS.cursor, left.cursor)
         .set(VS.placed, left.placed)
         .set(VS.seq, left.seq)
         .set_opt(VS.quiet_until, left.quiet_until.as_deref())
@@ -200,7 +252,7 @@ pub(crate) fn write_on(conn: &rusqlite::Connection, left: &Carried) -> Result<()
         .sql()
         .execute(conn)
         .map_err(StoreEngineError::from)?;
-    Ok(())
+    write_reader_on(conn, left.cursor, reads_now(conn, left)?)
 }
 
 /// Throw away what the carrier was holding, so the next turn places the whole backlog again.
@@ -217,9 +269,16 @@ pub(crate) fn write_on(conn: &rusqlite::Connection, left: &Carried) -> Result<()
 ///
 /// The count a repair last showed goes too. It says how far apart the two ends were, and a server this
 /// store has not sent to is one nobody has been shown anything about.
+///
+/// So does the carrier's line among the feed's readers: a carrier with no memory has read nothing, and
+/// nothing waits for it.
 pub fn forget(engine: &StoreEngine) -> Result<()> {
     let tx = engine.transaction()?;
-    for sql in [Delete::from(VS.table).sql(), Delete::from(VP.table).sql()] {
+    for sql in [
+        Delete::from(VS.table).sql(),
+        Delete::from(VP.table).sql(),
+        Delete::from(FR.table).filter(Pred::eq(FR.name, AS_A_READER)).sql(),
+    ] {
         sql.execute(&tx).map_err(StoreEngineError::from)?;
     }
     super::repair::forget_asked_in(&tx)?;
@@ -232,7 +291,11 @@ pub fn forget(engine: &StoreEngine) -> Result<()> {
 /// **An absent row is on.** The switch only decides anything once a server exists, and standing one up is
 /// the act of asking for this — so a device that has never touched it is one that wants what it set up.
 pub fn switched_on(engine: &StoreEngine) -> Result<bool> {
-    let conn = engine.conn();
+    switched_on_on(engine.conn())
+}
+
+/// [`switched_on()`], on a connection.
+fn switched_on_on(conn: &rusqlite::Connection) -> Result<bool> {
     let mut sel = Select::new();
     let sending = sel.col(VW.sending);
     let mut sql = Sql::from(&sel, VW.table);
@@ -252,14 +315,23 @@ pub fn switched_on(engine: &StoreEngine) -> Result<bool> {
 /// read out: back on, what was already copied out is placed, and whatever the feed's window dropped in the
 /// meantime is taken again whole — which is what the copying already does with a gap, and needs nothing
 /// said here.
+///
+/// **The carrier's line among the feed's readers follows the switch**, in the same transaction: off is a
+/// reader nothing waits for, and back on it reads again where it left off.
 pub fn set_switched_on(engine: &StoreEngine, sending: bool) -> Result<()> {
+    let tx = engine.transaction()?;
     Insert::into(VW.table)
         .set(VW.id, THE_ROW)
         .set(VW.sending, i64::from(sending))
         .on_conflict_update(VW.id)
         .sql()
-        .execute(engine.conn())
+        .execute(&tx)
         .map_err(StoreEngineError::from)?;
+    let left = read_on(&tx)?;
+    if left != Carried::default() {
+        write_reader_on(&tx, left.cursor, reads_now(&tx, &left)?)?;
+    }
+    tx.commit().map_err(StoreEngineError::from)?;
     Ok(())
 }
 
@@ -626,6 +698,42 @@ mod tests {
 
         assert_eq!(store.viewer_carried().unwrap(), Carried::default());
         assert_eq!(store.viewer_waiting().unwrap(), 0);
+    }
+
+    /// **The carrier's cursor lives on its line among the feed's readers**, and the line says whether it
+    /// reads now: not before it has read anything, yes once it has, no while switched off, yes again when
+    /// switched back on — and no line at all once its memory is thrown away.
+    #[test]
+    fn the_carrier_is_a_registered_reader_of_the_feed() {
+        let store = store_at("reader");
+        let line = || -> Option<(i64, i64)> {
+            store
+                .engine
+                .conn()
+                .query_row("SELECT cursor, reading FROM feed_reader WHERE name = ?1", [AS_A_READER], |r| {
+                    Ok((r.get(0)?, r.get(1)?))
+                })
+                .optional()
+                .unwrap()
+        };
+        assert_eq!(line(), None, "a carrier that has never written has no line");
+
+        store.set_viewer_carried(&Carried { build: 4, ..Carried::default() }).unwrap();
+        assert_eq!(line(), Some((0, 0)), "having read nothing out, nothing waits for it");
+
+        store.set_viewer_carried(&Carried { cursor: 900, version: 12, ..Carried::default() }).unwrap();
+        assert_eq!(line(), Some((900, 1)));
+        assert_eq!(store.viewer_carried().unwrap().cursor, 900);
+
+        store.set_viewer_switched_on(false).unwrap();
+        assert_eq!(line(), Some((900, 0)), "switched off, nothing waits for it");
+        store.set_viewer_switched_on(true).unwrap();
+        assert_eq!(line(), Some((900, 1)), "back on, it reads where it left off");
+
+        store.forget_viewer_carried().unwrap();
+        assert_eq!(line(), None);
+        store.set_viewer_switched_on(false).unwrap();
+        assert_eq!(line(), None, "the switch writes no line for a carrier with no memory");
     }
 
     /// Dropping more than is waiting takes what is there and no more, and dropping none is nothing at

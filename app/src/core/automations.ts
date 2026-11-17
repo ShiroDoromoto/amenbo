@@ -26,7 +26,7 @@ import { useQuery } from "./query";
 import { inTauri } from "./snapshot";
 import { invoke } from "./ipc";
 import { confirmDialog } from "./dialog";
-import { t } from "./i18n";
+import { isErr, t } from "./i18n";
 import { invokeAck, invokeForAck } from "./mutations";
 import { told } from "./automationSave";
 import type {
@@ -1457,18 +1457,31 @@ export async function fetchLiveLaunches(): Promise<AutomationLiveLaunchDto[]> {
   return invoke<AutomationLiveLaunchDto[]>("automation_launches_live", {});
 }
 
-/**
- * Subscribing read of one launch. It is read again when a run of it moves or a role's headcount changes
- * (`automationRuns`), when a task waiting for a role turns up or is taken (`tasks`), and when a role is
- * renamed (`automations`) (`core/query`'s `launchState`). Null until the first answer lands, and for no
- * launch.
- */
-export function useLaunchState(launchId: number | null): AutomationLaunchStateDto | null {
-  const { data } = useQuery<AutomationLaunchStateDto | null>(
+/** The one read {@link useLaunchState} and {@link useLaunchGone} share: one key, so one fetch. */
+function useLaunchQuery(launchId: number | null) {
+  return useQuery<AutomationLaunchStateDto | null>(
     ["launchState", launchId],
     () => (launchId === null ? Promise.resolve(null) : fetchLaunchState(launchId)),
   );
-  return data ?? null;
+}
+
+/**
+ * Subscribing read of one launch. It is read again when a run of it moves or a role's headcount changes
+ * (`automationRuns`), when a task waiting for a role turns up or is taken (`tasks`), and when a role is
+ * renamed (`automations`) (`core/query`'s `launchState`). Null until the first answer lands, for no
+ * launch, and for one that is gone ({@link useLaunchGone}).
+ */
+export function useLaunchState(launchId: number | null): AutomationLaunchStateDto | null {
+  return useLaunchQuery(launchId).data ?? null;
+}
+
+/**
+ * Whether the launch is gone: core answers its read with `not_found` (`AMB-D-986`). This is what tells
+ * a launch that is no more from one whose first answer has not landed — {@link useLaunchState} is null
+ * for both.
+ */
+export function useLaunchGone(launchId: number | null): boolean {
+  return isErr(useLaunchQuery(launchId).error, "not_found");
 }
 
 /**

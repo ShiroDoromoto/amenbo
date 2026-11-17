@@ -18,7 +18,7 @@ import {
 } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
 import type { Plate as Row, Say } from "../talk/nameplate";
-import { acknowledgeRun, stopLaunch, useLaunchState } from "../core/automations";
+import { acknowledgeRun, stopLaunch, useLaunchGone, useLaunchState } from "../core/automations";
 import { FacetAvatar, facetActor } from "../components/atoms";
 import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
@@ -30,7 +30,7 @@ import { PaneMade, type Made } from "./PaneMade";
 import type { FrameNames, NamedBy } from "../talk/frames";
 import type { PaneStart } from "../talk/terminal";
 import type { SessionMadeDto, SessionSaidDto } from "../bindings/bindings";
-import { currentLang, errText, t, tf } from "../core/i18n";
+import { currentLang, errText, isErr, t, tf } from "../core/i18n";
 import { useRefNav, type RunsTab } from "../core/refNav";
 import { asTyped, isComposing, isEnterSubmit } from "../core/keys";
 import { hostOs } from "../core/platform";
@@ -286,12 +286,13 @@ function Pane({
   const runsTab: RunsTab =
     run?.state?.status === "failed" && !run.state.acknowledged ? "running" : "history";
 
-  // The launch this pane draws, read for whether it has ended: one that has is not stopped again.
+  // The launch this pane draws, read for whether it has ended or is gone: neither is stopped again.
   const launchState = useLaunchState(launch);
+  const launchGone = useLaunchGone(launch);
   // The close button cannot be pressed: a run's own pane while its run is going or held.
   const stuck = launch === null && runLive;
-  // Taking the pane away stops the launch it draws: one not ended yet.
-  const stopsLaunch = launch !== null && launchState?.status !== "ended";
+  // Taking the pane away stops the launch it draws: one not ended yet, and still there.
+  const stopsLaunch = launch !== null && !launchGone && launchState?.status !== "ended";
 
   /** Take the place away, once the person has said so. The terminal in it is ended first: a session
    *  whose pane has gone is one nobody can get back to.
@@ -312,9 +313,11 @@ function Pane({
    *  **A launch's pane is always asked about, and taking it away stops the launch** (`AMB-D-1154`),
    *  whether a seat is in front, going or held, or none yet. A launch left going with its pane gone
    *  waited on unseen and took the next task. The question says the launch stops with the pane; a
-   *  "no" leaves the pane, the terminal and the launch as they were. A launch already ended is not
-   *  stopped again — core refuses it — and its pane is asked about as any other place. Where the stop
-   *  is refused the pane stays, and the refusal is said on the toast.
+   *  "no" leaves the pane, the terminal and the launch as they were. A launch already ended, or gone
+   *  altogether, is not stopped again — core refuses it — and its pane is asked about as any other
+   *  place. One that goes while the question is open is refused as `not_found` (`AMB-D-986`): there
+   *  is nothing left to stop, so the pane goes without a toast. Where the stop is refused otherwise
+   *  the pane stays, and the refusal is said on the toast.
    *
    *  **One press at a time** ({@link dropping}): presses that pile up while the app is busy would
    *  otherwise each ask again, or take the frame away twice. */
@@ -328,8 +331,10 @@ function Pane({
         try {
           await stopLaunch(launch);
         } catch (e) {
-          pushNotice(errText(e));
-          return;
+          if (!isErr(e, "not_found")) {
+            pushNotice(errText(e));
+            return;
+          }
         }
       } else if (launch !== null || run === null) {
         // A run's own pane is not asked about: there is no way back into a step's conversation to

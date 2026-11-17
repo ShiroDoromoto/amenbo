@@ -150,7 +150,8 @@ pub(super) const META_FEED_WINDOWS_FROM: &str = "change_feed_windows_from";
 type ChangeBuffer = std::sync::Arc<std::sync::Mutex<Vec<RowChange>>>;
 
 /// The store's truth source: the read-model connection, and the rows the transaction in flight has
-/// touched — see [`super::write::WriteTx::commit`], which drains them into the feed.
+/// touched — see [`super::write::WriteTx::commit`] and [`super::migrate::run`], which drain them into
+/// the feed.
 pub struct StoreEngine {
     conn: Connection,
     changes: ChangeBuffer,
@@ -346,8 +347,9 @@ impl StoreEngine {
     }
 
     /// Forget whatever the hook has collected so far, and hand it back — how [`super::write::WriteTx`]
-    /// starts a transaction with an empty ledger and ends it with exactly that transaction's rows.
-    /// Anything a write outside a `WriteTx` leaves here is dropped at the next `BEGIN` rather than
+    /// starts a transaction with an empty ledger and ends it with exactly that transaction's rows, and
+    /// how a migration step does the same ([`super::migrate::run`], `AMB-D-1166`).
+    /// Anything any other write leaves here is dropped at the next `BEGIN` rather than
     /// attributed to it: a change with no commit to ride into the feed with is not a change a reader may
     /// act on — the file-level signal covers those paths.
     pub(super) fn take_changes(&self) -> Vec<RowChange> {

@@ -217,7 +217,8 @@ async function readSignature(): Promise<StoreSignatureDto | null> {
  * - **nothing moved** … our own write. The ack already put the result on screen, and the `loadSnapshot`
  *   at the end of it has already carried the cursor past our own rows. Read nothing.
  * - **the store file's identity moved** … it was swapped out from under us (`fold`, `stage_and_swap`, a
- *   restore, a migration). Nothing the feed held survives that, so re-read everything.
+ *   restore). Nothing the feed held survives that, so re-read everything. A migration runs in place and
+ *   puts what it rewrote on the feed (`AMB-D-1166`), so it comes in as `data_version` alone.
  * - **`config.json`'s identity moved** … that file is not in the database, so no row will ever speak for
  *   it. Re-read everything.
  * - **only `data_version` moved** … somebody committed, and the feed can say what: fold the changed rows'

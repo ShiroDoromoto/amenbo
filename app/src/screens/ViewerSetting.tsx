@@ -209,8 +209,9 @@ function ServerRow({ state, onSetUp }: { state: ViewerState; onSetUp: () => void
 /**
  * Which build the server is running, said beside the one this Amenbo carries.
  *
- * **The number travels on the answer to a write and nowhere else**, so a device that has never sent has
- * never been told one — and zero is that, not an old Worker. Pressing setup is what moves it, and
+ * **The number is written down by setup, for the Worker it placed, and by the answer to a write**
+ * (`AMB-D-1167`), so a device that has done neither has never been told one — and zero is that, not an
+ * old Worker. Pressing setup is what moves it, and
  * pressing it is the reader's to do, so this says where the two stand rather than doing anything about it.
  */
 function buildLine(state: ViewerState): string {

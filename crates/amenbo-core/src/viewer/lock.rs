@@ -11,6 +11,11 @@
 //! is stop — which is what "no, and do not queue" makes it do. Waiting would hold a process open for a turn
 //! that has already been taken.
 //!
+//! **Setup is the one that waits** ([`wait_for_the_turn`]). It has a thing of its own to write — the build
+//! of the Worker it placed, or a memory thrown away for a server the carrier has not sent to — and a turn
+//! running under it writes back the row it read at its start, over whatever setup put there. Stopping would
+//! leave that unwritten, so setup waits for the turn to end and holds it while it writes.
+//!
 //! **The other reason is the one that started this.** A machine that sleeps hands the same stretch to two
 //! runs at once, because a timer counts a wall clock that runs while the machine is asleep and a heartbeat
 //! counts one that does not.
@@ -21,6 +26,7 @@
 
 use std::fs::{OpenOptions, TryLockError};
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use crate::config::Paths;
 use crate::error::{Error, Result};
@@ -28,6 +34,9 @@ use crate::error::{Error, Result};
 /// What the hold is taken on, `<base>/viewer-sending.lock`. It is a file for want of anything else to name
 /// — a hold has to be on something — and its content is deliberately nothing.
 const FILE_NAME: &str = "viewer-sending.lock";
+
+/// How long [`wait_at`] leaves between one try at the hold and the next.
+const WAIT_PAUSE: Duration = Duration::from_millis(100);
 
 /// The hold, for as long as it is kept. Letting go of this lets go of the turn: the file is closed, and
 /// closing it is what the kernel reads as the hold being dropped.
@@ -76,6 +85,31 @@ pub fn at(path: &Path) -> Result<Option<TheTurn>> {
     }
 }
 
+/// Take the turn, waiting for whoever holds it to let go — for `up_to` at the most.
+///
+/// What [`take_the_turn`] answers with `None` this answers with an `Err` once `up_to` has passed: the one
+/// who waits has something to write, and not writing it is a failure to say.
+pub fn wait_for_the_turn(paths: &Paths, up_to: Duration) -> Result<TheTurn> {
+    wait_at(&paths.base_dir.join(FILE_NAME), up_to)
+}
+
+/// [`wait_for_the_turn`], on a named file.
+pub fn wait_at(path: &Path, up_to: Duration) -> Result<TheTurn> {
+    let until = Instant::now() + up_to;
+    loop {
+        if let Some(turn) = at(path)? {
+            return Ok(turn);
+        }
+        if Instant::now() >= until {
+            return Err(Error::invalid(format!(
+                "a send to the Viewer's server held its turn for longer than {}s",
+                up_to.as_secs()
+            )));
+        }
+        std::thread::sleep(WAIT_PAUSE);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,6 +127,35 @@ mod tests {
 
         drop(first);
         assert!(at(&path).unwrap().is_some(), "letting go hands the turn on");
+    }
+
+    /// The one who waits is handed the turn the moment its holder lets go, and not before.
+    #[test]
+    fn a_waiter_takes_the_turn_once_it_is_let_go() {
+        let dir = amenbo_scratch::scratch("viewer-lock-waited");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(FILE_NAME);
+
+        let held = at(&path).unwrap().expect("nobody holds it yet");
+        let letting_go = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            drop(held);
+        });
+        let waited = wait_at(&path, Duration::from_secs(30)).expect("the turn is let go within the wait");
+        letting_go.join().unwrap();
+        assert!(at(&path).unwrap().is_none(), "and the waiter holds it now");
+        drop(waited);
+    }
+
+    /// A turn that is not let go within the wait is an error, not a hold taken anyway.
+    #[test]
+    fn a_waiter_that_waits_too_long_is_told_so() {
+        let dir = amenbo_scratch::scratch("viewer-lock-waited-out");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(FILE_NAME);
+
+        let _held = at(&path).unwrap().expect("nobody holds it yet");
+        assert!(wait_at(&path, Duration::from_millis(250)).is_err());
     }
 
     /// The file says nothing, before or after. What means "a turn is running" is the kernel's hold, so a

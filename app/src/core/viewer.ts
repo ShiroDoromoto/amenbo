@@ -82,9 +82,10 @@ export function useViewerAsksForSetupAgain(): boolean {
 }
 
 /**
- * Ask again whether to ask for setup. The build that turns the answer to `false` comes back on a send
- * that runs in its own process, and the row it is written to is not on the change feed — so nothing
- * would ever tell this window. The band calls this on a timer while it is up.
+ * Ask again whether to ask for setup. The build that turns the answer to `false` is written down by a
+ * setup, or comes back on a send that runs in its own process (`AMB-D-1167`), and the row it is written to
+ * is not on the change feed — so nothing would ever tell this window. The band calls this on a timer
+ * while it is up, and the screen that runs setup calls it once the press is answered.
  */
 export function recheckSetupAgain(): void {
   invalidateQueries((key) => key[0] === "viewer-setup-again");

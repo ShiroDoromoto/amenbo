@@ -4117,6 +4117,112 @@ mod tests {
         assert!(!card.interactive && !card.waiting && !card.waits_for_room);
     }
 
+    /// **The history tab reads a store whose ended runs have let go of their steps** — the shape v148
+    /// leaves: the run's row, its rounds and what they passed on, and no step, no copy of the
+    /// definition and no value. Each card still says how the run ended, who saw it fail, the task it
+    /// was on, the task its failed round was filed as and what it passed on, newest first; a failure
+    /// nobody has seen and a run still going stay off it (`AMB-D-955`).
+    #[test]
+    fn the_history_tab_reads_runs_that_have_let_go_of_their_steps() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("automation-history-after-v148");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        drop(amenbo_core::Store::open().unwrap());
+        let paths = amenbo_core::config::Paths::resolve().unwrap();
+        let conn = rusqlite::Connection::open(&paths.store_file).unwrap();
+        conn.execute_batch(
+            "BEGIN;
+             INSERT INTO project (id, name, default_view) VALUES (901, 'Alice', 'list');
+             INSERT INTO automation (id, project_id, name) VALUES (901, 901, 'Build');
+             INSERT INTO task (id, title, subtype, status, project_id) VALUES
+                 (901, 'Fix the build', 'default', 'todo', 901),
+                 (902, 'The build fell', 'default', 'todo', 901),
+                 (903, 'Write the notes', 'default', 'todo', 901);
+             INSERT INTO automation_run
+                 (id, automation_id, project_id, status, stopped_reason, started_at, ended_at,
+                  acknowledged_at, acknowledged_by_kind) VALUES
+                 (901, 901, 901, 'completed', NULL, '2026-11-08T05:00:00Z', '2026-11-08T05:05:00Z', NULL, NULL),
+                 (902, 901, 901, 'failed', 'crashed', '2026-11-08T06:00:00Z', '2026-11-08T06:05:00Z',
+                  '2026-11-08T07:00:00Z', 'human'),
+                 (903, 901, 901, 'canceled', NULL, '2026-11-08T08:00:00Z', '2026-11-08T08:05:00Z', NULL, NULL),
+                 (904, 901, 901, 'failed', 'crashed', '2026-11-08T09:00:00Z', '2026-11-08T09:05:00Z', NULL, NULL),
+                 (905, 901, 901, 'running', NULL, '2026-11-08T10:00:00Z', NULL, NULL, NULL);
+             INSERT INTO automation_run_task (id, run_id, seq, task_id, ended_at, incident_task_id) VALUES
+                 (9010, 901, 1, 903, '2026-11-08T05:02:00Z', NULL),
+                 (9011, 901, 2, 901, '2026-11-08T05:05:00Z', NULL),
+                 (9020, 902, 1, 901, '2026-11-08T06:05:00Z', 902);
+             INSERT INTO automation_run_pass (id, run_id, run_task_id, task_id) VALUES
+                 (1, 901, 9010, 903), (2, 901, 9011, 902);
+             UPDATE project SET created_at = '2026-11-08T04:00:00Z', updated_at = '2026-11-08T04:00:00Z';
+             UPDATE automation SET created_at = '2026-11-08T04:00:00Z', updated_at = '2026-11-08T04:00:00Z';
+             UPDATE task SET created_at = '2026-11-08T04:00:00Z', updated_at = '2026-11-08T04:00:00Z';
+             UPDATE automation_run SET created_at = started_at, updated_at = started_at;
+             UPDATE automation_run_task SET created_at = ended_at, updated_at = ended_at;
+             UPDATE automation_run_pass SET created_at = '2026-11-08T05:05:00Z', updated_at = '2026-11-08T05:05:00Z';
+             COMMIT;",
+        )
+        .unwrap();
+        let none_of = |table: &str| -> i64 {
+            conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get(0)).unwrap()
+        };
+        for table in ["automation_run_step", "automation_run_def", "automation_run_value"] {
+            assert_eq!(none_of(table), 0, "{table} holds nothing, as after v148");
+        }
+
+        let page = automation_history_page(None, None, 0).expect("the history reads");
+        assert_eq!(page.total, 3, "the unseen failure and the run going are not history");
+        assert_eq!(
+            (page.by_ending.completed, page.by_ending.failed, page.by_ending.canceled),
+            (1, 1, 1),
+        );
+        assert_eq!(page.runs.iter().map(|card| card.run).collect::<Vec<_>>(), [903, 902, 901], "newest first");
+        for card in &page.runs {
+            assert_eq!(card.project_name, "Alice");
+            assert_eq!(card.automation_name, "Build");
+            assert!(card.step_name.is_none() && card.action_name.is_none() && card.builtin.is_none());
+            assert!(card.placement.is_none() && card.exit_name.is_none() && card.version.is_none());
+            assert_eq!(card.steps_done, 0);
+            assert!(card.report_withheld.is_empty());
+        }
+
+        let canceled = &page.runs[0];
+        assert_eq!(canceled.status, "canceled");
+        assert!(canceled.task.is_none(), "a run that took no task is on none");
+        assert!(canceled.passes.is_empty());
+
+        let failed = &page.runs[1];
+        assert_eq!(failed.status, "failed");
+        assert_eq!(failed.stopped_reason, Some("crashed"));
+        assert_eq!(failed.ended_at.as_deref(), Some("2026-11-08T06:05:00Z"));
+        assert!(failed.acknowledged);
+        assert_eq!(failed.acknowledged_by, Some("human"));
+        let task = failed.task.as_ref().expect("the task it was on");
+        assert_eq!((task.id, task.title.as_str(), task.seq), (901, "Fix the build", 1));
+        assert_eq!(task.r#ref, amenbo_core::idref::task(901));
+        let incident = failed.incident.as_ref().expect("the task its failed round was filed as");
+        assert_eq!((incident.id, incident.title.as_str()), (902, "The build fell"));
+        assert_eq!(incident.at.as_deref(), Some("2026-11-08T06:05:00Z"));
+
+        let completed = &page.runs[2];
+        assert_eq!(completed.status, "completed");
+        assert!(!completed.acknowledged && completed.acknowledged_by.is_none());
+        let task = completed.task.as_ref().expect("the task of its last round");
+        assert_eq!((task.id, task.seq), (901, 2));
+        assert!(completed.incident.is_none());
+        let passed: Vec<_> =
+            completed.passes.iter().map(|pass| (pass.task, pass.task_title.as_deref(), pass.current)).collect();
+        assert_eq!(passed, [(Some(903), Some("Write the notes"), false), (Some(902), Some("The build fell"), true)]);
+
+        let only_failed = automation_history_page(Some("failed".into()), None, 0).expect("narrowed");
+        assert_eq!(only_failed.total, 1);
+        assert_eq!(only_failed.runs.iter().map(|card| card.run).collect::<Vec<_>>(), [902]);
+        let in_project = automation_history_page(None, Some(901), 0).expect("one project's");
+        assert_eq!(in_project.total, 3);
+        let elsewhere = automation_history_page(None, Some(902), 0).expect("another project's");
+        assert_eq!(elsewhere.total, 0);
+        assert!(elsewhere.runs.is_empty());
+    }
+
     /// **A failed round's task goes out with when the round failed** — the end its stretch was closed
     /// with — for the line under the pane to say the time; a stretch with no end leaves it out.
     #[test]

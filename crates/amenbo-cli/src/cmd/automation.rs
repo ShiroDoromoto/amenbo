@@ -414,7 +414,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 print_json(&serde_json::to_value(&view).unwrap());
             } else {
                 // Who carries each step out, as a launch would choose it: the step's own choice, else
-                // its role's default, else Amenbo's.
+                // its role's default, else the agent chosen for the project.
                 let reads = if saved { ReadsFrom::Saved } else { ReadsFrom::Draft };
                 let default_agent = store.automation_default_agent(id).map_err(CliError::from)?;
                 let carriers = amenbo_core::ops::automation_run::carriers(
@@ -2131,7 +2131,7 @@ fn render_placement(
                         let role = view.roles.iter().find(|r| r.id == *role_id).map_or("?", |r| r.name.as_str());
                         format!("{by}  — role {role_id} {role}'s default")
                     }
-                    ChosenAt::Amenbo => format!("{by}  — Amenbo's default"),
+                    ChosenAt::Amenbo => format!("{by}  — the project's agent (Amenbo's default)"),
                 }
             }
             (None, None, None) => "nobody chosen to carry it out".to_string(),

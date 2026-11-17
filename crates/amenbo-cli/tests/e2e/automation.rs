@@ -2328,6 +2328,29 @@ fn a_step_nobody_chose_for_is_carried_out_by_its_roles_default() {
     cli.json(&["automation", "save", &a, "--json"]);
 }
 
+/// A step neither the placement nor its role chose for falls back to the agent chosen for the project,
+/// and `show` says that is whose it is — never the one a pane was last opened with.
+#[test]
+fn a_step_nobody_chose_for_is_carried_out_by_the_projects_agent() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, placement, step) = a_launchable(&cli);
+    cli.json(&["automation", "agent-set", &placement, "--step", &step, "--clear", "--json"]);
+    let project = id_str(&cli.json(&["automation", "show", &a, "--json"])["automation"]["project_id"]);
+    let project: i64 = project.parse().unwrap();
+
+    // What the app's Project settings write: the agent this project's panes and steps are given.
+    let file = cli.home.join("config.json");
+    let mut config = amenbo_core::config::Config::load(&file);
+    config.remember_agent(project, "codex");
+    config.last_agent = Some("claude".to_string());
+    config.save(&file).unwrap();
+
+    let (shown, _) = cli.run(&["automation", "show", &a]);
+    assert!(shown.contains("carried out by codex  — the project's agent (Amenbo's default)"), "{shown}");
+    assert!(!shown.contains("nobody chosen to carry it out"), "{shown}");
+}
+
 /// **A role is defined in an automation by the ids the other commands hand back**: its round starts at
 /// a placement, its agent and model are defaults, `role-list` and `show` read it back, and it goes into
 /// the draft and out again.

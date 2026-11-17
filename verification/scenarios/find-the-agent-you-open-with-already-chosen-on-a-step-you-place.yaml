@@ -1,10 +1,10 @@
 # An action placed on an automation has steps, and each is carried out by an agent. A step nobody
 # chose for is one the launch check refuses, so a reader once had to choose again for every step of
 # every placement before a run could start. Nothing is written on a placement now: who carries a step
-# out is decided in order — what the step names, then the role's default, then Amenbo's own
-# (`amenbo_core::wake::step_agent`: the agent chosen for the project, and never the one a pane was
-# last opened with). So a step nobody chose for is carried out by the agent the project's panes open
-# with, and the placement's own line for it stays on nobody chosen.
+# out is decided in order — what the step names, then the role's default, then the agent chosen for
+# the project (`amenbo_core::wake::step_agent`), and never the one a pane was last opened with. So a
+# step nobody chose for is carried out by the agent the project's panes open with, and the
+# placement's own line for it stays on nobody chosen.
 #
 # ── Where it is read ────────────────────────────────────────────────────────────────────────────
 # The panel of a pressed placement says only what the step itself names, and this one names nothing.

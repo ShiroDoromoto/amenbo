@@ -22,9 +22,11 @@ vi.mock("./ipc", () => ({
 
 const invalidateScopes = vi.fn();
 const invalidateAllQueries = vi.fn();
+const recheckSetupAgain = vi.fn();
 vi.mock("./query", () => ({
   invalidateScopes: (s: ReadonlySet<string>) => invalidateScopes(s),
   invalidateAllQueries: () => invalidateAllQueries(),
+  recheckSetupAgain: () => recheckSetupAgain(),
 }));
 
 // Intercept the `store-changed` subscription so a test can fire a wake-up whenever it likes.
@@ -91,6 +93,7 @@ beforeEach(() => {
   invoke.mockReset();
   invalidateScopes.mockReset();
   invalidateAllQueries.mockReset();
+  recheckSetupAgain.mockReset();
   signature = { file: "file-0", config: "config-0", version: "1" };
   head = 0;
   pages = [];
@@ -111,6 +114,7 @@ async function boot(): Promise<() => Promise<void>> {
   await watchStore();
   invalidateScopes.mockClear();
   invalidateAllQueries.mockClear();
+  recheckSetupAgain.mockClear();
   invoke.mockClear();
   if (!wake) throw new Error("watchStore did not set up a subscription");
   return wake;
@@ -170,6 +174,9 @@ describe("watchStore — while the feed can speak, refetch only the surfaces tha
     expect(invalidateScopes).not.toHaveBeenCalled();
     expect(invalidateAllQueries).not.toHaveBeenCalled();
     expect(seen).toEqual([]);
+    // …except whether to ask for setup again: the build a send brings back is written off the feed, so
+    // an empty page is the only wake that can carry it. That one query, and nothing else.
+    expect(recheckSetupAgain).toHaveBeenCalledTimes(1);
 
     // The signature was carried forward, so the write that follows is compared against what is on
     // disk now — not against a store two commits old, which would read as a swap and re-read everything.

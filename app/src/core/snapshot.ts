@@ -23,7 +23,7 @@ import type {
   VersionStatusDto,
   Snapshot as SnapshotDto,
 } from "../bindings/bindings";
-import { invalidateAllQueries, invalidateScopes } from "./query";
+import { invalidateAllQueries, invalidateScopes, recheckSetupAgain } from "./query";
 import { drainChanges, takeChangeCursor } from "./changes";
 import { applyPerfConfig, invoke } from "./ipc";
 import { clearDismissedUpdate } from "./updateDismissed";
@@ -227,7 +227,9 @@ async function readSignature(): Promise<StoreSignatureDto | null> {
  *   `reconcile("gap")`: an invalidation signal is not truth (see `drainChanges`).
  * - **an empty page** … a commit the feed collects no row for: the drive reclaiming the outbox it walked,
  *   a `store_meta` scalar, the feed's own truncation. Read nothing, and announce
- *   nothing — nothing landed on the screen.
+ *   nothing — nothing landed on the screen. The one exception is whether to ask for setup again: what
+ *   moves it (a send bringing back the server's build) is written off the feed, so an empty page is the
+ *   only sign of it, and that one query is asked again (`recheckSetupAgain`).
  *
  * Inbox membership only ever moves on the task side, so the generation is bumped only when `tasks` is
  * among the scopes — an outside write touching decisions or attachments alone must not trigger a mailbox
@@ -254,6 +256,9 @@ export async function watchStore(): Promise<() => void> {
       // lands, so nothing is announced — but the signature is carried forward, or the next wake would
       // be compared against a store two commits old and re-read everything for it.
       lastSignature = sig;
+      // A setup, and a send, write the server's build off the feed, so this is the only wake that
+      // can carry it — ask again whether to ask for setup, band up or not.
+      recheckSetupAgain();
       return;
     }
     await loadSnapshot({ inboxAffected: scopes.has("tasks") });

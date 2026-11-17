@@ -9,7 +9,8 @@ import { act, createElement, StrictMode, useState, type ReactNode } from "react"
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  __queryCache, invalidateAllQueries, invalidateQueries, invalidateScopes, SCOPE_WATCHERS, useQuery, type QueryKey,
+  __queryCache, invalidateAllQueries, invalidateQueries, invalidateScopes, recheckSetupAgain, SCOPE_WATCHERS, useQuery,
+  type QueryKey,
 } from "./query";
 import { ACK_WATCHERS } from "./mutations";
 
@@ -392,5 +393,30 @@ describe("invalidateScopes — a scope reaches the queries drawn from it", () =>
   it("watches every namespace a write ack refetches", () => {
     const missing = Object.keys(ACK_WATCHERS).filter((ns) => !(ns in SCOPE_WATCHERS));
     expect(missing).toEqual([]);
+  });
+});
+
+describe("recheckSetupAgain — asks again whether to ask for setup, and nothing else", () => {
+  function KeyProbe({ qkey, k }: { qkey: QueryKey; k: string }) {
+    const { data } = useQuery<string>(qkey, () => fetchFor(k));
+    return createElement("span", { "data-k": k }, data ?? "…");
+  }
+
+  // The store watcher calls this on every empty page of the feed, so it must not widen into the
+  // Viewer's other reads or the board — that would be the full re-read an empty page is kept out of.
+  it("refetches the setup-again answer only", async () => {
+    render(
+      createElement(
+        "div",
+        null,
+        createElement(KeyProbe, { qkey: ["viewer-setup-again"], k: "again" }),
+        createElement(KeyProbe, { qkey: ["viewer-state"], k: "state" }),
+        createElement(KeyProbe, { qkey: ["viewer-pairing"], k: "pairing" }),
+      ),
+    );
+    await settle();
+    recheckSetupAgain();
+    await settle();
+    expect([count("again"), count("state"), count("pairing")]).toEqual([2, 1, 1]);
   });
 });

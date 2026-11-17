@@ -81,14 +81,9 @@ export function useViewerAsksForSetupAgain(): boolean {
   return data ?? false;
 }
 
-/**
- * Ask again whether to ask for setup. The build that turns the answer to `false` comes back on a send
- * that runs in its own process, and the row it is written to is not on the change feed — so nothing
- * would ever tell this window. The band calls this on a timer while it is up.
- */
-export function recheckSetupAgain(): void {
-  invalidateQueries((key) => key[0] === "viewer-setup-again");
-}
+// Asking again whether to ask for setup lives with the query cache, so the store watcher can reach it
+// without importing this file (`./snapshot` is imported from here). Re-exported for the screens.
+export { recheckSetupAgain } from "./query";
 
 /**
  * Whether a phone may read. `null` where no server has been stood up — and where there is no store to

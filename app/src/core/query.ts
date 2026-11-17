@@ -119,6 +119,16 @@ export function invalidateScopes(scopes: ReadonlySet<string>): void {
 }
 
 /**
+ * Ask again whether to ask for setup. The build that turns the answer to `false` comes back on a send
+ * that runs in its own process, and the row it is written to is not on the change feed — so nothing
+ * would ever tell this window by name. The store watcher calls this on every commit the feed names no
+ * row for, and the band also calls it on a timer while it is up.
+ */
+export function recheckSetupAgain(): void {
+  invalidateQueries((key) => key[0] === "viewer-setup-again");
+}
+
+/**
  * Key namespace → the scopes whose external change leaves it stale (any one of them refetches it). A
  * namespace missing here is never refetched by a write from outside the window, so every namespace
  * `mutations`' ack table refetches has to be here too — `query.test` holds the two against each other.
@@ -151,7 +161,8 @@ export const SCOPE_WATCHERS: Readonly<Record<string, readonly string[]>> = {
   "viewer-state": ["viewer"],
   "viewer-pairing": ["viewer"],
   // Whether to ask for setup again. A setup from the CLI moves it the same way; the build a send brings
-  // back does not reach the feed, so the band also asks again on a timer (`recheckSetupAgain`).
+  // back does not reach the feed, so the store watcher asks again on an empty page of the feed, and the
+  // band also asks again on a timer while it is up (`recheckSetupAgain`).
   "viewer-setup-again": ["viewer"],
   // The device's shelf of notification targets, and one project's notification pane. Both are moved
   // from the CLI (`notify target-add`, `notify on`, `notify use` …), which the feed folds here.

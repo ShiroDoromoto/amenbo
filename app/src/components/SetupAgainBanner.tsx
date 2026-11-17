@@ -10,7 +10,8 @@
 // **Whether it is up is core's whole judgement** (`asks_for_setup_again`); nothing here looks at the build or
 // the leftover rows itself. It goes down once core answers `false`, which happens when a send after the setup
 // brings build 4 back from the server. That send runs in its own process and the row it writes is not on the
-// change feed, so while the band is up it asks again on a timer.
+// change feed, so the store watcher asks again whenever the feed comes back empty, and while the band is up it
+// also asks again on a timer.
 //
 // Its button opens the update screen, which asks for the API token and nothing else (`ViewerUpdate`). The
 // screen is the shell's to hold, so a band that goes down while it is open does not take it along.

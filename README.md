@@ -398,7 +398,7 @@ amenbo automation exit-add --action 7 --name "gave up" # a way out a placement m
 amenbo automation edge-add --in-action --from 11: --exit-to # inside an action: leave it by a way out it declares
 amenbo automation edge-add --in-action --from "11:gave up" --exit-to "gave up"
 amenbo automation action-scope-set 7 --global          # move it to the device's library (into a project: --project)
-amenbo automation place-add 3 --action 7               # 33: put that action on the picture; a step nobody chooses for falls back to its role's agent, then Amenbo's
+amenbo automation place-add 3 --action 7               # 33: put that action on the picture; a step nobody chooses for falls back to its role's agent, then the agent chosen for the project (Agent in Project settings); with none, the launch is refused
 amenbo automation agent-set 33 --step 11 --agent claude-code # who carries that step out at this spot, ahead of its role's default (--model too)
 amenbo automation role-update 8 --name Implement --entry 31 --agent claude-code # the role it was born with (8, from role-list): where its round starts — take_task, as a role started by a task does — and the agent its steps fall back to; 31 then takes only a task of that role
 amenbo automation role-add 3 --name Intake --starts-by trigger   # 9: a role a trigger starts with no task filed; its --entry is anything but take_task, and failed rounds cannot be filed to it

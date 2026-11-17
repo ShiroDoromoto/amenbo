@@ -2074,6 +2074,7 @@ pub fn automation_history_page(
 pub fn automation_run_acknowledge(run_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_acknowledge(run_id, ActorKind::Human)?;
+    crate::delivery::drive(&store);
     Ok(())
 }
 
@@ -2506,7 +2507,11 @@ pub fn automation_step_open(
                 .id
         }
     };
-    open_one(&app, &mut store, run_id, def_id)
+    let opened = open_one(&app, &mut store, run_id, def_id);
+    if opened.is_ok() {
+        crate::delivery::drive(&store);
+    }
+    opened
 }
 
 /// **Pause a run** — it settles at the end of the action under way
@@ -2518,6 +2523,7 @@ pub fn automation_step_open(
 pub fn automation_run_pause(run_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_pause(run_id)?;
+    crate::delivery::drive(&store);
     crate::automation_watch::wake();
     Ok(())
 }
@@ -2529,6 +2535,7 @@ pub fn automation_run_pause(run_id: i64) -> Result<(), CmdError> {
 pub fn automation_pause_before_next_task(run_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_pause_run_before_next_task(run_id)?;
+    crate::delivery::drive(&store);
     crate::automation_watch::wake();
     Ok(())
 }
@@ -2549,6 +2556,7 @@ pub fn automation_run_resume(run_id: i64) -> Result<(), CmdError> {
     let startable = amenbo_core::wake::startable_ids(&store.config);
     let offered = crate::agent_models::offered_here();
     store.automation_resume(run_id, startable.as_deref(), &offered)?;
+    crate::delivery::drive(&store);
     crate::automation_watch::wake();
     Ok(())
 }
@@ -2890,6 +2898,7 @@ pub(crate) fn take_up_newer(
     let startable = amenbo_core::wake::startable_ids(&store.config);
     let offered = crate::agent_models::offered_here();
     let taken = store.automation_take_up_newer(run_id, startable.as_deref(), &offered)?;
+    crate::delivery::drive(&store);
     match taken {
         automation_run::TakenUp::Same => Ok(Some(def)),
         automation_run::TakenUp::Copied(entry) => {
@@ -3069,6 +3078,7 @@ pub(crate) fn time_up(app: &tauri::AppHandle, run_id: i64) -> Result<bool, CmdEr
     let Some(run_step_id) = due else { return Ok(false) };
     let mut store = crate::commands::open_store()?;
     store.automation_time_up(run_step_id)?;
+    crate::delivery::drive(&store);
     log::info!("run {run_id} waited out built-in step {run_step_id}");
     let (run, builtin) = builtin_of_step(&store, run_id, run_step_id)?;
     tell(app, AutomationStepOpenDto {
@@ -3175,6 +3185,7 @@ fn run_script(
     };
     let told = crate::commands::open_store().and_then(|mut store| {
         store.automation_script_ran(run_step_id, &ran)?;
+        crate::delivery::drive(&store);
         builtin_of_step(&store, run_id, run_step_id)
     });
     match told {
@@ -3233,7 +3244,9 @@ fn project_folder(store: &amenbo_core::Store, project: i64) -> Option<String> {
 /// program, and the task the round was filed as is read long after.
 pub fn step_program_ended(run_step: i64, screen: &str, code: Option<i32>) {
     let ended = crate::commands::open_store().and_then(|mut store| {
-        store.automation_step_ended(run_step).map_err(CmdError::from)
+        let ended = store.automation_step_ended(run_step)?;
+        crate::delivery::drive(&store);
+        Ok(ended)
     });
     match ended {
         Ok(Some(ended)) => log::info!("run {} failed: step {run_step} ended without reporting", ended.run.id),
@@ -3251,7 +3264,9 @@ pub fn step_program_ended(run_step: i64, screen: &str, code: Option<i32>) {
 /// hears of a write that did not go through: the terminal is going either way.
 pub(crate) fn keep_failed_screen(run_step: i64, screen: &str, code: Option<i32>) {
     let kept = crate::commands::open_store().and_then(|mut store| {
-        store.automation_keep_failed_screen(run_step, screen, code.map(i64::from)).map_err(CmdError::from)
+        let kept = store.automation_keep_failed_screen(run_step, screen, code.map(i64::from))?;
+        crate::delivery::drive(&store);
+        Ok(kept)
     });
     match kept {
         Ok(true) => log::info!("kept the screen of step {run_step}, which failed its run"),
@@ -3362,7 +3377,9 @@ fn passes_of(
 #[tauri::command]
 pub fn automation_run_stop(run_id: i64) -> Result<bool, CmdError> {
     let mut store = crate::commands::open_store()?;
-    if stop_if_going(&mut store, run_id)?.is_none() {
+    let stopped = stop_if_going(&mut store, run_id)?;
+    crate::delivery::drive(&store);
+    if stopped.is_none() {
         return Ok(false);
     }
     crate::automation_watch::wake();
@@ -3379,6 +3396,7 @@ pub fn automation_run_stop(run_id: i64) -> Result<bool, CmdError> {
 pub fn automation_run_cancel(run_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_cancel(run_id)?;
+    crate::delivery::drive(&store);
     crate::automation_watch::wake();
     Ok(())
 }
@@ -3391,6 +3409,7 @@ pub fn automation_run_cancel(run_id: i64) -> Result<(), CmdError> {
 pub fn automation_launch_pause(launch_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_pause(launch_id)?;
+    crate::delivery::drive(&store);
     crate::automation_watch::wake();
     Ok(())
 }
@@ -3401,6 +3420,7 @@ pub fn automation_launch_pause(launch_id: i64) -> Result<(), CmdError> {
 pub fn automation_launch_pause_before_next_task(launch_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_pause_before_next_task(launch_id)?;
+    crate::delivery::drive(&store);
     crate::automation_watch::wake();
     Ok(())
 }
@@ -3414,6 +3434,7 @@ pub fn automation_launch_resume(launch_id: i64) -> Result<(), CmdError> {
     let startable = amenbo_core::wake::startable_ids(&store.config);
     let offered = crate::agent_models::offered_here();
     store.automation_launch_resume(launch_id, startable.as_deref(), &offered)?;
+    crate::delivery::drive(&store);
     crate::automation_watch::wake();
     Ok(())
 }
@@ -3425,6 +3446,7 @@ pub fn automation_launch_resume(launch_id: i64) -> Result<(), CmdError> {
 pub fn automation_launch_cancel(launch_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_cancel(launch_id)?;
+    crate::delivery::drive(&store);
     crate::automation_watch::wake();
     Ok(())
 }
@@ -3436,6 +3458,7 @@ pub fn automation_launch_cancel(launch_id: i64) -> Result<(), CmdError> {
 pub fn automation_launch_stop(launch_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_stop(launch_id)?;
+    crate::delivery::drive(&store);
     crate::automation_watch::wake();
     Ok(())
 }
@@ -3450,6 +3473,7 @@ pub fn automation_launch_stop(launch_id: i64) -> Result<(), CmdError> {
 pub fn automation_launch_headcount_set(launch_id: i64, role_id: i64, headcount: u32) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_headcount_set(launch_id, role_id, headcount)?;
+    crate::delivery::drive(&store);
     crate::automation_watch::wake();
     Ok(())
 }
@@ -3461,6 +3485,7 @@ pub fn automation_launch_headcount_set(launch_id: i64, role_id: i64, headcount: 
 pub fn automation_launch_headcount_reset(launch_id: i64, role_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_headcount_reset(launch_id, role_id)?;
+    crate::delivery::drive(&store);
     crate::automation_watch::wake();
     Ok(())
 }
@@ -3473,6 +3498,7 @@ pub fn automation_launch_headcount_reset(launch_id: i64, role_id: i64) -> Result
 pub fn automation_launch_limit_set(launch_id: i64, limit: Option<u32>) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_limit_set(launch_id, limit)?;
+    crate::delivery::drive(&store);
     crate::automation_watch::wake();
     Ok(())
 }
@@ -3484,6 +3510,7 @@ pub fn automation_launch_limit_set(launch_id: i64, limit: Option<u32>) -> Result
 pub fn automation_launch_limit_reset(launch_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_limit_reset(launch_id)?;
+    crate::delivery::drive(&store);
     crate::automation_watch::wake();
     Ok(())
 }
@@ -3497,6 +3524,7 @@ pub fn automation_launch_limit_reset(launch_id: i64) -> Result<(), CmdError> {
 pub fn automation_launch_role_hold(launch_id: i64, role_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_role_hold(launch_id, role_id)?;
+    crate::delivery::drive(&store);
     crate::automation_watch::wake();
     Ok(())
 }
@@ -3508,6 +3536,7 @@ pub fn automation_launch_role_hold(launch_id: i64, role_id: i64) -> Result<(), C
 pub fn automation_launch_role_release(launch_id: i64, role_id: i64) -> Result<(), CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_role_release(launch_id, role_id)?;
+    crate::delivery::drive(&store);
     crate::automation_watch::wake();
     Ok(())
 }
@@ -3856,6 +3885,44 @@ mod tests {
         assert!(stop_if_going(&mut store, 404)
             .expect("a run nobody can find is not an error")
             .is_none());
+    }
+
+    /// **A press that writes through its own open store still carries the write out** — these commands
+    /// do not come through `commands::with_store_mut`, so without their own drive what committed would
+    /// wait for the next write to reach the Viewer and the senders.
+    #[test]
+    fn a_run_press_drives_what_committed() {
+        use amenbo_core::outbox_drive::persisted_cursor;
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("automation-stop-drives");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        let mut store = amenbo_core::Store::open().unwrap();
+        let task = store
+            .add_task(amenbo_core::ops::task::NewTask {
+                title: "Fix the build".into(),
+                project_id: None,
+                due: None,
+                start: None,
+                priority: None,
+                notes: String::new(),
+                created_by_kind: Some(ActorKind::Human),
+                at_binding_id: None,
+                role_id: None,
+                made_in_run_step_id: None,
+                made_in: None,
+            })
+            .unwrap();
+        store.finish_task_creation(task.id, ActorKind::Human).unwrap();
+        let before = persisted_cursor(store.read_model()).unwrap();
+        drop(store);
+
+        assert!(!automation_run_stop(404).expect("a run nobody can find is not an error"));
+
+        let store = crate::commands::open_store().expect("the store");
+        assert!(
+            persisted_cursor(store.read_model()).unwrap() > before,
+            "the press walked the cursor past what was waiting"
+        );
     }
 
     /// **A store with no launch answers no launch to stand a pane for**, rather than refusing: the

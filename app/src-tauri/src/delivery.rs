@@ -9,7 +9,8 @@
 //! - **The drive rides the write seam.** Commands open the store per action
 //!   (`commands::with_store_mut`), so there is no long-lived store to hang a loop off. The drive runs once
 //!   after each mutating command committed, on that command's own open store — the same shape the CLI has
-//!   at its write seam.
+//!   at its write seam. The automation run's writes that open their own store (`crate::automation`) call
+//!   [`drive`](crate::delivery::drive) themselves, after the same commit.
 //! - **And once as the app comes up** ([`resume`](crate::delivery::resume), `AMB-D-399`), for what a previous run left half carried.
 //!   That is the one thing the write seam cannot reach: a session spent reading makes no write for it to
 //!   ride.

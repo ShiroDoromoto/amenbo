@@ -46,11 +46,12 @@ pub(crate) fn open_store_read() -> Result<Store, CmdError> {
 /// **Projection (build_snapshot) is done separately, after the lock is released** — it reopens the
 /// same store, so projecting in here would collide re-entrantly with our own lock.
 ///
-/// This is also the GUI's dispatch seam (`AMB-D-367`): every mutating command comes through here, so the
+/// This is also the GUI's dispatch seam (`AMB-D-367`): mutating commands come through here, so the
 /// observation dispatcher is driven here — once, after the mutation committed, on the store that is still
 /// open ([`crate::delivery`]). It drains from the store's own cursor, shared with the CLI
 /// (`AMB-D-380`), so there is nothing to start first. A command that errored rolled its mutation back and
-/// has nothing to dispatch.
+/// has nothing to dispatch. The automation run's own writes (`crate::automation`) open the store
+/// themselves and call the same drive after they commit.
 pub(crate) fn with_store_mut<T>(
     f: impl FnOnce(&mut Store) -> Result<T, CmdError>,
 ) -> Result<T, CmdError> {

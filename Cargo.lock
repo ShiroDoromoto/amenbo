@@ -38,14 +38,14 @@ dependencies = [
 
 [[package]]
 name = "amenbo-askpass"
-version = "44.0.0"
+version = "45.0.0"
 dependencies = [
  "amenbo-scratch",
 ]
 
 [[package]]
 name = "amenbo-cli"
-version = "44.0.0"
+version = "45.0.0"
 dependencies = [
  "amenbo-core",
  "amenbo-scratch",
@@ -61,7 +61,7 @@ dependencies = [
 
 [[package]]
 name = "amenbo-core"
-version = "44.0.0"
+version = "45.0.0"
 dependencies = [
  "amenbo-scratch",
  "amenbo-static-host",
@@ -105,11 +105,11 @@ dependencies = [
 
 [[package]]
 name = "amenbo-scratch"
-version = "44.0.0"
+version = "45.0.0"
 
 [[package]]
 name = "amenbo-static-host"
-version = "44.0.0"
+version = "45.0.0"
 
 [[package]]
 name = "android_system_properties"

@@ -645,7 +645,30 @@ fn trim_change_feed(conn: &Connection) -> Result<()> {
 }
 
 /// The highest feed id a trim may take, the feed's newest being `newest`: [`CHANGE_FEED_RETAIN`] rows
-/// back from the head, or the place of the reader furthest behind if that is further back.
+/// back from the head, or the place of the reader furthest behind that it waits for
+/// ([`reader_waited_for`]) if that is further back.
+fn trim_through(conn: &Connection, newest: i64) -> Result<i64> {
+    let retained = newest - CHANGE_FEED_RETAIN;
+    if retained <= 0 {
+        return Ok(retained);
+    }
+    Ok(reader_waited_for(conn, newest, retained)?.map_or(retained, |r| r.cursor))
+}
+
+/// A registered reader a trim waits for, as [`reader_waited_for`] finds it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ReaderWaitedFor {
+    /// How far it has read the feed.
+    pub cursor: i64,
+    /// How many rows re-reading the whole store would hand it ([`rows_carried_out`]): once what it has
+    /// not read outgrows this, it is no longer waited for.
+    pub whole: i64,
+}
+
+/// The reader furthest behind that a trim waits for, among those whose place is below `below`, the
+/// feed's newest being `newest`. The trim asks it ([`trim_through`]), and so does an operation that
+/// writes many rows at once and would rather stop than lose a reader its place (`ops::automation`'s
+/// `let_old_runs_go`).
 ///
 /// A reader is waited for when it is reading (`reading = 1`) and its place is still in the feed — at or
 /// above the watermark, since a reader below it is told of a gap whatever stays. It is **not** waited
@@ -655,18 +678,14 @@ fn trim_change_feed(conn: &Connection) -> Result<()> {
 /// every reader. A reader switched off, one that has read nothing yet, and one without a line are not
 /// waited for; nor is a reader that does not register, which keeps the window [`CHANGE_FEED_RETAIN`]
 /// gives it.
-fn trim_through(conn: &Connection, newest: i64) -> Result<i64> {
-    let retained = newest - CHANGE_FEED_RETAIN;
-    if retained <= 0 {
-        return Ok(retained);
-    }
+pub(crate) fn reader_waited_for(conn: &Connection, newest: i64, below: i64) -> Result<Option<ReaderWaitedFor>> {
     let floor = super::read::feed_floor(conn, None)?;
     let mut sel = Select::new();
     let cursor = sel.col(READER.cursor);
     let mut sql = Sql::from(&sel, READER.table);
     sql.push_where(Some(
         &Pred::eq(READER.reading, 1_i64)
-            .and(Pred::cmp(READER.cursor, "<", retained))
+            .and(Pred::cmp(READER.cursor, "<", below))
             .and(Pred::cmp(READER.cursor, ">=", floor)),
     ));
     let behind: Vec<i64> = conn
@@ -674,10 +693,10 @@ fn trim_through(conn: &Connection, newest: i64) -> Result<i64> {
         .query_map(rusqlite::params_from_iter(sql.params()), |r| cursor.get(r))?
         .collect::<rusqlite::Result<Vec<i64>>>()?;
     if behind.is_empty() {
-        return Ok(retained);
+        return Ok(None);
     }
     let whole = rows_carried_out(conn)?;
-    Ok(behind.into_iter().filter(|c| newest - c <= whole).fold(retained, i64::min))
+    Ok(behind.into_iter().filter(|c| newest - c <= whole).min().map(|cursor| ReaderWaitedFor { cursor, whole }))
 }
 
 /// How many rows re-reading the whole store hands a reader: the rows of every table a road out carries.

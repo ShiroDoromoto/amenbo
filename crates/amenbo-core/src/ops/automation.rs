@@ -2459,12 +2459,15 @@ pub const RUNS_KEPT_PER_ROLE: usize = 1_000;
 /// - **`run` itself stays**: the operation that asked is still answering with it.
 /// - **The rounds go with it**, and nothing reads past it: the count of rounds stopped in a row and the
 ///   runs by task read the runs that are left (`AMB-D-1139`).
-/// - **It stops before the change feed outruns the Viewer** — once what the feed holds past where the
-///   Viewer's carrier read up to, this operation's rows counted in, comes to more than half the window
-///   the feed keeps ([`crate::store_engine::CHANGE_FEED_RETAIN`], `AMB-D-726`). What is left goes the
-///   next time. A carrier that has read nothing out, or one already left behind the window, is reading
-///   the whole store again anyway, and then it is this operation's own rows that are held to half the
-///   window.
+/// - **It stops before the change feed outruns a reader the feed waits for** — the registered reader
+///   furthest behind that the trim waits for ([`crate::store_engine::reader_waited_for`], `AMB-D-1165`):
+///   once what the feed holds past where that reader read up to, this operation's rows counted in, comes
+///   to more than half of what the reader may fall behind and still keep its place — the window the feed
+///   keeps ([`crate::store_engine::CHANGE_FEED_RETAIN`], `AMB-D-726`), or what re-reading the whole store
+///   would hand it if that is more. What is left goes the next time. A reader the trim does not wait for —
+///   switched off, one that has read nothing yet, one with no server, or one so far behind that re-reading
+///   the whole store is the cheaper road — reads the whole store again anyway, and with none waited for it
+///   is this operation's own rows that are held to half the window.
 /// - **The blobs** of the files that go are left to the store's sweep ([`crate::store::Store::gc_blobs`]),
 ///   as a round's are: reclaiming them belongs after the commit.
 pub(crate) fn let_old_runs_go(tx: &WriteTx<'_>, run: &crate::model::AutomationRun) -> Result<usize> {
@@ -2472,11 +2475,15 @@ pub(crate) fn let_old_runs_go(tx: &WriteTx<'_>, run: &crate::model::AutomationRu
 }
 
 /// [`let_old_runs_go`], keeping `keep` runs a role and stopping once the feed is `room` rows past the
-/// Viewer.
+/// reader the feed waits for — or half of what re-reading the whole store would hand that reader, if that
+/// is more.
 pub(crate) fn let_old_runs_go_past(tx: &WriteTx<'_>, run: &crate::model::AutomationRun, keep: usize, room: i64) -> Result<usize> {
     let conn = tx.conn();
     let head = read::change_feed_head(conn)?;
-    let read_up_to = viewer_read_up_to(conn, head)?.unwrap_or(head);
+    let (read_up_to, room) = match crate::store_engine::reader_waited_for(conn, head, i64::MAX)? {
+        Some(reader) => (reader.cursor, room.max(reader.whole / 2)),
+        None => (head, room),
+    };
     let mut gone = 0;
     for old in read::automation_runs_past(conn, run.automation_id, run.role_id, keep)? {
         if old.id == run.id || !may_go(conn, &old)? {
@@ -2489,16 +2496,6 @@ pub(crate) fn let_old_runs_go_past(tx: &WriteTx<'_>, run: &crate::model::Automat
         gone += 1;
     }
     Ok(gone)
-}
-
-/// Where the Viewer's carrier read the change feed up to, or `None` where it is reading nothing from it:
-/// it has read nothing out yet, or it fell behind the window the feed keeps and will read the whole store
-/// again.
-fn viewer_read_up_to(conn: &Connection, head: i64) -> Result<Option<i64>> {
-    let left = crate::viewer::carried::read_on(conn)?;
-    let read_nothing = left.cursor == 0 && left.version == 0;
-    let left_behind = head - left.cursor > crate::store_engine::CHANGE_FEED_RETAIN;
-    Ok((!read_nothing && !left_behind).then_some(left.cursor))
 }
 
 /// Whether one old run may go ([`let_old_runs_go`]): over, seen if it failed, and every task filed for it

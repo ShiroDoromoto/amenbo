@@ -146,9 +146,9 @@ pub fn read(engine: &StoreEngine) -> Result<Carried> {
     read_on(engine.conn())
 }
 
-/// [`read()`], on a connection — a write transaction's, for an operation that asks where the carrier was
-/// left before it writes (`ops::automation`'s `let_old_runs_go`).
-pub(crate) fn read_on(conn: &rusqlite::Connection) -> Result<Carried> {
+/// [`read()`], on a connection — a write transaction's, for [`set_switched_on`], which rewrites the
+/// carrier's line among the readers in the same transaction as the switch.
+fn read_on(conn: &rusqlite::Connection) -> Result<Carried> {
     let mut sel = Select::new();
     let (version, placed, seq) = (sel.col(VS.version), sel.col(VS.placed), sel.col(VS.seq));
     let (quiet_until, spent, spent_on, build) =
@@ -235,7 +235,7 @@ pub fn write(engine: &StoreEngine, left: &Carried) -> Result<()> {
 
 /// [`write()`], on a connection — inside the caller's transaction, which is what keeps the two tables
 /// written together.
-pub(crate) fn write_on(conn: &rusqlite::Connection, left: &Carried) -> Result<()> {
+fn write_on(conn: &rusqlite::Connection, left: &Carried) -> Result<()> {
     Insert::into(VS.table)
         .set(VS.id, THE_ROW)
         .set(VS.version, left.version)

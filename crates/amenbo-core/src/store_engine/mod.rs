@@ -34,6 +34,7 @@ pub use engine::{
     Result, RowChange,
     StoreEngine, StoreEngineError, CHANGE_FEED_RETAIN,
 };
+pub(crate) use engine::reader_waited_for;
 pub use hydrate::hydrate_database;
 pub use outbox::{events_since, outbox_head, EventRow, OutboxRow, OutboxSlice};
 pub use read::{

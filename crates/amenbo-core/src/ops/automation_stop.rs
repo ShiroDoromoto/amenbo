@@ -1578,37 +1578,139 @@ mod tests {
         });
     }
 
-    /// **It stops before the feed outruns the Viewer**, and what is left goes the next time — once the
-    /// Viewer has read on.
+    /// [`with_tx`], on a store already holding `tasks` tasks — written before the transaction opens, so
+    /// they count in what re-reading the whole store hands a reader and not in what this write adds to
+    /// the feed.
+    fn with_tx_on_a_store_of(tasks: i64, f: impl FnOnce(&WriteTx<'_>)) {
+        let engine = crate::ops::test_support::new_engine();
+        engine
+            .conn()
+            .execute(
+                "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?1) \
+                 INSERT INTO task (id, title) SELECT 1000000 + i, 'task' FROM n",
+                [tasks],
+            )
+            .expect("a store of many tasks");
+        let tx = engine.write().expect("write transaction");
+        f(&tx);
+    }
+
+    /// Append `rows` records to the change feed, as earlier writes would have; answers the feed's head.
+    fn feed_on(tx: &WriteTx<'_>, rows: i64) -> i64 {
+        tx.conn()
+            .execute(
+                "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?1) \
+                 INSERT INTO change_feed (dataset, row_id, op) SELECT 'task', i, 'update' FROM n",
+                [rows],
+            )
+            .expect("the feed runs on");
+        read::change_feed_head(tx.conn()).expect("head")
+    }
+
+    /// Write one reader's line among the feed's readers.
+    fn reader_at(tx: &WriteTx<'_>, name: &str, cursor: i64, reading: bool) {
+        tx.conn()
+            .execute(
+                "INSERT INTO feed_reader (name, cursor, reading) VALUES (?1, ?2, ?3) \
+                 ON CONFLICT (name) DO UPDATE SET cursor = excluded.cursor, reading = excluded.reading",
+                rusqlite::params![name, cursor, i64::from(reading)],
+            )
+            .expect("where the reader read up to");
+    }
+
+    /// How far the feed may run past a reader it waits for: [`ROOM`], or half of what re-reading the whole
+    /// store would hand it if that is more.
+    fn edge(tx: &WriteTx<'_>, head: i64) -> i64 {
+        reader_at(tx, "measure", head, true);
+        let reader = crate::store_engine::reader_waited_for(tx.conn(), head, i64::MAX)
+            .expect("read the readers")
+            .expect("a reader at the head is waited for");
+        tx.conn().execute("DELETE FROM feed_reader WHERE name = 'measure'", []).expect("forget it");
+        ROOM.max(reader.whole / 2)
+    }
+
+    /// **It stops before the feed outruns a reader it waits for** — one that is reading, further behind
+    /// than the window [`crate::store_engine::CHANGE_FEED_RETAIN`] keeps, and still waited for since
+    /// re-reading the whole store would hand it more — and what is left goes the next time, once the
+    /// reader has read on.
     #[test]
-    fn letting_runs_go_stops_before_the_feed_outruns_the_viewer() {
-        with_tx(|tx| {
+    fn letting_runs_go_stops_before_the_feed_outruns_a_reader_it_waits_for() {
+        with_tx_on_a_store_of(12_000, |tx| {
             let p = picture(tx, false);
             let runs: Vec<AutomationRun> = (0..3).map(|_| over(tx, &p, Ending::Canceled)).collect();
-            tx.conn()
-                .execute_batch(
-                    "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 3000) \
-                     INSERT INTO change_feed (dataset, row_id, op) SELECT 'task', i, 'update' FROM n",
-                )
-                .expect("a feed already 3000 rows on");
-            let head = read::change_feed_head(tx.conn()).expect("head");
-            let viewer_at = |cursor: i64| {
-                let left = crate::viewer::carried::Carried { version: 1, cursor, ..Default::default() };
-                crate::viewer::carried::write_on(tx.conn(), &left).expect("where the Viewer read up to");
-            };
+            let head = feed_on(tx, 9_000);
+            let edge = edge(tx, head);
+            assert!(edge > crate::store_engine::CHANGE_FEED_RETAIN, "the reader is waited for past the window");
 
-            viewer_at(0);
+            reader_at(tx, "viewer", head + tx.feed_rows_pending() - edge - 1, true);
             assert_eq!(automation::let_old_runs_go_past(tx, &runs[2], 0, ROOM).expect("let go"), 0);
 
             // Right at the edge, the row this write may add to the feed counted in: one run fits, and the
             // rows it takes put the feed past the edge.
-            viewer_at(head + tx.feed_rows_pending() + 1 - ROOM);
+            reader_at(tx, "viewer", head + tx.feed_rows_pending() + 1 - edge, true);
             assert_eq!(automation::let_old_runs_go_past(tx, &runs[2], 0, ROOM).expect("let go"), 1);
             assert!(gone(tx, runs[0].id) && !gone(tx, runs[1].id), "one run, and then it stopped");
 
-            viewer_at(head);
+            reader_at(tx, "viewer", head, true);
             assert_eq!(automation::let_old_runs_go_past(tx, &runs[2], 0, ROOM).expect("let go"), 1);
             assert!(gone(tx, runs[1].id), "the rest went the next time");
+        });
+    }
+
+    /// **A reader switched off is not waited for**: it reads the whole store again anyway, so only this
+    /// operation's own rows are held to [`ROOM`].
+    #[test]
+    fn letting_runs_go_does_not_wait_for_a_reader_switched_off() {
+        with_tx_on_a_store_of(12_000, |tx| {
+            let p = picture(tx, false);
+            let runs: Vec<AutomationRun> = (0..3).map(|_| over(tx, &p, Ending::Canceled)).collect();
+            let head = feed_on(tx, 9_000);
+            let edge = edge(tx, head);
+
+            reader_at(tx, "viewer", head + tx.feed_rows_pending() - edge - 1, true);
+            assert_eq!(automation::let_old_runs_go_past(tx, &runs[2], 0, ROOM).expect("let go"), 0, "reading, it holds");
+
+            reader_at(tx, "viewer", head + tx.feed_rows_pending() - edge - 1, false);
+            assert_eq!(automation::let_old_runs_go_past(tx, &runs[2], 0, ROOM).expect("let go"), 2);
+        });
+    }
+
+    /// **A reader further behind than re-reading the whole store would take is not waited for**: the
+    /// re-read is the cheaper road for it, so only this operation's own rows are held to [`ROOM`].
+    #[test]
+    fn letting_runs_go_does_not_wait_for_a_reader_further_behind_than_the_whole_store() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let runs: Vec<AutomationRun> = (0..3).map(|_| over(tx, &p, Ending::Canceled)).collect();
+            let head = feed_on(tx, 4_000);
+            reader_at(tx, "viewer", 1, true);
+            assert_eq!(
+                crate::store_engine::reader_waited_for(tx.conn(), head, i64::MAX).expect("read the readers"),
+                None,
+                "a small store: the reader 4,000 records behind would rather read it whole"
+            );
+
+            assert_eq!(automation::let_old_runs_go_past(tx, &runs[2], 0, ROOM).expect("let go"), 2);
+        });
+    }
+
+    /// **With several readers, it stops before the feed outruns the one furthest behind** that it waits
+    /// for — one switched off further back holds nothing.
+    #[test]
+    fn letting_runs_go_stops_at_the_reader_furthest_behind() {
+        with_tx_on_a_store_of(12_000, |tx| {
+            let p = picture(tx, false);
+            let runs: Vec<AutomationRun> = (0..3).map(|_| over(tx, &p, Ending::Canceled)).collect();
+            let head = feed_on(tx, 9_000);
+            let edge = edge(tx, head);
+            reader_at(tx, "viewer", head, true);
+            reader_at(tx, "away", 1, false);
+
+            reader_at(tx, "other", head + tx.feed_rows_pending() - edge - 1, true);
+            assert_eq!(automation::let_old_runs_go_past(tx, &runs[2], 0, ROOM).expect("let go"), 0);
+
+            reader_at(tx, "other", head, true);
+            assert_eq!(automation::let_old_runs_go_past(tx, &runs[2], 0, ROOM).expect("let go"), 2);
         });
     }
 

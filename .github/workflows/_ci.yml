@@ -726,9 +726,10 @@ jobs:
       - name: Test
         run: npm test
 
-  # The Viewer's Cloudflare Worker — the one face here that Node is needed to judge, and the one
-  # whose output is committed rather than built on the way in. Three things in one job, because they
-  # share an `npm ci` and nothing else in this workflow wants one from `worker/`:
+  # The Viewer's Cloudflare Worker, judged on its own — the one face whose output is committed rather
+  # than built on the way in. Three things in one job, because they share an `npm ci`; the other job
+  # that wants one from `worker/` is `worker-through` below, which runs the Worker against the Rust
+  # sender rather than judging it alone:
   # the bake's freshness (the guard re-bakes and reads the working tree), the Worker's own typecheck
   # and dry-run deploy, and its test suite inside workerd.
   #
@@ -763,6 +764,58 @@ jobs:
       - name: Test (inside workerd, against the same config a deploy reads)
         run: npm test
         working-directory: worker
+
+  # The Viewer's road end to end: core's sender, built from this tree, against `worker/` started here
+  # by `wrangler dev --local` over a local D1, read back the way the phone reads it
+  # (crates/amenbo-core/tests/viewer_worker_through.rs). It is the one job with both Rust and Node,
+  # because the test needs both: the `rust` job has no Node, so the test skips there, and the `worker`
+  # job has no Rust. Either side changing can break the road, so either one opens this job.
+  #
+  # Nothing here touches a Cloudflare account. `--local` runs workerd on the runner, and the write
+  # token is one the test makes up for a database that lives for one test.
+  worker-through:
+    name: viewer through the worker
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.worker == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # The same Node and the same install as the `worker` job: the test looks for
+      # worker/node_modules/.bin/wrangler first.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Install the Worker's dependencies
+        run: npm ci
+        working-directory: worker
+
+      # The test returns green when it finds no wrangler, so a missing one would pass here unseen.
+      # This step is what turns that skip into a red job.
+      - name: wrangler is where the test looks for it
+        run: test -x worker/node_modules/.bin/wrangler
+
+      # The toolchain, the cache and nextest as the `rust` job has them; this job reads the shared
+      # cache entry and does not save it.
+      - name: Show toolchain
+        run: rustc --version && cargo --version
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: workspace
+          save-if: false
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2.90.3
+        with:
+          tool: cargo-nextest
+
+      - name: Test (the sender through the Worker to the phone's read)
+        run: cargo nextest run --profile ci -p amenbo-core -E 'binary(viewer_worker_through)'
 
   # devtool is not built or shipped by anything else here — it is the optional helper that gives a
   # task its own dev GUI and measures the agent entry — so no other job compiles it, and
@@ -1335,6 +1388,7 @@ jobs:
       - verification-macos
       - gui-web
       - worker
+      - worker-through
       - go
       - rot-gates
       - cargo-license

@@ -1324,9 +1324,10 @@ pub fn cli_command_name() -> Option<&'static str> {
 /// Open the folder holding this machine's logs in the OS file manager — the one step between "please
 /// attach your logs" and a file the user can drag onto an issue (`AMB-D-382`).
 ///
-/// The **folder**, not a file: `amenbo.log` and `perf.log` live side by side and a report usually wants
-/// both, so opening either one alone hands over half the answer. That is also why the log was put here
-/// rather than in the platform's own log directory — one folder to ask for.
+/// The **folder**, not a file: `amenbo.log`, `perf.log` and the Viewer's `viewer-send.log` live side by
+/// side and a report usually wants more than one, so opening any one alone hands over part of the
+/// answer. That is also why the log was put here rather than in the platform's own log directory — one
+/// folder to ask for.
 ///
 /// A folder that is not there yet is reported rather than created. The diagnostic log is on by default
 /// and written from startup (`AMB-D-382`), so in practice it exists by the time anyone opens Settings;

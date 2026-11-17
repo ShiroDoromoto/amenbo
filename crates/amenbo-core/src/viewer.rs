@@ -33,6 +33,7 @@ pub mod refusal;
 pub mod repair;
 pub mod sealing;
 pub mod send;
+pub mod send_log;
 
 use cloudflare::Sky;
 
@@ -159,13 +160,16 @@ impl Default for Reach {
 /// down. `account` says which account to build in, and is only needed when the token reaches more than
 /// one. `name` says which server of that account is meant, and is only needed for a second one — or to
 /// say that a server already standing under the default name is this store's after all (`AMB-D-930`).
+///
+/// What it says on the way is written to the send log ([`send_log`]), beside what the carriers say.
 pub fn setup(
     store: &mut Store,
     api_token: &str,
     account: Option<&str>,
     name: Option<&str>,
 ) -> Result<Stood> {
-    setup_reaching(store, api_token, account, name, &Reach::default())
+    let base_dir = store.paths.base_dir.clone();
+    send_log::within(&base_dir, || setup_reaching(store, api_token, account, name, &Reach::default()))
 }
 
 /// The name a server already stood up carries, read back out of the address the store keeps.

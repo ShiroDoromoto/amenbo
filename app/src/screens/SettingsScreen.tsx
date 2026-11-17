@@ -849,8 +849,8 @@ function DataLocationSetting() {
 
 /** The logs, one click from the path they sit under (`AMB-D-382`). Reporting a bug means attaching them,
  *  and "open your data folder, then find logs/" is where that ask stops being followed. It opens the
- *  folder rather than a file because `amenbo.log` and `perf.log` are both wanted. Core answers when
- *  there is nothing there yet, and that answer is shown as it came. */
+ *  folder rather than a file because `amenbo.log`, `perf.log` and `viewer-send.log` are all wanted.
+ *  Core answers when there is nothing there yet, and that answer is shown as it came. */
 function LogsSetting() {
   const [error, setError] = useState<string | null>(null);
   const open = async () => {

@@ -1133,3 +1133,33 @@ fn a_sequential_axis_holds_tasks_until_the_values_before_theirs_close() {
     assert!(page.contains("waiting on values: (none)"), "closing v1 released it: {page}");
     cli.json(&["task", "status", &later, "in_progress", "--json"]);
 }
+
+/// Closing a value is a write like any other, so what it releases is carried out of the outbox by the
+/// command that closed it, not left for whichever write comes next (`AMB-D-367`). The tick is the probe:
+/// it stands down from the startup kick and reports how much it found still standing.
+#[test]
+fn the_release_a_close_announces_is_carried_out_by_the_close() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "段階PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "リリース", "--ordered", "--closable", "--json"]);
+    cli.json(&["dimension", "value-add", "リリース", "--name", "v1", "--json"]);
+    cli.json(&["dimension", "value-add", "リリース", "--name", "v2", "--json"]);
+    let first = id_str(&cli.json(&["task", "add", "--title", "前", "--project", &pid, "--dim", "リリース=v1", "--json"])["task"]["id"]);
+    let later = id_str(&cli.json(&["task", "add", "--title", "後", "--project", &pid, "--dim", "リリース=v2", "--json"])["task"]["id"]);
+    cli.finish_creating(&first);
+    cli.finish_creating(&later);
+    cli.json(&["dimension", "update", "リリース", "--sequential", "true", "--json"]);
+    cli.json(&["task", "status", &first, "in_progress", "--json"]);
+    cli.json(&["task", "done", &first, "--report", "終えた", "--json"]);
+
+    // The tick comes straight after the close: any other command would pick the release up at its own
+    // startup and hide whether the close carried it.
+    cli.json(&["dimension", "value-close", "リリース", "v1", "--json"]);
+    let out = cli.json(&["tick", "run", "--json"]);
+    assert_eq!(out["carried"], 0, "the close carried its own release out: {out}");
+
+    let acts = cli.json(&["activity", "--task", &later, "--json"]);
+    let has_unblock = acts["items"].as_array().unwrap().iter().any(|i| i["event"]["kind"] == "task.unblocked");
+    assert!(has_unblock, "the close announced the release: {acts}");
+}

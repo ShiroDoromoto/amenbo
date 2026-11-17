@@ -1262,10 +1262,11 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         Command::Activity { task, project, since, kind, by, for_scope, limit, offset } => {
             return activity_cmd(&store, flags, task, project, since, kind, by, for_scope, limit, offset)
         }
-        Command::Project { sub } => return project(&mut store, flags, sub),
-        Command::Dimension { sub } => return dimension(&mut store, flags, sub),
-        // The three command groups that append observation events to the outbox (`AMB-D-367`): drive the
-        // dispatcher once after each, at the short-lived CLI's write seam (`with_dispatch`).
+        // Every command group that writes records goes through the short-lived CLI's write seam
+        // (`with_dispatch`): what it appended to the outbox is carried out (`AMB-D-367`), and the Viewer is
+        // set off because the phone is now behind (`AMB-D-884`).
+        Command::Project { sub } => return with_dispatch(&mut store, |s| project(s, flags, sub)),
+        Command::Dimension { sub } => return with_dispatch(&mut store, |s| dimension(s, flags, sub)),
         Command::Task { sub } => return with_dispatch(&mut store, |s| task(s, flags, sub)),
         // Automations: the library of prompts, and the pictures built out of them. Only the building
         // side, and nothing here refuses an unfinished automation — the launch check is where a person
@@ -1275,14 +1276,18 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         }
         Command::Comment { sub } => return with_dispatch(&mut store, |s| comment(s, flags, sub)),
         Command::Decision { sub } => return with_dispatch(&mut store, |s| decision(s, flags, sub)),
-        Command::Attach { sub } => return attach(&mut store, flags, sub),
+        Command::Attach { sub } => return with_dispatch(&mut store, |s| attach(s, flags, sub)),
         Command::Export { out } => return export(&store, flags, out),
         Command::Backup { path } => return run_backup(flags, path),
-        Command::HardErase { sub } => return hard_erase(&mut store, flags, sub),
+        Command::HardErase { sub } => return with_dispatch(&mut store, |s| hard_erase(s, flags, sub)),
         Command::Restore { .. } => {
             unreachable!("handled before open")
         }
-        Command::Hooks { sub } => return hooks_cmd(&mut store, flags, sub),
+        // An opt-out is a row on the change feed, so the Viewer's carrier is the one to step past it.
+        Command::Hooks { sub } => return with_dispatch(&mut store, |s| hooks_cmd(s, flags, sub)),
+        // The tick stays off the seam. Its registration is config.json alone, and its run writes only the
+        // outbox and the day's mark — neither of which is on the change feed — and carries the outbox out
+        // itself, in this process, so a drive behind it would walk the same rows twice.
         Command::Tick { sub: TickCmd::Run } => return tick_run_cmd(&store, flags),
         Command::Tick { sub } => return tick_cmd(&mut store, flags, sub),
         // The recording face is the one that needs this folder: the answer is kept against the project

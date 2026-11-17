@@ -12,8 +12,8 @@
 //
 // **On a launch's pane it stops the launch** (`AMB-D-1154`): the pane is always asked about there —
 // a seat in front going, or none yet — and a yes stops the launch before the place goes. A launch
-// already ended is not stopped again. A run's own pane, outside a launch, cannot be taken away while
-// its run is going.
+// already ended, or gone, is not stopped again. A run's own pane, outside a launch, cannot be taken
+// away while its run is going.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -44,6 +44,12 @@ const hoisted = vi.hoisted(() => ({
   log: [] as string[],
   /** Where set, the host refuses the stop with this. */
   refuses: null as string | null,
+  /** Where set, the host refuses the stop with a refusal of this code, as core sends one. */
+  refusesAs: null as string | null,
+  /** Whether the host answers the launch's read with `not_found`: the launch is gone. */
+  gone: false,
+  /** What was said on the toast. */
+  notices: [] as string[],
 }));
 
 vi.mock("../talk/agent", () => ({
@@ -73,11 +79,17 @@ vi.mock("../core/dialog", () => ({
 }));
 vi.mock("../core/automations", async (actual) => ({
   ...(await actual<typeof import("../core/automations")>()),
-  useLaunchState: (launch: number | null) => (launch === null ? null : hoisted.launched),
+  useLaunchState: (launch: number | null) => (launch === null || hoisted.gone ? null : hoisted.launched),
+  useLaunchGone: (launch: number | null) => launch !== null && hoisted.gone,
   stopLaunch: vi.fn(async (launch: number) => {
     if (hoisted.refuses !== null) throw new Error(hoisted.refuses);
+    if (hoisted.refusesAs !== null) throw { code: hoisted.refusesAs, message_en: `refused: ${hoisted.refusesAs}` };
     hoisted.log.push(`stop ${launch}`);
   }),
+}));
+vi.mock("../core/notice", async (actual) => ({
+  ...(await actual<typeof import("../core/notice")>()),
+  pushNotice: (msg: string) => { hoisted.notices.push(msg); },
 }));
 // What a launch's pane draws beside the control reads these; what they say is not what this is about.
 vi.mock("../talk/runOutputs", () => ({ useRunOutputs: () => new Map() }));
@@ -109,6 +121,9 @@ beforeEach(() => {
   hoisted.launched = null;
   hoisted.log = [];
   hoisted.refuses = null;
+  hoisted.refusesAs = null;
+  hoisted.gone = false;
+  hoisted.notices = [];
   dropped = [];
   container = document.createElement("div");
   document.body.append(container);
@@ -274,6 +289,38 @@ describe("removing a launch's pane", () => {
     await press();
 
     expect(dropped, "the place went though the launch it drew was still going").toEqual([]);
+    expect(hoisted.notices, "the refusal was not said").toHaveLength(1);
+  });
+
+  it("keeps the place, and says so, where the stop is refused for anything but the launch being gone", async () => {
+    hoisted.launched = launchOf("running");
+    hoisted.refusesAs = "out_of_reach";
+    await pane(false, { launch: 5 });
+    await press();
+
+    expect(dropped).toEqual([]);
+    expect(hoisted.notices).toHaveLength(1);
+  });
+
+  it("takes the place away without a toast where the launch went while the question was open", async () => {
+    hoisted.launched = launchOf("running");
+    hoisted.refusesAs = "not_found";
+    await pane(false, { launch: 5 });
+    await press();
+
+    expect(hoisted.questions).toEqual([t("face.dropLaunchConfirm")]);
+    expect(hoisted.log, "the pane of a launch that is gone could not be closed").toEqual(["drop 1"]);
+    expect(hoisted.notices, "a launch that is gone was said as a refusal").toEqual([]);
+  });
+
+  it("does not stop a launch that is gone, and asks about its pane as any other place", async () => {
+    hoisted.gone = true;
+    await pane(false, { launch: 5 });
+    await press();
+
+    expect(hoisted.questions).toEqual([t("face.dropConfirm")]);
+    expect(hoisted.log, "a launch that is gone was stopped").toEqual(["drop 1"]);
+    expect(hoisted.notices).toEqual([]);
   });
 
   it("does not stop a launch that has ended, but still asks before the place goes", async () => {

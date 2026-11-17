@@ -133,6 +133,7 @@ dependencies = [
  "thiserror 2.0.21",
  "toml 1.1.2+spec-1.1.0",
  "tracing",
+ "tracing-subscriber",
  "unicode-normalization",
  "ureq",
  "webpki-roots",

@@ -49,8 +49,9 @@ const CEILING_BYTES: u128 = MAX_FILE_BYTES * (ARCHIVED_GENERATIONS as u128 + 1);
 /// real plugin left 3 archives behind `KeepSome(3)`.
 const _: () = assert!(CEILING_BYTES <= 4 * 1024 * 1024);
 
-/// The folder both logs live in: `logs/`, directly under the user-level app-data dir. `None` when that
-/// root cannot be resolved at all — callers decide what a missing folder means for them, rather than
+/// The folder the logs live in — this one, `perf.log`, and the Viewer's `viewer-send.log`
+/// ([`amenbo_core::viewer::send_log`]): `logs/`, directly under the user-level app-data dir. `None` when
+/// that root cannot be resolved at all — callers decide what a missing folder means for them, rather than
 /// having a relative path invented for them (a bundled app's working directory is not writable).
 pub(crate) fn logs_dir() -> Option<PathBuf> {
     amenbo_core::config::Paths::resolve().ok().map(|p| p.base_dir.join("logs"))

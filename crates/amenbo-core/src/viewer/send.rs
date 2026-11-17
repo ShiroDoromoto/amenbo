@@ -1141,8 +1141,15 @@ impl Carrier for SelfCarrier {
 /// ([`crate::notify_dispatch::send_process`]): it must carry the store its parent wrote to.
 ///
 /// Nothing here is reported to a caller — there is none. A store that will not open, a server that refuses,
-/// a turn another run is already taking: each is a line in the log and a queue that keeps.
+/// a turn another run is already taking: each is a line in `<base>/logs/viewer-send.log`
+/// ([`super::send_log`]) and a queue that keeps.
 pub fn carry_process(base_dir: std::path::PathBuf) {
+    let log_base = base_dir.clone();
+    super::send_log::within(&log_base, || carry_and_say(base_dir));
+}
+
+/// The carrier's one turn, with what came of it said in the log [`carry_process`] holds open.
+fn carry_and_say(base_dir: std::path::PathBuf) {
     let store = match Store::open_at(crate::config::Paths::at(base_dir)) {
         Ok(store) => store,
         Err(err) => {

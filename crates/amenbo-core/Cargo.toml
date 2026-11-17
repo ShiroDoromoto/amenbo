@@ -29,6 +29,10 @@ chrono.workspace = true
 thiserror.workspace = true
 directories.workspace = true
 tracing.workspace = true
+# What writes a Viewer carrier's `tracing` lines to `logs/viewer-send.log` (`src/viewer/send_log.rs`).
+# A carrier is a process of its own that both faces start, so the writer is here rather than in either
+# face. `fmt` alone: no env filter, no ANSI colour, no `log` bridge.
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }
 getrandom = "0.4"
 base64 = "0.23"
 fs2 = "0.4"

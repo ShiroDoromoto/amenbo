@@ -2319,7 +2319,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   not_ready_automation_cfg_not_found: "{step}: the setting “{cfg}” names “{line}”, which this project does not have",
   not_ready_automation_cfg_value_closed: "{step}: the setting “{cfg}” names “{line}”, a value that is closed",
   not_ready_automation_folder_unchosen: "{step}: the setting “{cfg}” is empty, and this project has {count} linked folders — write which one",
-  not_ready_automation_agent_unchosen: "{step}: no agent is chosen",
+  not_ready_automation_agent_unchosen: "{step}: no agent is chosen — choose one under Agent in Project settings",
   not_ready_automation_agent_missing: "{step}: this machine cannot start “{agent}”",
   // Said of the model rather than of the agent, which the step's own row already names. Only ever
   // drawn for an agent that has said what it offers, so "does not offer" is an answer and not a

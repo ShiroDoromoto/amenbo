@@ -1187,13 +1187,15 @@ impl Config {
     }
 
     /// Which agent this project's panes are opened with, where one has been settled
-    /// ([`Config::project_agent`]).
+    /// ([`Config::project_agent`]) — and the only answer an automation's steps fall back on
+    /// ([`crate::wake::step_agent`]).
     pub fn agent_for(&self, project: i64) -> Option<&str> {
         self.project_agent.get(&project.to_string()).map(String::as_str)
     }
 
-    /// Keep this project's answer, replacing any earlier one — what the project's settings write,
-    /// and what the first pane opened in a project leaves behind ([`crate::wake`]).
+    /// Keep this project's answer, replacing any earlier one — what the project's settings write
+    /// ([`crate::wake`]). Opening a pane does not write it: that leaves the person's answer
+    /// ([`Config::remember_last_agent`]).
     pub fn remember_agent(&mut self, project: i64, id: &str) {
         self.project_agent.insert(project.to_string(), id.to_string());
     }
@@ -1205,7 +1207,8 @@ impl Config {
     }
 
     /// What this person last opened a pane with, where they have opened one
-    /// ([`Config::last_agent`]).
+    /// ([`Config::last_agent`]). Panes read it; an automation's steps do not
+    /// ([`crate::wake::step_agent`]).
     pub fn last_agent(&self) -> Option<&str> {
         self.last_agent.as_deref()
     }

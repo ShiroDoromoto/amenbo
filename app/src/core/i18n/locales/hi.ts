@@ -2030,7 +2030,7 @@ export const hi: Translation = {
     not_ready_automation_cfg_not_found: "{step}: सेटिंग “{cfg}” में “{line}” लिखा है, जो इस प्रोजेक्ट में नहीं है।",
     not_ready_automation_cfg_value_closed: "{step}: सेटिंग “{cfg}” में “{line}” लिखा है, जो बंद किया गया मान है।",
     not_ready_automation_folder_unchosen: "{step}: सेटिंग “{cfg}” खाली है, और इस प्रोजेक्ट से {count} फ़ोल्डर जुड़े हैं — उनमें से एक लिखें",
-    not_ready_automation_agent_unchosen: "{step}: कोई एजेंट नहीं चुना गया",
+    not_ready_automation_agent_unchosen: "{step}: कोई एजेंट नहीं चुना गया — प्रोजेक्ट सेटिंग के “एजेंट” में चुनें",
     not_ready_automation_agent_missing: "{step}: यह मशीन “{agent}” को शुरू नहीं कर सकती।",
     not_ready_automation_model_missing: "{step}: यहाँ इसका एजेंट “{model}” मॉडल नहीं देता।",
     not_ready_automation_script_missing: "{step}: “{program}” पर कोई फ़ाइल नहीं है।",

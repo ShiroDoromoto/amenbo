@@ -2026,7 +2026,7 @@ export const ko: Translation = {
     not_ready_automation_cfg_not_found: "{step}: 설정 “{cfg}”에 적힌 “{line}”이(가) 이 프로젝트에 없습니다",
     not_ready_automation_cfg_value_closed: "{step}: 설정 “{cfg}”에 적힌 “{line}”은(는) 닫힌 값입니다",
     not_ready_automation_folder_unchosen: "{step}: 설정 “{cfg}”이(가) 비어 있고, 이 프로젝트에 연결된 폴더가 {count}개입니다. 그중 하나를 적으세요",
-    not_ready_automation_agent_unchosen: "{step}: 에이전트를 고르지 않았습니다",
+    not_ready_automation_agent_unchosen: "{step}: 에이전트를 고르지 않았습니다 — 프로젝트 설정의 ‘에이전트’에서 고를 수 있습니다",
     not_ready_automation_agent_missing: "{step}: 이 컴퓨터에서 “{agent}”을(를) 시작할 수 없습니다",
     not_ready_automation_model_missing: "{step}: 여기의 에이전트는 “{model}” 모델을 제공하지 않습니다",
     not_ready_automation_script_missing: "{step}: “{program}”에 파일이 없습니다",

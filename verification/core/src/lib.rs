@@ -2254,6 +2254,13 @@ const REGISTRY: &[OpSpec] = &[
     // test is that what the frame said it would run is what ran, so the steps that chose it are the
     // ones before, and this one only presses.
     OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "open-start", required: &[], refs: &[], strings: &[], binds: false },
+    // Choosing the agent this project uses, on its settings screen — the project's own answer, which
+    // its panes open with and the only one an automation's steps fall back on
+    // (`amenbo_core::wake::step_agent`). `agent` is the name the field draws, the provider's own, so a
+    // road names one only where it stood the machine up (`can-start`), as `pick-start` does; and the
+    // field is drawn only where the machine has more than one agent to choose between. There is no
+    // terminal road to it, which is why it is a screen move.
+    OpSpec { kind: Kind::Action, domain: Domain::Workspace, op: "project-agent", required: &["agent"], refs: &[], strings: &["agent"], binds: false },
     // ── Moving a pane that is already running ────────────────────────────────────────────────────
     // The other half of the model question, and a different question. Above it a model goes on a
     // launch line and is settled before the program starts; here the program has been running for an

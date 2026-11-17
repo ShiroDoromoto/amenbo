@@ -1241,6 +1241,10 @@ one control on it and no rows above, the record holding the pane and the way bac
 the folder nor the provider. `open-next` is the third of them, on the row a frame draws once the
 program in it has gone — the list of what to start, already holding what was running there, and the
 press beside it.
+`project-agent` is the project's own answer rather than a pane's: the Agent field on the project's
+settings screen, saved with the rest of it. It is the only answer an automation's steps fall back on
+— the agent a pane was last opened with is not one — and there is no terminal road to it. Like
+`pick-start`'s `agent`, it names the provider, so a road says it only where it stood the machine up.
 
 **The row has three shapes, and which one is drawn is decided by how long the agent's answer was** —
 so a road says which it is walking, in `pick-model`'s `how`. `write` is a box to type a name in, which

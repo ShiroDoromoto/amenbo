@@ -2048,7 +2048,7 @@ export const ptBR: Translation = {
     not_ready_automation_cfg_not_found: "{step}: a configuração “{cfg}” cita “{line}”, que este projeto não tem",
     not_ready_automation_cfg_value_closed: "{step}: a configuração “{cfg}” cita “{line}”, um valor que está fechado",
     not_ready_automation_folder_unchosen: "{step}: a configuração “{cfg}” está vazia, e este projeto tem {count} pastas vinculadas — escreva qual",
-    not_ready_automation_agent_unchosen: "{step}: nenhum agente foi escolhido",
+    not_ready_automation_agent_unchosen: "{step}: nenhum agente foi escolhido — escolha em “Agente” nas Configurações do projeto",
     not_ready_automation_agent_missing: "{step}: esta máquina não consegue iniciar “{agent}”",
     not_ready_automation_model_missing: "{step}: o agente aqui não oferece o modelo “{model}”",
     not_ready_automation_script_missing: "{step}: não há arquivo em “{program}”",

@@ -2048,7 +2048,7 @@ export const fr: Translation = {
     not_ready_automation_cfg_not_found: "{step} : le réglage « {cfg} » nomme « {line} », que ce projet n’a pas",
     not_ready_automation_cfg_value_closed: "{step} : le réglage « {cfg} » nomme « {line} », une valeur fermée",
     not_ready_automation_folder_unchosen: "{step} : le réglage « {cfg} » est vide, et ce projet a {count} dossiers liés — indiquez lequel",
-    not_ready_automation_agent_unchosen: "{step} : aucun agent n’est choisi",
+    not_ready_automation_agent_unchosen: "{step} : aucun agent n’est choisi — choisissez-le dans « Agent » des Réglages du projet",
     not_ready_automation_agent_missing: "{step} : cette machine ne peut pas lancer « {agent} »",
     not_ready_automation_model_missing: "{step} : son agent ici ne propose pas le modèle « {model} »",
     not_ready_automation_script_missing: "{step} : aucun fichier à « {program} »",

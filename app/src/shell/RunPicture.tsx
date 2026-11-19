@@ -7,10 +7,13 @@
 //
 // **A role with a task is a desk**: one with a run in a seat, a task waiting for it to take, or a task
 // of it stopped until the task its round's failure was filed as closes.
-// The desks stand across the whole width of the pane and wrap onto as many lines as they need, in the
-// order the roles are defined in, and never move for what they are doing — a desk that jumped to the
-// top when a seat asked for a person would be a desk the reader has to look for again. Only the room
-// the desks are in scrolls; the pane's own place on the page stays.
+// The desks stand in as many columns as the pane's width holds, none narrower than 300px, each column
+// packed up to its top so a short desk leaves no gap under it. The role defined `i`th, counting those
+// with no task, stands in the column `i` modulo the number of columns, under the desks defined before it
+// there. A desk never moves for what it or the others are doing — not even when another role runs out of
+// tasks and its desk goes — as a desk that jumped to the top when a seat asked for a person would be a
+// desk the reader has to look for again; only a change in the pane's width moves it. Only the room the
+// desks are in scrolls; the pane's own place on the page stays.
 //
 // **A desk's head is one line, never wrapped**: the role's icon and name, "stops after the task" where
 // the role is held on its own, how many seats are at work out of its headcount, a small square per seat,
@@ -112,7 +115,7 @@
 // The role's name and icon are the definition's as it is now (`AMB-D-1015`) — the launch's, read with
 // it, or the project's roles (`../core/projectRoles`) for a run kept from before launches. The icon is
 // drawn from its seed (`AMB-D-686`).
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { useProjectRoles } from "../core/projectRoles";
 import {
   holdLaunchRole,
@@ -201,6 +204,9 @@ export type DeskControl = {
 export type Desk = {
   /** The role's id, or null for a round under no role. */
   readonly role: number | null;
+  /** Where the role stands among its automation's roles as they are defined, counting those with no
+   *  task, from 0: what puts it in its column. */
+  readonly order: number;
   readonly name: string;
   /** The role's icon seed; null for none written, where it is drawn from its name. */
   readonly icon: string | null;
@@ -264,7 +270,7 @@ export function desksOf(launch: AutomationLaunchStateDto, front: Say | null): { 
   const nameOf = (role: number | undefined) => (role === undefined ? undefined : names.get(role));
   const desks: Desk[] = [];
   const idle: IdleRole[] = [];
-  for (const role of launch.roles) {
+  for (const [order, role] of launch.roles.entries()) {
     const awaits = role.awaitsPerson ?? null;
     const stopped = launch.attention.flatMap((one) =>
       one.kind === "stopped" && one.role === role.role && one.taskRef !== undefined
@@ -276,6 +282,7 @@ export function desksOf(launch: AutomationLaunchStateDto, front: Say | null): { 
     }
     desks.push({
       role: role.role,
+      order,
       name: role.name,
       icon: role.icon ?? null,
       headcount: role.headcount,
@@ -339,18 +346,18 @@ export function runDesks(run: Say, roles: readonly TaskRoleDto[]): { desks: Desk
     to: [],
     pausing: status === "running" && run.state?.pauseRequested === true,
   };
-  const deskOf = (role: number | null, name: string, icon: string | null): Desk => ({
-    role, name, icon, headcount: 1, held: false, heldAlone: false, seats: [seat], waiting: 0, first: [], stopped: [], awaits: null,
+  const deskOf = (role: number | null, order: number, name: string, icon: string | null): Desk => ({
+    role, order, name, icon, headcount: 1, held: false, heldAlone: false, seats: [seat], waiting: 0, first: [], stopped: [], awaits: null,
     atLimit: null, control: null,
   });
   const idleOf = (role: TaskRoleDto): IdleRole => ({ role: role.id, name: role.name, icon: role.icon, headcount: null, awaits: null });
   if (at === null) {
     // A pane no step has arrived in, on a run that has not read back yet, has no round to draw.
     const drawn = going && (run.round !== undefined || run.step !== "");
-    return { desks: drawn ? [deskOf(null, run.automation, null)] : [], idle: own.map(idleOf) };
+    return { desks: drawn ? [deskOf(null, 0, run.automation, null)] : [], idle: own.map(idleOf) };
   }
   return {
-    desks: own.filter((role) => role.id === at).map((role) => deskOf(role.id, role.name, role.icon)),
+    desks: own.flatMap((role, order) => (role.id === at ? [deskOf(role.id, order, role.name, role.icon)] : [])),
     idle: own.filter((role) => role.id !== at).map(idleOf),
   };
 }
@@ -456,12 +463,57 @@ export function noticeOf(attns: readonly Attn[]): { what: string; stop: boolean 
   return { what: parts.join(" ・ "), stop: attns.some((attn) => attn !== "asks") };
 }
 
-/** The marks in the room `at`, where they stand on the page. */
+/** The marks in the room `at`, where they stand on the page, from the top down — not in the order they
+ *  are written in, which goes down one column and then the next. */
 function marksIn(at: HTMLElement): Mark[] {
   return [...at.querySelectorAll<HTMLElement>("[data-attn]")].map((el) => {
     const box = el.getBoundingClientRect();
     return { attn: el.dataset.attn as Attn, top: box.top, bottom: box.bottom };
-  });
+  }).sort((a, b) => a.top - b.top);
+}
+
+/** The narrowest a column of desks is drawn, and the room between two columns, in pixels. */
+const COLUMN = 300;
+const COLUMN_GAP = 12;
+
+/**
+ * **How many columns of desks a room `width` pixels wide inside holds**, none narrower than `COLUMN`
+ * with `COLUMN_GAP` between them, and never fewer than one: a room narrower than a column, or not laid
+ * out yet, has one.
+ */
+export function columnsOf(width: number): number {
+  return Math.max(1, Math.floor((width + COLUMN_GAP) / (COLUMN + COLUMN_GAP)));
+}
+
+/**
+ * **The desks `desks` in `columns` columns**: the desk of the role defined `order`th in the column `order`
+ * modulo `columns`, each column in the order the roles are defined in. A column with no desk is kept
+ * empty, so no desk takes its place.
+ */
+export function columnsFor(desks: readonly Desk[], columns: number): Desk[][] {
+  const out = Array.from({ length: columns }, (): Desk[] => []);
+  for (const desk of [...desks].sort((a, b) => a.order - b.order)) out[desk.order % columns]!.push(desk);
+  return out;
+}
+
+/** How many columns the room `room` holds, read again as it changes size. */
+function useColumns(room: RefObject<HTMLDivElement | null>): number {
+  const [columns, setColumns] = useState(1);
+  useLayoutEffect(() => {
+    const at = room.current;
+    if (at === null) return;
+    const measure = () => {
+      const style = getComputedStyle(at);
+      const pad = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+      setColumns(columnsOf(at.clientWidth - pad));
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(measure);
+    watch.observe(at);
+    return () => watch.disconnect();
+  }, [room]);
+  return columns;
 }
 
 /** What is out of sight above and below the room `room`, read again only as it scrolls or changes size. */
@@ -955,6 +1007,8 @@ export const RunRoles = memo(
     const [menu, setMenu] = useState<{ role: number | null; at: { x: number; y: number } } | null>(null);
     const room = useRef<HTMLDivElement>(null);
     const unseen = useUnseen(room);
+    // No more columns than the automation has roles: a column no role can stand in is not drawn.
+    const columns = Math.min(useColumns(room), Math.max(1, desks.length + idle.length));
     const jump = (up: boolean) => {
       if (room.current !== null) scrollToUnseen(room.current, up);
     };
@@ -975,20 +1029,24 @@ export const RunRoles = memo(
             {desks.length === 0 ? (
               !reading && <p className="runroles__none">{t("auto.run.roles.none")}</p>
             ) : (
-              <ul className="runroles__desks">
-                {desks.map((desk) => (
-                  <DeskView
-                    key={desk.role ?? "run"}
-                    desk={desk}
-                    front={run?.run ?? null}
-                    now={now}
-                    silenceAt={silenceAt}
-                    onOpen={onOpen}
-                    menuAt={menu !== null && menu.role === desk.role ? menu.at : null}
-                    onMenu={(at) => setMenu(at === null ? null : { role: desk.role, at })}
-                  />
+              <div className="runroles__desks" style={{ "--runroles-columns": columns } as CSSProperties}>
+                {columnsFor(desks, columns).map((column, index) => (
+                  <ul key={index} className="runroles__column">
+                    {column.map((desk) => (
+                      <DeskView
+                        key={desk.role ?? "run"}
+                        desk={desk}
+                        front={run?.run ?? null}
+                        now={now}
+                        silenceAt={silenceAt}
+                        onOpen={onOpen}
+                        menuAt={menu !== null && menu.role === desk.role ? menu.at : null}
+                        onMenu={(at) => setMenu(at === null ? null : { role: desk.role, at })}
+                      />
+                    ))}
+                  </ul>
                 ))}
-              </ul>
+              </div>
             )}
             {/* In the room, under the desks: however many it holds, it scrolls with them and never
                 takes their height. */}

@@ -8,8 +8,10 @@
 // so the program in it is not ended by looking away. An ordinary pane has no roles and no control for
 // them.
 //
-// **A role with a task is a desk, and the rest are on the bar** — the desks in the order the roles are
-// defined in, whatever their seats are doing. A desk's head says the role, how many seats are at work
+// **A role with a task is a desk, and the rest are on the bar** — the desks in as many columns as the
+// room's width holds, the role defined `i`th, counting those with no task, in the column `i` modulo
+// their number, each column in the order the roles are defined in, whatever their seats are doing. A
+// desk's head says the role, how many seats are at work
 // out of its headcount and a square per seat; under it a row per seat at work — its task, its time, the
 // run's number and its step — the tasks waiting for it, its tasks stopped and how many wait for a
 // person. A free seat has no row. The bar is under the desks, in the room they scroll in. There is no
@@ -40,7 +42,7 @@ import { TerminalPane } from "./TerminalPane";
 import { t, tf } from "../core/i18n";
 import { RefNavProvider, type RefNav } from "../core/refNav";
 import {
-  attnOf, desksOf, minutesOf, noticeOf, runDesks, seatOf, seatStateOf, silenceOf, unseenOf,
+  attnOf, columnsFor, columnsOf, desksOf, minutesOf, noticeOf, runDesks, seatOf, seatStateOf, silenceOf, unseenOf,
 } from "./RunPicture";
 import { showTerminalOf } from "./runFaces";
 
@@ -353,6 +355,63 @@ describe("the desks of a launch", () => {
     expect(idle()[0]!.querySelector("svg.identicon"), "a role on the bar is drawn by its seed").not.toBeNull();
     expect(container.querySelector(".runroles__idlecount")?.textContent).toBe(tf("auto.run.roles.idle", { n: 1 }));
     expect(container.querySelector(".slot__views"), "the room offers cards or a list").toBeNull();
+  });
+
+  describe("in columns", () => {
+    /** How wide the room is inside, and what would tell the pane it changed size. */
+    let width = 0;
+    let resized: (() => void)[] = [];
+    beforeEach(() => {
+      width = 0;
+      resized = [];
+      vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
+        return this.classList.contains("runroles__room") ? width : 0;
+      });
+      vi.stubGlobal("ResizeObserver", class {
+        constructor(on: () => void) { resized.push(on); }
+        observe() {}
+        disconnect() {}
+      });
+    });
+    afterEach(() => {
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    });
+    const columns = () => [...container.querySelectorAll<HTMLElement>(".runroles__column")]
+      .map((column) => [...column.querySelectorAll<HTMLElement>(".runroles__desk")].map((one) => one.dataset.role));
+
+    it("puts each desk in the column of where its role is defined, counting the roles with no task, packed to the top", async () => {
+      width = 640;
+      launched = busy();
+      await pane(FRONT, { launch: 5 });
+      // Bob is defined first, Carol second, the third role has no task, and the held one is fourth.
+      expect(columns()).toEqual([["12"], ["13", "15"]]);
+      expect(container.querySelector<HTMLElement>(".runroles__desks")!.style.getPropertyValue("--runroles-columns")).toBe("2");
+    });
+
+    it("keeps every other desk in its column when a role runs out of tasks and its desk goes", async () => {
+      width = 640;
+      launched = busy();
+      await pane(FRONT, { launch: 5 });
+      launched = { ...busy(), roles: busy().roles.map((one) => (one.role === 13 ? { ...one, waiting: 0, firstWaiting: [] } : one)) };
+      // The desks are drawn again only when the run moves, so the pane is drawn afresh on the launch as it now is.
+      act(() => root.unmount());
+      root = createRoot(container);
+      await pane(FRONT, { launch: 5 });
+      expect(columns()).toEqual([["12"], ["15"]]);
+    });
+
+    it("stands the desks in one column, in the order defined, once the pane is narrowed to it, and in more once widened", async () => {
+      width = 640;
+      launched = busy();
+      await pane(FRONT, { launch: 5 });
+      width = 400;
+      await act(async () => resized.forEach((on) => on()));
+      expect(columns()).toEqual([["12", "13", "15"]]);
+      width = 1300;
+      await act(async () => resized.forEach((on) => on()));
+      expect(columns(), "no more columns than there are roles").toEqual([["12"], ["13"], [], ["15"]]);
+    });
   });
 
   it("heads a desk with the role, how many are at work of its headcount, a square per seat and its menu", async () => {
@@ -746,6 +805,16 @@ describe("desksOf", () => {
     expect(got.idle).toEqual([{ role: 2, name: "B", icon: null, headcount: 3, awaits: null }]);
   });
 
+  it("numbers each desk by where its role is defined, counting the roles on the bar", () => {
+    const got = desksOf(launchOf([
+      launchRole(1, "A", [], 1),
+      launchRole(2, "B", [liveRun(4)], 1),
+      launchRole(3, "C", [], 1),
+      launchRole(4, "D", [liveRun(5)], 1),
+    ]), FRONT);
+    expect(got.desks.map((one) => [one.role, one.order])).toEqual([[2, 1], [4, 3]]);
+  });
+
   it("carries a role's tasks waiting for a person onto its desk or the bar, and nothing where none waits", () => {
     const got = desksOf(launchOf([
       { ...launchRole(1, "A", [], 2), awaitsPerson: AWAITS },
@@ -798,7 +867,7 @@ describe("runDesks", () => {
   it("draws the run's role as a desk with the run its one seat, and the rest on the bar, in the order they are defined in", () => {
     const got = runDesks(RUNNING, [role(3, "C"), role(2, "B", 3, "seed"), role(1, "A"), role(9, "Elsewhere", 9)]);
     expect(got.desks).toEqual([{
-      role: 2, name: "B", icon: "seed", headcount: 1, held: false, heldAlone: false, waiting: 0, first: [], stopped: [], awaits: null, atLimit: null,
+      role: 2, order: 1, name: "B", icon: "seed", headcount: 1, held: false, heldAlone: false, waiting: 0, first: [], stopped: [], awaits: null, atLimit: null,
       control: null, seats: [{ run: 15, task: "AMB-T-7 Fix", step: "check", state: "running", since: 1000, to: [], pausing: false }],
     }]);
     expect(got.idle.map((one) => [one.role, one.headcount])).toEqual([[3, null], [1, null]]);
@@ -806,7 +875,7 @@ describe("runDesks", () => {
 
   it("draws a round under no role as one desk named after the automation, its roles on the bar", () => {
     const got = runDesks({ ...RUNNING, round: { role: null, startedAt: null } }, [role(2, "B"), role(3, "C")]);
-    expect(got.desks.map((one) => [one.role, one.name])).toEqual([[null, "Nightly"]]);
+    expect(got.desks.map((one) => [one.role, one.order, one.name])).toEqual([[null, 0, "Nightly"]]);
     expect(got.idle.map((one) => one.role)).toEqual([2, 3]);
   });
 
@@ -826,6 +895,26 @@ describe("runDesks", () => {
     expect(state({ ...RUNNING, interactive: true })).toBe("asks");
     expect(state({ ...RUNNING, state: FAILED.state })).toBe("failed");
     expect(state({ ...RUNNING, state: { ...RUNNING.state!, status: "paused" } })).toBe("paused");
+  });
+});
+
+describe("columnsOf and columnsFor", () => {
+  const desk = (order: number) => runDesks(
+    { ...FAILED, round: { role: order + 1, startedAt: null } },
+    Array.from({ length: order + 1 }, (_, at) => role(at + 1, `R${at}`)),
+  ).desks[0]!;
+
+  it("holds as many columns as fit 300px each with 12px between them, and never fewer than one", () => {
+    expect([0, 299, 300, 611, 612, 923, 924].map(columnsOf)).toEqual([1, 1, 1, 1, 2, 2, 3]);
+    expect(columnsOf(-24), "a room not laid out yet").toBe(1);
+  });
+
+  it("puts the role defined i-th in the column i modulo their number, each column in the order defined, keeping an empty column", () => {
+    const ones = [desk(4), desk(1), desk(2)];
+    const at = (columns: number) => columnsFor(ones, columns).map((column) => column.map((one) => one.order));
+    expect(at(2)).toEqual([[2, 4], [1]]);
+    expect(at(3)).toEqual([[], [1, 4], [2]]);
+    expect(at(1)).toEqual([[1, 2, 4]]);
   });
 });
 
@@ -927,6 +1016,27 @@ describe("a round out of sight", () => {
     expect(notices().map((one) => one.dataset.edge)).toEqual(["top"]);
     await act(async () => notices()[0]!.click());
     expect(scrollBy).toHaveBeenCalledWith({ top: -128, behavior: "smooth" });
+  });
+
+  it("scrolls to the nearest mark below, though it is written after one further down in the column before", async () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("runroles__room") ? 640 : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("runroles__room")) return box(0, 100);
+      if (this.dataset.attn !== undefined) {
+        return this.closest<HTMLElement>(".runroles__desk")!.dataset.role === "12" ? box(300, 318) : box(150, 168);
+      }
+      return box(0, 0);
+    });
+    const failing = (run: number, role: number) => liveRun(run, { role, status: "failed" });
+    launched = launchOf([launchRole(12, "Bob", [failing(81, 12)], 1), launchRole(13, "Carol", [failing(82, 13)], 1)]);
+    await pane({ ...FAILING, run: 81 }, { launch: 5 });
+    expect(marks().map((one) => one.closest<HTMLElement>(".runroles__desk")!.dataset.role), "the left column is written first").toEqual(["12", "13"]);
+    expect(notices().map((one) => [one.dataset.edge, one.textContent])).toEqual([["bottom", `↓ ${tf("auto.run.roles.attn.failed", { n: 2 })}`]]);
+
+    await act(async () => notices()[0]!.click());
+    expect(scrollBy).toHaveBeenCalledWith({ top: 76, behavior: "smooth" });
   });
 
   it("names nothing for a round that needs no person", async () => {

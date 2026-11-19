@@ -2849,7 +2849,8 @@ button.feed__target:hover { color: var(--c-accent); }
 .autopic__line--leaves { stroke: var(--c-accent); }
 /* **A launch's pane, shown by its roles** (`../shell/RunPicture`). It is drawn over the pane's body,
    whole: the desks of the roles with a task in a room that scrolls up and down inside it, then the bar
-   of the roles with none. The desks stand across the whole width and wrap, none narrower than 300px. */
+   of the roles with none. The desks stand in as many columns as the width holds, none narrower than
+   300px (`columnsOf`), each column packed up to its top so a short desk leaves no gap under it. */
 .runroles {
   position: absolute; inset: 0; z-index: 1;
   display: flex; flex-direction: column;
@@ -2869,9 +2870,9 @@ button.feed__target:hover { color: var(--c-accent); }
 .runroles__unseen[data-stop] { border-color: var(--c-stop); color: var(--c-stop); }
 .runroles__unseen:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 .runroles__desks {
-  list-style: none; margin: 0; padding: 0;
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; align-items: start;
+  display: grid; grid-template-columns: repeat(var(--runroles-columns, 1), minmax(0, 1fr)); gap: 12px; align-items: start;
 }
+.runroles__column { list-style: none; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 /* One role with a task. A seat that may wait for a person draws its border in the person's colour,
    twice as heavy — inset, so nothing moves; a task of it stopped, in the stop colour; one whose terminal
    has gone quiet, in the heed colour. A role that takes no new task is dashed. */

@@ -72,7 +72,7 @@ dependencies = [
  "objc2-user-notifications",
  "portable-pty",
  "regex",
- "rusqlite",
+ "rusqlite 0.43.0",
  "serde",
  "serde_json",
  "tauri",
@@ -122,7 +122,7 @@ dependencies = [
  "objc2-service-management",
  "pulldown-cmark",
  "qrcode",
- "rusqlite",
+ "rusqlite 0.42.0",
  "rustls",
  "self-replace",
  "serde",
@@ -3657,6 +3657,21 @@ name = "rusqlite"
 version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4edff0039f148731aee2fd80f76dbfeb12d204ab3d1c544838d34e02151049b"
+dependencies = [
+ "bitflags 2.13.0",
+ "fallible-iterator",
+ "fallible-streaming-iterator",
+ "hashlink",
+ "libsqlite3-sys",
+ "smallvec",
+ "sqlite-wasm-rs",
+]
+
+[[package]]
+name = "rusqlite"
+version = "0.43.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f172c4812a19b26d1c23cdb0070e69db335503dfa378b910eb857386e5b8beba"
 dependencies = [
  "bitflags 2.13.0",
  "fallible-iterator",

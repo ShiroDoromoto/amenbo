@@ -2421,8 +2421,12 @@ body.dragging-row .slot__bar--grab { cursor: grabbing; }
 .memo { flex: 1; min-height: 0; }
 /* One thing on it: how the writing stands. The name of the page is on its tab (`app/src/files/FilesPanel.tsx`). */
 .memo__bar { display: flex; align-items: baseline; justify-content: flex-end; gap: var(--s-2); }
+/* `max-width: none` drops the reading width every other textarea takes. That cap is there so a
+   paragraph is typed in the column it is shown back in; the draft's width is the right column's,
+   narrow or wide, and the page has none of its own. Left capped, the field stops at
+   `--measure-prose` and leaves the right of a wide column empty. */
 .memo__field {
-  flex: 1; min-height: 0; width: 100%; resize: none;
+  flex: 1; min-height: 0; width: 100%; max-width: none; resize: none;
   padding: var(--s-2);
   background: var(--c-sunken-pic) var(--c-sunken); border: var(--border-w) var(--border-style) var(--c-edge); border-radius: var(--r-md);
   color: var(--c-text); font-family: var(--font-mono); font-size: var(--fs-md); line-height: 1.6;

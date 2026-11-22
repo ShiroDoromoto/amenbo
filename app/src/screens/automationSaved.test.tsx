@@ -8,7 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { told } from "../core/automationSave";
 import { t } from "../core/i18n";
-import { fieldOf, MARK_MS, markBeside, useSaved, type SavedState } from "./AutomationSaved";
+import { fieldOf, MARK_MS, markBeside, useSaved, type FromField, type SavedState } from "./AutomationSaved";
 
 /** A write the test settles by hand. */
 function pending() {
@@ -20,6 +20,8 @@ function pending() {
 let write = pending();
 // The saved state the screen hands the hook.
 let state: SavedState | null;
+// The field noted by the last press on the held button, for a write sent after the press is over.
+let heldFrom: FromField | null = null;
 
 function Screen() {
   const saved = useSaved(state);
@@ -30,6 +32,13 @@ function Screen() {
     createElement("input", {
       "aria-label": "name",
       onBlur: () => void told(() => write.promise).catch(() => undefined),
+    }),
+    createElement("button", {
+      type: "button",
+      "aria-label": "held",
+      onClick: () => {
+        heldFrom = saved.fromHere();
+      },
     }),
     saved.marks,
   );
@@ -42,6 +51,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   write = pending();
   state = null;
+  heldFrom = null;
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -109,6 +119,16 @@ describe("a head handed the definition's saved state", () => {
       await own;
     });
     expect(marks()).toHaveLength(0);
+  });
+
+  it("stands Written beside the field a write was held from, sent once the event is over", async () => {
+    draw({ unsaved: false });
+    act(() => host.querySelector<HTMLButtonElement>('button[aria-label="held"]')!.click());
+    act(() => vi.runAllTimers());
+    await act(async () => {
+      await heldFrom!(() => told(() => Promise.resolve()));
+    });
+    expect(marks()).toHaveLength(1);
   });
 
   it("turns the head red when a write is refused", async () => {

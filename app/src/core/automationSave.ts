@@ -3,9 +3,9 @@
 // the line they report on, kept apart so a screen can listen without reaching for the writes.
 /**
  * **What one write on a definition is doing**, told to the build screens that draw that it was saved
- * (`../screens/AutomationSaved`, `AMB-D-1005`). Every field writes on the spot (`AMB-D-32`), so the
- * screen says what became of it: which field it came from, when the last write landed, and why one was
- * refused.
+ * (`../screens/AutomationSaved`, `AMB-D-1005`). Every field writes on the spot (`AMB-D-32`) — a number
+ * stepped press after press once the reader stops (`AMB-D-1189`) — so the screen says what became of
+ * it: which field it came from, when the last write landed, and why one was refused.
  *
  * `start` is told **before the call returns**, inside the handler that made the write — that is how
  * the screen knows which field the write came from.

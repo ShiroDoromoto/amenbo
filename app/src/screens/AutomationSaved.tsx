@@ -1,6 +1,7 @@
 // **What the build screens say about saving** (`AMB-D-1005`). Every field writes on the spot
-// (`AMB-D-32`), so without this a reader cannot tell a field still being edited from one already
-// written. The automation's screen and the action's screen say it the same way, in two places:
+// (`AMB-D-32`) — a number stepped press after press once the reader stops (`AMB-D-1189`) — so without
+// this a reader cannot tell a field still being edited from one already written. The automation's
+// screen and the action's screen say it the same way, in two places:
 //
 // - **On the head, always.** It says the definition's saved state (`SavedState`): nothing saved yet,
 //   changes not saved, or the version saved last and when. The writes land in the draft, and the
@@ -21,6 +22,11 @@
 // that starts during that event came from that field. The note is dropped once the event is over, so
 // a write started by nothing a reader did is marked on the head only. Events from the panel reach the
 // screen too: it is drawn through a portal, and React carries events up its own tree.
+//
+// **A write held back is marked beside the field it was held from.** A number stepped again and again
+// is written once the reader stops (`AMB-D-1189`), from a timer, after the event is over. So the
+// screen hands out `fromHere`: called during the event, it notes the field the event is on, and the
+// write later sent through it is taken as that field's.
 import { useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
 import { createPortal } from "react-dom";
 import { onAutomationSave } from "../core/automationSave";
@@ -40,6 +46,9 @@ type Capture = {
   onChangeCapture: (e: SyntheticEvent) => void;
   onKeyDownCapture: (e: SyntheticEvent) => void;
 };
+
+/** Sends a write as though it came from the field noted when this was made. */
+export type FromField = <T>(write: () => T) => T;
 
 /** The field an event is on: the control itself, or the whole of the field it is one control of. */
 export function fieldOf(target: Element): Element {
@@ -101,6 +110,8 @@ export function useSaved(state: SavedState | null): {
   capture: Capture;
   head: ReactNode;
   marks: ReactNode;
+  /** Notes the field the event going on now is on, for a write sent after the event is over. */
+  fromHere: () => FromField;
 } {
   const [failed, setFailed] = useState<string | null>(null);
   const [marks, setMarks] = useState<Mark[]>([]);
@@ -153,6 +164,18 @@ export function useSaved(state: SavedState | null): {
       if (touched.current === field) touched.current = null;
     }, 0);
   };
+  const fromHere = (): FromField => {
+    const field = touched.current;
+    return (write) => {
+      const was = touched.current;
+      touched.current = field;
+      try {
+        return write();
+      } finally {
+        touched.current = was;
+      }
+    };
+  };
   const capture: Capture = {
     onFocusCapture: note,
     onBlurCapture: note,
@@ -188,5 +211,5 @@ export function useSaved(state: SavedState | null): {
           document.body,
         );
 
-  return { capture, head, marks: drawn };
+  return { capture, head, marks: drawn, fromHere };
 }

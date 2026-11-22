@@ -1131,6 +1131,7 @@ export const zhHant: Translation = {
     "auto.side.headcountOf": "{role}的人數",
     "auto.side.headcountLess": "減少",
     "auto.side.headcountMore": "增加",
+    "auto.side.stepperRange": "請輸入 {min}～{max} 之間的數字。",
     "auto.side.headcountValue": "{n} 人",
     "auto.side.headcountSaved": "已儲存的版本：{n} 人",
     "auto.side.headcountTotal": "同時進行的任務：最多 {total} 個",

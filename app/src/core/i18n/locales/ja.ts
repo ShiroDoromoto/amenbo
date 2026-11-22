@@ -1135,6 +1135,7 @@ export const ja: Translation = {
     "auto.side.headcountOf": "{role}の人数",
     "auto.side.headcountLess": "減らす",
     "auto.side.headcountMore": "増やす",
+    "auto.side.stepperRange": "{min}〜{max} の数を入れてください。",
     "auto.side.headcountValue": "{n} 名",
     "auto.side.headcountSaved": "保存したバージョンでは {n} 名",
     "auto.side.headcountTotal": "同時に進むタスクは、最大 {total} 件",

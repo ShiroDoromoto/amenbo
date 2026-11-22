@@ -2,7 +2,8 @@
 # after the task is (`stop-a-role-after-its-task-and-resume-it`) — and past ten is past what a role
 # holds. Both are turned away, and the launch holds what it held before.
 #
-# A terminal road alone: the screen's stepper stops at 1 and 10, so it has neither to press.
+# A terminal road alone: the screen's stepper stops its presses at 1 and 10 and refuses a typed 0 or
+# 11 in its box, so the screen never sends either.
 id: refuse-a-launch-headcount-of-none-or-past-ten
 title: A launch's headcount of none or past ten is refused, and what the launch held stays
 description: >

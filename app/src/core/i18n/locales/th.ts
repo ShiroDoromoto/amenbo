@@ -1130,6 +1130,7 @@ export const th: Translation = {
     "auto.side.headcountOf": "จำนวนคนของ {role}",
     "auto.side.headcountLess": "ลด",
     "auto.side.headcountMore": "เพิ่ม",
+    "auto.side.stepperRange": "ใส่ตัวเลขตั้งแต่ {min} ถึง {max}",
     "auto.side.headcountValue": "{n}",
     "auto.side.headcountSaved": "เวอร์ชันที่บันทึก: {n}",
     "auto.side.headcountTotal": "งานที่ดำเนินพร้อมกัน: สูงสุด {total}",

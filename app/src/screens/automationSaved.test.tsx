@@ -136,8 +136,14 @@ describe("where Written stands", () => {
     group.setAttribute("data-saved-field", "");
     const plus = document.createElement("button");
     group.appendChild(plus);
+    // The number typed into is a control of the stepper too, inside its label.
+    const label = document.createElement("label");
+    const typed = document.createElement("input");
+    label.appendChild(typed);
+    group.appendChild(label);
     const input = document.createElement("input");
     expect(fieldOf(plus)).toBe(group);
+    expect(fieldOf(typed)).toBe(group);
     expect(fieldOf(input)).toBe(input);
   });
 

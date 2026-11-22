@@ -1129,6 +1129,7 @@ export const nl: Translation = {
     "auto.side.headcountOf": "Aantal voor {role}",
     "auto.side.headcountLess": "Minder",
     "auto.side.headcountMore": "Meer",
+    "auto.side.stepperRange": "Voer een getal van {min} tot {max} in.",
     "auto.side.headcountValue": "{n}",
     "auto.side.headcountSaved": "Opgeslagen versie: {n}",
     "auto.side.headcountTotal": "Taken tegelijk onderweg: tot {total}",

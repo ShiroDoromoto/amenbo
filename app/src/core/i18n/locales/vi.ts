@@ -1130,6 +1130,7 @@ export const vi: Translation = {
     "auto.side.headcountOf": "Số người của {role}",
     "auto.side.headcountLess": "Giảm",
     "auto.side.headcountMore": "Tăng",
+    "auto.side.stepperRange": "Nhập một số từ {min} đến {max}.",
     "auto.side.headcountValue": "{n}",
     "auto.side.headcountSaved": "Phiên bản đã lưu: {n}",
     "auto.side.headcountTotal": "Tác vụ chạy cùng lúc: tối đa {total}",

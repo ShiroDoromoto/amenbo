@@ -154,7 +154,7 @@ describe("the column", () => {
     expect(boxes[1]!.textContent).toContain(t("auto.side.trigger"));
     expect(boxes[2]!.textContent).toContain(t("auto.side.headcount"));
     // With no limit, a number stepped is a role's alone.
-    expect(container.querySelectorAll("output")).toHaveLength(automation.roles.length);
+    expect(container.querySelectorAll(".stepper")).toHaveLength(automation.roles.length);
   });
 });
 
@@ -183,7 +183,7 @@ describe("the headcounts", () => {
       "Read the context",
       "Implement",
     ]);
-    expect(stepperOf("Alice").querySelector("output")!.textContent).toBe(tf("auto.side.headcountValue", { n: 3 }));
+    expect(stepperOf("Alice").querySelector("input")!.value).toBe("3");
     expect(container.querySelector(".autoside__total")!.textContent).toContain("4");
     expect(container.textContent).toContain(tf("auto.side.headcountRange", { min: 1, max: 10 }));
   });
@@ -276,7 +276,7 @@ describe("the run limit", () => {
 
   it("steps between 1 and the cap, and goes back to no limit", async () => {
     await render({ ...automation, runLimit: 1 });
-    expect(limitStepper()!.querySelector("output")!.textContent).toBe(tf("auto.side.runLimitValue", { n: 1 }));
+    expect(limitStepper()!.querySelector("input")!.value).toBe("1");
     expect(limitButton(t("auto.side.headcountLess")).disabled).toBe(true);
     await press(limitButton(t("auto.side.headcountMore")));
     await press(limitButton(t("auto.side.runLimitClear")));

@@ -22,7 +22,8 @@
 //
 // **At the header's end, "⋯" opens the launch's menu**, built as a role's menu is (`./RunPicture`): the
 // most runs that go at once in this launch alone, across its roles (`AMB-D-1145`). "No limit" with a
-// press to set one, or a stepper from 1 to the cap core sets with a press to take it off; beside it the
+// press to set one, or a stepper from 1 to the cap core sets with a press to take it off — stepped only,
+// never typed, since each digit typed would reach the running launch on its way; beside it the
 // default — the definition's — which the launch goes back to when it ends, and a press back to it where
 // the two differ. It is not drawn once the launch has ended either.
 //
@@ -113,11 +114,12 @@ function LaunchMenu({ state, at, from, onClose }: {
           ) : (
             <Stepper
               small
+              typable={false}
               value={limit}
               min={MIN_RUN_LIMIT}
               max={state.maxRunLimit}
               label={t("auto.run.limit.of")}
-              valueText={tf("auto.run.limit.value", { n: limit })}
+              valueTemplate={t("auto.run.limit.value")}
               lessLabel={t("auto.side.headcountLess")}
               moreLabel={t("auto.side.headcountMore")}
               onStep={write}

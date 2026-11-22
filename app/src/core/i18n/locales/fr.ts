@@ -1141,6 +1141,7 @@ export const fr: Translation = {
     "auto.side.headcountOf": "Effectif de {role}",
     "auto.side.headcountLess": "Moins",
     "auto.side.headcountMore": "Plus",
+    "auto.side.stepperRange": "Saisissez un nombre entre {min} et {max}.",
     "auto.side.headcountValue": "{n}",
     "auto.side.headcountSaved": "Version enregistrée : {n}",
     "auto.side.headcountTotal": "Tâches en cours en même temps : jusqu’à {total}",

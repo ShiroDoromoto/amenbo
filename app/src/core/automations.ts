@@ -1661,10 +1661,10 @@ export async function stopLaunch(launch: number): Promise<void> {
 }
 
 /**
- * **Change how many are in one role for this launch alone** — the stepper in the role's menu
- * (`AMB-D-1123`). The definition is left as it is, and the launch goes back to it when it ends. A raise
- * is taken up at once; a cut lets seats go as their tasks end, and a raise while a cut is still to come
- * calls the cut off (`amenbo_core::ops::automation_run::launch_headcount_set`). Core refuses a headcount
+ * **Change how many are in one role for this launch alone** — "Apply" beside the stepper in the role's
+ * menu (`AMB-D-1123`). The definition is left as it is, and the launch goes back to it when it ends. A
+ * raise is taken up at once; a cut lets seats go as their tasks end, and a raise while a cut is still to
+ * come calls the cut off (`amenbo_core::ops::automation_run::launch_headcount_set`). Core refuses a headcount
  * outside 1 to the cap (`AMB-D-1124`), the cap being the launch state's `max_headcount`.
  */
 export async function setLaunchHeadcount(launch: number, role: number, headcount: number): Promise<void> {

@@ -14,6 +14,7 @@ import { tf } from "../core/i18n";
 let container: HTMLDivElement;
 let root: Root;
 let stepped: number[];
+let refusals: boolean[];
 
 function render(value: number, min = 1, max = 10, typable = true): void {
   act(() => {
@@ -27,6 +28,7 @@ function render(value: number, min = 1, max = 10, typable = true): void {
         lessLabel: "Fewer",
         moreLabel: "More",
         onStep: (n) => stepped.push(n),
+        onRefused: (refused) => refusals.push(refused),
         typable,
       }),
     );
@@ -51,6 +53,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   stepped = [];
+  refusals = [];
 });
 
 afterEach(() => {
@@ -127,6 +130,20 @@ describe("Stepper", () => {
     type("10");
     render(1);
     expect(input().value).toBe("10");
+  });
+
+  it("tells the caller each time the box turns refused and turns back, and only then", () => {
+    render(3);
+    expect(refusals).toEqual([false]);
+    focus();
+    type("0");
+    type("11");
+    expect(refusals).toEqual([false, true]);
+    type("5");
+    expect(refusals).toEqual([false, true, false]);
+    type("abc");
+    act(() => button("More").click());
+    expect(refusals).toEqual([false, true, false, true, false]);
   });
 
   it("drops a refused number for the caller's once a press steps", () => {

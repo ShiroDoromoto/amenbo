@@ -15,6 +15,10 @@
 // the caller's number and drops what was typed. The range said under a refused number is laid over what
 // lies below the stepper, so the stepper does not move while the reader types.
 //
+// **A caller that writes only on a press of its own learns of a refused number** (`onRefused`): told
+// each time the box turns refused or turns back, it can keep its press from writing the number last
+// handed on while the box shows another.
+//
 // **A number that acts on a launch at once is stepped only** (`typable={false}`): each digit typed would
 // reach the launch on its way to the number meant, so there the number is drawn, not a box.
 //
@@ -25,7 +29,7 @@
 //
 // **It is one field to the screen's "Written" mark** (`data-saved-field`, `../screens/AutomationSaved`):
 // the mark stands beside the whole stepper, never over the number just stepped to or typed.
-import { useId, useState, type ChangeEvent, type MouseEvent } from "react";
+import { useEffect, useId, useState, type ChangeEvent, type MouseEvent } from "react";
 import { tf } from "../core/i18n";
 
 /** The whole number a typed text stands for, or null where it is not one. */
@@ -45,6 +49,7 @@ export function Stepper({
   onStep,
   small = false,
   typable = true,
+  onRefused,
 }: {
   value: number;
   min: number;
@@ -60,6 +65,8 @@ export function Stepper({
   small?: boolean;
   /** Takes a typed number; false draws the number and leaves only "−" and "+". */
   typable?: boolean;
+  /** Told whether the box now holds a refused number, each time that turns. */
+  onRefused?: (refused: boolean) => void;
 }) {
   const rangeId = useId();
   // What the reader has typed, while it differs from the caller's number; null shows the caller's.
@@ -75,6 +82,11 @@ export function Stepper({
   const n = typedNumber(text);
   const refused = typable && (n === null || n < min || n > max);
   const [before, after = ""] = valueTemplate.split("{n}");
+  useEffect(() => {
+    onRefused?.(refused);
+    // Told on a turn only: a caller handing a new function each draw is not told again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refused]);
 
   const step = (by: number) => (e: MouseEvent<HTMLButtonElement>) => {
     e.currentTarget.focus();

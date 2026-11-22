@@ -636,6 +636,14 @@ describe("a role's menu", () => {
     await new Promise((r) => setTimeout(r, 0));
   });
   const stepper = () => panel()!.querySelector<HTMLElement>(".stepper")!;
+  const apply = () => panel()!.querySelector<HTMLButtonElement>(".menu__apply")!;
+  const change = () => panel()!.querySelector(".menu__change");
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+  const typeIn = (text: string) => act(() => {
+    const box = stepper().querySelector("input")!;
+    setValue.call(box, text);
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+  });
   const stepBy = (label: string) =>
     [...stepper().querySelectorAll("button")].find((one) => one.getAttribute("aria-label") === label)!;
   /** The pane drawn afresh on the launch as it now is: the desks are drawn again only when the run moves. */
@@ -676,7 +684,7 @@ describe("a role's menu", () => {
     expect(document.activeElement, "Escape left the reader on nothing").toBe(more(0));
   });
 
-  it("steps the headcount for this launch alone between 1 and the cap, and leaves the menu open", async () => {
+  it("steps the headcount for this launch alone between 1 and the cap, writing it only on Apply, and leaves the menu open", async () => {
     launched = launchOf([bob()]);
     await pane(FRONT, { launch: 5 });
     await click(more(0)!);
@@ -688,8 +696,20 @@ describe("a role's menu", () => {
     expect(panel()!.querySelector(".menu__help")?.textContent).toBe(t("auto.run.roles.menuHelp"));
     expect(panel()!.querySelector(".menu__reset"), "a link back to where it already is").toBeNull();
 
+    expect(apply().textContent).toBe(t("auto.run.roles.menuApply"));
+    expect(apply().disabled, "Apply on the launch's own headcount").toBe(true);
+    expect(change()).toBeNull();
+
     await click(stepBy(t("auto.side.headcountMore")));
-    expect(moves.set).toHaveBeenCalledWith(5, 12, 4);
+    await click(stepBy(t("auto.side.headcountMore")));
+    expect(moves.set, "a step reached the launch").not.toHaveBeenCalled();
+    expect(stepper().querySelector("input")?.value).toBe("5");
+    expect(change()?.textContent).toBe(tf("auto.run.roles.menuChange", { from: 3, to: 5 }));
+    expect(apply().disabled).toBe(false);
+
+    await click(apply());
+    expect(moves.set).toHaveBeenCalledTimes(1);
+    expect(moves.set).toHaveBeenCalledWith(5, 12, 5);
     expect(panel()).not.toBeNull();
 
     launched = launchOf([bob({ headcount: 10 })]);
@@ -702,6 +722,48 @@ describe("a role's menu", () => {
     expect(stepBy(t("auto.side.headcountLess")).disabled).toBe(true);
   });
 
+  it("takes a typed headcount, writes it only on Apply, and cannot apply one out of the bounds", async () => {
+    launched = launchOf([bob()]);
+    await pane(FRONT, { launch: 5 });
+    await click(more(0)!);
+    const box = stepper().querySelector("input")!;
+    act(() => box.focus());
+    for (const text of ["7", "11", "abc", ""]) {
+      typeIn(text);
+      expect(moves.set, text).not.toHaveBeenCalled();
+      if (text === "7") {
+        expect(apply().disabled).toBe(false);
+        expect(change()?.textContent).toBe(tf("auto.run.roles.menuChange", { from: 3, to: 7 }));
+      } else {
+        expect(apply().disabled, text).toBe(true);
+        expect(change(), text).toBeNull();
+      }
+    }
+    typeIn("8");
+    await click(apply());
+    expect(moves.set).toHaveBeenCalledTimes(1);
+    expect(moves.set).toHaveBeenCalledWith(5, 12, 8);
+  });
+
+  it("says Applying while the write is on its way, and cannot be pressed again", async () => {
+    let done = () => {};
+    moves.set.mockImplementationOnce(() => new Promise<void>((r) => { done = r; }));
+    launched = launchOf([bob()]);
+    await pane(FRONT, { launch: 5 });
+    await click(more(0)!);
+    await click(stepBy(t("auto.side.headcountMore")));
+    await click(apply());
+    expect(apply().textContent).toBe(t("auto.run.roles.menuApplying"));
+    expect(apply().disabled).toBe(true);
+    await click(apply());
+    expect(moves.set).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      done();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(apply().textContent).toBe(t("auto.run.roles.menuApply"));
+  });
+
   it("offers the default headcount back where this launch has another", async () => {
     launched = launchOf([bob({ headcount: 5 })]);
     await pane(FRONT, { launch: 5 });
@@ -711,6 +773,7 @@ describe("a role's menu", () => {
     expect(panel()!.querySelector(".menu__hint")?.textContent).toBe(tf("auto.run.roles.menuDefined", { n: 3 }));
     await click(reset);
     expect(moves.reset).toHaveBeenCalledWith(5, 12);
+    expect(stepper().querySelector("input")?.value, "the box kept the launch's number").toBe("3");
   });
 
   it("stops the role after its tasks, or resumes it, and closes", async () => {

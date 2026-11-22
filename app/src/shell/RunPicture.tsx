@@ -27,11 +27,16 @@
 // closes it, and so does a press outside it or Escape, which puts the reader back on the "⋯". In it,
 // under the role's icon and name:
 //
-// - **The headcount for this launch alone** (`AMB-D-1123`), stepped between 1 and the cap
-//   (`AMB-D-1124`), beside the default headcount — the definition's — and a line on what a step does. A
+// - **The headcount for this launch alone** (`AMB-D-1123`), stepped or typed between 1 and the cap
+//   (`AMB-D-1124`), beside the default headcount — the definition's — and a line on what a change does.
+//   Stepping and typing only change the box; the launch takes the number when "Apply" beside it is
+//   pressed, and not before (`AMB-D-1189`): a launch's seats move the moment its headcount does, so a
+//   number on its way to the one meant must not reach it. While the box differs from the launch's
+//   headcount, a line says what it goes from and to; while the press is on its way, the button says so.
+//   "Apply" cannot be pressed on a number out of the bounds, nor where the box is the launch's own. A
 //   raise is taken up at once; a cut lets seats go as their tasks end; the launch goes back to the
-//   default when it ends. Where the two differ, a link puts it back to the default. Stepping leaves the
-//   menu open.
+//   default when it ends. Where the launch's headcount and the default differ, a link puts it back to
+//   the default, the box with it. Applying leaves the menu open.
 // - **"Stop after the task"**, or "Resume" where the role is stopped — the role's own stop, apart from
 //   the whole launch's pause (`AMB-D-1019`). Pressed, the menu closes. While the whole launch is paused
 //   it cannot be pressed, and its line says why.
@@ -748,6 +753,16 @@ function DeskMenu({ desk, role, control, at, from, onClose }: {
   from: RefObject<HTMLButtonElement | null>; onClose: () => void;
 }) {
   const [pressing, setPressing] = useState(false);
+  const [applying, setApplying] = useState(false);
+  // The number in the box, written to the launch only on "Apply". It follows the launch's headcount
+  // where the box has not been moved off it.
+  const [draft, setDraft] = useState(desk.headcount);
+  const [seen, setSeen] = useState(desk.headcount);
+  if (desk.headcount !== seen) {
+    setSeen(desk.headcount);
+    if (draft === seen) setDraft(desk.headcount);
+  }
+  const [refused, setRefused] = useState(false);
   const press = async (act: () => Promise<void>) => {
     setPressing(true);
     try {
@@ -758,8 +773,15 @@ function DeskMenu({ desk, role, control, at, from, onClose }: {
       setPressing(false);
     }
   };
-  const step = (next: number) => {
-    if (!pressing) void press(() => setLaunchHeadcount(control.launch, role, next));
+  const changed = !refused && draft !== desk.headcount;
+  const apply = () => {
+    if (pressing || !changed) return;
+    setApplying(true);
+    void press(() => setLaunchHeadcount(control.launch, role, draft)).finally(() => setApplying(false));
+  };
+  const reset = () => {
+    setDraft(control.defined);
+    void press(() => resetLaunchHeadcount(control.launch, role));
   };
   const hold = () => {
     onClose();
@@ -787,25 +809,29 @@ function DeskMenu({ desk, role, control, at, from, onClose }: {
         <div className="menu__row">
           <Stepper
             small
-            value={desk.headcount}
+            value={draft}
             min={1}
             max={control.max}
             label={tf("auto.run.roles.menuHeadcountOf", { name: desk.name })}
             valueTemplate={t("auto.side.headcountValue")}
             lessLabel={t("auto.side.headcountLess")}
             moreLabel={t("auto.side.headcountMore")}
-            onStep={step}
+            onStep={setDraft}
+            onRefused={setRefused}
           />
+          <button type="button" className="btn menu__apply" disabled={pressing || !changed} onClick={apply}>
+            {t(applying ? "auto.run.roles.menuApplying" : "auto.run.roles.menuApply")}
+          </button>
           <span className="menu__hint">{tf("auto.run.roles.menuDefined", { n: control.defined })}</span>
         </div>
+        {changed && (
+          <p className="menu__change" role="status">
+            {tf("auto.run.roles.menuChange", { from: desk.headcount, to: draft })}
+          </p>
+        )}
         <p className="menu__help">{t("auto.run.roles.menuHelp")}</p>
         {desk.headcount !== control.defined && (
-          <button
-            type="button"
-            className="menu__reset"
-            disabled={pressing}
-            onClick={() => void press(() => resetLaunchHeadcount(control.launch, role))}
-          >
+          <button type="button" className="menu__reset" disabled={pressing} onClick={reset}>
             {t("auto.run.roles.menuReset")}
           </button>
         )}

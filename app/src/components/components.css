@@ -1323,6 +1323,8 @@ button.feed__target:hover { color: var(--c-accent); }
 .menu__label { font-size: 11px; font-weight: var(--fw-bold); letter-spacing: .04em; color: var(--c-text-muted); }
 .menu__row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .menu__hint { font-size: var(--fs-xs); color: var(--c-text-muted); }
+.menu__apply { font-size: var(--fs-xs); }
+.menu__change { margin: 0; font-size: var(--fs-xs); color: var(--c-accent-text); }
 .menu__help { margin: 0; font-size: var(--fs-xs); line-height: 1.5; color: var(--c-text-muted); }
 .menu__reset {
   align-self: flex-start; padding: 0; border: 0; background: none; cursor: pointer;

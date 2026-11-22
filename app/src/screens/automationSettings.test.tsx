@@ -7,7 +7,10 @@
 // has a row, in order, with the actions placed for it and a stepper held between 1 and the cap, which
 // writes the role's headcount; the sum is the most tasks at once; a row whose draft differs from the
 // saved version says what the version holds; and the foot saves or discards the draft with the head's
-// presses, or says it is the saved version**; **under the roles, the run limit is "no limit" until one is
+// presses, or says it is the saved version**; **a headcount or the limit stepped moves the box, the sum
+// and what the saved version holds on the press, and is written once, 0.8 seconds after the last change —
+// each change counting again; what is held is written at once when asked or when the column goes, and
+// dropped when asked; a number typed out of range is told**; **under the roles, the run limit is "no limit" until one is
 // set, stepped between 1 and the cap and taken back to no limit; the sum is the smaller of it and the
 // headcounts, with a limit at or over the headcounts said to have no effect; and what the saved version
 // holds is said where it differs**; **who failures are filed to is required, offers the automation's roles
@@ -57,7 +60,7 @@ vi.mock("../core/snapshot", async (importOriginal) => ({
 }));
 
 import { statusLabel, t, tf } from "../core/i18n";
-import { AutomationSettings } from "./AutomationSettings";
+import { AutomationSettings, HOLD_MS, useHeldNumbers, type HeldNumbers } from "./AutomationSettings";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -111,15 +114,25 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  vi.useRealTimers();
 });
 
 /** The head's two presses, as the build screen hands them down: each press counted. */
 const draft = { saved: 0, discarded: 0, canSave: true, canDiscard: true };
 
+/** The numbers held by the column drawn last, as the build screen would keep them. */
+let held: HeldNumbers;
+
+/** The column, with the numbers held kept beside it the way the build screen keeps them. */
+function Column(props: Omit<Parameters<typeof AutomationSettings>[0], "held">) {
+  held = useHeldNumbers(props.automation.id, props.automation);
+  return createElement(AutomationSettings, { ...props, held });
+}
+
 const render = (shown: AutomationDetailDto = automation) =>
   act(async () => {
     root.render(
-      createElement(AutomationSettings, {
+      createElement(Column, {
         automation: shown,
         draft: {
           save: () => draft.saved++,
@@ -136,7 +149,10 @@ const button = (label: string) =>
   Array.from(document.body.querySelectorAll("button")).find(
     (b) => b.getAttribute("aria-label") === label || (b.textContent ?? "") === label,
   );
+const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
 const press = (b: HTMLButtonElement | undefined) => act(async () => { b!.click(); });
+/** Let the time go by, with the clock faked. */
+const wait = (ms: number) => act(async () => { vi.advanceTimersByTime(ms); });
 const select = () => container.querySelector("select")!;
 const pick = (value: string) =>
   act(async () => {
@@ -200,13 +216,108 @@ describe("the headcounts", () => {
     const more = t("auto.side.headcountMore");
     expect(stepButton("Alice", less).disabled).toBe(true);
     expect(stepButton("Bob", more).disabled).toBe(true);
+    vi.useFakeTimers();
     await press(stepButton("Alice", more));
     await press(stepButton("Bob", less));
+    expect(stepperOf("Alice").querySelector("input")!.value).toBe("2");
+    expect(stepperOf("Bob").querySelector("input")!.value).toBe("9");
+    await wait(HOLD_MS);
     expect(hoisted.edits).toEqual([
       { role: 1, headcount: 2 },
       { role: 2, headcount: 9 },
     ]);
     expect(document.activeElement).toBe(stepButton("Bob", less));
+  });
+
+  it("move the box, the sum and what the saved version holds on the press, before anything is written", async () => {
+    vi.useFakeTimers();
+    await render({
+      ...automation,
+      saved: { version: 1, savedAt: "2026-11-07T00:00:00Z" } as AutomationDetailDto["saved"],
+      roles: [
+        { id: 1, name: "Alice", headcount: 1, startsBy: "task", savedHeadcount: 1, passes: [] },
+        { id: 2, name: "Bob", headcount: 1, startsBy: "task", savedHeadcount: 1, passes: [] },
+      ],
+    });
+    await press(stepButton("Alice", t("auto.side.headcountMore")));
+    await press(stepButton("Alice", t("auto.side.headcountMore")));
+    expect(hoisted.edits).toEqual([]);
+    expect(stepperOf("Alice").querySelector("input")!.value).toBe("3");
+    expect(totalLine().querySelector(".autoside__num")!.textContent).toBe("4");
+    expect(rows()[0]!.textContent).toContain(tf("auto.side.headcountSaved", { n: 1 }));
+    expect(container.textContent).toContain(t("auto.side.draftUnsaved"));
+  });
+
+  it("write once, 0.8 seconds after the last press, each press counting again", async () => {
+    vi.useFakeTimers();
+    await render();
+    const more = () => press(stepButton("Alice", t("auto.side.headcountMore")));
+    await more();
+    await wait(HOLD_MS - 100);
+    await more();
+    await wait(HOLD_MS - 100);
+    await more();
+    await wait(HOLD_MS - 1);
+    expect(hoisted.edits).toEqual([]);
+    await wait(1);
+    expect(hoisted.edits).toEqual([{ role: 1, headcount: 4 }]);
+  });
+
+  it("keep the number held until the definition holds it", async () => {
+    vi.useFakeTimers();
+    await render();
+    await press(stepButton("Alice", t("auto.side.headcountMore")));
+    await wait(HOLD_MS);
+    // Written, and the definition not read again yet.
+    expect(stepperOf("Alice").querySelector("input")!.value).toBe("2");
+    expect(held.pending).toBe(true);
+    await render({ ...automation, roles: [{ ...automation.roles[0]!, headcount: 2 }, automation.roles[1]!] });
+    expect(held.pending).toBe(false);
+    expect(stepperOf("Alice").querySelector("input")!.value).toBe("2");
+  });
+
+  it("write what is held at once when asked, and not again once the wait is over", async () => {
+    vi.useFakeTimers();
+    await render();
+    await press(stepButton("Alice", t("auto.side.headcountMore")));
+    await act(() => held.flush());
+    expect(hoisted.edits).toEqual([{ role: 1, headcount: 2 }]);
+    await wait(HOLD_MS);
+    expect(hoisted.edits).toEqual([{ role: 1, headcount: 2 }]);
+  });
+
+  it("write what is held when the column goes", async () => {
+    vi.useFakeTimers();
+    await render();
+    await press(stepButton("Bob", t("auto.side.headcountMore")));
+    act(() => root.unmount());
+    root = createRoot(container);
+    expect(hoisted.edits).toEqual([{ role: 2, headcount: 2 }]);
+  });
+
+  it("drop what is held, unwritten, when asked", async () => {
+    vi.useFakeTimers();
+    await render();
+    await press(stepButton("Alice", t("auto.side.headcountMore")));
+    await act(async () => held.drop());
+    await wait(HOLD_MS);
+    expect(hoisted.edits).toEqual([]);
+    expect(stepperOf("Alice").querySelector("input")!.value).toBe("1");
+  });
+
+  it("tell while a number typed out of range stands in a box", async () => {
+    await render();
+    const input = stepperOf("Alice").querySelector("input")!;
+    const type = (text: string) =>
+      act(async () => {
+        setValue.call(input, text);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    await act(async () => input.focus());
+    await type("11");
+    expect(held.refused).toBe(true);
+    await type("3");
+    expect(held.refused).toBe(false);
   });
 
   it("say what the saved version holds where the draft differs from it, and nothing where it does not", async () => {
@@ -247,8 +358,10 @@ describe("the headcounts", () => {
 
   it("draw a refused step in core's words", async () => {
     hoisted.refuse = "how many are in a role is from 1 to 10, not 11";
+    vi.useFakeTimers();
     await render();
     await press(stepButton("Alice", t("auto.side.headcountMore")));
+    await wait(HOLD_MS);
     expect(container.textContent).toContain("how many are in a role is from 1 to 10, not 11");
   });
 });
@@ -274,12 +387,20 @@ describe("the run limit", () => {
     expect(hoisted.edits).toEqual([{ runLimit: 2 }]);
   });
 
-  it("steps between 1 and the cap, and goes back to no limit", async () => {
+  it("steps between 1 and the cap, written once the stepping stops, and goes back to no limit at once", async () => {
+    vi.useFakeTimers();
     await render({ ...automation, runLimit: 1 });
     expect(limitStepper()!.querySelector("input")!.value).toBe("1");
     expect(limitButton(t("auto.side.headcountLess")).disabled).toBe(true);
     await press(limitButton(t("auto.side.headcountMore")));
+    expect(limitStepper()!.querySelector("input")!.value).toBe("2");
+    expect(hoisted.edits).toEqual([]);
+    await wait(HOLD_MS);
+    expect(hoisted.edits).toEqual([{ runLimit: 2 }]);
+    await press(limitButton(t("auto.side.headcountMore")));
     await press(limitButton(t("auto.side.runLimitClear")));
+    await wait(HOLD_MS);
+    // The limit stepped and then taken back is dropped, not written after the clear.
     expect(hoisted.edits).toEqual([{ runLimit: 2 }, { runLimit: null }]);
 
     await render({ ...automation, runLimit: 100 });

@@ -4704,8 +4704,9 @@ impl Instructor {
                 }
             }
             // One role of the launch, changed from the menu its desk's "⋯" opens
-            // (`app/src/shell/RunPicture.tsx`, `DeskMenu`). The stepper stays open under the presses, so
-            // the menu is closed by hand after it; the item that stops or resumes the role closes it.
+            // (`app/src/shell/RunPicture.tsx`, `DeskMenu`). The stepper only moves the box; the launch takes
+            // the number only on "Apply" beside it. The menu stays open under the presses, so it
+            // is closed by hand after it; the item that stops or resumes the role closes it.
             (Domain::Automation, "launch-headcount-set") => {
                 if with.contains_key("refused") {
                     return Err("the menu's stepper stops its presses at 1 and 10 and refuses a typed 0 or 11 in its box, so the screen sends no refusal to walk — a headcount turned away is the terminal's".to_string());
@@ -4715,12 +4716,12 @@ impl Instructor {
                     return Err(format!("`headcount: {n}` is past the stepper, which stops its presses at 1 and 10 and refuses a typed one past them"));
                 }
                 format!(
-                    "{}. In the menu, under \"Headcount for this run\", press \"More\" or \"Fewer\" until the number between them reads {n}, letting each press land before the next. Confirm \"Defined as …\" beside it has not changed, then press Esc to close the menu.",
+                    "{}. In the menu, under \"Headcount for this run\", press \"More\" or \"Fewer\" until the number between them reads {n}, then press \"Apply\" beside it and wait until it reads \"Apply\" again rather than \"Applying…\" and no line \"… once applied\" stands under it. Confirm \"Default: …\" beside it has not changed, then press Esc to close the menu.",
                     desk_menu(req(with, "role")?)
                 )
             }
             (Domain::Automation, "launch-headcount-reset") => format!(
-                "{}. In the menu, press \"Back to the defined headcount (…)\", the button under the stepper. Confirm the stepper now reads the number \"Defined as …\" says and the button is gone, then press Esc to close the menu.",
+                "{}. In the menu, press \"Back to the default headcount\", the button under the stepper. Confirm the stepper now reads the number \"Default: …\" says and the button is gone, then press Esc to close the menu.",
                 desk_menu(req(with, "role")?)
             ),
             // While the launch is paused as a whole, the item is shut and says why, rather than being

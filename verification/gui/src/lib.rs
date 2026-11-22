@@ -4708,11 +4708,11 @@ impl Instructor {
             // the menu is closed by hand after it; the item that stops or resumes the role closes it.
             (Domain::Automation, "launch-headcount-set") => {
                 if with.contains_key("refused") {
-                    return Err("the menu's stepper stops at 1 and 10, so it has no refusal to walk — a headcount turned away is the terminal's".to_string());
+                    return Err("the menu's stepper stops its presses at 1 and 10 and refuses a typed 0 or 11 in its box, so the screen sends no refusal to walk — a headcount turned away is the terminal's".to_string());
                 }
                 let n = count(with, "headcount")?;
                 if !(1..=10).contains(&n) {
-                    return Err(format!("`headcount: {n}` is past the stepper, which stops at 1 and 10"));
+                    return Err(format!("`headcount: {n}` is past the stepper, which stops its presses at 1 and 10 and refuses a typed one past them"));
                 }
                 format!(
                     "{}. In the menu, under \"Headcount for this run\", press \"More\" or \"Fewer\" until the number between them reads {n}, letting each press land before the next. Confirm \"Defined as …\" beside it has not changed, then press Esc to close the menu.",

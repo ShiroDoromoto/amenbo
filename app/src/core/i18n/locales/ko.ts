@@ -1126,6 +1126,7 @@ export const ko: Translation = {
     "auto.side.headcountOf": "{role} 인원",
     "auto.side.headcountLess": "줄이기",
     "auto.side.headcountMore": "늘리기",
+    "auto.side.stepperRange": "{min}~{max} 사이의 숫자를 입력하세요.",
     "auto.side.headcountValue": "{n}명",
     "auto.side.headcountSaved": "저장한 버전: {n}명",
     "auto.side.headcountTotal": "동시에 진행하는 태스크: 최대 {total}개",

@@ -1146,6 +1146,7 @@ export const pl: Translation = {
     "auto.side.headcountOf": "Liczba osób: {role}",
     "auto.side.headcountLess": "Mniej",
     "auto.side.headcountMore": "Więcej",
+    "auto.side.stepperRange": "Wpisz liczbę od {min} do {max}.",
     "auto.side.headcountValue": "{n}",
     "auto.side.headcountSaved": "Zapisana wersja: {n}",
     "auto.side.headcountTotal": "Zadania w toku naraz: do {total}",

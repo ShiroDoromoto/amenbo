@@ -1131,6 +1131,7 @@ export const zhHans: Translation = {
     "auto.side.headcountOf": "{role}的人数",
     "auto.side.headcountLess": "减少",
     "auto.side.headcountMore": "增加",
+    "auto.side.stepperRange": "请输入 {min}～{max} 之间的数字。",
     "auto.side.headcountValue": "{n} 人",
     "auto.side.headcountSaved": "已保存的版本：{n} 人",
     "auto.side.headcountTotal": "同时进行的任务：最多 {total} 个",

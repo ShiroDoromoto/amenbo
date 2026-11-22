@@ -1129,6 +1129,7 @@ export const tr: Translation = {
     "auto.side.headcountOf": "{role} kişi sayısı",
     "auto.side.headcountLess": "Azalt",
     "auto.side.headcountMore": "Artır",
+    "auto.side.stepperRange": "{min} ile {max} arasında bir sayı girin.",
     "auto.side.headcountValue": "{n}",
     "auto.side.headcountSaved": "Kayıtlı sürüm: {n}",
     "auto.side.headcountTotal": "Aynı anda süren görevler: en fazla {total}",

@@ -1133,6 +1133,7 @@ export const de: Translation = {
     "auto.side.headcountOf": "Anzahl für {role}",
     "auto.side.headcountLess": "Weniger",
     "auto.side.headcountMore": "Mehr",
+    "auto.side.stepperRange": "Eine Zahl von {min} bis {max} eingeben.",
     "auto.side.headcountValue": "{n}",
     "auto.side.headcountSaved": "Gespeicherte Version: {n}",
     "auto.side.headcountTotal": "Gleichzeitig laufende Aufgaben: bis zu {total}",

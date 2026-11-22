@@ -1129,6 +1129,7 @@ export const hi: Translation = {
     "auto.side.headcountOf": "{role} की संख्या",
     "auto.side.headcountLess": "घटाएँ",
     "auto.side.headcountMore": "बढ़ाएँ",
+    "auto.side.stepperRange": "{min} से {max} तक की संख्या लिखें।",
     "auto.side.headcountValue": "{n}",
     "auto.side.headcountSaved": "सहेजे गए संस्करण में: {n}",
     "auto.side.headcountTotal": "एक साथ चल रहे कार्य: अधिकतम {total}",

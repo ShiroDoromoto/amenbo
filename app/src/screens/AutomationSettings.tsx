@@ -177,7 +177,7 @@ function RunLimitRow({ automation, total, write }: {
             min={MIN_RUN_LIMIT}
             max={automation.maxRunLimit}
             label={t("auto.side.runLimit")}
-            valueText={tf("auto.side.runLimitValue", { n: limit })}
+            valueTemplate={t("auto.side.runLimitValue")}
             lessLabel={t("auto.side.headcountLess")}
             moreLabel={t("auto.side.headcountMore")}
             onStep={write}
@@ -341,7 +341,7 @@ export function AutomationSettings({
                   min={MIN_HEADCOUNT}
                   max={automation.maxHeadcount}
                   label={tf("auto.side.headcountOf", { role: role.name })}
-                  valueText={tf("auto.side.headcountValue", { n: role.headcount })}
+                  valueTemplate={t("auto.side.headcountValue")}
                   lessLabel={t("auto.side.headcountLess")}
                   moreLabel={t("auto.side.headcountMore")}
                   onStep={(next) => writeHeadcount(role.id, next)}

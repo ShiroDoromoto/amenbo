@@ -806,7 +806,8 @@ headcount (`launch-headcount-set`, 1 to 10, and `launch-headcount-reset` back to
 whether it stops after the task (`launch-role-hold` / `launch-role-release`). `launch-role` reads what
 the launch holds for it beside the definition — off `launch-show` at the terminal, off the desk's
 count, note and tag on the screen, and the default headcount off its "⋯" menu. None and past ten are refused at the terminal alone, since the
-screen's stepper stops at 1 and 10; the role's stop while the launch is paused as a whole is refused on
+screen's stepper stops its presses at 1 and 10 and refuses a typed 0 or 11 in its box, so the screen
+never sends either; the role's stop while the launch is paused as a whole is refused on
 the screen alone, since no terminal pauses a launch as a whole, and so is the role read back at its
 definition once the launch has ended, since the terminal's roads have no op that ends one
 (`automation launch-stop` is not walked there).

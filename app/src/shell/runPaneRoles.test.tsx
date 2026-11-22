@@ -683,7 +683,7 @@ describe("a role's menu", () => {
     expect(panel()!.querySelector(".menu__label")?.textContent).toBe(t("auto.run.roles.menuHeadcount"));
     expect(stepper().getAttribute("aria-label")).toBe(tf("auto.run.roles.menuHeadcountOf", { name: "Bob" }));
     expect(stepper().classList.contains("stepper--s")).toBe(true);
-    expect(stepper().querySelector("output")?.textContent).toBe(tf("auto.side.headcountValue", { n: 3 }));
+    expect(stepper().querySelector("input")?.value).toBe("3");
     expect(panel()!.querySelector(".menu__hint")?.textContent).toBe(tf("auto.run.roles.menuDefined", { n: 3 }));
     expect(panel()!.querySelector(".menu__help")?.textContent).toBe(t("auto.run.roles.menuHelp"));
     expect(panel()!.querySelector(".menu__reset"), "a link back to where it already is").toBeNull();

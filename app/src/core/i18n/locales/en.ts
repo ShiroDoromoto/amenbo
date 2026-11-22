@@ -1368,6 +1368,7 @@ const ui = {
   "auto.side.headcountOf": "Headcount of {role}",
   "auto.side.headcountLess": "Fewer",
   "auto.side.headcountMore": "More",
+  "auto.side.stepperRange": "Enter a number from {min} to {max}.",
   "auto.side.headcountValue": "{n}",
   "auto.side.headcountSaved": "Saved version: {n}",
   "auto.side.headcountTotal": "Tasks under way at once: up to {total}",

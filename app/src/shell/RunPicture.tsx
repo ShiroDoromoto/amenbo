@@ -791,7 +791,7 @@ function DeskMenu({ desk, role, control, at, from, onClose }: {
             min={1}
             max={control.max}
             label={tf("auto.run.roles.menuHeadcountOf", { name: desk.name })}
-            valueText={tf("auto.side.headcountValue", { n: desk.headcount })}
+            valueTemplate={t("auto.side.headcountValue")}
             lessLabel={t("auto.side.headcountLess")}
             moreLabel={t("auto.side.headcountMore")}
             onStep={step}

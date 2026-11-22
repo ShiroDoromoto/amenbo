@@ -4291,8 +4291,9 @@ const REGISTRY: &[OpSpec] = &[
     // How many are in the role for this launch (`headcount`), 1 to 10. Raised, the new seats are free
     // at once and a task waiting is taken into one; lowered, no task under way is cut off, and the
     // seats past the headcount go as their runs finish a task. None and past ten are refused
-    // (`invalid`) at the terminal; the screen's stepper stops at 1 and 10, so a screen road names
-    // neither. On the screen it is the stepper in the menu the desk's "⋯" opens.
+    // (`invalid`) at the terminal; the screen's stepper stops its presses at 1 and 10 and refuses a
+    // typed 0 or 11 in its box, so a screen road names neither. On the screen it is the stepper in the
+    // menu the desk's "⋯" opens.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "launch-headcount-set", required: &["role", "headcount"], refs: &["target"], strings: &["role"], binds: false },
     // Back to the definition's headcount — the button the menu carries only while the two differ.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "launch-headcount-reset", required: &["role"], refs: &["target"], strings: &["role"], binds: false },

@@ -1362,6 +1362,7 @@ describe("the header of a launch's pane", () => {
     await openMenu();
     const stepper = panel()!.querySelector<HTMLElement>(".stepper")!;
     expect(stepper.getAttribute("aria-label")).toBe(t("auto.run.limit.of"));
+    expect(stepper.querySelector("input"), "a typed number would reach the launch digit by digit").toBeNull();
     expect(stepper.querySelector("output")!.textContent).toBe(tf("auto.run.limit.value", { n: 2 }));
     expect(panel()!.textContent).toContain(tf("auto.run.limit.defined", { n: 4 }));
     await pressIn(t("auto.side.headcountMore"));

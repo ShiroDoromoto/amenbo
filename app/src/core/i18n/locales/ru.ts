@@ -1146,6 +1146,7 @@ export const ru: Translation = {
     "auto.side.headcountOf": "Численность: {role}",
     "auto.side.headcountLess": "Меньше",
     "auto.side.headcountMore": "Больше",
+    "auto.side.stepperRange": "Введите число от {min} до {max}.",
     "auto.side.headcountValue": "{n}",
     "auto.side.headcountSaved": "В сохранённой версии: {n}",
     "auto.side.headcountTotal": "Задач в работе одновременно: до {total}",

@@ -1142,6 +1142,7 @@ export const ptBR: Translation = {
     "auto.side.headcountOf": "Pessoas de {role}",
     "auto.side.headcountLess": "Menos",
     "auto.side.headcountMore": "Mais",
+    "auto.side.stepperRange": "Digite um número de {min} a {max}.",
     "auto.side.headcountValue": "{n}",
     "auto.side.headcountSaved": "Versão salva: {n}",
     "auto.side.headcountTotal": "Tarefas em andamento ao mesmo tempo: até {total}",

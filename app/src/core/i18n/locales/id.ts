@@ -1130,6 +1130,7 @@ export const id: Translation = {
     "auto.side.headcountOf": "Jumlah orang {role}",
     "auto.side.headcountLess": "Kurangi",
     "auto.side.headcountMore": "Tambah",
+    "auto.side.stepperRange": "Masukkan angka dari {min} sampai {max}.",
     "auto.side.headcountValue": "{n}",
     "auto.side.headcountSaved": "Versi tersimpan: {n}",
     "auto.side.headcountTotal": "Tugas berjalan bersamaan: hingga {total}",

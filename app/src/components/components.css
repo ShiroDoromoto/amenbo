@@ -2269,10 +2269,10 @@ button.feed__target:hover { color: var(--c-accent); }
   display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: var(--s-1) var(--s-2); align-items: center;
   padding: var(--s-2) var(--s-3); border-block-end: var(--border-w) var(--border-style) var(--c-rule);
 }
-.autoside__role > .stepper { grid-column: 2; justify-self: start; }
+.autoside__role > .stepfield { grid-column: 2; justify-self: start; }
 @container autoheads (min-width: 22rem) {
   .autoside__role { grid-template-columns: 22px minmax(0, 1fr) auto; }
-  .autoside__role > .stepper { grid-column: auto; }
+  .autoside__role > .stepfield { grid-column: auto; }
 }
 .autoside__rolebody { display: flex; flex-direction: column; min-width: 0; }
 .autoside__rolename { font-weight: var(--fw-bold); overflow-wrap: anywhere; }
@@ -2310,7 +2310,26 @@ button.feed__target:hover { color: var(--c-accent); }
 .stepper > button:hover:not(:disabled) { background: var(--c-hover); }
 .stepper > button:disabled { color: var(--c-text-faint); cursor: default; }
 .stepper > button:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
-.stepper__value { min-width: 48px; text-align: center; font-weight: var(--fw-bold); font-variant-numeric: tabular-nums; }
+/* The number, typed into a box drawn as part of the stepper; the unit stands beside it. A number out of
+   the bounds turns the box red and says the range under the stepper (`.stepfield__range`), laid over
+   what lies below and held to the stepper's width, so neither the stepper nor its row moves. */
+.stepper__value {
+  display: inline-flex; align-items: center; justify-content: center; gap: 2px; min-width: 48px;
+  font-weight: var(--fw-bold); font-variant-numeric: tabular-nums;
+}
+.stepper__input {
+  font: inherit; width: 3.5ch; padding: 2px 0; border: 0; border-radius: var(--r-sm);
+  background: transparent; color: inherit; text-align: center;
+}
+.stepper__input:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 0; }
+.stepper__input[aria-invalid="true"] { color: var(--c-stop); }
+.stepper:has(.stepper__input[aria-invalid="true"]) { border-color: var(--c-stop); }
+.stepfield { position: relative; display: inline-flex; }
+.stepfield__range {
+  position: absolute; inset-block-start: calc(100% + 2px); inset-inline: 0; z-index: 1; padding: 2px 4px;
+  border-radius: var(--r-sm); background: var(--c-surface-pic) var(--c-surface); box-shadow: var(--shadow-md);
+  color: var(--c-stop); font-size: var(--fs-xs); line-height: 1.3;
+}
 /* The same, smaller, inside a menu (the role's menu on a launch's pane). */
 .stepper--s > button { width: 26px; height: 24px; }
 .stepper--s > .stepper__value { min-width: 40px; font-size: var(--fs-xs); }

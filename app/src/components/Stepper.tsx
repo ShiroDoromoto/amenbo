@@ -13,7 +13,9 @@
 // caret leaves, the box shows the caller's number again as soon as the caller's number moves. A refused
 // number stays in the box, marked, so the reader sees what they typed. A press of "−" or "+" steps from
 // the caller's number and drops what was typed. The range said under a refused number is laid over what
-// lies below the stepper, so the stepper does not move while the reader types.
+// lies below the stepper, so the stepper does not move while the reader types. Whether a refused
+// number is in the box is told to the caller (`onRefused`), so a press that would keep the number the
+// box no longer shows can be held back.
 //
 // **A number that acts on a launch at once is stepped only** (`typable={false}`): each digit typed would
 // reach the launch on its way to the number meant, so there the number is drawn, not a box.
@@ -25,7 +27,7 @@
 //
 // **It is one field to the screen's "Written" mark** (`data-saved-field`, `../screens/AutomationSaved`):
 // the mark stands beside the whole stepper, never over the number just stepped to or typed.
-import { useId, useState, type ChangeEvent, type MouseEvent } from "react";
+import { useEffect, useId, useRef, useState, type ChangeEvent, type MouseEvent } from "react";
 import { tf } from "../core/i18n";
 
 /** The whole number a typed text stands for, or null where it is not one. */
@@ -45,6 +47,7 @@ export function Stepper({
   onStep,
   small = false,
   typable = true,
+  onRefused,
 }: {
   value: number;
   min: number;
@@ -60,6 +63,9 @@ export function Stepper({
   small?: boolean;
   /** Takes a typed number; false draws the number and leaves only "−" and "+". */
   typable?: boolean;
+  /** Told true when a refused number comes into the box, and false when it leaves it or the stepper
+   *  goes. */
+  onRefused?: (refused: boolean) => void;
 }) {
   const rangeId = useId();
   // What the reader has typed, while it differs from the caller's number; null shows the caller's.
@@ -75,6 +81,15 @@ export function Stepper({
   const n = typedNumber(text);
   const refused = typable && (n === null || n < min || n > max);
   const [before, after = ""] = valueTemplate.split("{n}");
+  const tell = useRef(onRefused);
+  useEffect(() => {
+    tell.current = onRefused;
+  });
+  useEffect(() => {
+    if (!refused) return;
+    tell.current?.(true);
+    return () => tell.current?.(false);
+  }, [refused]);
 
   const step = (by: number) => (e: MouseEvent<HTMLButtonElement>) => {
     e.currentTarget.focus();

@@ -121,7 +121,7 @@ import { AutomationActionMake } from "./AutomationActionMake";
 import { AutomationActionOver } from "./AutomationActionOver";
 import { AutomationHeldBy } from "./AutomationHeldBy";
 import { useSaved } from "./AutomationSaved";
-import { AutomationSettings } from "./AutomationSettings";
+import { AutomationSettings, useHeldNumbers } from "./AutomationSettings";
 import { AutomationStepPanel } from "./AutomationStepPanel";
 import { AutomationTestPane, useAutomationTestRun } from "./AutomationTestPane";
 import { AutomationTrigger } from "./AutomationTrigger";
@@ -334,6 +334,9 @@ export function AutomationBuildScreen({
   const saved = useSaved(
     automation === null ? null : { saved: automation.saved, unsaved: automation.unsaved },
   );
+  // The headcounts and the run limit stepped down the right and not yet written (`AMB-D-1189`): "Save"
+  // writes them first, "Discard changes" drops them, and a number typed out of range holds "Save" back.
+  const held = useHeldNumbers(id, automation, saved.fromHere);
   const [keeping, setKeeping] = useState(false);
   const [keepRefused, setKeepRefused] = useState<string | null>(null);
   const keep = async (write: () => Promise<void>) => {
@@ -347,11 +350,16 @@ export function AutomationBuildScreen({
       setKeeping(false);
     }
   };
-  const save = () => void keep(() => saveAutomation(id));
+  const save = () =>
+    void keep(async () => {
+      await held.flush();
+      await saveAutomation(id);
+    });
   const discard = async () => {
     const version = automation?.saved?.version;
     if (version === undefined) return;
     if (!(await confirmDialog(tf("auto.saved.discardConfirm", { version })))) return;
+    held.drop();
     await keep(() => discardAutomation(id));
   };
   // What is written out is the newest saved version, whatever is being written on it now. The file is
@@ -364,6 +372,9 @@ export function AutomationBuildScreen({
   // Listed only while there is something to save: a definition with nothing unsaved has nothing the
   // reasons would hold back.
   const saveBlocks = automation?.unsaved === true ? automation.saveBlocks : [];
+  const unsaved = automation?.unsaved === true || held.pending;
+  const canSave = unsaved && saveBlocks.length === 0 && !held.refused && !keeping;
+  const canDiscard = automation?.saved !== undefined && unsaved && !keeping;
   const launchBlocks =
     check === null || check.ready
       ? []
@@ -445,7 +456,7 @@ export function AutomationBuildScreen({
           <button
             type="button"
             className="btn"
-            disabled={automation?.unsaved !== true || saveBlocks.length > 0 || keeping}
+            disabled={!canSave}
             onClick={save}
           >
             {t("auto.saved.save")}
@@ -453,7 +464,7 @@ export function AutomationBuildScreen({
           <button
             type="button"
             className="btn"
-            disabled={automation?.saved === undefined || !automation.unsaved || keeping}
+            disabled={!canDiscard}
             onClick={() => void discard()}
           >
             {t("auto.saved.discard")}
@@ -611,12 +622,8 @@ export function AutomationBuildScreen({
           {automation !== null && (
             <AutomationSettings
               automation={automation}
-              draft={{
-                save,
-                discard: () => void discard(),
-                canSave: automation.unsaved && saveBlocks.length === 0 && !keeping,
-                canDiscard: automation.saved !== undefined && automation.unsaved && !keeping,
-              }}
+              held={held}
+              draft={{ save, discard: () => void discard(), canSave, canDiscard }}
               onOpenTrigger={(trigger) => setTriggerOpen(trigger === undefined ? "new" : { id: trigger.id })}
             />
           )}

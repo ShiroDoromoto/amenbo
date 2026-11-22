@@ -2,7 +2,8 @@
 // The stepper on its own: "−" and "+" step the number, and the number itself takes a typed one. What
 // is asked here is what the screens that use it do not see on their own: that a typed number reaches
 // the caller only within the bounds, that anything else is refused in the box rather than handed on,
-// and that a number the caller hands back does not overwrite what the reader is still typing.
+// that a number the caller hands back does not overwrite what the reader is still typing, and that the
+// caller is told while a refused number stands in the box.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -14,6 +15,7 @@ import { tf } from "../core/i18n";
 let container: HTMLDivElement;
 let root: Root;
 let stepped: number[];
+let told: boolean[];
 
 function render(value: number, min = 1, max = 10, typable = true): void {
   act(() => {
@@ -27,6 +29,7 @@ function render(value: number, min = 1, max = 10, typable = true): void {
         lessLabel: "Fewer",
         moreLabel: "More",
         onStep: (n) => stepped.push(n),
+        onRefused: (refused) => told.push(refused),
         typable,
       }),
     );
@@ -51,6 +54,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   stepped = [];
+  told = [];
 });
 
 afterEach(() => {
@@ -127,6 +131,20 @@ describe("Stepper", () => {
     type("10");
     render(1);
     expect(input().value).toBe("10");
+  });
+
+  it("tells the caller when a refused number comes into the box and when it leaves", () => {
+    render(3);
+    focus();
+    type("11");
+    type("12");
+    expect(told).toEqual([true]);
+    type("4");
+    expect(told).toEqual([true, false]);
+    type("");
+    act(() => root.unmount());
+    root = createRoot(container);
+    expect(told).toEqual([true, false, true, false]);
   });
 
   it("drops a refused number for the caller's once a press steps", () => {

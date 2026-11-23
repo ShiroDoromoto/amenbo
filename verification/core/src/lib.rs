@@ -4655,10 +4655,11 @@ const REGISTRY: &[OpSpec] = &[
     // beside it. A line inside ending the run with the task still open (`task_left_open_at_end`) is
     // pressed the same way, where `opens` says it is inside; without it, it is the placement's own
     // way out and picks the box. An action with no step (`action_empty`) or still being created
-    // (`action_draft`) names the action itself, and it opens with nothing picked. So does one handing
-    // on the task (`hands_on_task_taken`), which may name a step inside — `opens` then names the
-    // action. A road goes on from there the way it goes on inside an action, and comes back with
-    // `action-back`.
+    // (`action_draft`) names the action itself, and it opens with nothing picked. So does a required
+    // output of one of its ways out that no step inside hands anything to (`unfilled_exit_output`),
+    // and one handing on the task (`hands_on_task_taken`), which may name a step inside — `opens`
+    // then names the action. A road goes on from there the way it goes on inside an action, and
+    // comes back with `action-back`.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "press-reason", required: &["reason", "box"], refs: &[], strings: &["reason", "box", "opens"], binds: false },
     // Going back from an action's build screen standing over its automation, by the button named
     // after the automation. The automation's build screen is in front again, so a road reads its

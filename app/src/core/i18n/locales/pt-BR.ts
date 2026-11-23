@@ -2047,6 +2047,7 @@ export const ptBR: Translation = {
     not_ready_automation_take_task_off_start: "“{step}” só pode ficar onde um papel começa",
     not_ready_automation_open_exit: "{step}: nada está previsto depois de “{exit}”",
     not_ready_automation_unwired_input: "{step}: nada chega à entrada obrigatória “{port}”",
+    not_ready_automation_unfilled_exit_output: "ação “{action}”: nenhuma etapa interna entrega nada à saída obrigatória “{port}” da via de saída “{exit}”",
     not_ready_automation_unanswered_cfg: "{step}: a configuração obrigatória “{cfg}” está sem resposta",
     not_ready_automation_misanswered_cfg: "{step}: a resposta da configuração “{cfg}” não corresponde ao seu tipo",
     not_ready_automation_cfg_not_found: "{step}: a configuração “{cfg}” cita “{line}”, que este projeto não tem",

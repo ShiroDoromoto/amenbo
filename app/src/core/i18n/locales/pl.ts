@@ -2055,6 +2055,7 @@ export const pl: Translation = {
     not_ready_automation_take_task_off_start: "„{step}” może stać tylko tam, gdzie startuje rola",
     not_ready_automation_open_exit: "{step}: po „{exit}” nic nie jest ustalone",
     not_ready_automation_unwired_input: "{step}: do wymaganego wejścia „{port}” nic nie dociera",
+    not_ready_automation_unfilled_exit_output: "akcja „{action}”: żaden krok wewnątrz nie przekazuje niczego do wymaganego wyjścia „{port}” drogi wyjścia „{exit}”",
     not_ready_automation_unanswered_cfg: "{step}: wymagane ustawienie „{cfg}” pozostaje bez odpowiedzi",
     not_ready_automation_misanswered_cfg: "{step}: odpowiedź na ustawienie „{cfg}” nie pasuje do jego rodzaju",
     not_ready_automation_cfg_not_found: "{step}: ustawienie „{cfg}” wskazuje „{line}”, którego ten projekt nie ma",

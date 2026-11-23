@@ -2029,6 +2029,7 @@ export const nl: Translation = {
     not_ready_automation_take_task_off_start: "„{step}” kan alleen staan waar een rol start",
     not_ready_automation_open_exit: "{step}: na ‘{exit}’ staat niets vast",
     not_ready_automation_unwired_input: "{step}: niets bereikt de verplichte invoer ‘{port}’",
+    not_ready_automation_unfilled_exit_output: "actie ‘{action}’: geen stap binnenin geeft iets door aan de verplichte uitvoer ‘{port}’ van de uitgang ‘{exit}’",
     not_ready_automation_unanswered_cfg: "{step}: de verplichte instelling ‘{cfg}’ is onbeantwoord",
     not_ready_automation_misanswered_cfg: "{step}: het antwoord op de instelling ‘{cfg}’ past niet bij haar soort",
     not_ready_automation_cfg_not_found: "{step}: de instelling ‘{cfg}’ noemt ‘{line}’, dat dit project niet heeft",

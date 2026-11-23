@@ -160,11 +160,13 @@ function whereTo(automation: AutomationDetailDto | null, target: PlaceTarget): W
 }
 
 /** The reasons whose gap is inside the action a box holds whatever step they name: an action with no
- *  step, one still being written, and a way out of it handing on the task. */
+ *  step, one still being written, a way out of it handing on the task, and a required output of one of
+ *  its ways out that no step inside hands anything to. */
 const MENDED_IN_ACTION = new Set([
   "not_ready_automation_action_empty",
   "not_ready_automation_action_draft",
   "not_ready_automation_hands_on_task_taken",
+  "not_ready_automation_unfilled_exit_output",
 ]);
 
 /**

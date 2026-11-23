@@ -2029,6 +2029,7 @@ export const vi: Translation = {
     not_ready_automation_take_task_off_start: "“{step}” chỉ có thể đặt ở nơi một vai trò bắt đầu",
     not_ready_automation_open_exit: "{step}: chưa đặt việc gì sau “{exit}”",
     not_ready_automation_unwired_input: "{step}: không có gì đến được đầu vào bắt buộc “{port}”",
+    not_ready_automation_unfilled_exit_output: "hành động “{action}”: không bước nào bên trong chuyển gì cho đầu ra bắt buộc “{port}” của lối ra “{exit}”",
     not_ready_automation_unanswered_cfg: "{step}: thiết lập bắt buộc “{cfg}” chưa có câu trả lời",
     not_ready_automation_misanswered_cfg: "{step}: câu trả lời cho thiết lập “{cfg}” không khớp với loại của nó",
     not_ready_automation_cfg_not_found: "{step}: thiết lập “{cfg}” ghi “{line}”, nhưng dự án này không có",

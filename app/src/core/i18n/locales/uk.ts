@@ -2055,6 +2055,7 @@ export const uk: Translation = {
     not_ready_automation_take_task_off_start: "«{step}» можна поставити лише на початок ролі",
     not_ready_automation_open_exit: "{step}: після «{exit}» нічого не задано",
     not_ready_automation_unwired_input: "{step}: до обов’язкового входу «{port}» нічого не доходить",
+    not_ready_automation_unfilled_exit_output: "дія «{action}»: жоден крок усередині нічого не передає до обов’язкового виходу «{port}» шляху «{exit}»",
     not_ready_automation_unanswered_cfg: "{step}: обов’язкове налаштування «{cfg}» лишилося без відповіді",
     not_ready_automation_misanswered_cfg: "{step}: відповідь на налаштування «{cfg}» не відповідає його виду",
     not_ready_automation_cfg_not_found: "{step}: налаштування «{cfg}» називає «{line}», чого в цьому проєкті немає",

@@ -162,12 +162,25 @@ describe("asking for another pane", () => {
   it("makes it a page like any other once a pane is opened on it", () => {
     const asked = addPane(withPanes(2, "half"));
     const made = openedFrame(asked, 1, "/work/1");
-    expect(made.layout.adding).toBe(false);
+    expect(made.layout.adding).toBe(null);
     expect(pageCount(made.layout)).toBe(2);
     expect(idsOn(made.layout, 2)).toEqual(["3"]);
     // The page it was brought into being from is what sized it: a page with no panes on it is not a
     // reason to go back to the whole page.
     expect(made.frame.size).toBe("half");
+  });
+
+  it("offers the page it made at the size of the pane being worked in, not the project's last", () => {
+    // A half across and a quarter, with the half being worked in: the half does not fit the quarter's
+    // page, so a page comes into being for it. The quarter's hole on page one is not where it goes.
+    const mixed = focusOn(resized(withPanes(2, "half"), "2", "quarter"), "1");
+    const asked = addPane(mixed);
+    expect(asked.page).toBe(2);
+    expect(landingOn(asked, 2)).toEqual({ across: 0, down: 0, size: "half" });
+    const made = openedFrame(asked, 1, "/work/1");
+    expect(made.frame.size).toBe("half");
+    expect(made.layout.page).toBe(2);
+    expect(idsOn(made.layout, 2)).toEqual(["3"]);
   });
 
   it("does not survive a resize, which measures the pages afresh", () => {
@@ -488,8 +501,8 @@ describe("a pane is laid down at its size, and the pages fall out of the order",
     // against.
     expect(openedFrame(goPage(resized(three, "2", "quarter"), 1), 1, "/work/1").frame.size)
       .toBe("quarter");
-    // And on a page `addPane` brought into being, which has no panes at all, the last pane of the
-    // project is.
+    // And on a page `addPane` brought into being, which has no panes at all, the size it was made
+    // for is.
     expect(openedFrame(addPane(withPanes(2, "half")), 1, "/work/1").frame.size).toBe("half");
   });
 });

@@ -288,13 +288,18 @@ export type Layout = {
   /** The frame the person is working in, or null before they have picked one. */
   readonly focus: string | null;
   /**
-   * Whether a page has been brought into being for a pane nobody has opened yet (`addPane`).
+   * The size of the pane a page has been brought into being for, while nobody has opened it yet
+   * (`addPane`), or null where no page has been.
    *
    * It is the one page that exists without panes on it, and it exists only while the person who asked
    * for it is on it: going anywhere else, or opening the pane, takes it away again. Nothing about it
    * is kept — a page nobody put a terminal on is not part of the arrangement (`laidOut`).
+   *
+   * **The size is the one the page was made for** (`AMB-D-1194`): the pane being worked in when the
+   * person asked, which did not fit the last page. The empty frame on it and the pane opened on it
+   * are both that size, so the pane lands on the page that was made for it.
    */
-  readonly adding: boolean;
+  readonly adding: Size | null;
   /**
    * The pane last worked in on each project the reader has gone away from (`AMB-D-984`).
    *
@@ -313,7 +318,7 @@ export const EMPTY_LAYOUT: Layout = {
   project: null,
   page: 1,
   focus: null,
-  adding: false,
+  adding: null,
   left: {},
 };
 
@@ -427,7 +432,7 @@ export function panesOf(layout: Layout, project: number | null): readonly Frame[
  * nothing opened on it yet (`addPane`) — that page is reachable, so it is counted.
  */
 export function pageCount(layout: Layout): number {
-  return filledPages(layout) + (layout.adding ? 1 : 0);
+  return filledPages(layout) + (layout.adding !== null ? 1 : 0);
 }
 
 /** The pages the shown project's panes actually fill, which is every page but the one `addPane` may
@@ -440,17 +445,18 @@ export function filledPages(layout: Layout): number {
 
 /**
  * The size a pane opened on this page would be: the pane being worked in where that is on this page,
- * the last pane of the page where it is not, or, on a page brought into being by `addPane` and so
- * having no panes at all, the last pane of the project. The first pane of a project has nothing to
- * be measured against and takes the whole page.
+ * or the last pane of the page where it is not. A page brought into being by `addPane` has no panes
+ * at all, and takes the size it was made for (`Layout.adding`). Any other page with no panes is a
+ * project with nothing open, and the first pane of a project has nothing to be measured against, so
+ * it takes the whole page.
  */
 function sizeOn(layout: Layout, page: number): Size {
   const here = slotsOf(layout, page);
+  const one = here.find((each) => each.frame.id === layout.focus)?.frame ?? here[here.length - 1]?.frame;
+  if (one) return one.size;
+  if (layout.adding !== null && page > filledPages(layout)) return layout.adding;
   const panes = panesOf(layout, layout.project);
-  const one = here.find((each) => each.frame.id === layout.focus)?.frame
-    ?? here[here.length - 1]?.frame
-    ?? panes[panes.length - 1];
-  return one?.size ?? DEFAULT_SIZE;
+  return panes[panes.length - 1]?.size ?? DEFAULT_SIZE;
 }
 
 /** How many of this project's panes are laid down by the end of this page, which is where a pane
@@ -607,7 +613,7 @@ export function openedFrame(
     frames: [...layout.frames.slice(0, into), frame, ...layout.frames.slice(into)],
     project,
     // The page asked for has a pane on it now, so it is a page like any other (`addPane`).
-    adding: false,
+    adding: null,
   };
   return { layout: focusOn(next_, frame.id), frame };
 }
@@ -916,7 +922,7 @@ export function closedFrame(layout: Layout, frame: string): Layout {
   const next: Layout = {
     ...layout,
     frames: layout.frames.filter((one) => one.id !== frame),
-    adding: false,
+    adding: null,
   };
   if (layout.focus !== frame) return { ...next, page: Math.min(next.page, pageCount(next)) };
   const left = panesOf(next, gone.project);
@@ -937,8 +943,8 @@ export function closedFrame(layout: Layout, frame: string): Layout {
 export function addPane(layout: Layout): Layout {
   const last = filledPages(layout);
   return roomOnPage(layout, last)
-    ? { ...layout, page: last, adding: false }
-    : { ...layout, page: last + 1, adding: true };
+    ? { ...layout, page: last, adding: null }
+    : { ...layout, page: last + 1, adding: sizeOn(layout, last) };
 }
 
 /** The pane being worked in, kept for the project the screen is about to leave for this one
@@ -963,14 +969,14 @@ export function goProject(layout: Layout, project: number): Layout {
   const was = away.left[project];
   if (away.frames.some((one) => one.id === was && one.project === project)) return focusOn(away, was!);
   const first = panesOf(away, project)[0] ?? null;
-  return { ...away, project, page: 1, focus: first?.id ?? null, adding: false };
+  return { ...away, project, page: 1, focus: first?.id ?? null, adding: null };
 }
 
 /** Show a page of the project that is up, as far as there are pages to show. A page asked for and not
  *  opened on goes away as soon as the reader is somewhere else — it was the question, not a page. */
 export function goPage(layout: Layout, page: number): Layout {
   if (page < 1 || page > pageCount(layout)) return layout;
-  return { ...layout, page, adding: layout.adding && page === pageCount(layout) };
+  return { ...layout, page, adding: page === pageCount(layout) ? layout.adding : null };
 }
 
 /** Work in a frame, bringing its project and page up with it — the rail's rows reach panes that are
@@ -978,7 +984,7 @@ export function goPage(layout: Layout, page: number): Layout {
 export function focusOn(layout: Layout, frame: string): Layout {
   const one = layout.frames.find((each) => each.id === frame);
   if (!one) return layout;
-  const shown: Layout = { ...leaving(layout, one.project), project: one.project, adding: false };
+  const shown: Layout = { ...leaving(layout, one.project), project: one.project, adding: null };
   const page = pageOfFrame(shown, frame);
   return page === null ? layout : { ...shown, page, focus: frame };
 }
@@ -999,7 +1005,7 @@ export function resized(layout: Layout, frame: string, size: Size): Layout {
   if (!was || was.size === size) return layout;
   const next: Layout = {
     ...withFrame(layout, frame, (one) => ({ ...one, size })),
-    adding: false,
+    adding: null,
   };
   const page = pageOfFrame(next, frame);
   return { ...next, page: Math.min(page ?? layout.page, pageCount(next)) };
@@ -1171,7 +1177,7 @@ export function restored(saved: SavedLayout, onto: number | null, composeOpen = 
     project: first?.project ?? onto,
     page: 1,
     focus: first?.id ?? null,
-    adding: false,
+    adding: null,
     left: {},
   };
 }

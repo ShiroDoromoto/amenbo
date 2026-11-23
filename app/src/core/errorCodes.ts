@@ -169,6 +169,7 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "not_ready_automation_take_task_off_start",
   "not_ready_automation_open_exit",
   "not_ready_automation_unwired_input",
+  "not_ready_automation_unfilled_exit_output",
   "not_ready_automation_unanswered_cfg",
   "not_ready_automation_misanswered_cfg",
   "not_ready_automation_cfg_not_found",

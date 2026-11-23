@@ -2030,6 +2030,7 @@ export const zhHans: Translation = {
     not_ready_automation_take_task_off_start: "“{step}”只能放在角色的开始处",
     not_ready_automation_open_exit: "{step}：“{exit}”之后要做什么还没定",
     not_ready_automation_unwired_input: "{step}：没有东西到达必填输入“{port}”",
+    not_ready_automation_unfilled_exit_output: "动作“{action}”：内部没有任何步骤向出口“{exit}”的必填输出“{port}”传递内容",
     not_ready_automation_unanswered_cfg: "{step}：必填设置“{cfg}”还没有填",
     not_ready_automation_misanswered_cfg: "{step}：设置“{cfg}”的答案与该设置的类型不符",
     not_ready_automation_cfg_not_found: "{step}：设置“{cfg}”写的“{line}”，本项目里没有",

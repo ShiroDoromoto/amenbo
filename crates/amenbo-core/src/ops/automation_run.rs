@@ -171,6 +171,14 @@ pub enum Unmet {
         placement: Option<i64>,
         inside: Option<i64>,
     },
+    /// A required output of one of the action's own ways out that no step inside hands anything to — no
+    /// wire into the action's edge ([`ACTION_BOUNDARY`]) under that output, or none drawn from a way out
+    /// of a step the run could open that returns to this very way out ([`returns_to`]). A run leaving
+    /// the action by it would hand nothing on, and the step after it would find that output empty. The
+    /// error way out is not asked, for the reason [`Unmet::OpenExit`] leaves it alone, nor is a
+    /// built-in's action, whose outputs Amenbo fills itself (`AMB-D-1140`). Asked of the action alone
+    /// ([`check_action`]), it names no placement.
+    UnfilledExitOutput { action: String, exit: String, port: String, placement: Option<i64> },
     /// A required setting nobody answered while building.
     UnansweredCfg { step: String, cfg: String, builtin: Option<String>, placement: i64 },
     /// A setting answered with something its kind does not take — a task filter that is not its parts, a
@@ -315,6 +323,24 @@ impl Unmet {
             Unmet::UnwiredInput { step, port, .. } => {
                 format!("the required input '{port}' of '{step}' has nothing reaching it")
             }
+            Unmet::UnfilledExitOutput { action, exit, port, placement } => {
+                // A placement stands on a saved version (`AMB-D-1000`): the wire drawn inside reaches its
+                // launch only once the action is saved and the placement moved onto that version.
+                let then = match placement {
+                    Some(_) => {
+                        ", then save the action with `automation action-save` and move this placement onto \
+                         the new version with `automation place-version`"
+                    }
+                    None => "",
+                };
+                format!(
+                    "the required output '{port}' of {} of the action '{action}' has nothing handed to it from \
+                     a step inside — inside the action, add a wire with `automation wire-add --in-action` from \
+                     an output of a step's way out that returns to '{exit}', to '{port}' (`--to 0 \
+                     --to-port`){then}",
+                    named(exit)
+                )
+            }
             Unmet::UnansweredCfg { step, cfg, .. } => {
                 format!("the required setting '{cfg}' of '{step}' is unanswered")
             }
@@ -405,6 +431,7 @@ impl Unmet {
             Unmet::TakeTaskOffStart { .. } => ErrorCode::NotReadyAutomationTakeTaskOffStart,
             Unmet::OpenExit { .. } => ErrorCode::NotReadyAutomationOpenExit,
             Unmet::UnwiredInput { .. } => ErrorCode::NotReadyAutomationUnwiredInput,
+            Unmet::UnfilledExitOutput { .. } => ErrorCode::NotReadyAutomationUnfilledExitOutput,
             Unmet::UnansweredCfg { .. } => ErrorCode::NotReadyAutomationUnansweredCfg,
             Unmet::MisansweredCfg { .. } => ErrorCode::NotReadyAutomationMisansweredCfg,
             Unmet::CfgNotFound { .. } => ErrorCode::NotReadyAutomationCfgNotFound,
@@ -453,6 +480,9 @@ impl Unmet {
             Unmet::TakeTaskOffStart { step, .. } => msg.with("step", step),
             Unmet::OpenExit { step, exit, .. } => msg.with("step", step).with("exit", exit),
             Unmet::UnwiredInput { step, port, .. } => msg.with("step", step).with("port", port),
+            Unmet::UnfilledExitOutput { action, exit, port, .. } => {
+                msg.with("action", action).with("exit", exit).with("port", port)
+            }
             Unmet::UnansweredCfg { step, cfg, .. } | Unmet::MisansweredCfg { step, cfg, .. } => {
                 msg.with("step", step).with("cfg", cfg)
             }
@@ -495,7 +525,8 @@ impl Unmet {
             | Unmet::RoleStartsNowhere { .. } => None,
             Unmet::ActionEmpty { placement, .. }
             | Unmet::OpenExit { placement, .. }
-            | Unmet::UnwiredInput { placement, .. } => *placement,
+            | Unmet::UnwiredInput { placement, .. }
+            | Unmet::UnfilledExitOutput { placement, .. } => *placement,
             Unmet::ActionDraft { placement, .. }
             | Unmet::RoleStartTakesNoTask { placement, .. }
             | Unmet::RoleStartTakesTask { placement, .. }
@@ -1408,6 +1439,9 @@ fn check_picture(
         }
         let fed_here = |port| fed(pic, placement, port, &routed, &live, &by_id, &defs);
         push_new(&mut unmet, inside(def, Some(placement.id), &steps, fed_here)?);
+        if builtin.is_none() {
+            push_new(&mut unmet, unfilled_exit_outputs(def, &name, Some(placement.id), &steps));
+        }
         // A built-in names no agent and no model: Amenbo carries it out itself (`AMB-D-964`).
         for step in steps.iter().filter(|step| step.builtin.is_none()) {
             // Nor does a script: its program is what is started, so that is what is asked about.
@@ -1462,8 +1496,9 @@ fn defs_of(conn: &Connection, placements: &[AutomationPlacement]) -> Result<Defs
 /// **Is what is inside this action ready to be saved?** An empty answer is yes.
 ///
 /// Only what the action answers for on its own is asked: that it has a step to open
-/// ([`Unmet::ActionEmpty`]), and of every step it could open, the two questions [`inside`] puts — a way
-/// out with nothing after it, and a required input nothing inside reaches. An input wired in from the
+/// ([`Unmet::ActionEmpty`]), of every step it could open, the two questions [`inside`] puts — a way
+/// out with nothing after it, and a required input nothing inside reaches — and of its own ways out,
+/// a required output no step inside hands anything to ([`unfilled_exit_outputs`]). An input wired in from the
 /// action itself counts where the action declares it; whether something reaches that input is asked of
 /// each placement, at the automation's launch check. So is everything chosen or answered where the action
 /// is placed — the agents, the settings — and the lines out of the action.
@@ -1474,7 +1509,11 @@ pub fn check_action(conn: &Connection, action_id: i64) -> Result<Vec<Unmet>> {
     if steps.is_empty() {
         return Ok(vec![Unmet::ActionEmpty { action: action.name, placement: None }]);
     }
-    inside(&def, None, &steps, |_| Ok(true))
+    let mut unmet = inside(&def, None, &steps, |_| Ok(true))?;
+    if action.builtin.is_none() {
+        unmet.extend(unfilled_exit_outputs(&def, &action.name, None, &steps));
+    }
+    Ok(unmet)
 }
 
 /// **Why the program of a script step could not be started here**, or `None` when it could
@@ -1772,6 +1811,54 @@ fn inside(
         }
     }
     Ok(unmet)
+}
+
+/// **The required outputs of the action's own ways out that no step inside fills**
+/// ([`Unmet::UnfilledExitOutput`]).
+///
+/// **An output is filled** by a wire into the action's edge ([`ACTION_BOUNDARY`]) under that output,
+/// drawn from an output a step the run could open declares on one of its ways out, where the line from
+/// that way out returns to this very way out of the action ([`returns_to`]). It is the rule a launch
+/// follows when it hands a step what the action before it handed on ([`wired_into`]): a wire from a way
+/// out that leaves by another of the action's ways out, or by none, is never read for this one.
+fn unfilled_exit_outputs(
+    def: &ActionDef,
+    action: &str,
+    placement: Option<i64>,
+    steps: &[AutomationStep],
+) -> Vec<Unmet> {
+    let opened: BTreeSet<i64> = steps.iter().map(|s| s.id).collect();
+    let mut unmet = Vec::new();
+    for exit in def.action_exits() {
+        if exit.name == ERROR_EXIT {
+            continue;
+        }
+        for port in def.outs_of(exit.id) {
+            if !port.required {
+                continue;
+            }
+            let filled = def.wires.iter().any(|wire| {
+                wire.to_id == ACTION_BOUNDARY
+                    && wire.to_port_id == port.id
+                    && opened.contains(&wire.from_id)
+                    && declared_exit(def, wire.from_exit_id, AutomationOwner::Step, wire.from_id).is_some_and(
+                        |from| {
+                            returns_to(def, wire.from_id, from.id) == Some(exit.id)
+                                && def.outs_of(from.id).iter().any(|p| p.id == wire.from_port_id)
+                        },
+                    )
+            });
+            if !filled {
+                unmet.push(Unmet::UnfilledExitOutput {
+                    action: action.to_string(),
+                    exit: exit.name.clone(),
+                    port: port.name,
+                    placement,
+                });
+            }
+        }
+    }
+    unmet
 }
 
 /// Add what one placement is missing, leaving out what is already said. A reason names its placement, so
@@ -8511,6 +8598,132 @@ mod tests {
                 vec![],
                 "the first step inside hands it on",
             );
+        });
+    }
+
+    /// **The action's own way out with a required output, and a way out of its step returning to it.**
+    /// The output is declared on the action's way out alone: nothing inside hands anything to it yet.
+    fn fails_with_a_report(tx: &WriteTx<'_>, action: &AutomationAction) -> i64 {
+        mk_exit(tx, action, "落ちた");
+        let failed = exit_id(tx, AutomationOwner::Action, action.id, Some("落ちた"));
+        automation::port_add(
+            tx,
+            AutomationPortOwner::Exit,
+            failed,
+            AutomationPortDirection::Out,
+            "報告",
+            AutomationPortKind::Value,
+            true,
+        )
+        .expect("the action's output");
+        failed
+    }
+
+    /// Declare the output on the step's way out of the same name, and wire it into the action's edge.
+    fn the_step_hands_on_the_report(tx: &WriteTx<'_>, action: &AutomationAction) {
+        let step = only_step(tx, action);
+        let failed = exit_id(tx, AutomationOwner::Step, step.id, Some("落ちた"));
+        automation::port_add(
+            tx,
+            AutomationPortOwner::Exit,
+            failed,
+            AutomationPortDirection::Out,
+            "報告",
+            AutomationPortKind::Value,
+            false,
+        )
+        .expect("the step's output");
+        automation::wire_add(
+            tx,
+            AutomationPictureOwner::Action,
+            step.id,
+            Some("落ちた"),
+            "報告",
+            ACTION_BOUNDARY,
+            "報告",
+        )
+        .expect("the wire out to the action");
+    }
+
+    fn unfilled_report(placement: Option<i64>) -> Unmet {
+        Unmet::UnfilledExitOutput {
+            action: "直す".into(),
+            exit: "落ちた".into(),
+            port: "報告".into(),
+            placement,
+        }
+    }
+
+    /// **A required output of one of the action's ways out that no step inside hands anything to is
+    /// refused on save**, named by the action, the way out and the output. The wire from the step whose
+    /// way out returns to it lets the action be saved.
+    #[test]
+    fn a_required_output_of_an_actions_way_out_nothing_inside_fills_is_refused_on_save() {
+        with_tx(|tx| {
+            let (_, action, _) = launchable(tx);
+            fails_with_a_report(tx, &action);
+            assert_eq!(check_action(tx.conn(), action.id).expect("check"), vec![unfilled_report(None)]);
+            let Error::NotReady(msg) = automation::action_save(tx, action.id).expect_err("refused") else {
+                panic!("a save that cannot go ahead is not_ready")
+            };
+            assert_eq!(
+                msg.parts().iter().map(|p| p.code()).collect::<Vec<_>>(),
+                vec![Some(ErrorCode::NotReadyAutomationUnfilledExitOutput)],
+            );
+            let fields: Vec<(&str, &str)> = msg.parts()[0].fields().iter().collect();
+            for named in [("action", "直す"), ("exit", "落ちた"), ("port", "報告")] {
+                assert!(fields.contains(&named), "{fields:?}");
+            }
+            let en = msg.parts()[0].en();
+            for name in ["'直す'", "'落ちた'", "'報告'", "automation wire-add"] {
+                assert!(en.contains(name), "{en}");
+            }
+
+            the_step_hands_on_the_report(tx, &action);
+            assert_eq!(check_action(tx.conn(), action.id).expect("check"), vec![]);
+            automation::action_save(tx, action.id).expect("saved once the step inside hands it on");
+        });
+    }
+
+    /// **A wire into the action's edge from a way out that returns to another of its ways out fills
+    /// nothing** — a run leaving by the one the output hangs on never read it ([`wired_into`]).
+    #[test]
+    fn a_wire_from_a_way_out_returning_elsewhere_does_not_fill_the_actions_output() {
+        with_tx(|tx| {
+            let (_, action, _) = launchable(tx);
+            fails_with_a_report(tx, &action);
+            the_step_hands_on_the_report(tx, &action);
+            let step = only_step(tx, &action);
+            let failed = exit_id(tx, AutomationOwner::Step, step.id, Some("落ちた"));
+            let line = read::automation_edge_for_exit(tx.conn(), AutomationPictureOwner::Action, step.id, failed)
+                .expect("read")
+                .expect("the line back to the action");
+            automation::edge_update(tx, line.id, Some(EdgeTarget::Exit(None)), None)
+                .expect("return to the done way out instead");
+            assert_eq!(check_action(tx.conn(), action.id).expect("check"), vec![unfilled_report(None)]);
+        });
+    }
+
+    /// **A placement standing on a saved version missing the wire is refused at launch**, though the
+    /// action as it is written now has it: the check reads the version the placement stands on.
+    #[test]
+    fn a_saved_version_with_an_unfilled_output_is_refused_at_launch() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            fails_with_a_report(tx, &action);
+            crate::ops::test_support::mk_closed_after(tx, &automation, placement.id, Some("落ちた"));
+            automation::action_version_add(tx, action.id).expect("a version saved before the check was");
+            tx.conn()
+                .execute("UPDATE automation_placement SET version = 1 WHERE id = ?1", [placement.id])
+                .expect("stand the placement on version 1");
+            the_step_hands_on_the_report(tx, &action);
+            assert_eq!(check_action(tx.conn(), action.id).expect("check"), vec![], "written now, it has the wire");
+            assert_eq!(checked(tx, &automation), vec![unfilled_report(Some(placement.id))]);
+            // The wire written now reaches the launch only once saved and stood on, so the line says so.
+            let said = unfilled_report(Some(placement.id)).say();
+            for named in ["automation wire-add", "automation action-save", "automation place-version"] {
+                assert!(said.contains(named), "{said}");
+            }
         });
     }
 

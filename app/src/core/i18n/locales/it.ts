@@ -2047,6 +2047,7 @@ export const it: Translation = {
     not_ready_automation_take_task_off_start: "«{step}» può stare solo dove inizia un ruolo",
     not_ready_automation_open_exit: "{step}: dopo «{exit}» non è previsto nulla",
     not_ready_automation_unwired_input: "{step}: nulla raggiunge l’ingresso obbligatorio «{port}»",
+    not_ready_automation_unfilled_exit_output: "azione «{action}»: nessun passo interno passa nulla all’uscita obbligatoria «{port}» della via d’uscita «{exit}»",
     not_ready_automation_unanswered_cfg: "{step}: l’impostazione obbligatoria «{cfg}» non ha risposta",
     not_ready_automation_misanswered_cfg: "{step}: la risposta all’impostazione «{cfg}» non corrisponde al suo tipo",
     not_ready_automation_cfg_not_found: "{step}: l’impostazione «{cfg}» nomina «{line}», che questo progetto non ha",

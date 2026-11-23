@@ -2030,6 +2030,7 @@ export const id: Translation = {
     not_ready_automation_take_task_off_start: "“{step}” hanya bisa diletakkan di awal sebuah peran",
     not_ready_automation_open_exit: "{step}: tidak ada yang ditetapkan setelah “{exit}”",
     not_ready_automation_unwired_input: "{step}: tidak ada yang sampai ke masukan wajib “{port}”",
+    not_ready_automation_unfilled_exit_output: "aksi “{action}”: tidak ada langkah di dalamnya yang menyerahkan apa pun ke keluaran wajib “{port}” dari jalan keluar “{exit}”",
     not_ready_automation_unanswered_cfg: "{step}: setelan wajib “{cfg}” belum dijawab",
     not_ready_automation_misanswered_cfg: "{step}: jawaban setelan “{cfg}” tidak sesuai dengan jenisnya",
     not_ready_automation_cfg_not_found: "{step}: setelan “{cfg}” menyebut “{line}”, yang tidak ada di proyek ini",

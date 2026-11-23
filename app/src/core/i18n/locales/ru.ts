@@ -2055,6 +2055,7 @@ export const ru: Translation = {
     not_ready_automation_take_task_off_start: "«{step}» можно поставить только в начало роли",
     not_ready_automation_open_exit: "{step}: после «{exit}» ничего не задано",
     not_ready_automation_unwired_input: "{step}: до обязательного входа «{port}» ничего не доходит",
+    not_ready_automation_unfilled_exit_output: "действие «{action}»: ни один шаг внутри ничего не передаёт в обязательный выход «{port}» пути «{exit}»",
     not_ready_automation_unanswered_cfg: "{step}: обязательная настройка «{cfg}» осталась без ответа",
     not_ready_automation_misanswered_cfg: "{step}: ответ на настройку «{cfg}» не подходит к её виду",
     not_ready_automation_cfg_not_found: "{step}: настройка «{cfg}» называет «{line}», чего в этом проекте нет",

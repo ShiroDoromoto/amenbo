@@ -2036,6 +2036,7 @@ export const de: Translation = {
     not_ready_automation_take_task_off_start: "„{step}“ kann nur am Start einer Rolle stehen",
     not_ready_automation_open_exit: "{step}: Nach „{exit}“ ist nichts festgelegt",
     not_ready_automation_unwired_input: "{step}: An der erforderlichen Eingabe „{port}“ kommt nichts an",
+    not_ready_automation_unfilled_exit_output: "Aktion „{action}“: Kein Schritt darin übergibt etwas an die erforderliche Ausgabe „{port}“ des Ausgangs „{exit}“",
     not_ready_automation_unanswered_cfg: "{step}: Die erforderliche Einstellung „{cfg}“ ist unbeantwortet",
     not_ready_automation_misanswered_cfg: "{step}: Die Einstellung „{cfg}“ hat eine Antwort, die nicht zu ihrer Art passt",
     not_ready_automation_cfg_not_found: "{step}: Die Einstellung „{cfg}“ nennt „{line}“, das es in diesem Projekt nicht gibt",

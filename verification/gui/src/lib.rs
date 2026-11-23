@@ -4573,7 +4573,8 @@ impl Instructor {
             // cannot mend it. Its line says so before it is pressed, in the interface's words, and the
             // press lands on the action's build screen standing over the automation's — on the step it
             // names (`opens` the action it sits in), or on nothing for a gap in the action as a whole —
-            // one with no step, one still being created, or one handing on the task. That last may be
+            // one with no step, one still being created, one with a required output of a way out
+            // nothing inside hands anything to, or one handing on the task. That last may be
             // named by a step inside, so `opens` names the action there too; left out, the action is
             // the box it names.
             (Domain::Automation, "press-reason") => {
@@ -4585,7 +4586,7 @@ impl Instructor {
                 );
                 let fix = "Confirm its line says it opens the action to fix it — its words are written in the interface's language — then press it.";
                 match (reason, arg_str(with, "opens")) {
-                    ("action_empty" | "action_draft", None) | ("hands_on_task_taken", _) => format!(
+                    ("action_empty" | "action_draft" | "unfilled_exit_output", None) | ("hands_on_task_taken", _) => format!(
                         "{press} {fix} Confirm the action build screen for \"{}\" opens over the automation's, with no step picked out on its picture.",
                         arg_str(with, "opens").unwrap_or(named)
                     ),
@@ -7544,6 +7545,7 @@ fn launch_reason(reason: &str) -> Result<&'static str, String> {
         "task_left_open" => "that a way out goes on to a box that takes another task with this one still open",
         "task_left_open_at_end" => "that a way out ends the run with the task still open",
         "hands_on_task_taken" => "that a way out hands on the task the run works, which only a built-in takes",
+        "unfilled_exit_output" => "that no step inside an action placed on it hands anything to a required output of one of the action's ways out",
         other => {
             return Err(format!(
                 "`reason` does not know `{other}` — it is one of the codes the launch check answers with"

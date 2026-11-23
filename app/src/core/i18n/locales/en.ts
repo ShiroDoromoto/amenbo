@@ -2318,6 +2318,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   not_ready_automation_take_task_off_start: "“{step}” can only stand where a role starts",
   not_ready_automation_open_exit: "{step}: nothing is set to happen after “{exit}”",
   not_ready_automation_unwired_input: "{step}: nothing reaches the required input “{port}”",
+  not_ready_automation_unfilled_exit_output: "the action “{action}”: no step inside hands anything to the required output “{port}” of the way out “{exit}”",
   not_ready_automation_unanswered_cfg: "{step}: the required setting “{cfg}” is unanswered",
   not_ready_automation_misanswered_cfg: "{step}: the setting “{cfg}” is answered with something it does not take",
   not_ready_automation_cfg_not_found: "{step}: the setting “{cfg}” names “{line}”, which this project does not have",

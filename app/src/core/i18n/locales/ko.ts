@@ -2025,6 +2025,7 @@ export const ko: Translation = {
     not_ready_automation_take_task_off_start: "「{step}」은(는) 역할의 시작에만 둘 수 있다",
     not_ready_automation_open_exit: "{step}: “{exit}” 다음에 할 일이 정해지지 않았습니다",
     not_ready_automation_unwired_input: "{step}: 필수 입력 “{port}”에 아무것도 닿지 않습니다",
+    not_ready_automation_unfilled_exit_output: "액션 “{action}”: 출구 “{exit}”의 필수 출력 “{port}”에 안쪽 스텝에서 넘겨주는 것이 없습니다",
     not_ready_automation_unanswered_cfg: "{step}: 필수 설정 “{cfg}”에 답이 없습니다",
     not_ready_automation_misanswered_cfg: "{step}: 설정 “{cfg}”의 답이 그 설정의 종류와 맞지 않습니다",
     not_ready_automation_cfg_not_found: "{step}: 설정 “{cfg}”에 적힌 “{line}”이(가) 이 프로젝트에 없습니다",

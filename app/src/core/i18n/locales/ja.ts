@@ -2044,6 +2044,7 @@ export const ja: Translation = {
     not_ready_automation_take_task_off_start: "「{step}」は役割の始まりにしか置けない",
     not_ready_automation_open_exit: "{step}：出口「{exit}」の次にすることが決まっていない",
     not_ready_automation_unwired_input: "{step}：必須の入力「{port}」に何も届かない",
+    not_ready_automation_unfilled_exit_output: "アクション「{action}」：出口「{exit}」の必須の出力「{port}」に、中のステップからの受け渡しが無い",
     not_ready_automation_unanswered_cfg: "{step}：必須の設定「{cfg}」に答えが無い",
     not_ready_automation_misanswered_cfg: "{step}：設定「{cfg}」の答えが、その設定の種類に合わない",
     not_ready_automation_cfg_not_found: "{step}：設定「{cfg}」の「{line}」が、このプロジェクトに無い",

@@ -2521,16 +2521,21 @@ impl FeedRoom {
     }
 }
 
-/// **Let the detail of finished runs go from the store, once the run log holds it** — of the runs of
-/// `run`'s role that are over, the step executions of each round whose file the run log holds, with
-/// their values and the files attached to them, and each copy of the definition no step left names and
-/// whose file the run log holds ([`let_rounds_of_a_finished_run_go`]), oldest run first. Answers how many
-/// rounds let their detail go. Asked as each run ends (`ops::automation_stop`'s `ended`), after the runs
-/// past what the role keeps have gone ([`let_old_runs_go`]), and sharing the room they left in the feed.
+/// **Let the detail of finished runs go from the store, once the run log holds it** — of the runs that
+/// are over, the step executions of each round whose file the run log holds, with their values and the
+/// files attached to them, and each copy of the definition no step left names and whose file the run log
+/// holds ([`let_rounds_of_a_finished_run_go`]). The runs of `run`'s role go first, then those of every
+/// other automation and role, oldest run first within each. Answers how many rounds let their detail go.
+/// Asked as each run ends (`ops::automation_stop`'s `ended`), after the runs past what the role keeps have
+/// gone ([`let_old_runs_go`]), and sharing the room they left in the feed.
 ///
-/// - **A run's last round goes the next time a run of its role ends**, not as the run ends: its file is
-///   written after the commit that ends it ([`WriteTx::record_round`]), and a round goes only once its
-///   file is there.
+/// - **Every role, not only the one that ended**: a role whose runs no longer end would otherwise keep
+///   its finished runs' detail for good, and so would the detail the store held before the run log took
+///   it over. Each run that ends anywhere takes some of it, within the room — never all of it in one
+///   write, which would take the feed past its reader (`AMB-D-1165`).
+/// - **A run's last round goes the next time a run ends**, not as the run ends: its file is written
+///   after the commit that ends it ([`WriteTx::record_round`]), and a round goes only once its file is
+///   there.
 /// - **What stays**: the run row, every round row (`automation_run_task`), every task a round passed on
 ///   (`automation_run_pass`), the files on the run itself (`AMB-D-1133`), the steps no round holds
 ///   (`run_task_id` NULL), and the detail of a round whose file is not there. An engine with no run log
@@ -2549,8 +2554,12 @@ pub(crate) fn let_finished_rounds_go_past(tx: &WriteTx<'_>, run: &crate::model::
     }
     let conn = tx.conn();
     let feed = FeedRoom::of(conn, room)?;
+    let (mut runs, others): (Vec<_>, Vec<_>) = read::automation_runs_over_with_detail(conn)?
+        .into_iter()
+        .partition(|over| over.automation_id == run.automation_id && over.role_id == run.role_id);
+    runs.extend(others);
     let mut gone = 0;
-    for over in read::automation_runs_over_with_detail(conn, run.automation_id, run.role_id)? {
+    for over in runs {
         if feed.is_full(tx) {
             break;
         }
@@ -2565,7 +2574,7 @@ pub(crate) fn let_finished_rounds_go_past(tx: &WriteTx<'_>, run: &crate::model::
 ///
 /// - **Only a run that is over** — completed, failed or canceled — and **a failure only once somebody has
 ///   seen it** (`AMB-D-989`): until then its last step's screen is what the person looks at. Any other
-///   run lets nothing go, and so does an engine with no run log.
+///   run lets nothing go, and so does an engine with no run log or a run with no folder in it.
 /// - **The order** is a round's let-go's ([`super::automation_step::let_steps_go`]); a copy goes after
 ///   every step naming it has.
 /// - **The blobs** of the files that go are left to the store's sweep ([`crate::store::Store::gc_blobs`]).
@@ -2578,6 +2587,9 @@ pub(crate) fn let_rounds_of_a_finished_run_go(tx: &WriteTx<'_>, run: &crate::mod
     }
     let conn = tx.conn();
     let dir = crate::run_log::dir_of(&place.runs, run);
+    if !dir.exists() {
+        return Ok(0);
+    }
     let now = Timestamp::now();
     let mut steps = read::automation_run_steps_of(conn, run.id)?;
     let mut gone = 0;

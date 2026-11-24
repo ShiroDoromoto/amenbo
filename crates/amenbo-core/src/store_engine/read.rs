@@ -7495,26 +7495,16 @@ pub fn automation_runs_past(
     Ok(runs)
 }
 
-/// **The runs of one role that are over and still hold step executions of a round**, oldest first —
-/// completed, failed or canceled runs of `automation_id` bound to `role_id` (or to no role, for `None`)
-/// with a step execution some round holds (`run_task_id` set). What the let-go of a finished run's rounds
-/// reads (`ops::automation`'s `let_finished_rounds_go`).
-pub fn automation_runs_over_with_detail(
-    conn: &Connection,
-    automation_id: i64,
-    role_id: Option<i64>,
-) -> Result<Vec<crate::model::AutomationRun>> {
+/// **The runs that are over and still hold step executions of a round**, oldest first — completed,
+/// failed or canceled runs of every automation and role with a step execution some round holds
+/// (`run_task_id` set). What the let-go of finished runs' rounds reads (`ops::automation`'s
+/// `let_finished_rounds_go`).
+pub fn automation_runs_over_with_detail(conn: &Connection) -> Result<Vec<crate::model::AutomationRun>> {
     use crate::model::AutomationRunStatus as St;
     const R: col::automation_run::Cols = col::automation_run::ALL;
     const S: col::automation_run_step::Cols = col::automation_run_step::ALL;
-    let in_role = match role_id {
-        Some(role) => Pred::eq(R.role_id, role),
-        None => Pred::is_null(R.role_id),
-    };
     let with_detail = IdSet::of(S.table, S.run_id).filter(Pred::is_not_null(S.run_task_id));
-    let pred = Pred::eq(R.automation_id, automation_id)
-        .and(in_role)
-        .and(Pred::is_in(R.status, [St::Completed.as_str(), St::Failed.as_str(), St::Canceled.as_str()]))
+    let pred = Pred::is_in(R.status, [St::Completed.as_str(), St::Failed.as_str(), St::Canceled.as_str()])
         .and(Pred::is_not_null(R.ended_at))
         .and(Pred::is_in_any(R.id, [with_detail]));
     let mut runs = automation_run_rows(conn, &pred, None, 0)?;

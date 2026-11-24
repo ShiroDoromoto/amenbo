@@ -177,8 +177,9 @@ fn under_way(status: AutomationRunStatus) -> bool {
 /// a launch ends only where a person stops it ([`stop_launch`], [`cancel_launch`]).
 ///
 /// **Its role's oldest runs may go with it** (`ops::automation`'s `let_old_runs_go`), where the role
-/// holds more than it keeps, and **the detail of its role's finished runs** that the run log already
-/// holds (`ops::automation`'s `let_finished_rounds_go`) — its own last round's the next time.
+/// holds more than it keeps, and **the detail of finished runs** that the run log already holds — its
+/// role's first, then any other automation's and role's (`ops::automation`'s `let_finished_rounds_go`);
+/// its own last round's the next time a run ends.
 pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<Ended> {
     // Read before the stretch is closed below: whether it was already ended is what says the run
     // handed its task back on the way.
@@ -214,7 +215,7 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
     }
     // Over now, it may be what takes its role past the runs it keeps.
     crate::ops::automation::let_old_runs_go(tx, &after)?;
-    // And the rounds of its role's finished runs that the run log holds let their detail go.
+    // And the rounds of finished runs that the run log holds let their detail go, its role's first.
     crate::ops::automation::let_finished_rounds_go(tx, &after)?;
     Ok(Ended { run: after })
 }
@@ -1881,14 +1882,69 @@ mod tests {
         });
     }
 
-    /// **An engine with no run log lets no finished run's detail go.**
+    /// **A run that ends lets the detail of other automations' finished runs go too** — what a role whose
+    /// runs no longer end, and the store from before the run log, would otherwise keep for good. A round
+    /// whose file is not there keeps its detail, and so does a run still under way.
+    #[test]
+    fn a_run_ending_lets_other_automations_finished_rounds_go() {
+        on_a_run_log("finished-elsewhere", |engine, place| {
+            let (mine, done, unwritten, going) = {
+                let tx = engine.write().expect("write");
+                let mine = picture(&tx, false);
+                let theirs = picture(&tx, false);
+                crate::ops::test_support::room_for_runs(&tx, theirs.automation.id);
+                let done = over(&tx, &theirs, Ending::Completed);
+                let unwritten = over(&tx, &theirs, Ending::Canceled);
+                let going = a_run(&tx, &theirs.automation);
+                opened(&tx, &going, &theirs.first);
+                tx.commit().expect("commit");
+                (mine, done, unwritten, going)
+            };
+            let file = crate::run_log::dir_of(&place.runs, &unwritten).join(crate::run_log::round_file_name(1));
+            std::fs::remove_file(file).expect("lose the round's file");
+
+            let tx = engine.write().expect("write");
+            over(&tx, &mine, Ending::Completed);
+            assert!(steps_left(&tx, done.id).is_empty(), "another automation's finished round lets its detail go");
+            assert_eq!(steps_left(&tx, unwritten.id).len(), 1, "a round whose file is not there keeps it");
+            assert_eq!(steps_left(&tx, going.id).len(), 1, "a run under way keeps it");
+        });
+    }
+
+    /// **The runs of the role that ended go first**, then the others', and it stops at the room
+    /// wherever it is: what is left goes the next time.
+    #[test]
+    fn letting_finished_rounds_go_takes_its_own_role_first_and_stops_at_the_room() {
+        on_a_run_log("finished-own-first", |engine, _| {
+            let (theirs, mine) = {
+                let tx = engine.write().expect("write");
+                let other = picture(&tx, false);
+                let p = picture(&tx, false);
+                let theirs = over(&tx, &other, Ending::Completed);
+                let mine: Vec<AutomationRun> = (0..2).map(|_| over(&tx, &p, Ending::Completed)).collect();
+                tx.commit().expect("commit");
+                (theirs, mine)
+            };
+            let tx = engine.write().expect("write");
+            assert_eq!(automation::let_finished_rounds_go_past(&tx, &mine[1], 0).expect("let go"), 1, "one round, and then it stopped");
+            assert!(steps_left(&tx, mine[0].id).is_empty(), "its own role's oldest run went first");
+            assert_eq!(steps_left(&tx, theirs.id).len(), 1, "the older run of another automation waits");
+            assert_eq!(automation::let_finished_rounds_go_past(&tx, &mine[1], ROOM).expect("let go"), 2);
+            assert!(steps_left(&tx, mine[1].id).is_empty() && steps_left(&tx, theirs.id).is_empty(), "the rest went the next time");
+        });
+    }
+
+    /// **An engine with no run log lets no finished run's detail go**, of its own role or any other.
     #[test]
     fn with_no_run_log_a_finished_run_keeps_its_detail() {
         with_tx(|tx| {
             let p = picture(tx, false);
+            let other = picture(tx, false);
+            let theirs = over(tx, &other, Ending::Completed);
             let runs: Vec<AutomationRun> = (0..2).map(|_| over(tx, &p, Ending::Completed)).collect();
             assert_eq!(automation::let_finished_rounds_go_past(tx, &runs[1], ROOM).expect("let go"), 0);
             assert_eq!(steps_left(tx, runs[0].id).len(), 1);
+            assert_eq!(steps_left(tx, theirs.id).len(), 1);
         });
     }
 

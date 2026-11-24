@@ -65,7 +65,7 @@ range, and what the PC sends is the handful of rows that moved.
 |---|---|
 | `records` | key, order (`seq`), operation (`put` / `del`), nonce, ciphertext |
 | `tokens` | the read code's **hash** and its issue date (**one row**, like `store` — `CHECK (id = 1)` says so) |
-| `store` | the ledger's version, **where the order stands**, last write, **where the current placement began**, and **the fingerprint of the key the records in it were sealed with** (one row). The `replacing` column is still there and **nothing reads or writes it** — dropping it is a migration that would run in the user's account, which is not worth what it buys |
+| `store` | the ledger's version, **where the order stands**, last write, **where the current placement began**, and **the fingerprint of the key the records in it were sealed with**, and **how far above its stored number every row is handed out** (`shift`) (one row). The `replacing` column is still there and **nothing reads or writes it** — dropping it is a migration that would run in the user's account, which is not worth what it buys |
 
 - **A deletion stays as a row.** Made to vanish, it takes with it the only chance a phone that was
   away has of learning the record is gone
@@ -235,17 +235,19 @@ beginning — without what was taken out (see "A cursor a placement overtook is 
 rows out over several requests asks for it on the last one, or on a request with no keys after them, so
 the phones read again once.
 
-**`reread` also moves every row that stays above `placed_from`**: it adds where the order stood to each
-row's `seq` and doubles `seq`. The rows keep their order among themselves. A phone reading again from
-the beginning is handed a cursor with every page, and each has to be past `placed_from` — left where
-they were, the rows of a store larger than one page would hand that phone a cursor at or below
-`placed_from` with its first page, and its second read would be refused, over and over. **This costs a
-write for every row the store holds**, and `rows_written` in the answer says so. The last page of a read
-carries where the order stands rather than where its last row sits, so a phone comes level with `seq`
-even when the rows at the end were taken out.
+**`reread` also moves every row that stays above `placed_from`**: it raises the store's `shift` to where
+the order stood. Every number this Worker hands out — a row's place, `seq`, a cursor — is the number it
+is stored under plus `shift`, so every row moves at once and `seq` lands that far past `placed_from`. The
+rows keep their order among themselves. A phone reading again from the beginning is handed a cursor with
+every page, and each has to be past `placed_from` — left where they were, the rows of a store larger than
+one page would hand that phone a cursor at or below `placed_from` with its first page, and its second
+read would be refused, over and over. **This costs one write however many rows the store holds**: the
+rows are not rewritten, only the store row. The last page of a read carries where the order stands
+rather than where its last row sits, so a phone comes level with `seq` even when the rows at the end
+were taken out.
 
 The answer is `{"seq":…,"rows_written":…,"build":…}`, as for `PUT /records`, so one budget covers both.
-This route is what `build` `4` adds.
+This route is what `build` `4` adds. `build` `5` is `reread` costing one write rather than one per row.
 
 ### The order never rewinds
 

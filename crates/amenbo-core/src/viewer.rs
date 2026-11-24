@@ -71,7 +71,7 @@ pub const WORKER_SCRIPT: &str = include_str!("viewer/worker.js");
 ///
 /// `tests::the_baked_script_is_the_build_this_says_it_is` keeps the two level: a `make -C worker baked`
 /// that was never run is a build claiming a Worker it does not carry.
-pub const WORKER_BUILD: u32 = 4;
+pub const WORKER_BUILD: u32 = 5;
 
 /// Where the number sits in the built script. esbuild emits the constant as a plain declaration, so the
 /// name and the assignment are the whole of what has to be found.

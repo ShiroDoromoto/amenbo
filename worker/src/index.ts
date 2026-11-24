@@ -87,9 +87,11 @@ const SPEC_V = 1;
  * take a row out of the store, so a record the phone never needed stays here and on every phone for
  * good. Amenbo carries this same number for the Worker it deploys, and compares the two — which is
  * how a settings screen can say the server is behind, and how a sender knows whether the door to
- * take rows out is there before it knocks.
+ * take rows out is there before it knocks. `5` is `reread` costing one write rather than one per
+ * row (migration `0007`): against a `4` it rewrites every row the store holds, so a sender keeping
+ * a daily budget can only afford it on a small store.
  */
-const BUILD = 4;
+const BUILD = 5;
 
 /**
  * How many records one read hands back before saying there are more.
@@ -314,12 +316,18 @@ interface Standing {
 	 * migration that adds it.
 	 */
 	key_fingerprint: string | null;
+	/**
+	 * How far above the number it is stored under every row is handed out — see the migration that
+	 * adds it. `seq` above already has it added, so it is what the store hands out, and this is
+	 * needed only to turn a cursor back into a stored number.
+	 */
+	shift: number;
 }
 
 /** Reads that row. It is there from the first migration, so there is no "no store yet" to handle. */
 async function standing(env: Env): Promise<Standing> {
 	const row = await env.RECORDS.prepare(
-		"SELECT version, seq, updated_at, placed_from, key_fingerprint FROM store WHERE id = 1",
+		"SELECT version, seq + shift AS seq, shift, updated_at, placed_from, key_fingerprint FROM store WHERE id = 1",
 	).first<Standing>();
 	return row!;
 }
@@ -481,13 +489,18 @@ async function read(env: Env, url: URL): Promise<Response> {
 	// read rather than by a second one counting what is left. The envelope columns are left out
 	// of the keys-only read as well as out of its answer: reading 27 MB out of the database to
 	// throw it away here would buy nothing.
+	//
+	// The cursor is a number as handed out, and the rows are filed under the numbers they were
+	// stored with, so it is turned back before comparing and every row is handed out with `shift`
+	// added. A cursor at or below `shift` is one that has not passed `placed_from` and was refused
+	// above — except `0`, which is reading from the beginning.
 	const most = keysOnly ? PER_KEY_PAGE : PER_PAGE;
 	const { results } = await env.RECORDS.prepare(
 		keysOnly
-			? "SELECT seq, k, op FROM records WHERE seq > ? ORDER BY seq LIMIT ?"
-			: "SELECT seq, k, op, nonce, ciphertext FROM records WHERE seq > ? ORDER BY seq LIMIT ?",
+			? "SELECT seq + ? AS seq, k, op FROM records WHERE seq > ? ORDER BY seq LIMIT ?"
+			: "SELECT seq + ? AS seq, k, op, nonce, ciphertext FROM records WHERE seq > ? ORDER BY seq LIMIT ?",
 	)
-		.bind(since, most + 1)
+		.bind(now.shift, Math.max(since - now.shift, 0), most + 1)
 		.all<Stored>();
 
 	const more = results.length > most;
@@ -629,7 +642,9 @@ async function place(env: Env, request: Request): Promise<Response> {
 	//
 	// The numbers are not worked out here but in the statements themselves, counting up from
 	// where the store row says the order stands. Two sends arriving together therefore cannot be
-	// handed the same number — the second one reads the row the first one already moved.
+	// handed the same number — the second one reads the row the first one already moved. These are
+	// stored numbers, `shift` below the ones handed out; the order handed back has it added, like
+	// every number that leaves this Worker.
 	const upsert = env.RECORDS.prepare(
 		"INSERT INTO records (k, seq, op, nonce, ciphertext)" +
 			" VALUES (?, (SELECT seq FROM store WHERE id = 1) + ?, ?, ?, ?)" +
@@ -646,7 +661,7 @@ async function place(env: Env, request: Request): Promise<Response> {
 					).bind(version, new Date().toISOString(), sealedWith),
 				]
 			: []),
-		env.RECORDS.prepare("SELECT seq FROM store WHERE id = 1"),
+		env.RECORDS.prepare("SELECT seq + shift AS seq FROM store WHERE id = 1"),
 	];
 	const done = await env.RECORDS.batch<{ seq: number }>(statements);
 
@@ -673,14 +688,15 @@ async function place(env: Env, request: Request): Promise<Response> {
  * **`reread` is how the phones hear of it.** It moves `placed_from` up to where the order now
  * stands, so every phone holding rows is refused its next read on (`read`'s 409), throws its copy
  * away and reads again from the beginning — and what was taken out here is not in what it reads.
- * **It moves every row that stays above `placed_from` as it does**, by adding where the order
- * stood to each row's number and doubling the order. A phone reading again from the beginning is
- * handed cursors along the way, and each of them has to be past `placed_from`: were the rows left
- * where they were, a store of more than one page would hand that phone a cursor at or below
- * `placed_from` with its first page, and refuse it the second — sent back to the beginning, over
- * and over. The order of the rows among themselves does not change, and neither number winds back.
- * **It costs a write for every row the store holds**, which `rows_written` reports — the price a
- * placement used to pay, paid once after the rows went rather than once per send.
+ * **It moves every row that stays above `placed_from` as it does**, by raising `shift` to where
+ * the order stood, so every row is handed out that much higher and the order with it. A phone
+ * reading again from the beginning is handed cursors along the way, and each of them has to be
+ * past `placed_from`: were the rows left where they were, a store of more than one page would hand
+ * that phone a cursor at or below `placed_from` with its first page, and refuse it the second —
+ * sent back to the beginning, over and over. The order of the rows among themselves does not
+ * change, and neither number winds back.
+ * **It costs one write however many rows the store holds**: the rows themselves are not touched,
+ * only the store row, so a sender can ask for it on a store of any size.
  * It belongs to this door rather than to one of its own because it is what makes this one
  * finished: a sender taking rows out over several requests asks for it on the last, or on an empty
  * request after them, and the phones read once rather than once per request.
@@ -734,15 +750,12 @@ async function remove(env: Env, request: Request): Promise<Response> {
 	const take = env.RECORDS.prepare("DELETE FROM records WHERE k = ?");
 	const statements = [
 		...(taking as string[]).map((k) => take.bind(k)),
-		// Every row left is at or below where the order stands, so adding that number lands each one
-		// above every number in use: the unique index on `seq` never sees two rows meet on the way.
+		// Every row left is stored at 1 or above, so raising `shift` to where the order stood hands each
+		// one out above `placed_from`, and the order lands the same distance past it.
 		...(reread
-			? [
-					env.RECORDS.prepare("UPDATE records SET seq = seq + (SELECT seq FROM store WHERE id = 1)"),
-					env.RECORDS.prepare("UPDATE store SET placed_from = seq, seq = seq * 2 WHERE id = 1"),
-				]
+			? [env.RECORDS.prepare("UPDATE store SET placed_from = seq + shift, shift = seq + shift WHERE id = 1")]
 			: []),
-		env.RECORDS.prepare("SELECT seq FROM store WHERE id = 1"),
+		env.RECORDS.prepare("SELECT seq + shift AS seq FROM store WHERE id = 1"),
 	];
 	const done = await env.RECORDS.batch<{ seq: number }>(statements);
 

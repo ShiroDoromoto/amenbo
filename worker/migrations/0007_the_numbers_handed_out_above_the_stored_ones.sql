@@ -1,0 +1,15 @@
+-- How far above the number it is stored under every row's place in the order is handed out.
+--
+-- `reread` has to hand every row left a place above `placed_from`, so a phone reading again from
+-- the beginning is never handed a cursor that the next page refuses. It used to do that by
+-- rewriting the number on every row, which is a write per row: on a store of tens of thousands of
+-- rows, one `reread` was most of a day's writes.
+--
+-- What it moves now is this one number on the store row. A row's place, wherever it is handed out,
+-- is the number it is stored under plus this — and so is the order's own `seq` — so moving it
+-- moves every row at once, for one write. The rows keep their order among themselves, and the
+-- numbers a phone sees still only go up.
+--
+-- `0` is a store that has never had a `reread` under this migration, which is every store the
+-- moment it applies: what was handed out before is what is handed out after.
+ALTER TABLE store ADD COLUMN shift INTEGER NOT NULL DEFAULT 0;

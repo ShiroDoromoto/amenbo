@@ -66,6 +66,10 @@ pub(crate) const MIGRATIONS: &[(&str, &str)] = &[
         "0006_one_code_and_not_one_per_phone.sql",
         include_str!("migrations/0006_one_code_and_not_one_per_phone.sql"),
     ),
+    (
+        "0007_the_numbers_handed_out_above_the_stored_ones.sql",
+        include_str!("migrations/0007_the_numbers_handed_out_above_the_stored_ones.sql"),
+    ),
 ];
 
 /// What a database that was already there says about itself.

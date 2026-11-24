@@ -1719,6 +1719,16 @@ pub const STEPS: &[Step] = &[
         // so reading those pages again writes nothing. No task is touched.
         apply: Apply::Custom(let_the_carrier_count_what_the_reread_would_cost),
     },
+    Step {
+        to: 152,
+        name: "lay the file out for incremental vacuum, so the pages deleted rows free go back to the OS",
+        // **Nothing in the transaction.** What lays the file out is a `VACUUM`, which no transaction may
+        // hold, so it follows the chain (`run`, `StoreEngine::lay_out_for_incremental_vacuum`). The step
+        // is what makes the chain run once on every store born before, and with it that `VACUUM`: the
+        // detail of finished runs, let go of as runs end, is most of a long-used store's file, and
+        // without the layout the pages it leaves free never leave the file.
+        apply: Apply::Sql(""),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -7882,6 +7892,20 @@ pub fn run(
         tx.commit()?;
         run.to = step.to;
         run.applied.push(step.name);
+    }
+    // A store born without the incremental vacuum layout is brought over to it here (v152), because this
+    // is the one moment the store is held to itself: every other surface is turned away until the chain is
+    // done, so the `VACUUM` that does it waits for nobody and nobody waits on it past `busy_timeout`. It
+    // runs after the last step has committed, since no transaction may be open around it.
+    //
+    // **A failure here is not the migration's failure.** The steps have committed and the store is whole
+    // at its new version; only its pages stay in the file (a `VACUUM` that cannot finish leaves the file
+    // as it was). Rolling the chain back for that would leave a store this build cannot open in exchange
+    // for a file that is merely larger, so it is let go. The store stays at its new version, so nothing
+    // retries it until a later step makes the chain run again; until then the file keeps its free pages
+    // (they are reused by the next writes) and `return_free_pages` does nothing on it.
+    if run.migrated() {
+        let _ = engine.lay_out_for_incremental_vacuum();
     }
     Ok(run)
 }
@@ -16800,6 +16824,35 @@ mod tests {
             assert_eq!(rest, (version, 12, 41, 3), "and the rest of the row stays");
             std::fs::remove_dir_all(&dir).ok();
         }
+    }
+
+    /// v152: a store born before stores were laid out for incremental vacuum is laid out for it once the
+    /// chain has run, and the pages its deletes had freed leave the file in the same `VACUUM`.
+    #[test]
+    fn a_store_born_before_v152_is_laid_out_for_incremental_vacuum() {
+        let dir = scratch("incremental-vacuum");
+        let engine = store_at(&dir, 151);
+        engine
+            .conn()
+            .execute_batch(
+                "CREATE TABLE ballast (b BLOB);
+                 WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 200)
+                 INSERT INTO ballast SELECT randomblob(4000) FROM n;
+                 DROP TABLE ballast;",
+            )
+            .unwrap();
+        let pragma = |name: &str| -> i64 {
+            engine.conn().query_row(&format!("PRAGMA {name}"), [], |r| r.get(0)).unwrap()
+        };
+        assert_eq!(pragma("auto_vacuum"), 0, "born before, the file is not laid out for it");
+        assert!(pragma("freelist_count") >= 200, "and the deleted rows' pages stay in it");
+
+        run(&engine, &dir, steps_through(152), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 152);
+        assert_eq!(pragma("auto_vacuum"), 2, "laid out for incremental vacuum");
+        assert_eq!(pragma("freelist_count"), 0, "the free pages left the file");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// v150 on a store whose carrier never wrote a row: there is nothing to move, and no line is written.

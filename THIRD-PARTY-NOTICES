@@ -476,6 +476,9 @@ is_terminal_polyfill — MIT OR Apache-2.0
 itoa — MIT OR Apache-2.0
 javascriptcore-rs — MIT
 javascriptcore-rs-sys — MIT
+jiff — Unlicense OR MIT
+jiff-core — Unlicense OR MIT
+jiff-static — Unlicense OR MIT
 jni — MIT OR Apache-2.0; MIT/Apache-2.0
 jni-macros — MIT OR Apache-2.0
 jni-sys — MIT OR Apache-2.0
@@ -574,6 +577,8 @@ plist — MIT
 png — MIT OR Apache-2.0
 polling — Apache-2.0 OR MIT
 poly1305 — Apache-2.0 OR MIT
+portable-atomic — Apache-2.0 OR MIT
+portable-atomic-util — Apache-2.0 OR MIT
 portable-pty — MIT
 potential_utf — Unicode-3.0
 powerfmt — MIT OR Apache-2.0
@@ -824,6 +829,7 @@ zbus_names — MIT
 zerofrom — Unicode-3.0
 zerofrom-derive — Unicode-3.0
 zeroize — Apache-2.0 OR MIT
+zeroize_derive — Apache-2.0 OR MIT
 zerotrie — Unicode-3.0
 zerovec — Unicode-3.0
 zerovec-derive — Unicode-3.0
@@ -1110,7 +1116,7 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
 AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-Used by: adler2, anyhow, async-channel, async-executor, async-io, async-lock, async-process, async-recursion, async-signal, async-task, async-trait, atomic-waker, blocking, camino, cargo-platform, cargo_metadata, concurrent-queue, displaydoc, dtoa, dyn-clone, endi, erased-serde, event-listener, event-listener-strategy, fastrand, futures-lite, hermit-abi, itoa, linux-raw-sys, num_enum, num_enum_derive, once_cell, ordered-stream, parking, pin-project-lite, piper, polling, proc-macro-crate, proc-macro2, quote, ref-cast, ref-cast-impl, rustc-hash, rustix, rustversion, semver, serde, serde-untagged, serde_core, serde_derive, serde_derive_internals, serde_json, serde_norway, serde_repr, servo_arc, simd_cesu8, syn, system-deps, thiserror, thiserror-impl, typed-path, typeid, unicode-ident, unsafe-libyaml-norway, utf-8, utf8-zero, wasi, wasip2, wasm-streams, wit-bindgen, x11, x11-dl, zmij, zvariant_utils
+Used by: adler2, anyhow, async-channel, async-executor, async-io, async-lock, async-process, async-recursion, async-signal, async-task, async-trait, atomic-waker, blocking, camino, cargo-platform, cargo_metadata, concurrent-queue, displaydoc, dtoa, dyn-clone, endi, erased-serde, event-listener, event-listener-strategy, fastrand, futures-lite, hermit-abi, itoa, linux-raw-sys, num_enum, num_enum_derive, once_cell, ordered-stream, parking, pin-project-lite, piper, polling, portable-atomic, portable-atomic-util, proc-macro-crate, proc-macro2, quote, ref-cast, ref-cast-impl, rustc-hash, rustix, rustversion, semver, serde, serde-untagged, serde_core, serde_derive, serde_derive_internals, serde_json, serde_norway, serde_repr, servo_arc, simd_cesu8, syn, system-deps, thiserror, thiserror-impl, typed-path, typeid, unicode-ident, unsafe-libyaml-norway, utf-8, utf8-zero, wasi, wasip2, wasm-streams, wit-bindgen, x11, x11-dl, zmij, zvariant_utils
 ------------------------------------------------------------------------------
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated
@@ -1369,7 +1375,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-Used by: aho-corasick, byteorder, globset, ignore, memchr, termcolor, walkdir
+Used by: aho-corasick, byteorder, globset, ignore, jiff, jiff-core, jiff-static, memchr, termcolor, walkdir
 ------------------------------------------------------------------------------
 The MIT License (MIT)
 
@@ -1393,7 +1399,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
-Used by: aho-corasick, byteorder, globset, ignore, memchr, same-file, termcolor, walkdir, winapi-util
+Used by: aho-corasick, byteorder, globset, ignore, jiff, jiff-core, jiff-static, memchr, same-file, termcolor, walkdir, winapi-util
 ------------------------------------------------------------------------------
 This is free and unencumbered software released into the public domain.
 
@@ -1420,7 +1426,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 
 For more information, please refer to <http://unlicense.org/>
 
-Used by: aho-corasick, byteorder, globset, ignore, memchr, same-file, termcolor, walkdir, winapi-util
+Used by: aho-corasick, byteorder, globset, ignore, jiff, jiff-core, jiff-static, memchr, same-file, termcolor, walkdir, winapi-util
 ------------------------------------------------------------------------------
 This project is dual-licensed under the Unlicense and MIT licenses.
 
@@ -4784,7 +4790,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-Used by: chacha20, chacha20poly1305
+Used by: chacha20, chacha20poly1305, zeroize_derive
 ------------------------------------------------------------------------------
 Copyright (c) 2019-2026 The RustCrypto Project Developers
 
@@ -4812,7 +4818,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-Used by: chardetng, cmov, ctutils, embed_plist, encoding_rs, multiversion_no_op, qrcode, rustls-platform-verifier, serialize-to-javascript, serialize-to-javascript-impl, tinyvec, ureq, ureq-proto, utf8_iter, zeroize
+Used by: chardetng, cmov, ctutils, embed_plist, encoding_rs, multiversion_no_op, qrcode, rustls-platform-verifier, serialize-to-javascript, serialize-to-javascript-impl, tinyvec, ureq, ureq-proto, utf8_iter, zeroize, zeroize_derive
 ------------------------------------------------------------------------------
                                  Apache License
                            Version 2.0, January 2004
@@ -8560,7 +8566,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-Used by: fdeflate, field-offset, miniz_oxide, num-conv, pin-project-lite, raw-window-handle, rpassword, rtoolbox, simdutf8, sync_wrapper, tauri, tauri-build, tauri-codegen, tauri-macros, tauri-plugin-autostart, tauri-plugin-dialog, tauri-plugin-fs, tauri-plugin-log, tauri-plugin-notification, tauri-plugin-opener, tauri-plugin-single-instance, tauri-plugin-updater, tauri-runtime, tauri-runtime-wry, tauri-utils, tauri-winrt-notification, time, time-core, time-macros
+Used by: fdeflate, field-offset, miniz_oxide, num-conv, pin-project-lite, portable-atomic, portable-atomic-util, raw-window-handle, rpassword, rtoolbox, simdutf8, sync_wrapper, tauri, tauri-build, tauri-codegen, tauri-macros, tauri-plugin-autostart, tauri-plugin-dialog, tauri-plugin-fs, tauri-plugin-log, tauri-plugin-notification, tauri-plugin-opener, tauri-plugin-single-instance, tauri-plugin-updater, tauri-runtime, tauri-runtime-wry, tauri-utils, tauri-winrt-notification, time, time-core, time-macros
 ------------------------------------------------------------------------------
                                  Apache License
                            Version 2.0, January 2004
@@ -20263,29 +20269,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-Used by: @tauri-apps/api
-------------------------------------------------------------------------------
-SPDXVersion: SPDX-2.1
-DataLicense: CC0-1.0
-PackageName: tauri
-DataFormat: SPDXRef-1
-PackageSupplier: Organization: The Tauri Programme in the Commons Conservancy
-PackageHomePage: https://tauri.app
-PackageLicenseDeclared: Apache-2.0
-PackageLicenseDeclared: MIT
-PackageCopyrightText: 2019-2025, The Tauri Programme in the Commons Conservancy
-PackageSummary: <text>Tauri is a rust project that enables developers to make secure
-and small desktop applications using a web frontend.
-                </text>
-PackageComment: <text>The package includes the following libraries; see
-Relationship information.
-                </text>
-Created: 2019-05-20T09:00:00Z
-PackageDownloadLocation: git://github.com/tauri-apps/tauri
-PackageDownloadLocation: git+https://github.com/tauri-apps/tauri.git
-PackageDownloadLocation: git+ssh://github.com/tauri-apps/tauri.git
-Creator: Person: Daniel Thompson-Yvetot
 
 Used by: @tauri-apps/plugin-dialog, @tauri-apps/plugin-opener, @tauri-apps/plugin-updater
 ------------------------------------------------------------------------------

@@ -244,16 +244,24 @@ impl StoreEngine {
         // instant it is contended. Every batch of field writes is one transaction (all-or-nothing), and
         // this timeout keeps a contended write from failing needlessly. Set before any migration write.
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
-        // The journal mode first, because the DDL below is written into whichever one is live. Left
+        // Is there anything here at all? An empty `sqlite_master` is a store being born, and the only
+        // state in which the batch below writes rather than recognises. It decides how the batch is run
+        // and whether the file is laid out for incremental vacuum, and nothing else — a store that
+        // answers "not empty" still goes through the batch, so an interrupted genesis is still completed
+        // by the `IF NOT EXISTS` clauses, exactly as before.
+        let being_born: i64 = conn.query_row("SELECT count(*) FROM sqlite_master", [], |r| r.get(0))?;
+        // A store is born laid out for incremental vacuum, so the pages a delete frees go back to the OS
+        // (`return_free_pages`) instead of staying in the file for good. Before the journal mode: the
+        // WAL switch writes the file's first page, and from then on SQLite takes this setting only through
+        // a `VACUUM` (`StoreEngine::lay_out_for_incremental_vacuum`, which brings an older store over).
+        if being_born == 0 {
+            conn.execute_batch(AUTO_VACUUM_INCREMENTAL)?;
+        }
+        // The journal mode before the DDL, because the DDL is written into whichever one is live. Left
         // until after, a new store is built in the rollback journal — a file written, synced and
         // unlinked once per statement — where the WAL takes an append (`schema::JOURNAL_MODE_SQL`).
         let (journal_mode, ddl) = schema::genesis_sql();
         conn.execute_batch(journal_mode)?;
-        // Is there anything here at all? An empty `sqlite_master` is a store being born, and the only
-        // state in which the batch below writes rather than recognises. It decides how the batch is run
-        // and nothing else — a store that answers "not empty" still goes through it, so an interrupted
-        // genesis is still completed by the `IF NOT EXISTS` clauses, exactly as before.
-        let being_born: i64 = conn.query_row("SELECT count(*) FROM sqlite_master", [], |r| r.get(0))?;
         // Create what is missing, and nothing else. `schema_sql` only ever issues
         // `CREATE … IF NOT EXISTS`, so this is genesis on a new file and a no-op on a store this
         // build already wrote. It does **not** evolve a store an older build left behind: bringing an
@@ -327,6 +335,9 @@ impl StoreEngine {
     /// saw, and an empty result would otherwise read as "nothing changed" and freeze a stale screen;
     /// recording how far the truncation reached is what lets [`super::read::changes_since`] say *"your
     /// cursor is gone, re-read the store"* instead.
+    ///
+    /// The same beat hands the pages the deletes since the last one freed back to the OS
+    /// ([`return_free_pages`]), so the file shrinks as rows go without a write of its own to wait for.
     pub(super) fn trim_change_feed_if_due(
         &self,
         tx: &rusqlite::Transaction<'_>,
@@ -339,7 +350,28 @@ impl StoreEngine {
             return Ok(());
         }
         self.rows_since_trim.store(0, std::sync::atomic::Ordering::Relaxed);
-        trim_change_feed(tx)
+        trim_change_feed(tx)?;
+        return_free_pages(tx)
+    }
+
+    /// Bring a store born without the incremental vacuum layout over to it, so the pages a delete frees
+    /// go back to the OS from here on ([`return_free_pages`]). SQLite changes the layout of a file
+    /// that already holds tables only by rewriting it whole, so this is a `VACUUM` — which also hands back
+    /// every page already free. A store already laid out for it is left alone, at the cost of one read.
+    ///
+    /// **Outside any transaction**, as `VACUUM` must be, and on a store nobody else is writing: it
+    /// rewrites the whole file under the write lock, which on a large store outlasts the `busy_timeout`
+    /// another process would wait. The migration chain calls it while it holds the store to itself
+    /// ([`super::migrate::run`]). It writes nothing to the change feed: no row changes, only where the
+    /// rows sit in the file.
+    pub(crate) fn lay_out_for_incremental_vacuum(&self) -> Result<()> {
+        let mode: i64 = self.conn.query_row("PRAGMA auto_vacuum", [], |r| r.get(0))?;
+        if mode == AUTO_VACUUM_MODE_INCREMENTAL {
+            return Ok(());
+        }
+        self.conn.execute_batch(AUTO_VACUUM_INCREMENTAL)?;
+        self.conn.execute_batch("VACUUM;")?;
+        Ok(())
     }
 
     /// How many change-feed rows the transaction in flight has collected so far, for one window — a row
@@ -641,6 +673,37 @@ fn trim_change_feed(conn: &Connection) -> Result<()> {
         return Ok(());
     }
     upsert_meta(conn, META_FEED_TRUNCATED_THROUGH, Some(&cut.to_string()))?;
+    Ok(())
+}
+
+/// How a store asks SQLite to lay its file out for incremental vacuum — see [`return_free_pages`].
+const AUTO_VACUUM_INCREMENTAL: &str = "PRAGMA auto_vacuum = INCREMENTAL;";
+
+/// What `PRAGMA auto_vacuum` reads back on a file laid out for incremental vacuum.
+const AUTO_VACUUM_MODE_INCREMENTAL: i64 = 2;
+
+/// How many free pages one trim hands back at most: 4 MiB at the store's 4 KiB page. A delete frees its
+/// pages within the file, where the next write reuses them; handing them back moves the pages at the end
+/// of the file into the holes, so its cost grows with how many are handed back. Bounded, so a commit that
+/// follows a large delete does not carry the whole of it; the rest goes on the next trims. The deletes
+/// that make a store shrink most — the detail of finished runs, a few thousand rows at a run's end —
+/// free well under this between two trims.
+const FREE_PAGES_RETURNED_PER_TRIM: i64 = 1_024;
+
+/// Hand up to [`FREE_PAGES_RETURNED_PER_TRIM`] free pages back to the OS, inside the caller's
+/// transaction. A delete only marks its pages free within the file, which then never shrinks; on a store
+/// laid out for incremental vacuum (every store born since, and every older one once the migration chain
+/// has run on it — [`StoreEngine::lay_out_for_incremental_vacuum`]) this truncates the file by what it
+/// hands back. On a store not laid out for it, it does nothing.
+///
+/// No row changes, so nothing reaches the change feed: the pages move, the rows on them stay what they
+/// were.
+fn return_free_pages(conn: &Connection) -> Result<()> {
+    // SQLite hands back one page per step, so the statement is stepped through to its end — a single
+    // `execute` would stop after the first.
+    let mut stmt = conn.prepare(&format!("PRAGMA incremental_vacuum({FREE_PAGES_RETURNED_PER_TRIM})"))?;
+    let mut pages = stmt.query([])?;
+    while pages.next()?.is_some() {}
     Ok(())
 }
 
@@ -1093,6 +1156,82 @@ mod tests {
         let e = StoreEngine::open_in_memory().unwrap();
         let ms: i64 = e.conn().query_row("PRAGMA busy_timeout", [], |r| r.get(0)).unwrap();
         assert!(ms >= 5000, "busy_timeout is set to at least 5s (got {ms}ms)");
+    }
+
+    fn pragma(e: &StoreEngine, name: &str) -> i64 {
+        e.conn().query_row(&format!("PRAGMA {name}"), [], |r| r.get(0)).unwrap()
+    }
+
+    /// Fill the store with pages nothing else holds, then free them: `pages` pages a delete has let go of.
+    fn free_pages(e: &StoreEngine, pages: i64) {
+        e.conn()
+            .execute_batch(&format!(
+                "CREATE TABLE ballast (b BLOB);
+                 WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < {pages})
+                 INSERT INTO ballast SELECT randomblob(4000) FROM n;
+                 DROP TABLE ballast;"
+            ))
+            .unwrap();
+    }
+
+    /// A store is born laid out for incremental vacuum — on a file, where the WAL switch that follows
+    /// would otherwise have fixed the layout first.
+    #[test]
+    fn a_store_is_born_laid_out_for_incremental_vacuum() {
+        let dir = amenbo_scratch::scratch("born-incremental");
+        let e = StoreEngine::open(&dir.join("store.sqlite")).unwrap();
+        assert_eq!(pragma(&e, "auto_vacuum"), AUTO_VACUUM_MODE_INCREMENTAL);
+        let mode: String = e.conn().query_row("PRAGMA journal_mode", [], |r| r.get(0)).unwrap();
+        assert_eq!(mode, "wal", "and still in the WAL");
+    }
+
+    /// The trim hands the pages deletes freed back to the OS: the file shrinks by them, up to
+    /// [`FREE_PAGES_RETURNED_PER_TRIM`] a trim, and the rest goes on the next.
+    #[test]
+    fn a_trim_hands_free_pages_back() {
+        let dir = amenbo_scratch::scratch("trim-returns-pages");
+        let e = StoreEngine::open(&dir.join("store.sqlite")).unwrap();
+        free_pages(&e, FREE_PAGES_RETURNED_PER_TRIM + 100);
+        let (free, size) = (pragma(&e, "freelist_count"), pragma(&e, "page_count"));
+        assert!(free > FREE_PAGES_RETURNED_PER_TRIM, "the delete left its pages in the file ({free})");
+
+        let tx = e.transaction().unwrap();
+        e.trim_change_feed_if_due(&tx, CHANGE_FEED_TRIM_EVERY).unwrap();
+        tx.commit().unwrap();
+
+        assert_eq!(pragma(&e, "freelist_count"), free - FREE_PAGES_RETURNED_PER_TRIM);
+        assert!(pragma(&e, "page_count") <= size - FREE_PAGES_RETURNED_PER_TRIM, "the file shrank by them");
+
+        let tx = e.transaction().unwrap();
+        e.trim_change_feed_if_due(&tx, CHANGE_FEED_TRIM_EVERY).unwrap();
+        tx.commit().unwrap();
+        assert_eq!(pragma(&e, "freelist_count"), 0, "the next trim takes the rest");
+    }
+
+    /// A store born before stores were laid out for incremental vacuum is brought over in one `VACUUM`,
+    /// which also takes out the pages already free; one already laid out is left as it is.
+    #[test]
+    fn an_older_store_is_laid_out_for_incremental_vacuum() {
+        let dir = amenbo_scratch::scratch("lay-out-incremental");
+        let path = dir.join("store.sqlite");
+        {
+            // How every store before was born: the WAL switch first, which fixes the layout at none.
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(schema::JOURNAL_MODE_SQL).unwrap();
+        }
+        let e = StoreEngine::open(&path).unwrap();
+        assert_eq!(pragma(&e, "auto_vacuum"), 0);
+        free_pages(&e, 50);
+        assert!(pragma(&e, "freelist_count") >= 50);
+
+        e.lay_out_for_incremental_vacuum().unwrap();
+
+        assert_eq!(pragma(&e, "auto_vacuum"), AUTO_VACUUM_MODE_INCREMENTAL);
+        assert_eq!(pragma(&e, "freelist_count"), 0, "the VACUUM took the free pages out");
+        free_pages(&e, 50);
+        let free = pragma(&e, "freelist_count");
+        e.lay_out_for_incremental_vacuum().unwrap();
+        assert_eq!(pragma(&e, "freelist_count"), free, "laid out already, the store is not rewritten again");
     }
 
     /// [`transaction`](StoreEngine::transaction) must open `BEGIN IMMEDIATE`, i.e. hold the write lock

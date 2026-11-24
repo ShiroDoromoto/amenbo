@@ -24,7 +24,7 @@ import type {
   Snapshot as SnapshotDto,
 } from "../bindings/bindings";
 import { invalidateAllQueries, invalidateScopes, recheckSetupAgain } from "./query";
-import { drainChanges, takeChangeCursor } from "./changes";
+import { drainChanges, hasChangeCursor, takeChangeCursor } from "./changes";
 import { applyPerfConfig, invoke } from "./ipc";
 import { clearDismissedUpdate } from "./updateDismissed";
 
@@ -190,8 +190,8 @@ export function notifyInboxChanged(): void {
 // The store signature this device saw last, refreshed on every loadSnapshot from the one the snapshot
 // itself carries (read by core before the rows, so it is never newer than what is on screen). When a
 // store-changed arrives and all three legs still match, the file moved because *we* wrote — the result
-// is already on screen — and the refetch is suppressed. This is the watcher's dedup of our own writes.
-// Which leg moved is the other half: see `watchStore`.
+// is already on screen — and the snapshot is not read again. This is the watcher's dedup of our own writes;
+// the rows still unread on the feed are refetched all the same. Which leg moved is the other half: see `watchStore`.
 let lastSignature: StoreSignatureDto | null = null;
 
 /** Whether two signatures say the same thing. All three legs, since any one of them moving is a change. */
@@ -214,8 +214,11 @@ async function readSignature(): Promise<StoreSignatureDto | null> {
  * re-read from **which leg of the signature moved** (`AMB-D-856`), because `store-changed` is nothing but
  * a wake-up saying *something* did, and the payload never says what:
  *
- * - **nothing moved** … our own write. The ack already put the result on screen, and the `loadSnapshot`
- *   at the end of it has already carried the cursor past our own rows. Read nothing.
+ * - **nothing moved** … our own write, or an outside one the last `loadSnapshot` already read. The
+ *   snapshot region is current, so it is not read again — but the rows past the cursor are still read off
+ *   the feed and their scopes refetched: a narrow `loadSnapshot` does not move the cursor, so an outside
+ *   write that landed while it read is still there to be found. Rows of our own write come back here too;
+ *   refetching what the ack already refetched is the harmless direction.
  * - **the store file's identity moved** … it was swapped out from under us (`fold`, `stage_and_swap`, a
  *   restore). Nothing the feed held survives that, so re-read everything. A migration runs in place and
  *   puts what it rewrote on the feed (`AMB-D-1166`), so it comes in as `data_version` alone.
@@ -246,11 +249,19 @@ export async function watchStore(): Promise<() => void> {
     };
     // No signature at all, or nothing to compare against: we cannot say which leg moved, so re-read.
     if (sig === null || lastSignature === null) return await full();
-    if (sameSignature(sig, lastSignature)) return; // our own write, already on screen.
+    const unmoved = sameSignature(sig, lastSignature);
     // The two legs the feed structurally cannot speak for.
-    if (sig.file !== lastSignature.file || sig.config !== lastSignature.config) return await full();
+    if (!unmoved && (sig.file !== lastSignature.file || sig.config !== lastSignature.config)) return await full();
     const { scopes, gap } = await drainChanges();
     if (gap) return await full();
+    if (unmoved) {
+      // The snapshot on screen already counts every commit up to now, so only the queries the unread rows
+      // touched are owed — and the mailbox, when they reach the task side.
+      if (scopes.size === 0) return;
+      invalidateScopes(scopes);
+      if (scopes.has("tasks")) notifyInboxChanged();
+      return;
+    }
     if (scopes.size === 0) {
       // The feed answered, and it named nothing: a commit of the store's own bookkeeping. Nothing
       // lands, so nothing is announced — but the signature is carried forward, or the next wake would
@@ -316,7 +327,7 @@ export async function reconcile(reason: ReconcileReason): Promise<void> {
         const full = reconcileForceFull;
         reconcileForceFull = false;
         if (full) {
-          await loadSnapshot(); // members/projects/activity/config… and lastSignature moves to now.
+          await loadSnapshot({ whole: true }); // members/projects/activity/config… and lastSignature moves to now.
           invalidateAllQueries(); // every live query — list, board, single, aggregate, decision — re-reads.
         } else {
           await focusCatchUp(); // focus-only path: the signature decides between no-op and a re-read.
@@ -347,7 +358,7 @@ async function focusCatchUp(): Promise<void> {
     notifyOutsideStore(); // and the same for everything else that lives outside the store.
     return;
   }
-  await loadSnapshot(); // this also moves lastSignature to the current value.
+  await loadSnapshot({ whole: true }); // this also moves lastSignature to the current value.
   invalidateAllQueries();
 }
 
@@ -442,11 +453,18 @@ export interface LoadOptions {
    * must not stoke an inbox recompute.
    */
   inboxAffected?: boolean;
+  /**
+   * Whether every live query is re-read right after this (default false) — `reconcile`'s full re-read. Only
+   * then may the change feed's cursor be moved to its head before the read: what the feed held up to there is
+   * covered by re-reading everything. A narrower read leaves the cursor where it is, so a row nobody has read
+   * yet is still read off the feed (see `watchStore`).
+   */
+  whole?: boolean;
 }
 
 // The read in flight, and the one queued behind it. See `loadSnapshot`.
 let running: Promise<void> | null = null;
-let queued: { inboxAffected: boolean; done: Promise<void> } | null = null;
+let queued: { inboxAffected: boolean; whole: boolean; done: Promise<void> } | null = null;
 
 /**
  * Re-reads from core (or the fixtures), swaps the cache and notifies subscribers.
@@ -457,30 +475,32 @@ let queued: { inboxAffected: boolean; done: Promise<void> } | null = null;
  * reads would instead each overwrite the cache and `lastSignature` whenever their reply came in — the
  * last *reply* would win, not the last *call*, and that order is only kept today because core runs
  * these commands one at a time on the main thread. A queued read is inbox-affecting if any call it
- * stands for was.
+ * stands for was, and whole if any of them was — that caller re-reads every query once it is done.
  */
 export function loadSnapshot(opts: LoadOptions = {}): Promise<void> {
   const inboxAffected = opts.inboxAffected ?? true;
+  const whole = opts.whole ?? false;
   if (queued) {
     queued.inboxAffected ||= inboxAffected;
+    queued.whole ||= whole;
     return queued.done;
   }
   if (running) {
-    const next = { inboxAffected, done: Promise.resolve() };
+    const next = { inboxAffected, whole, done: Promise.resolve() };
     next.done = running
       .catch(() => {}) // the one before failing is no reason not to read again.
       .then(() => {
         queued = null;
-        return startLoad(next.inboxAffected);
+        return startLoad(next.inboxAffected, next.whole);
       });
     queued = next;
     return next.done;
   }
-  return startLoad(inboxAffected);
+  return startLoad(inboxAffected, whole);
 }
 
-function startLoad(inboxAffected: boolean): Promise<void> {
-  const read = readSnapshot(inboxAffected).finally(() => {
+function startLoad(inboxAffected: boolean, whole: boolean): Promise<void> {
+  const read = readSnapshot(inboxAffected, whole).finally(() => {
     if (running === read) running = null;
   });
   running = read;
@@ -488,15 +508,18 @@ function startLoad(inboxAffected: boolean): Promise<void> {
 }
 
 /**
- * One read. The change feed's position is taken **before** the store is read, not after: a change that
- * slips into the gap would otherwise land behind the cursor and be lost forever. Taking it first can
- * only make a change show up twice, which is the harmless direction. Core returns no tasks/decisions
- * rows, so they are filled with empty arrays to satisfy the non-optional type — the Tauri path reads
- * neither, and the paging hooks fetch a window at a time.
+ * One read. On a whole re-read, or when we hold no position yet (startup, a failed IPC), the change feed's
+ * position is taken **before** the store is read, not after: a change that slips into the gap would
+ * otherwise land behind the cursor and be lost forever. Taking it first can only make a change show up
+ * twice, which is the harmless direction. A narrower read leaves the cursor alone — moving it to the head
+ * would skip rows that came after the last drain, and with them the queries they touch, which nothing
+ * but the feed refetches. Core returns no tasks/decisions rows, so they are filled with empty arrays to
+ * satisfy the non-optional type — the Tauri path reads neither, and the paging hooks fetch a window at a
+ * time.
  */
-async function readSnapshot(inboxAffected: boolean): Promise<void> {
+async function readSnapshot(inboxAffected: boolean, whole: boolean): Promise<void> {
   if (inTauri()) {
-    await takeChangeCursor();
+    if (whole || !hasChangeCursor()) await takeChangeCursor();
     const snap = await invoke<Snapshot>("snapshot");
     cache = { ...snap, tasks: snap.tasks ?? [], decisions: snap.decisions ?? [] };
     applyPerfConfig(cache.perfLog);

@@ -190,9 +190,10 @@ describe("watchStore — while the feed can speak, refetch only the surfaces tha
     stop();
   });
 
-  it("thins out our own (GUI) writes — already reflected via ack (do not fire twice from the feed)", async () => {
+  it("thins out our own (GUI) writes — already reflected via ack, and nothing left unread on the feed", async () => {
     head = 10;
     const fire = await boot();
+    pages = [feed([], 10)]; // Our rows were read off the feed already: nothing past the cursor.
     const { seen, stop } = captureReflected(); // The signature is unchanged, so the write was ours.
 
     await fire();
@@ -279,6 +280,49 @@ describe("watchStore — when the feed cannot speak, always re-read from the sou
 
     expect(reloaded()).toBeGreaterThan(0);
     expect(invalidateAllQueries).toHaveBeenCalled();
+  });
+});
+
+describe("watchStore — an outside write that lands while the store is being re-read is not dropped", () => {
+  it("a write landing between the drain and the snapshot read is read off the feed on its own wake", async () => {
+    head = 10;
+    const fire = await boot();
+    committed(); // Write A from outside.
+    head = 11;
+    // Right after the feed hands back A, write B lands — before the snapshot reads the store, so the
+    // snapshot's signature already counts B, and B's wake will find nothing moved.
+    let slipIn = true;
+    invoke.mockImplementation((cmd: string) => {
+      switch (cmd) {
+        case "snapshot": return Promise.resolve({ ...SNAPSHOT, signature });
+        case "store_signature": return Promise.resolve(signature);
+        case "change_cursor": return Promise.resolve(head);
+        case "changes_since": {
+          const page = pages.shift() ?? feed([], head);
+          if (slipIn) {
+            slipIn = false;
+            committed(); // Write B from outside.
+            head = 12;
+            pages.push(feed([row("decision_comment")], 12));
+          }
+          return Promise.resolve(page);
+        }
+        default: return Promise.resolve(null);
+      }
+    });
+    pages = [feed([row("task")], 11)];
+
+    await fire(); // A's wake.
+
+    expect(invalidateScopes).toHaveBeenCalledWith(new Set(["tasks"]));
+    invalidateScopes.mockClear();
+    invoke.mockClear();
+
+    await fire(); // B's wake: the signature matches the snapshot just read, yet B's row is still unread.
+
+    expect(invalidateScopes).toHaveBeenCalledWith(new Set(["decisions"]));
+    expect(invalidateAllQueries).not.toHaveBeenCalled();
+    expect(reloaded()).toBe(0); // The snapshot already counts B; only the queries B touched are owed.
   });
 });
 

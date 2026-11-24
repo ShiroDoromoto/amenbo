@@ -4,7 +4,9 @@
 //
 // The cursor lives in this module, and memory is enough for it: after a restart the snapshot reads the store
 // whole, so take the cursor **before** that read and resume from there (a change that slips into the gap between
-// the two stays ahead of the cursor — it is seen twice, never lost; the other order loses it forever).
+// the two stays ahead of the cursor — it is seen twice, never lost; the other order loses it forever). It is
+// taken only for a read that re-reads every query as well; a narrower read leaves it where it is, so the rows
+// past it are still read off the feed.
 //
 // When the feed cannot say what changed, it says so. Every condition under which `drainChanges` returns `gap` is
 // exactly that:
@@ -163,9 +165,16 @@ const MAX_PAGES = 20;
 /** Our position in the feed. `null` = never taken (startup, or a failed read) = we cannot say what changed. */
 let cursor: number | null = null;
 
+/** Whether we hold a position in the feed. Without one, a read of the store has to take one first. */
+export function hasChangeCursor(): boolean {
+  return cursor !== null;
+}
+
 /**
- * Note where the feed currently ends. Call this **before** reading the store whole; from then on `drainChanges`
- * returns only what came after. Outside Tauri (the mock) there is no feed, so it sits at 0 and nothing arrives.
+ * Note where the feed currently ends. Call this **before** reading the store whole, and only then — every query
+ * is re-read too, so whatever the feed held up to here is already covered; from then on `drainChanges` returns
+ * only what came after. A narrower read must not call it: it would skip rows nobody has read yet. Outside Tauri
+ * (the mock) there is no feed, so it sits at 0 and nothing arrives.
  */
 export async function takeChangeCursor(): Promise<void> {
   if (!inTauri()) {

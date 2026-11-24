@@ -667,7 +667,9 @@ CREATE TABLE IF NOT EXISTS viewer_send (
     last_placed_at TEXT,
     strays         BIGINT CHECK(strays IN (0, 1)),
     strays_read_to TEXT,
-    strays_gone_at TEXT
+    strays_gone_at TEXT,
+    keys_kept      BIGINT,
+    reread_waits   BIGINT CHECK(reread_waits IN (0, 1))
 );
 CREATE TABLE IF NOT EXISTS viewer_pending (
     id         INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,

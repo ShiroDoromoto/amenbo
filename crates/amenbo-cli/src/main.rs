@@ -568,11 +568,11 @@ fn advise_linux_system_orphan() {
     }
 }
 
-/// Ask for the Viewer to be set up again while its server is a Worker too old to delete the leftover
-/// rows it holds (`AMB-D-1160` / `AMB-D-1161`). Whether to ask is core's to say
-/// ([`amenbo_core::viewer::asks_for_setup_again`]); this only words it. How far the deleting has got and
-/// how long it has left are not said. On stderr beside the version advisory, and a store that cannot be
-/// read is not a reason to fail the command — the line is simply not said this time.
+/// Ask for the Viewer to be set up again while its server is a Worker too old to finish deleting the
+/// leftover rows it holds within a day's allowance (`AMB-D-1160` / `AMB-D-1161`). Whether to ask is
+/// core's to say ([`amenbo_core::viewer::asks_for_setup_again`]); this only words it. How far the
+/// deleting has got and how long it has left are not said. On stderr beside the version advisory, and a
+/// store that cannot be read is not a reason to fail the command — the line is simply not said this time.
 fn ask_for_viewer_setup_again(store: &Store) {
     if let Ok(true) = amenbo_core::viewer::asks_for_setup_again(store) {
         eprintln!(
@@ -796,7 +796,8 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     advise_linux_system_orphan();
 
     // An old Worker still holding leftover rows: the only way a CLI-only user hears that the server wants
-    // setting up again. Clears itself once a write answers as build 4.
+    // setting up again. Clears itself once a write answers as build 4 and the `reread` that ends the
+    // deleting is not held back, or once setup writes down build 5.
     ask_for_viewer_setup_again(&store);
 
     // Where the plugins went (`AMB-D-884`). A person who installed one and finds it gone is owed the

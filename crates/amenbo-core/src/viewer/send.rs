@@ -40,7 +40,8 @@ use crate::store_engine::read::FeedRow;
 
 use super::carried::{Carried, Op, Waiting};
 use super::pace::{
-    be_quiet_for, out_of_budget, quiet, spend, the_wait_in_words, ROWS_WE_MAY_SPEND_A_DAY,
+    be_quiet_for, fits_today, out_of_budget, quiet, spend, spent_today, the_wait_in_words,
+    ROWS_WE_MAY_SPEND_A_DAY,
 };
 use super::refusal::{one_line_of, Refused};
 use super::repair::KeysHeld;
@@ -99,6 +100,16 @@ const STRAY_PAGES_PER_TURN: usize = 10;
 /// answering as an older one has no such door, so a run's leftover rows on it are left alone until it is
 /// set up again — which is what [`super::asks_for_setup_again`] says out loud.
 pub(super) const BUILD_THAT_TAKES_KEYS_OUT: i64 = 4;
+
+/// The first build of the Worker whose `reread` costs next to nothing: it moves where its holdings begin
+/// with one `UPDATE` and rewrites no row. **On build 4 a `reread` rewrites every row the server holds**, so
+/// it is sent there only where that fits what is left of the day ([`clear_strays`]), and where it does
+/// not, setting the Viewer up again is what moves the server on ([`super::asks_for_setup_again`]).
+pub(super) const BUILD_WHOSE_REREAD_IS_CHEAP: i64 = 5;
+
+/// What a build 4 `reread` writes for each key the server holds — measured, at 4001 rows for a server
+/// holding 2000 keys.
+const ROWS_A_BUILD_4_REREAD_WRITES_A_KEY: i64 = 2;
 
 /// What one call to the Worker gets. A send nobody is waiting on must still end, so a call that is not
 /// going to answer gives the run back rather than holding it.
@@ -560,14 +571,24 @@ fn strays_to_clear(left: &Carried) -> bool {
 /// in [`WITHHELD_FROM_THE_VIEWER`] is handed to `DELETE /records`, [`RECORDS_PER_WRITE`] at a time.
 ///
 /// **It spends the day's rows the sending spends**, and stops where they run out — asked between
-/// requests, as [`drain`] asks it, so it overshoots by at most one. Deleting a key does not move the
-/// server's ordering, so where it stopped is the start of the page it was on: the next turn reads that
-/// page again, and finds only what is still there.
+/// requests, as [`drain`] asks it, so a removal overshoots by at most the one request after the asking.
+/// Deleting a key does not move the server's ordering, so where it stopped is the start of the page it
+/// was on: the next turn reads that page again, and finds only what is still there.
 ///
 /// **Once the last page is behind it, every phone is asked to read again** (`reread`). The Worker moves
 /// where its holdings begin up to where they stand, so a phone reading on from before that is answered
 /// `409`, throws its copy away — the run's rows with it — and reads the store again. Only then is
 /// `strays_gone_at` written, which is what says this is done.
+///
+/// **That one request is not bounded by asking between requests.** A build 5 Worker moves its holdings
+/// with one `UPDATE`, but a build 4 one rewrites every row it holds — about two rows written per key —
+/// and on a server past about 45,000 keys that is more than a whole day's allowance, let alone what is
+/// left of it.
+/// So the keys that stay on the server are counted as the pages go by ([`Carried::keys_kept`]), and a
+/// build 4 Worker is sent the `reread` only where twice that count fits what is left of the day. Where it
+/// does not, the `reread` is held back ([`Carried::reread_waits`]) and the user is asked to set the
+/// Viewer up again: a build 5 Worker is sent it whatever the count. The reading stays at the start of the
+/// last page, so each turn after reads that page again and asks the same question.
 fn clear_strays(
     server: &Server,
     left: &mut Carried,
@@ -597,15 +618,43 @@ fn clear_strays(
             if out_of_budget(left, now) {
                 return Ok(taken);
             }
+            let held = left.keys_kept + kept_on(&page);
+            if !reread_fits(left, held, now) {
+                tracing::info!(
+                    keys = held,
+                    spent = spent_today(left, now),
+                    "a build {} Worker would spend more than today's {ROWS_WE_MAY_SPEND_A_DAY} rows on \
+                     asking the phones to read again — it waits for the Viewer to be set up again",
+                    left.build
+                );
+                left.reread_waits = true;
+                return Ok(taken);
+            }
             take_out(server, left, &[], true, now)?;
             left.strays_read_to = None;
+            left.keys_kept = 0;
+            left.reread_waits = false;
             left.strays_gone_at = Some(crate::time::Timestamp(now).to_rfc3339_z());
             return Ok(taken);
         }
         since = read_on_past(&page, since)?;
         left.strays_read_to = Some(since.to_string());
+        left.keys_kept += kept_on(&page);
     }
     Ok(taken)
+}
+
+/// How many keys on a page stay on the server once its run rows are deleted.
+fn kept_on(page: &KeysHeld) -> i64 {
+    page.records.iter().filter(|record| !is_a_stray(&record.key)).count() as i64
+}
+
+/// Whether the `reread` that ends the deleting may go to a server holding `held` keys: always to a build
+/// whose `reread` rewrites nothing, and to an older one only where what it rewrites fits what is left of
+/// the day.
+fn reread_fits(left: &Carried, held: i64, now: DateTime<Utc>) -> bool {
+    left.build >= BUILD_WHOSE_REREAD_IS_CHEAP
+        || fits_today(left, held.saturating_mul(ROWS_A_BUILD_4_REREAD_WRITES_A_KEY), now)
 }
 
 /// Where a reading of the server's keys that stopped part way got to, or the beginning.
@@ -621,7 +670,7 @@ fn is_a_stray(key: &str) -> bool {
 /// Read one page of the server's keys after `since`.
 ///
 /// A server that answers `409` has had what it held replaced since, so the position is thrown away and
-/// the next turn reads from the beginning.
+/// the next turn reads from the beginning — and what the deleting counted with it.
 fn keys_held_after(
     server: &Server,
     left: &mut Carried,
@@ -631,6 +680,7 @@ fn keys_held_after(
         Ok(answered) => answered,
         Err(Rebuffed::Refused(refused)) if refused.status == 409 => {
             left.strays_read_to = None;
+            left.keys_kept = 0;
             return Err(Rebuffed::Refused(refused));
         }
         Err(rebuffed) => return Err(rebuffed),
@@ -2014,8 +2064,8 @@ mod tests {
         assert_eq!(store.viewer_carried().unwrap().strays, None);
     }
 
-    /// A device that found a run's rows on a server new enough to delete them, with nothing queued and
-    /// nothing in the store left to read out.
+    /// A device that found a run's rows on a server new enough to delete them and to ask the phones to
+    /// read again whatever it holds, with nothing queued and nothing in the store left to read out.
     fn holding_strays(store: &Store, left: Carried) {
         let version = store.device_sync_version().unwrap();
         store
@@ -2023,7 +2073,7 @@ mod tests {
                 cursor: 1,
                 version,
                 seq: 10,
-                build: 4,
+                build: BUILD_WHOSE_REREAD_IS_CHEAP,
                 strays: Some(true),
                 ..left
             })
@@ -2032,7 +2082,25 @@ mod tests {
 
     /// A Worker deleting keys and answering where its ordering stands.
     fn removed(seq: i64, rows: i64) -> Reply {
-        Reply::ok(serde_json::json!({ "seq": seq, "rows_written": rows, "build": 4 }).to_string())
+        removed_by(BUILD_WHOSE_REREAD_IS_CHEAP, seq, rows)
+    }
+
+    /// [`removed`], by a Worker answering as `build`.
+    fn removed_by(build: i64, seq: i64, rows: i64) -> Reply {
+        Reply::ok(serde_json::json!({ "seq": seq, "rows_written": rows, "build": build }).to_string())
+    }
+
+    /// A device holding a run's rows on a build 4 server, which has spent all but `left_today` of today's
+    /// rows by `day`.
+    fn holding_strays_on_build_4(store: &Store, left_today: i64, day: &str, left: Carried) {
+        holding_strays(
+            store,
+            Carried { spent: ROWS_WE_MAY_SPEND_A_DAY - left_today, spent_on: Some(day.into()), ..left },
+        );
+        // `holding_strays` writes down a build 5 server, so the build is written over after it.
+        store
+            .set_viewer_carried(&Carried { build: BUILD_THAT_TAKES_KEYS_OUT, ..store.viewer_carried().unwrap() })
+            .unwrap();
     }
 
     /// The removals a host was sent, oldest first.
@@ -2186,6 +2254,154 @@ mod tests {
             assert!(removals(&host).is_empty(), "build {build}");
             assert_eq!(key_reads(&host), 0, "build {build}");
         }
+    }
+
+    /// **A build 4 Worker is asked to read again only where it fits the day.** Its `reread` rewrites every
+    /// row it holds, about two rows written per key, so the keys that stay on the server are counted page by
+    /// page — the run rows deleted on the way are not among them — and the `reread` goes where twice that
+    /// count fits what is left of today's rows.
+    #[test]
+    fn a_build_4_worker_is_asked_to_read_again_where_twice_its_keys_fit_the_day() {
+        let mut store = store_at("strays-build-4-fits");
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        set_up(&mut store, &host);
+        // Four keys stay: eight rows, and eight are left of the day.
+        holding_strays_on_build_4(&store, 8, "2026-11-16", Carried::default());
+        host.set_reply(
+            "/records?since=0&keys=1",
+            keys_page(
+                &[("task/1", "put"), ("automation_run/2", "put"), ("task/3", "put"), ("task/4", "del")],
+                20,
+                true,
+            ),
+        );
+        host.set_reply(
+            "/records?since=20&keys=1",
+            keys_page(&[("task/5", "put"), ("automation_run/6", "put")], 30, false),
+        );
+        host.set_replies("/records", [removed_by(4, 10, 0), removed_by(4, 10, 0), removed_by(4, 40, 8)]);
+
+        carry_at(&store, at("2026-11-16T10:00:00Z")).unwrap();
+
+        let sent = removals(&host);
+        assert_eq!(sent.len(), 3);
+        assert_eq!(sent[2]["reread"], true);
+        let left = store.viewer_carried().unwrap();
+        assert!(left.strays_gone_at.is_some());
+        assert_eq!((left.keys_kept, left.reread_waits), (0, false), "the count goes with the reading");
+        assert!(!crate::viewer::asks_for_setup_again(&store).unwrap());
+    }
+
+    /// **Where twice the keys do not fit, the `reread` is held back and setup is asked for again.** The
+    /// run rows are deleted all the same; the reading stays at the start of the last page, with what the
+    /// pages before it counted, so the next turn reads that page again and asks again. Setting up again
+    /// writes down a build whose `reread` goes whatever it holds, and the next turn sends it.
+    #[test]
+    fn a_reread_that_does_not_fit_the_day_waits_for_setup_again() {
+        let mut store = store_at("strays-build-4-waits");
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        set_up(&mut store, &host);
+        // Four keys stay: eight rows, and seven are left of the day.
+        holding_strays_on_build_4(&store, 7, "2026-11-16", Carried::default());
+        host.set_reply(
+            "/records?since=0&keys=1",
+            keys_page(
+                &[("task/1", "put"), ("automation_run/2", "put"), ("task/3", "put"), ("task/4", "del")],
+                20,
+                true,
+            ),
+        );
+        host.set_reply(
+            "/records?since=20&keys=1",
+            keys_page(&[("task/5", "put"), ("automation_run/6", "put")], 30, false),
+        );
+        host.set_reply("/records", removed_by(4, 10, 0));
+
+        carry_at(&store, at("2026-11-16T10:00:00Z")).unwrap();
+
+        let sent = removals(&host);
+        assert_eq!(sent.len(), 2, "the run rows are deleted");
+        assert!(sent.iter().all(|removal| removal["reread"] == false), "and no reread goes");
+        let left = store.viewer_carried().unwrap();
+        assert_eq!(left.strays_gone_at, None);
+        assert!(left.reread_waits);
+        assert_eq!(left.strays_read_to.as_deref(), Some("20"), "the reading stays at the last page");
+        assert_eq!(left.keys_kept, 3, "with what the pages before it counted");
+        assert!(crate::viewer::asks_for_setup_again(&store).unwrap(), "and setup is asked for again");
+
+        // The next turn reads the last page again and holds back again.
+        host.set_reply("/records?since=20&keys=1", keys_page(&[("task/5", "put")], 30, false));
+        carry_at(&store, at("2026-11-16T11:00:00Z")).unwrap();
+        assert_eq!(removals(&host).len(), 2);
+        assert!(store.viewer_carried().unwrap().reread_waits);
+
+        // Setup writes down the build it placed, and the reread goes whatever the count.
+        store
+            .set_viewer_carried(&Carried {
+                build: BUILD_WHOSE_REREAD_IS_CHEAP,
+                ..store.viewer_carried().unwrap()
+            })
+            .unwrap();
+        host.set_reply("/records", removed(40, 1));
+        carry_at(&store, at("2026-11-16T12:00:00Z")).unwrap();
+        let sent = removals(&host);
+        assert_eq!(sent.len(), 3);
+        assert_eq!(sent[2]["reread"], true);
+        let left = store.viewer_carried().unwrap();
+        assert!(left.strays_gone_at.is_some());
+        assert_eq!((left.keys_kept, left.reread_waits), (0, false));
+        assert!(!crate::viewer::asks_for_setup_again(&store).unwrap());
+    }
+
+    /// **The keys counted on earlier turns count.** A reading that went on from where the last turn got to
+    /// prices the `reread` by everything it read past, not only what this turn read.
+    #[test]
+    fn the_keys_counted_on_earlier_turns_count_toward_the_reread() {
+        let mut store = store_at("strays-build-4-carried");
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        set_up(&mut store, &host);
+        // One key on this page would fit; with the thousand counted before, it does not.
+        holding_strays_on_build_4(
+            &store,
+            1_000,
+            "2026-11-16",
+            Carried { strays_read_to: Some("40".into()), keys_kept: 1_000, ..Carried::default() },
+        );
+        host.set_reply("/records?since=40&keys=1", keys_page(&[("task/9", "put")], 50, false));
+
+        carry_at(&store, at("2026-11-16T10:00:00Z")).unwrap();
+
+        assert!(removals(&host).is_empty());
+        let left = store.viewer_carried().unwrap();
+        assert!(left.reread_waits);
+        assert_eq!(left.keys_kept, 1_000);
+    }
+
+    /// **A new day brings the room back.** A `reread` held back yesterday goes today where twice the keys
+    /// fit the whole of the day, and the asking ends with it.
+    #[test]
+    fn a_held_back_reread_goes_on_a_day_it_fits() {
+        let mut store = store_at("strays-build-4-next-day");
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        set_up(&mut store, &host);
+        holding_strays_on_build_4(
+            &store,
+            0,
+            "2026-11-16",
+            Carried { strays_read_to: Some("40".into()), keys_kept: 2_000, reread_waits: true, ..Carried::default() },
+        );
+        host.set_reply("/records?since=40&keys=1", keys_page(&[("task/9", "put")], 50, false));
+        host.set_reply("/records", removed_by(4, 60, 4_003));
+
+        carry_at(&store, at("2026-11-17T00:00:01Z")).unwrap();
+
+        let sent = removals(&host);
+        assert_eq!(sent.len(), 1);
+        assert_eq!(sent[0]["reread"], true);
+        let left = store.viewer_carried().unwrap();
+        assert!(left.strays_gone_at.is_some());
+        assert!(!left.reread_waits);
+        assert_eq!(left.spent, 4_003);
     }
 
     /// The deleting reads a few pages a turn, and the turn after it goes on from where it got to.

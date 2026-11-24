@@ -1,17 +1,18 @@
 // The band that asks the reader to set the Viewer up again, put across the whole app.
 //
 // A Worker older than build 4 cannot take out the rows a run leaves behind on the server, so they stay
-// there for good; setting up again is what moves the Worker up. That is something the reader can do, so the
-// band is the strong one (`healthbanner--offer`, `role="alert"`), the same as the other offers in the stack.
+// there for good; a build 4 one takes them out, but asking the phones to read again afterwards can cost it
+// more than the day allows. Setting up again is what moves the Worker up. That is something the reader can
+// do, so the band is the strong one (`healthbanner--offer`, `role="alert"`), the same as the other offers in the stack.
 //
 // **It says one thing.** No progress of the cleanup and no stretch of time — only that the server needs
 // updating and that setting up again does it. The CLI's line on startup says the same.
 //
 // **Whether it is up is core's whole judgement** (`asks_for_setup_again`); nothing here looks at the build or
-// the leftover rows itself. It goes down once core answers `false`, which happens when a send after the setup
-// brings build 4 back from the server. That send runs in its own process and the row it writes is not on the
-// change feed, so the store watcher asks again whenever the feed comes back empty, and while the band is up it
-// also asks again on a timer.
+// the leftover rows itself. It goes down once core answers `false`, which happens when the setup writes down
+// the build it placed, or a send brings a newer build back from the server. A send runs in its own process
+// and the row it writes is not on the change feed, so the store watcher asks again whenever the feed comes
+// back empty, and while the band is up it also asks again on a timer.
 //
 // Its button opens the update screen, which asks for the API token and nothing else (`ViewerUpdate`). The
 // screen is the shell's to hold, so a band that goes down while it is open does not take it along.

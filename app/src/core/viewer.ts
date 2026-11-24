@@ -67,8 +67,8 @@ export function useViewerState(): { state: ViewerState; loading: boolean; error:
 
 /**
  * Whether the reader should be asked to set up again: an old Worker is holding rows a run left behind,
- * which only build 4 and later can take out. The judgement is core's whole (`asks_for_setup_again`); this
- * side only draws it. `false` outside Tauri, where there is no store to ask.
+ * which only build 4 and later can take out, and only build 5 can finish with whatever the server holds.
+ * The judgement is core's whole (`asks_for_setup_again`); this side only draws it. `false` outside Tauri, where there is no store to ask.
  */
 export async function fetchViewerAsksForSetupAgain(): Promise<boolean> {
   if (!inTauri()) return false;

@@ -1712,6 +1712,15 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 151,
+        name: "add viewer_send.keys_kept and reread_waits, what the deleting of the server's leftover run rows counted and held back",
+        // **A deleting part way through is read again from the beginning**, so the count starts where the
+        // reading does: going on from the middle would count low by the pages behind it, and a `reread`
+        // sent on that count could spend more than the day has left. The keys already deleted are gone,
+        // so reading those pages again writes nothing. No task is touched.
+        apply: Apply::Custom(let_the_carrier_count_what_the_reread_would_cost),
+    },
+    Step {
+        to: 152,
         name: "lay the file out for incremental vacuum, so the pages deleted rows free go back to the OS",
         // **Nothing in the transaction.** What lays the file out is a `VACUUM`, which no transaction may
         // hold, so it follows the chain (`run`, `StoreEngine::lay_out_for_incremental_vacuum`). The step
@@ -2444,6 +2453,30 @@ fn let_a_trigger_keep_since_when_it_waits(ctx: &Ctx<'_>) -> Result<()> {
              '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');",
         )?;
     }
+    Ok(())
+}
+
+/// v151: `viewer_send.keys_kept` and `reread_waits` — how many keys the deleting of the server's leftover
+/// run rows has read past that stay there, and whether the `reread` that ends it was held back for not
+/// fitting what was left of the day. NULL on the row already there, which reads as "none counted" and
+/// "not held back".
+///
+/// **A deleting not finished yet is sent back to the beginning** (`strays_read_to` to NULL), so what it
+/// counts covers the whole server: nothing was counted on the pages it had already read.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. Nullable with no default but NULL,
+/// so `ALTER TABLE` adds each as it stands.
+fn let_the_carrier_count_what_the_reread_would_cost(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let there = column_names(tx, "viewer_send")?;
+    for (name, decl) in [("keys_kept", "BIGINT"), ("reread_waits", "BIGINT CHECK(reread_waits IN (0, 1))")] {
+        if !there.iter().any(|c| c == name) {
+            tx.execute_batch(&format!("ALTER TABLE viewer_send ADD COLUMN {name} {decl};"))?;
+        }
+    }
+    tx.execute_batch(
+        "UPDATE viewer_send SET strays_read_to = NULL WHERE strays = 1 AND strays_gone_at IS NULL;",
+    )?;
     Ok(())
 }
 
@@ -7860,7 +7893,7 @@ pub fn run(
         run.to = step.to;
         run.applied.push(step.name);
     }
-    // A store born without the incremental vacuum layout is brought over to it here (v151), because this
+    // A store born without the incremental vacuum layout is brought over to it here (v152), because this
     // is the one moment the store is held to itself: every other surface is turned away until the chain is
     // done, so the `VACUUM` that does it waits for nobody and nobody waits on it past `busy_timeout`. It
     // runs after the last step has committed, since no transaction may be open around it.
@@ -16633,6 +16666,52 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// v151: where the carrier was left at v150 reads as "none counted" and "not held back", a deleting
+    /// part way through reads again from the beginning, what is written afterwards comes back, and the
+    /// holding back takes no word but yes or no.
+    #[test]
+    fn a_carrier_left_before_v151_has_counted_nothing_and_held_nothing_back() {
+        let dir = scratch("viewer-reread");
+        let engine = store_at(&dir, 150);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO viewer_send (id, version, placed, seq, spent, build, strays, strays_read_to)
+                 VALUES (1, 12, 12, 41, 0, 4, 1, '40');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, steps_through(151), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 151);
+        let read = || -> (Option<String>, Option<i64>, Option<i64>) {
+            engine
+                .conn()
+                .query_row("SELECT strays_read_to, keys_kept, reread_waits FROM viewer_send WHERE id = 1", [], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+                })
+                .unwrap()
+        };
+        assert_eq!(
+            read(),
+            (None, None, None),
+            "the row stays, nothing was counted yet, and the deleting part way through starts over"
+        );
+        engine
+            .conn()
+            .execute(
+                "UPDATE viewer_send SET strays_read_to = '40', keys_kept = 2000, reread_waits = 1 WHERE id = 1",
+                [],
+            )
+            .unwrap();
+        assert_eq!(read(), (Some("40".into()), Some(2000), Some(1)));
+        assert!(
+            engine.conn().execute("UPDATE viewer_send SET reread_waits = 2 WHERE id = 1", []).is_err(),
+            "held back or not, and nothing else",
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// v149: where the carrier was left at v148 reads as "not read yet" and "not deleted yet", what is
     /// written afterwards comes back, and the finding takes no word but none or some.
     #[test]
@@ -16747,12 +16826,12 @@ mod tests {
         }
     }
 
-    /// v151: a store born before stores were laid out for incremental vacuum is laid out for it once the
+    /// v152: a store born before stores were laid out for incremental vacuum is laid out for it once the
     /// chain has run, and the pages its deletes had freed leave the file in the same `VACUUM`.
     #[test]
-    fn a_store_born_before_v151_is_laid_out_for_incremental_vacuum() {
+    fn a_store_born_before_v152_is_laid_out_for_incremental_vacuum() {
         let dir = scratch("incremental-vacuum");
-        let engine = store_at(&dir, 150);
+        let engine = store_at(&dir, 151);
         engine
             .conn()
             .execute_batch(
@@ -16768,9 +16847,9 @@ mod tests {
         assert_eq!(pragma("auto_vacuum"), 0, "born before, the file is not laid out for it");
         assert!(pragma("freelist_count") >= 200, "and the deleted rows' pages stay in it");
 
-        run(&engine, &dir, steps_through(151), &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(152), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), 151);
+        assert_eq!(engine.format_version().unwrap(), 152);
         assert_eq!(pragma("auto_vacuum"), 2, "laid out for incremental vacuum");
         assert_eq!(pragma("freelist_count"), 0, "the free pages left the file");
         std::fs::remove_dir_all(&dir).ok();

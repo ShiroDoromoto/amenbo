@@ -95,7 +95,7 @@ describe("SetupAgainBanner", () => {
     expect(banner()).not.toBeNull();
     const before = hoisted.asked;
 
-    // A send in another process brought build 4 back; nothing on the feed says so.
+    // A send in another process brought a new enough build back; nothing on the feed says so.
     hoisted.asks = false;
     await act(async () => {
       vi.advanceTimersByTime(RECHECK_MS);

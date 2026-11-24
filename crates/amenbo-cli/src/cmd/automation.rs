@@ -1237,14 +1237,14 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 for r in &shown {
                     out.push(json!({
                         "run": serde_json::to_value(r).unwrap(),
-                        "steps": store.automation_run_steps(r.id).map_err(CliError::from)?.len(),
+                        "steps": steps_walked(store, r.id)?,
                     }));
                 }
                 print_json(&json!({ "count": out.len(), "about": about, "runs": out }));
             } else {
                 human(flags, format!("{} run(s) — {about}", shown.len()));
                 for r in &shown {
-                    let moves = store.automation_run_steps(r.id).map_err(CliError::from)?.len();
+                    let moves = steps_walked(store, r.id)?;
                     human(
                         flags,
                         format!(
@@ -1591,6 +1591,13 @@ fn speaking_for() -> Result<i64, CliError> {
         hint: Some("start a run with `automation start <id>`, and the step's own terminal carries what these commands need".to_string()),
         exit: 2,
     })
+}
+
+/// **How many steps one run walked**, its finished rounds read from the run log and the round under way
+/// from the store ([`amenbo_core::run_log::detail`]): the store lets a round's detail go once the run log
+/// holds it, so counting the store's rows alone would undercount.
+fn steps_walked(store: &Store, run: i64) -> Result<usize, CliError> {
+    Ok(store.automation_run_detail(run).map_err(CliError::from)?.map_or(0, |d| d.steps.len()))
 }
 
 /// **A step does not stop the run it belongs to** (`AMB-D-1020`). Pausing it stops the step that asked,

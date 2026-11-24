@@ -753,12 +753,30 @@ fn let_go_of_a_round(tx: &WriteTx<'_>, run_id: i64, before: &AutomationRunTask, 
     };
     let (going, staying): (Vec<_>, Vec<_>) = steps.into_iter().partition(|s| s.run_task_id == Some(round.id));
     let going: Vec<i64> = going.iter().map(|s| s.id).collect();
-    for step in &going {
+    let_steps_go(tx, &going, now)?;
+    let named: BTreeSet<i64> = staying.iter().map(|s| s.run_def_id).collect();
+    for def in super::automation_run::copies_let_go(conn, &run, &named)? {
+        tx.delete_record("automation_run_def", def)?;
+    }
+    Ok(())
+}
+
+/// **Let the step executions `going` go from the store** — their values, the files attached to them and
+/// the executions themselves. A value handed on from one of them to a step that stays keeps its value
+/// and loses where it came from; a file handed on loses the file too, as it hangs off the step that made
+/// it. What [`let_go_of_a_round`] and the let-go of a finished run's rounds
+/// (`ops::automation`'s `let_rounds_of_a_finished_run_go`) share.
+///
+/// The order is what the `RESTRICT` clauses insist on: every value of the executions goes, and every
+/// value naming one of them is cut loose, before any execution does.
+pub(crate) fn let_steps_go(tx: &WriteTx<'_>, going: &[i64], now: Timestamp) -> Result<()> {
+    let conn = tx.conn();
+    for step in going {
         for value in read::automation_run_value_ids(conn, *step)? {
             tx.delete_record("automation_run_value", value)?;
         }
     }
-    for value in read::automation_run_values_handed_from(conn, &going)? {
+    for value in read::automation_run_values_handed_from(conn, going)? {
         let mut cut = value.clone();
         cut.from_run_step_id = None;
         if cut.kind == AutomationPortKind::File {
@@ -767,13 +785,9 @@ fn let_go_of_a_round(tx: &WriteTx<'_>, run_id: i64, before: &AutomationRunTask, 
         cut.updated_at = now;
         crate::ops::emit_update(tx, record::automation_run_value(&value), record::automation_run_value(&cut))?;
     }
-    for step in &going {
+    for step in going {
         crate::ops::sweep_polymorphic(tx, AttachmentTarget::AutomationRunStep, *step)?;
         tx.delete_record("automation_run_step", *step)?;
-    }
-    let named: BTreeSet<i64> = staying.iter().map(|s| s.run_def_id).collect();
-    for def in super::automation_run::copies_let_go(conn, &run, &named)? {
-        tx.delete_record("automation_run_def", def)?;
     }
     Ok(())
 }

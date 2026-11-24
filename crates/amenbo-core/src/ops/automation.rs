@@ -2479,21 +2479,128 @@ pub(crate) fn let_old_runs_go(tx: &WriteTx<'_>, run: &crate::model::AutomationRu
 /// is more.
 pub(crate) fn let_old_runs_go_past(tx: &WriteTx<'_>, run: &crate::model::AutomationRun, keep: usize, room: i64) -> Result<usize> {
     let conn = tx.conn();
-    let head = read::change_feed_head(conn)?;
-    let (read_up_to, room) = match crate::store_engine::reader_waited_for(conn, head, i64::MAX)? {
-        Some(reader) => (reader.cursor, room.max(reader.whole / 2)),
-        None => (head, room),
-    };
+    let feed = FeedRoom::of(conn, room)?;
     let mut gone = 0;
     for old in read::automation_runs_past(conn, run.automation_id, run.role_id, keep)? {
         if old.id == run.id || !may_go(conn, &old)? {
             continue;
         }
-        if head + tx.feed_rows_pending() - read_up_to > room {
+        if feed.is_full(tx) {
             break;
         }
         run_delete(tx, old.id)?;
         gone += 1;
+    }
+    Ok(gone)
+}
+
+/// **How far one operation that deletes in bulk may still write to the change feed** — up to `room` rows
+/// past where the reader the feed waits for read up to ([`crate::store_engine::reader_waited_for`],
+/// `AMB-D-1165`), or half of what re-reading the whole store would hand that reader if that is more. With
+/// no reader waited for, it is this operation's own rows that are held to `room`. Read once, before the
+/// operation deletes anything: the feed's head does not move until the commit.
+pub(crate) struct FeedRoom {
+    /// How far the feed's head already is past the reader, before this operation's rows.
+    behind: i64,
+    room: i64,
+}
+
+impl FeedRoom {
+    pub(crate) fn of(conn: &Connection, room: i64) -> Result<Self> {
+        let head = read::change_feed_head(conn)?;
+        Ok(match crate::store_engine::reader_waited_for(conn, head, i64::MAX)? {
+            Some(reader) => FeedRoom { behind: head - reader.cursor, room: room.max(reader.whole / 2) },
+            None => FeedRoom { behind: 0, room },
+        })
+    }
+
+    /// Whether the rows `tx` has earned so far take the feed past the room — the point to stop at, and
+    /// leave what is left for the next time.
+    pub(crate) fn is_full(&self, tx: &WriteTx<'_>) -> bool {
+        self.behind + tx.feed_rows_pending() > self.room
+    }
+}
+
+/// **Let the detail of finished runs go from the store, once the run log holds it** — of the runs of
+/// `run`'s role that are over, the step executions of each round whose file the run log holds, with
+/// their values and the files attached to them, and each copy of the definition no step left names and
+/// whose file the run log holds ([`let_rounds_of_a_finished_run_go`]), oldest run first. Answers how many
+/// rounds let their detail go. Asked as each run ends (`ops::automation_stop`'s `ended`), after the runs
+/// past what the role keeps have gone ([`let_old_runs_go`]), and sharing the room they left in the feed.
+///
+/// - **A run's last round goes the next time a run of its role ends**, not as the run ends: its file is
+///   written after the commit that ends it ([`WriteTx::record_round`]), and a round goes only once its
+///   file is there.
+/// - **What stays**: the run row, every round row (`automation_run_task`), every task a round passed on
+///   (`automation_run_pass`), the files on the run itself (`AMB-D-1133`), the steps no round holds
+///   (`run_task_id` NULL), and the detail of a round whose file is not there. An engine with no run log
+///   lets nothing go.
+/// - **It stops before the change feed outruns a reader the feed waits for**, as [`let_old_runs_go`]
+///   does ([`FeedRoom`]), between one round and the next. What is left goes the next time.
+pub(crate) fn let_finished_rounds_go(tx: &WriteTx<'_>, run: &crate::model::AutomationRun) -> Result<usize> {
+    let_finished_rounds_go_past(tx, run, crate::store_engine::CHANGE_FEED_RETAIN / 2)
+}
+
+/// [`let_finished_rounds_go`], stopping once the feed is `room` rows past the reader the feed waits for
+/// ([`FeedRoom`]).
+pub(crate) fn let_finished_rounds_go_past(tx: &WriteTx<'_>, run: &crate::model::AutomationRun, room: i64) -> Result<usize> {
+    if tx.run_logs().is_none() {
+        return Ok(0);
+    }
+    let conn = tx.conn();
+    let feed = FeedRoom::of(conn, room)?;
+    let mut gone = 0;
+    for over in read::automation_runs_over_with_detail(conn, run.automation_id, run.role_id)? {
+        if feed.is_full(tx) {
+            break;
+        }
+        gone += let_rounds_of_a_finished_run_go(tx, &over, &feed)?;
+    }
+    Ok(gone)
+}
+
+/// **Let the detail of one finished run's rounds go**, each round whose file the run log holds, oldest
+/// first, until the feed is full ([`FeedRoom::is_full`]) — then each copy of the definition no step left
+/// names and whose file the run log holds. Answers how many rounds went.
+///
+/// - **Only a run that is over** — completed, failed or canceled — and **a failure only once somebody has
+///   seen it** (`AMB-D-989`): until then its last step's screen is what the person looks at. Any other
+///   run lets nothing go, and so does an engine with no run log.
+/// - **The order** is a round's let-go's ([`super::automation_step::let_steps_go`]); a copy goes after
+///   every step naming it has.
+/// - **The blobs** of the files that go are left to the store's sweep ([`crate::store::Store::gc_blobs`]).
+pub(crate) fn let_rounds_of_a_finished_run_go(tx: &WriteTx<'_>, run: &crate::model::AutomationRun, feed: &FeedRoom) -> Result<usize> {
+    use crate::model::AutomationRunStatus as S;
+    let Some(place) = tx.run_logs() else { return Ok(0) };
+    let over = matches!(run.status, S::Completed | S::Failed | S::Canceled) && run.ended_at.is_some();
+    if !over || (run.status == S::Failed && run.acknowledged_at.is_none()) {
+        return Ok(0);
+    }
+    let conn = tx.conn();
+    let dir = crate::run_log::dir_of(&place.runs, run);
+    let now = Timestamp::now();
+    let mut steps = read::automation_run_steps_of(conn, run.id)?;
+    let mut gone = 0;
+    for round in read::automation_run_tasks_of(conn, run.id)? {
+        if !steps.iter().any(|s| s.run_task_id == Some(round.id))
+            || !dir.join(crate::run_log::round_file_name(round.seq)).exists()
+        {
+            continue;
+        }
+        if feed.is_full(tx) {
+            break;
+        }
+        let (going, staying): (Vec<_>, Vec<_>) = steps.into_iter().partition(|s| s.run_task_id == Some(round.id));
+        let going: Vec<i64> = going.iter().map(|s| s.id).collect();
+        super::automation_step::let_steps_go(tx, &going, now)?;
+        steps = staying;
+        gone += 1;
+    }
+    let named: BTreeSet<i64> = steps.iter().map(|s| s.run_def_id).collect();
+    for def in read::automation_run_def_ids(conn, run.id)? {
+        if !named.contains(&def) && crate::run_log::def_path(&dir, def).exists() {
+            tx.delete_record("automation_run_def", def)?;
+        }
     }
     Ok(gone)
 }

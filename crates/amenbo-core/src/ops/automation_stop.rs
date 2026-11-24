@@ -177,7 +177,8 @@ fn under_way(status: AutomationRunStatus) -> bool {
 /// a launch ends only where a person stops it ([`stop_launch`], [`cancel_launch`]).
 ///
 /// **Its role's oldest runs may go with it** (`ops::automation`'s `let_old_runs_go`), where the role
-/// holds more than it keeps.
+/// holds more than it keeps, and **the detail of its role's finished runs** that the run log already
+/// holds (`ops::automation`'s `let_finished_rounds_go`) — its own last round's the next time.
 pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<Ended> {
     // Read before the stretch is closed below: whether it was already ended is what says the run
     // handed its task back on the way.
@@ -213,6 +214,8 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
     }
     // Over now, it may be what takes its role past the runs it keeps.
     crate::ops::automation::let_old_runs_go(tx, &after)?;
+    // And the rounds of its role's finished runs that the run log holds let their detail go.
+    crate::ops::automation::let_finished_rounds_go(tx, &after)?;
     Ok(Ended { run: after })
 }
 
@@ -1770,6 +1773,123 @@ mod tests {
         tx.commit().expect("commit");
         assert!(!dir.exists());
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // ─────────── the detail of finished runs (`automation::let_finished_rounds_go`) ───────────
+
+    /// An engine whose run log is a real folder of its own, cleared before `f` and after it.
+    fn on_a_run_log(name: &str, f: impl FnOnce(&crate::store_engine::StoreEngine, &crate::run_log::Place)) {
+        let base = std::env::temp_dir().join(format!("amenbo-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let place = crate::run_log::Place { runs: base.join("runs"), blobs: base.join("blobs") };
+        let mut engine = crate::ops::test_support::new_engine();
+        engine.keep_run_logs_in(place.clone());
+        engine.keep_activity_in(base.join("activity.jsonl"));
+        f(&engine, &place);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// The step executions of a run still in the store.
+    fn steps_left(tx: &WriteTx<'_>, run_id: i64) -> Vec<i64> {
+        read::automation_run_steps_of(tx.conn(), run_id).expect("steps").into_iter().map(|s| s.id).collect()
+    }
+
+    /// **A finished run lets its last round's detail go the next time a run of its role ends** — once
+    /// its file is written, not in the transaction that ends it. Its step executions go with their
+    /// values, and the copy of the definition they were opened from; the run row and its round rows stay,
+    /// as does the copy no step was opened from, which the run log does not hold. The run reads back from
+    /// the run log.
+    #[test]
+    fn a_finished_runs_last_round_lets_its_detail_go_once_the_run_log_holds_it() {
+        on_a_run_log("finished-let-go", |engine, place| {
+            let (p, first) = {
+                let tx = engine.write().expect("write");
+                let p = picture(&tx, false);
+                let first = over(&tx, &p, Ending::Completed);
+                assert_eq!(steps_left(&tx, first.id).len(), 1, "its last round has no file yet, so it stays");
+                tx.commit().expect("commit");
+                (p, first)
+            };
+            let dir = crate::run_log::dir_of(&place.runs, &first);
+            assert!(dir.join(crate::run_log::round_file_name(1)).exists(), "its round was written");
+            let step = {
+                let tx = engine.write().expect("write");
+                steps_left(&tx, first.id)[0]
+            };
+
+            let tx = engine.write().expect("write");
+            let used = read::automation_run_step(tx.conn(), step).expect("read").expect("the step").run_def_id;
+            let defs = read::automation_run_def_ids(tx.conn(), first.id).expect("defs");
+            let second = over(&tx, &p, Ending::Completed);
+
+            assert!(steps_left(&tx, first.id).is_empty(), "the round the run log holds lets its detail go");
+            assert!(read::automation_run_values_of(tx.conn(), step).expect("values").is_empty());
+            let left: Vec<i64> = defs.into_iter().filter(|d| *d != used).collect();
+            assert_eq!(read::automation_run_def_ids(tx.conn(), first.id).expect("defs"), left, "the copy the run log holds goes");
+            assert!(read::automation_run(tx.conn(), first.id).expect("read").is_some(), "the run row stays");
+            assert_eq!(read::automation_run_task_ids(tx.conn(), first.id).expect("rounds").len(), 1, "its round row stays");
+            assert_eq!(steps_left(&tx, second.id).len(), 1, "the run just ended keeps its last round");
+            for table in ["automation_run_value", "automation_run_step"] {
+                let mut check = tx.conn().prepare(&format!("PRAGMA foreign_key_check({table})")).expect("check the references");
+                assert_eq!(check.query_map([], |_| Ok(())).expect("check").count(), 0, "no row names one that went");
+            }
+
+            let detail = crate::run_log::detail(tx.conn(), Some(&place.runs), first.id).expect("read").expect("the run");
+            assert_eq!(detail.steps.iter().map(|s| s.step.id).collect::<Vec<_>>(), vec![step], "read back from the run log");
+            assert!(detail.defs.iter().any(|d| d.id == used), "with the copy it was opened from");
+        });
+    }
+
+    /// **A failure nobody has seen keeps its detail** (`AMB-D-989`), and lets it go once it is seen.
+    #[test]
+    fn a_failure_keeps_its_detail_until_somebody_has_seen_it() {
+        on_a_run_log("finished-unseen", |engine, _| {
+            let (p, failed) = {
+                let tx = engine.write().expect("write");
+                let p = picture(&tx, false);
+                let failed = over(&tx, &p, Ending::Failed(AutomationStoppedReason::Crashed));
+                tx.commit().expect("commit");
+                (p, failed)
+            };
+            let tx = engine.write().expect("write");
+            let next = over(&tx, &p, Ending::Canceled);
+            assert_eq!(steps_left(&tx, failed.id).len(), 1, "unseen, it keeps its last step");
+
+            acknowledge(&tx, failed.id, ActorKind::Human).expect("seen");
+            assert_eq!(automation::let_finished_rounds_go_past(&tx, &next, ROOM).expect("let go"), 1);
+            assert!(steps_left(&tx, failed.id).is_empty(), "seen, it lets its detail go");
+        });
+    }
+
+    /// **It stops before the feed is past the room**, between one round and the next, and what is left
+    /// goes the next time.
+    #[test]
+    fn letting_finished_rounds_go_stops_at_the_room() {
+        on_a_run_log("finished-room", |engine, _| {
+            let runs = {
+                let tx = engine.write().expect("write");
+                let p = picture(&tx, false);
+                let runs: Vec<AutomationRun> = (0..2).map(|_| over(&tx, &p, Ending::Canceled)).collect();
+                tx.commit().expect("commit");
+                runs
+            };
+            let tx = engine.write().expect("write");
+            assert_eq!(automation::let_finished_rounds_go_past(&tx, &runs[1], 0).expect("let go"), 1, "one round, and then it stopped");
+            assert!(steps_left(&tx, runs[0].id).is_empty() && !steps_left(&tx, runs[1].id).is_empty());
+            assert_eq!(automation::let_finished_rounds_go_past(&tx, &runs[1], ROOM).expect("let go"), 1);
+            assert!(steps_left(&tx, runs[1].id).is_empty(), "the rest went the next time");
+        });
+    }
+
+    /// **An engine with no run log lets no finished run's detail go.**
+    #[test]
+    fn with_no_run_log_a_finished_run_keeps_its_detail() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let runs: Vec<AutomationRun> = (0..2).map(|_| over(tx, &p, Ending::Completed)).collect();
+            assert_eq!(automation::let_finished_rounds_go_past(tx, &runs[1], ROOM).expect("let go"), 0);
+            assert_eq!(steps_left(tx, runs[0].id).len(), 1);
+        });
     }
 
     /// A run that ends before any round began has nothing to write.

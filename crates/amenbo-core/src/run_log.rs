@@ -21,7 +21,9 @@
 //!   ([`crate::store_engine::WriteTx::record_round`]) and written by
 //!   [`crate::store_engine::WriteTx::commit`]. A crash before the commit leaves no file; a crash after it
 //!   loses the round. The round is not lost from the store by that: the store lets a round's detail go
-//!   only once its file is here (`ops::automation_step`'s `let_go_of_a_round`).
+//!   only once its file is here — an old round of a run under way (`ops::automation_step`'s
+//!   `let_go_of_a_round`), and every round of a finished run (`ops::automation`'s
+//!   `let_finished_rounds_go`), its copies of the definition with it.
 //! - **When a round is over** is when the next one begins or the run ends — not when the round row is
 //!   given its `ended_at`. A step that hands its task back closes the round there, and the steps after it
 //!   still belong to it.
@@ -77,6 +79,11 @@ pub fn dir_of(runs: &Path, run: &AutomationRun) -> PathBuf {
 /// The file one round is written to, in its run's folder.
 pub fn round_file_name(seq: i64) -> String {
     format!("round-{seq}.jsonl")
+}
+
+/// The file one copy of a step definition is written to, in its run's folder `dir`.
+pub fn def_path(dir: &Path, def_id: i64) -> PathBuf {
+    dir.join("defs").join(format!("{def_id}.json"))
 }
 
 /// One finished round, read out of the store inside the transaction that ended it, ready to write once
@@ -151,7 +158,7 @@ pub fn write(place: &Place, round: &Round) {
     }
     for def in &round.defs {
         let bytes = serde_json::to_vec(&json!({ "v": LINE_VERSION, "def": def })).unwrap_or_default();
-        if let Err(e) = write_once(&dir.join("defs").join(format!("{}.json", def.id)), |f| f.write_all(&bytes)) {
+        if let Err(e) = write_once(&def_path(&dir, def.id), |f| f.write_all(&bytes)) {
             tracing::warn!(run = round.run.id, def = def.id, error = %e, "run log: step definition not written");
         }
     }

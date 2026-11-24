@@ -2144,6 +2144,12 @@ plain_tables! {
     /// `strays_read_to` is the `seq` a reading that stopped part way got to, in decimal (`NULL` is "from
     /// the beginning"), and `strays_gone_at` is the moment the last of those rows was deleted from the server
     /// (`NULL` is "not yet"), so deleting a few a day can go on across days and stop once it is done.
+    ///
+    /// The last two are about **the `reread` that ends the deleting**. On a build 4 Worker it rewrites
+    /// every row the server holds, about two rows written per key, so it is sent only where that fits what
+    /// is left of the day. `keys_kept` is how many keys the deleting has read past that stay on the server
+    /// (`NULL` is none yet), counted across turns, and `reread_waits` is `1` where the deleting got to the
+    /// end and that `reread` did not fit — which is when the user is asked to set the Viewer up again.
     viewer_send {
         id: integer("PRIMARY KEY CHECK (id = 1)"),
         version: bigint,
@@ -2157,6 +2163,8 @@ plain_tables! {
         strays: bigint_opt("CHECK(strays IN (0, 1))"),
         strays_read_to: text_opt,
         strays_gone_at: text_opt,
+        keys_kept: bigint_opt,
+        reread_waits: bigint_opt("CHECK(reread_waits IN (0, 1))"),
     }
 
     /// **What has been read out of the backlog for the Viewer and has not landed yet**, oldest first

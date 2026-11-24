@@ -87,8 +87,9 @@ fn setup_takes_the_api_token_on_stdin_and_refuses_an_empty_one() {
 }
 
 /// **An old Worker holding leftover rows asks for setup again**, in one line on stderr on any command, and
-/// stops asking once a write has answered as build 4. Whether to ask is core's; this checks the line is
-/// said where it says so, and not said where it does not.
+/// stops asking once a write has answered as build 4 — unless that build 4 Worker's `reread` was held back
+/// for not fitting the day, which asks until it answers as build 5. Whether to ask is core's; this checks
+/// the line is said where it says so, and not said where it does not.
 #[test]
 fn an_old_worker_with_leftover_rows_asks_for_setup_again() {
     use amenbo_core::model::SecretArea;
@@ -122,7 +123,15 @@ fn an_old_worker_with_leftover_rows_asks_for_setup_again() {
     assert!(stderr.contains("viewer setup"), "it names the command: {stderr}");
     assert!(!stdout.contains(ask), "stdout is left to the command: {stdout}");
 
-    open().set_viewer_carried(&Carried { build: 4, ..left }).unwrap();
+    open().set_viewer_carried(&Carried { build: 4, ..left.clone() }).unwrap();
     let (_, stderr, _) = cli.run_both(&["viewer", "app"]);
     assert!(!stderr.contains(ask), "a build-4 Worker is not asked about: {stderr}");
+
+    open().set_viewer_carried(&Carried { build: 4, reread_waits: true, ..left.clone() }).unwrap();
+    let (_, stderr, _) = cli.run_both(&["viewer", "app"]);
+    assert_eq!(stderr.matches(ask).count(), 1, "a build-4 Worker holding back its reread is: {stderr}");
+
+    open().set_viewer_carried(&Carried { build: 5, reread_waits: true, ..left }).unwrap();
+    let (_, stderr, _) = cli.run_both(&["viewer", "app"]);
+    assert!(!stderr.contains(ask), "and a build-5 one is not: {stderr}");
 }

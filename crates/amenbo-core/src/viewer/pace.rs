@@ -66,10 +66,24 @@ pub fn spend(left: &Carried, rows: i64, now: DateTime<Utc>) -> Carried {
 ///
 /// **It is asked before a write and never during one.** What a write will cost is not knowable from this
 /// side — an upsert onto a key already there costs a different number from one onto a key that is not —
-/// so the count can only be read after the fact, and this can overshoot by at most one request's worth.
-/// Guessing the cost instead would put a model of that database in here, to go stale the day it changes.
+/// so the count can only be read after the fact. Guessing the cost instead would put a model of that
+/// database in here, to go stale the day it changes.
+///
+/// **So asking this alone overshoots by whatever the one request after it costs.** For a placement or a
+/// removal that is a few hundred rows at most, against a ceiling that already holds a tenth of the day
+/// back. One request is not bounded that way: the `reread` a build 4 Worker is sent rewrites every row
+/// the server holds, about two rows written per key, so before that one the sending also asks
+/// [`fits_today`] with what it counted ([`super::send`]).
 pub fn out_of_budget(left: &Carried, now: DateTime<Utc>) -> bool {
     spent_today(left, now) >= ROWS_WE_MAY_SPEND_A_DAY
+}
+
+/// Whether a write that will cost `rows` fits what is left of today's allowance.
+///
+/// It is for the one request whose cost can be counted beforehand and is not small — the `reread` sent to
+/// a build 4 Worker, priced by the keys the server holds. Every other request goes on [`out_of_budget`].
+pub fn fits_today(left: &Carried, rows: i64, now: DateTime<Utc>) -> bool {
+    spent_today(left, now).saturating_add(rows) <= ROWS_WE_MAY_SPEND_A_DAY
 }
 
 /// How much of the quiet the server asked for is left, or `None` when it asked for none or the moment it
@@ -256,6 +270,18 @@ mod tests {
         const { assert!(ROWS_WE_MAY_SPEND_A_DAY < ROWS_A_DAY) };
         assert!(!out_of_budget(&spent(ROWS_WE_MAY_SPEND_A_DAY - 1, "2026-09-14"), at("2026-09-14T00:00:00Z")));
         assert!(out_of_budget(&spent(ROWS_WE_MAY_SPEND_A_DAY, "2026-09-14"), at("2026-09-14T00:00:00Z")));
+    }
+
+    /// A write fits where what today has spent and what it will cost stay within the line, and a count
+    /// carrying another day's date leaves the whole of the line to fit in.
+    #[test]
+    fn a_write_fits_what_is_left_of_the_day() {
+        let now = at("2026-09-14T10:00:00Z");
+        let left = spent(ROWS_WE_MAY_SPEND_A_DAY - 4_000, "2026-09-14");
+        assert!(fits_today(&left, 4_000, now));
+        assert!(!fits_today(&left, 4_001, now));
+        assert!(fits_today(&left, ROWS_WE_MAY_SPEND_A_DAY, at("2026-09-15T00:00:01Z")), "midnight UTC lifts it");
+        assert!(!fits_today(&Carried::default(), ROWS_WE_MAY_SPEND_A_DAY + 1, now), "no day holds more than the line");
     }
 
     /// A quiet that was asked for holds until the moment it named, and no longer.

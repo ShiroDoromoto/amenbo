@@ -4,7 +4,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 
 // src/index.ts
 var SPEC_V = 1;
-var BUILD = 4;
+var BUILD = 5;
 var PER_PAGE = 200;
 var PER_WRITE = 500;
 var PER_KEY_PAGE = 2e3;
@@ -112,7 +112,7 @@ async function sha256(text) {
 __name(sha256, "sha256");
 async function standing(env) {
   const row = await env.RECORDS.prepare(
-    "SELECT version, seq, updated_at, placed_from, key_fingerprint FROM store WHERE id = 1"
+    "SELECT version, seq + shift AS seq, shift, updated_at, placed_from, key_fingerprint FROM store WHERE id = 1"
   ).first();
   return row;
 }
@@ -163,8 +163,8 @@ async function read(env, url) {
   }
   const most = keysOnly ? PER_KEY_PAGE : PER_PAGE;
   const { results } = await env.RECORDS.prepare(
-    keysOnly ? "SELECT seq, k, op FROM records WHERE seq > ? ORDER BY seq LIMIT ?" : "SELECT seq, k, op, nonce, ciphertext FROM records WHERE seq > ? ORDER BY seq LIMIT ?"
-  ).bind(since, most + 1).all();
+    keysOnly ? "SELECT seq + ? AS seq, k, op FROM records WHERE seq > ? ORDER BY seq LIMIT ?" : "SELECT seq + ? AS seq, k, op, nonce, ciphertext FROM records WHERE seq > ? ORDER BY seq LIMIT ?"
+  ).bind(now.shift, Math.max(since - now.shift, 0), most + 1).all();
   const more = results.length > most;
   const page = more ? results.slice(0, most) : results;
   const last = page.length ? page[page.length - 1].seq : since;
@@ -247,7 +247,7 @@ async function place(env, request) {
         "UPDATE store SET version = ?, updated_at = ?, key_fingerprint = ? WHERE id = 1"
       ).bind(version, (/* @__PURE__ */ new Date()).toISOString(), sealedWith)
     ] : [],
-    env.RECORDS.prepare("SELECT seq FROM store WHERE id = 1")
+    env.RECORDS.prepare("SELECT seq + shift AS seq FROM store WHERE id = 1")
   ];
   const done = await env.RECORDS.batch(statements);
   return Response.json({
@@ -295,13 +295,10 @@ async function remove(env, request) {
   const take = env.RECORDS.prepare("DELETE FROM records WHERE k = ?");
   const statements = [
     ...taking.map((k) => take.bind(k)),
-    // Every row left is at or below where the order stands, so adding that number lands each one
-    // above every number in use: the unique index on `seq` never sees two rows meet on the way.
-    ...reread ? [
-      env.RECORDS.prepare("UPDATE records SET seq = seq + (SELECT seq FROM store WHERE id = 1)"),
-      env.RECORDS.prepare("UPDATE store SET placed_from = seq, seq = seq * 2 WHERE id = 1")
-    ] : [],
-    env.RECORDS.prepare("SELECT seq FROM store WHERE id = 1")
+    // Every row left is stored at 1 or above, so raising `shift` to where the order stood hands each
+    // one out above `placed_from`, and the order lands the same distance past it.
+    ...reread ? [env.RECORDS.prepare("UPDATE store SET placed_from = seq + shift, shift = seq + shift WHERE id = 1")] : [],
+    env.RECORDS.prepare("SELECT seq + shift AS seq FROM store WHERE id = 1")
   ];
   const done = await env.RECORDS.batch(statements);
   return Response.json({

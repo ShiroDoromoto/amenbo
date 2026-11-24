@@ -90,7 +90,7 @@ beforeEach(async () => {
 	await env.RECORDS.exec("DELETE FROM tokens");
 	await env.RECORDS.exec("DELETE FROM records");
 	await env.RECORDS.exec(
-		"UPDATE store SET version = NULL, updated_at = NULL, seq = 0, replacing = 0, placed_from = 0, key_fingerprint = NULL WHERE id = 1",
+		"UPDATE store SET version = NULL, updated_at = NULL, seq = 0, replacing = 0, placed_from = 0, shift = 0, key_fingerprint = NULL WHERE id = 1",
 	);
 });
 
@@ -967,15 +967,92 @@ describe("taking rows out", () => {
 		expect(((await second.json()) as { records: unknown[] }).records).toEqual(records.slice(200));
 	});
 
-	// Moving the rows above `placed_from` is a write for each of them, and the answer has to say so
-	// for a sender keeping a budget.
-	it("counts the rows it moves for reread in what it answers", async () => {
+	// Moving the rows above `placed_from` is the store row moving and not the rows, so what a sender
+	// pays for it does not grow with the store.
+	it("costs the same few writes for reread however many rows the store holds", async () => {
+		await sending("/records", 1, [sealed("task/1")]);
+		const few = (await taking({ reread: true }).then((it) => it.json())) as { rows_written: number };
+		await sending("/records", 2, Array.from({ length: 500 }, (_, i) => sealed(`task/many/${i}`)));
+
+		const many = (await taking({ reread: true }).then((it) => it.json())) as { rows_written: number };
+
+		expect(many.rows_written).toBe(few.rows_written);
+		expect(many.rows_written).toBeLessThan(5);
+	});
+
+	// The rows are filed under the numbers they were stored with; `reread` leaves every one of them
+	// as it was and moves the store row alone.
+	it("rewrites none of the rows for reread", async () => {
 		await sending("/records", 1, [sealed("task/1"), sealed("task/2"), sealed("task/3")]);
+		const before = await env.RECORDS.prepare("SELECT k, seq, op, nonce, ciphertext FROM records ORDER BY k").all();
 
-		const response = await taking({ reread: true });
+		await taking({ reread: true });
 
-		const { rows_written } = (await response.json()) as { rows_written: number };
-		expect(rows_written).toBeGreaterThanOrEqual(3);
+		const after = await env.RECORDS.prepare("SELECT k, seq, op, nonce, ciphertext FROM records ORDER BY k").all();
+		expect(after.results).toEqual(before.results);
+	});
+
+	// Every number a phone is handed only goes up, across a `reread` as much as across a write.
+	it("hands out numbers that only go up across reread and writes", async () => {
+		const seen: number[] = [];
+		const level = async () => {
+			const meta = (await reading("/meta").then((it) => it.json())) as { seq: number };
+			seen.push(meta.seq);
+		};
+		await sending("/records", 1, [sealed("task/1"), sealed("task/2")]);
+		await level();
+		await taking({ keys: ["task/1"], reread: true });
+		await level();
+		await sending("/records", 2, [sealed("task/3")]);
+		await level();
+		await taking({ reread: true });
+		await level();
+		await sending("/records", 3, [sealed("task/4")]);
+		await level();
+
+		expect(seen).toEqual([...seen].sort((a, b) => a - b));
+		expect(new Set(seen).size).toBe(seen.length);
+		const page = (await reading("/records?since=0").then((it) => it.json())) as { seq: number };
+		expect(page.seq).toBe(seen[seen.length - 1]);
+	});
+
+	// Two `reread`s with a write between them, on a store three pages long: every cursor a phone
+	// held before either is refused, and a phone reading again from the beginning is handed only
+	// cursors past `placed_from`, reaches the end, and reads on from there as usual.
+	it("lets a phone read again a store of several pages after two rereads", async () => {
+		const records = Array.from({ length: 450 }, (_, i) => sealed(`task/${i}`));
+		await sending("/records", 1, records);
+		const held = (await reading("/records?since=0").then((it) => it.json())) as { seq: number };
+		await taking({ keys: ["task/0"], reread: true });
+		expect((await reading(`/records?since=${held.seq}`)).status).toBe(409);
+		await sending("/records", 2, [sealed("task/new")]);
+		const between = (await reading("/meta").then((it) => it.json())) as { seq: number };
+		await taking({ keys: ["task/1"], reread: true });
+		expect((await reading(`/records?since=${held.seq}`)).status).toBe(409);
+		expect((await reading(`/records?since=${between.seq}`)).status).toBe(409);
+
+		const meta = (await reading("/meta").then((it) => it.json())) as { seq: number; placed_from: number };
+		const got: unknown[] = [];
+		let since = 0;
+		let more = true;
+		let pages = 0;
+		while (more) {
+			const response = await reading(`/records?since=${since}`);
+			expect(response.status).toBe(200);
+			const page = (await response.json()) as { seq: number; more: boolean; records: unknown[] };
+			expect(page.seq).toBeGreaterThan(meta.placed_from);
+			got.push(...page.records);
+			since = page.seq;
+			more = page.more;
+			pages++;
+		}
+		expect(pages).toBe(3);
+		expect(got).toEqual([...records.slice(2), sealed("task/new")]);
+		expect(since).toBe(meta.seq);
+
+		await sending("/records", 3, [sealed("task/after")]);
+		const tail = (await reading(`/records?since=${since}`).then((it) => it.json())) as { records: unknown[] };
+		expect(tail.records).toEqual([sealed("task/after")]);
 	});
 
 	// A sender that took rows out over several requests asks once, after the last of them.

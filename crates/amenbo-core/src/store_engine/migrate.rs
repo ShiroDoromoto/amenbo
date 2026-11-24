@@ -1710,6 +1710,15 @@ pub const STEPS: &[Step] = &[
         // stands — no record is read again and none is skipped.
         apply: Apply::Custom(register_the_viewer_as_a_feed_reader),
     },
+    Step {
+        to: 151,
+        name: "add viewer_send.keys_kept and reread_waits, what the deleting of the server's leftover run rows counted and held back",
+        // **A deleting part way through is read again from the beginning**, so the count starts where the
+        // reading does: going on from the middle would count low by the pages behind it, and a `reread`
+        // sent on that count could spend more than the day has left. The keys already deleted are gone,
+        // so reading those pages again writes nothing. No task is touched.
+        apply: Apply::Custom(let_the_carrier_count_what_the_reread_would_cost),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -2434,6 +2443,30 @@ fn let_a_trigger_keep_since_when_it_waits(ctx: &Ctx<'_>) -> Result<()> {
              '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z');",
         )?;
     }
+    Ok(())
+}
+
+/// v151: `viewer_send.keys_kept` and `reread_waits` — how many keys the deleting of the server's leftover
+/// run rows has read past that stay there, and whether the `reread` that ends it was held back for not
+/// fitting what was left of the day. NULL on the row already there, which reads as "none counted" and
+/// "not held back".
+///
+/// **A deleting not finished yet is sent back to the beginning** (`strays_read_to` to NULL), so what it
+/// counts covers the whole server: nothing was counted on the pages it had already read.
+///
+/// **Appended only where missing**, v68's guard and for v53's reason. Nullable with no default but NULL,
+/// so `ALTER TABLE` adds each as it stands.
+fn let_the_carrier_count_what_the_reread_would_cost(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let there = column_names(tx, "viewer_send")?;
+    for (name, decl) in [("keys_kept", "BIGINT"), ("reread_waits", "BIGINT CHECK(reread_waits IN (0, 1))")] {
+        if !there.iter().any(|c| c == name) {
+            tx.execute_batch(&format!("ALTER TABLE viewer_send ADD COLUMN {name} {decl};"))?;
+        }
+    }
+    tx.execute_batch(
+        "UPDATE viewer_send SET strays_read_to = NULL WHERE strays = 1 AND strays_gone_at IS NULL;",
+    )?;
     Ok(())
 }
 
@@ -16606,6 +16639,52 @@ mod tests {
         assert_eq!(count("automation_run_def"), 1);
         assert_eq!(count("automation_run_step"), 1);
         assert_eq!(count("automation_run_value"), 1);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v151: where the carrier was left at v150 reads as "none counted" and "not held back", a deleting
+    /// part way through reads again from the beginning, what is written afterwards comes back, and the
+    /// holding back takes no word but yes or no.
+    #[test]
+    fn a_carrier_left_before_v151_has_counted_nothing_and_held_nothing_back() {
+        let dir = scratch("viewer-reread");
+        let engine = store_at(&dir, 150);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO viewer_send (id, version, placed, seq, spent, build, strays, strays_read_to)
+                 VALUES (1, 12, 12, 41, 0, 4, 1, '40');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, steps_through(151), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 151);
+        let read = || -> (Option<String>, Option<i64>, Option<i64>) {
+            engine
+                .conn()
+                .query_row("SELECT strays_read_to, keys_kept, reread_waits FROM viewer_send WHERE id = 1", [], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+                })
+                .unwrap()
+        };
+        assert_eq!(
+            read(),
+            (None, None, None),
+            "the row stays, nothing was counted yet, and the deleting part way through starts over"
+        );
+        engine
+            .conn()
+            .execute(
+                "UPDATE viewer_send SET strays_read_to = '40', keys_kept = 2000, reread_waits = 1 WHERE id = 1",
+                [],
+            )
+            .unwrap();
+        assert_eq!(read(), (Some("40".into()), Some(2000), Some(1)));
+        assert!(
+            engine.conn().execute("UPDATE viewer_send SET reread_waits = 2 WHERE id = 1", []).is_err(),
+            "held back or not, and nothing else",
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 

@@ -104,6 +104,18 @@ pub struct Carried {
     /// When the last of those rows was deleted from the server. `None` is "not yet": the deleting goes a
     /// few at a time inside a day's allowance, so it runs across days and this is what says it is done.
     pub strays_gone_at: Option<String>,
+    /// How many keys the deleting has read past that stay on the server — every key on the pages behind
+    /// [`Self::strays_read_to`] that is not one of those rows. Zero where that reading is at the beginning.
+    ///
+    /// **It is what the `reread` that ends the deleting is priced by** on a build 4 Worker, which rewrites
+    /// every row it holds to send the phones back to the beginning. The reading goes a few pages a turn,
+    /// so the count is kept across turns, and it goes back to zero wherever the reading does.
+    pub keys_kept: i64,
+    /// Whether the deleting got to the end and the `reread` that ends it was held back, because on the
+    /// build 4 Worker the server answers as it would cost more than is left of the day. It is what asks
+    /// the user to set the Viewer up again ([`super::asks_for_setup_again`]), and it goes once a `reread`
+    /// is sent.
+    pub reread_waits: bool,
 }
 
 /// One record as it waits: the key it is filed under, what happened to it, and — for everything but a
@@ -156,6 +168,7 @@ fn read_on(conn: &rusqlite::Connection) -> Result<Carried> {
     let last_placed_at = sel.col(VS.last_placed_at);
     let (strays, strays_read_to, strays_gone_at) =
         (sel.col(VS.strays), sel.col(VS.strays_read_to), sel.col(VS.strays_gone_at));
+    let (keys_kept, reread_waits) = (sel.col(VS.keys_kept), sel.col(VS.reread_waits));
     let mut sql = Sql::from(&sel, VS.table);
     sql.push_where(Some(&Pred::eq(VS.id, THE_ROW)));
 
@@ -175,6 +188,8 @@ fn read_on(conn: &rusqlite::Connection) -> Result<Carried> {
                 strays: strays.get(r)?.map(|found: i64| found != 0),
                 strays_read_to: strays_read_to.get(r)?,
                 strays_gone_at: strays_gone_at.get(r)?,
+                keys_kept: keys_kept.get(r)?.unwrap_or(0),
+                reread_waits: reread_waits.get(r)?.is_some_and(|waits: i64| waits != 0),
             })
         })
         .optional()
@@ -249,6 +264,8 @@ fn write_on(conn: &rusqlite::Connection, left: &Carried) -> Result<()> {
         .set_opt(VS.strays, left.strays.map(i64::from))
         .set_opt(VS.strays_read_to, left.strays_read_to.as_deref())
         .set_opt(VS.strays_gone_at, left.strays_gone_at.as_deref())
+        .set(VS.keys_kept, left.keys_kept)
+        .set(VS.reread_waits, i64::from(left.reread_waits))
         .on_conflict_update(VS.id)
         .sql()
         .execute(conn)
@@ -547,6 +564,8 @@ mod tests {
             strays: Some(true),
             strays_read_to: Some("4000".into()),
             strays_gone_at: Some("2026-09-14T10:00:00Z".into()),
+            keys_kept: 1_800,
+            reread_waits: true,
         };
         store.set_viewer_carried(&left).unwrap();
         assert_eq!(store.viewer_carried().unwrap(), left);

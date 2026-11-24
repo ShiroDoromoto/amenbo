@@ -400,11 +400,14 @@ pub fn build_in_the_script(script: &str) -> Option<u32> {
 }
 
 /// **Whether to ask the user to press setup again**: this device's server holds a run's leftover rows,
-/// and answers as a Worker too old to delete them (`AMB-D-1160`).
+/// and answers as a Worker too old to finish deleting them within a day's allowance (`AMB-D-1160`).
 ///
 /// The deleting is done from here a few at a time, but only by a Worker of build 4 or later; on an older
-/// one those rows stay until setup is pressed again. Pressing it at the same server keeps what was found
-/// and writes down the build it placed (`AMB-D-1167`), so the asking ends with the press itself.
+/// one those rows stay until setup is pressed again. A build 4 one deletes them, but the `reread` that
+/// ends the deleting rewrites every row it holds, so where that does not fit what is left of the day it
+/// is held back ([`carried::Carried::reread_waits`]) and the asking starts there too. Pressing setup at
+/// the same server keeps what was found and writes down the build it placed (`AMB-D-1167`), so the asking
+/// ends with the press itself.
 ///
 /// **The condition is here and the words are not** (`AMB-D-544`). The command line and the screen both
 /// ask this, and each says it in its own place. Nothing about how far the deleting got is answered: the
@@ -427,7 +430,9 @@ pub fn asks_for_setup_again(store: &Store) -> Result<bool> {
 /// before it knows which Worker it is talking to. Asking then would ask everyone whose server is already
 /// new enough, for the one turn it takes the first write to answer.
 fn left_asks_for_setup_again(left: &carried::Carried) -> bool {
-    left.strays == Some(true) && left.build > 0 && left.build < send::BUILD_THAT_TAKES_KEYS_OUT
+    let too_old = left.build < send::BUILD_THAT_TAKES_KEYS_OUT
+        || (left.reread_waits && left.build < send::BUILD_WHOSE_REREAD_IS_CHEAP);
+    left.strays == Some(true) && left.build > 0 && too_old
 }
 
 #[cfg(test)]
@@ -475,15 +480,23 @@ mod tests {
         assert_eq!(raw.len(), SECRET_SIZE);
     }
 
-    /// The asking turns on the two together: leftover rows found, and a server known to be older than
-    /// build 4. A build not known yet (zero) does not ask, and neither does a reading not done yet.
+    /// The asking turns on leftover rows found, and a server known to be older than build 4 — or a build 4
+    /// one whose `reread` was held back for not fitting the day. A build not known yet (zero) does not
+    /// ask, and neither does a reading not done yet; a build 5 one is never asked, held back or not.
     #[test]
     fn setup_is_asked_for_again_only_where_an_old_worker_holds_leftover_rows() {
-        for build in [0, 1, 3, 4, 5] {
+        for build in [0, 1, 3, 4, 5, 6] {
             for strays in [None, Some(false), Some(true)] {
-                let left = carried::Carried { build, strays, ..Default::default() };
-                let asks = strays == Some(true) && (1..=3).contains(&build);
-                assert_eq!(left_asks_for_setup_again(&left), asks, "build {build}, strays {strays:?}");
+                for reread_waits in [false, true] {
+                    let left = carried::Carried { build, strays, reread_waits, ..Default::default() };
+                    let asks = strays == Some(true)
+                        && ((1..=3).contains(&build) || (build == 4 && reread_waits));
+                    assert_eq!(
+                        left_asks_for_setup_again(&left),
+                        asks,
+                        "build {build}, strays {strays:?}, reread waits {reread_waits}"
+                    );
+                }
             }
         }
     }
@@ -1002,6 +1015,25 @@ mod tests {
             crate::viewer::carried::Carried { build: i64::from(WORKER_BUILD), ..left }
         );
         assert_eq!(store.viewer_waiting().unwrap(), 1, "and what waits to go still waits");
+        assert!(!asks_for_setup_again(&store).unwrap(), "and the press that was asked for ends the asking");
+    }
+
+    /// A build 4 Worker whose `reread` was held back for not fitting the day asks too, and the press ends
+    /// it the same way: the build it writes down is one whose `reread` goes out whatever the server holds.
+    #[test]
+    fn a_held_back_reread_asks_until_setup_is_pressed() {
+        let host = already_standing();
+        let (mut store, left) = sent_to_already(&host, "reread-waits");
+        let left = crate::viewer::carried::Carried { build: 4, reread_waits: true, ..left };
+        store.set_viewer_carried(&left).unwrap();
+        assert!(asks_for_setup_again(&store).unwrap(), "a build 4 Worker holding back its reread asks");
+
+        setup_reaching(&mut store, "a-pasted-token", None, None, &reaching(&host)).expect("setup");
+
+        assert_eq!(
+            store.viewer_carried().unwrap(),
+            crate::viewer::carried::Carried { build: i64::from(WORKER_BUILD), ..left }
+        );
         assert!(!asks_for_setup_again(&store).unwrap(), "and the press that was asked for ends the asking");
     }
 

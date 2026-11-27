@@ -299,12 +299,7 @@ fn open_as(
 
     // The stretch this execution belongs to, decided before anything is written: a step that takes a
     // fresh task starts one, and every other step joins whatever is under way.
-    // A built-in set never to leave by the way out that takes one does not (`Chooses`).
-    let never = super::automation_builtin::never_leaves_by_def(&def)?;
-    let opens_a_stretch = exits
-        .iter()
-        .filter(|e| Some(e.name.as_str()) != never)
-        .any(|e| e.outs.iter().any(|p| p.kind == AutomationPortKind::TaskTake));
+    let opens_a_stretch = takes_a_fresh_task(&def, &exits)?;
     let current = read::automation_run_task_last(conn, run_id)?;
     // **The task before is closed before the next is taken** (`AMB-D-967`). The launch check refuses
     // a picture with a line that skips closing it, so this is a safety net for a line the check
@@ -671,6 +666,17 @@ fn gave_up(tx: &WriteTx<'_>, before: AutomationRun) -> Result<Ended> {
         before,
         super::automation_stop::Ending::Failed(AutomationStoppedReason::NoAgent),
     )
+}
+
+/// **Whether a step takes a fresh task**: one of its ways out declares a `task_take` output. Such a
+/// step opens a stretch of its own, and is the only one that can finish having found none. A built-in
+/// set never to leave by the way out that takes one does not (`Chooses`).
+pub(crate) fn takes_a_fresh_task(def: &AutomationRunDef, exits: &[RunDefExit]) -> Result<bool> {
+    let never = super::automation_builtin::never_leaves_by_def(def)?;
+    Ok(exits
+        .iter()
+        .filter(|e| Some(e.name.as_str()) != never)
+        .any(|e| e.outs.iter().any(|p| p.kind == AutomationPortKind::TaskTake)))
 }
 
 /// Begin the next stretch of a run, and close the one before it.

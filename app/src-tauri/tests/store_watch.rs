@@ -2,8 +2,8 @@
 //! FSEvents / Linux: inotify / Windows: ReadDirectoryChangesW) say nothing merely by compiling, so these tests
 //! make **real writes to a real filesystem** and watch what happens. Four properties are at stake: does a write
 //! from another process wake us; does the watch survive the file being replaced wholesale; does it degrade to
-//! polling where no kernel watch can be established; and does it stay asleep when idle (the whole point of
-//! moving to wakeups).
+//! polling where no kernel watch can be established; and when idle, does it wake only on the safety interval —
+//! once every few seconds, never at the stat-polling rate.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -207,22 +207,38 @@ fn falls_back_to_stat_loop_when_there_is_no_store() {
         .expect("the stat loop stopped after one cycle");
 }
 
-/// When idle, we stay asleep — nothing shakes us awake every 1.5 seconds. This is the whole point of the wakeup
-/// design: regress to an implementation that burns CPU while nothing is happening and this test fails.
+/// When idle, we still look every few seconds: a write the kernel never reports (macOS's `fseventsd` has held
+/// events back for minutes) has to reach the caller anyway, so a wakeup arrives within the safety interval with
+/// nothing written at all.
 #[test]
-fn idle_does_not_wake() {
+fn idle_wakes_on_the_safety_interval() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("store.sqlite"), b"seed").unwrap();
 
     let rx = spawn_run(Some(dir.path()));
-    // The write that seeds the store, made just before the watch is armed, can still wake us. A spurious wakeup
-    // is **by design** — whether anything really changed is the caller's signature check. So the question is
-    // whether we sleep *once things have settled*.
+    // The seeding write, made just before the watch is armed, can still wake us; let it settle first.
     while rx.recv_timeout(ARM).is_ok() {}
 
+    rx.recv_timeout(store_watch::testonly::SAFETY_INTERVAL + ARM * 4)
+        .expect("no wakeup within the safety interval with nobody writing (a dropped kernel event would be lost)");
+}
+
+/// When idle, the safety wakeups stay rare — nothing shakes us awake at the stat-polling rate. Regress to an
+/// implementation that polls every 1.5 seconds while nothing is happening and this test fails.
+#[test]
+fn idle_does_not_wake_at_the_polling_rate() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("store.sqlite"), b"seed").unwrap();
+
+    let rx = spawn_run(Some(dir.path()));
+    while rx.recv_timeout(ARM).is_ok() {}
+
+    // Line up on a safety wakeup, then the next one must not come sooner than the polling rate would.
+    rx.recv_timeout(store_watch::testonly::SAFETY_INTERVAL + ARM * 4)
+        .expect("no wakeup within the safety interval with nobody writing");
     let idle = store_watch::testonly::POLL_INTERVAL * 2;
     assert!(
         rx.recv_timeout(idle).is_err(),
-        "woke once settled with nobody writing (we are back to polling)"
+        "woke again within {idle:?} with nobody writing (we are back to polling)"
     );
 }

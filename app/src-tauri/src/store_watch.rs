@@ -1,7 +1,9 @@
-//! Let the kernel watch the store directory and wake us only when something is written. This is the
-//! only place that touches the OS-specific machinery (macOS: FSEvents / Linux: inotify / Windows:
-//! ReadDirectoryChangesW), so it stays **free of tauri**: on a wake-up it just calls the closure the
-//! caller handed in, which lets `tests/store_watch.rs` exercise the real OS behaviour on all three.
+//! Let the kernel watch the store directory and wake us when something is written, and look for
+//! ourselves every few seconds as well, in case the kernel's word comes late or not at all (macOS's
+//! `fseventsd` has been seen holding events back for minutes). This is the only place that touches
+//! the OS-specific machinery (macOS: FSEvents / Linux: inotify / Windows: ReadDirectoryChangesW), so
+//! it stays **free of tauri**: on a wake-up it just calls the closure the caller handed in, which
+//! lets `tests/store_watch.rs` exercise the real OS behaviour on all three.
 //! **Never use kernel watching on a network FS**: on NFS the inotify watch *succeeds* yet reports
 //! only changes made through our own mount, silently dropping writes from other hosts — so the
 //! choice is made up front from the FS type (`is_network_dir`, one cfg'd impl per OS), not from
@@ -9,14 +11,22 @@
 //! changed belong to the caller (`commands::watch_store`).
 
 use std::path::Path;
-use std::sync::mpsc::{Receiver, Sender};
-use std::time::Duration;
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
+use std::time::{Duration, Instant};
 
 use notify::{Config, PollWatcher, RecursiveMode, Watcher};
 
 /// Coalescing window. A single write makes the OS fire several events (main file, WAL, SHM,
 /// rename), so wait for this much quiet after the last one and notify once.
 const WATCH_DEBOUNCE: Duration = Duration::from_millis(150);
+
+/// How long a kernel watch may stay silent before we wake up and look for ourselves. The kernel is
+/// the fast path; this is the safety net for the events it drops or holds back. One look costs a
+/// `PRAGMA data_version` and a stat on a connection already open (well under a millisecond), so a
+/// wake-up every 5 s while idle adds nothing measurable to CPU or memory, while a missed write shows
+/// up within 5 s rather than whenever the OS gets round to telling us. Kept well above
+/// [`WATCH_POLL_INTERVAL`]: idle wake-ups stay rare where the kernel watch works.
+const WATCH_SAFETY_INTERVAL: Duration = Duration::from_secs(5);
 
 /// Interval of the stat polling used where a kernel watch cannot be had (containers, NFS, or a
 /// store that does not exist yet).
@@ -187,13 +197,15 @@ pub fn spawn_store_watcher(dir: &Path, tx: Sender<Wake>) -> Option<Box<dyn Watch
 }
 
 /// Call `on_wake` every time something happens under `dir` (**never returns**: the caller runs this
-/// on a thread of its own). **The kernel does the waking**, so we sleep outright while idle and come
-/// up the moment a write lands. Where no watch can be installed (`dir` is `None`, the FS does not
-/// support it, the watcher died) it degrades to polling, so the behaviour gets coarser but never
-/// stops. `on_wake` means only "we woke up": whether anything **really** changed is for the caller
-/// to confirm (`store_signature_string` = `PRAGMA data_version` plus file identity). A file watch
-/// also fires on touches that mean nothing (a read updating the SHM, say), and that check is what
-/// drops the pointless emits.
+/// on a thread of its own). **The kernel does the fast waking**, so we come up the moment a write
+/// lands; on top of that we wake once every [`WATCH_SAFETY_INTERVAL`] with nothing heard, so a write
+/// the kernel failed to report still reaches the caller. Both wake-ups go through the same `on_wake`
+/// on this one thread, so nothing is read twice and no thread is added. Where no watch can be
+/// installed (`dir` is `None`, the FS does not support it, the watcher died) it degrades to
+/// polling, so the behaviour gets coarser but never stops. `on_wake` means only "we woke up":
+/// whether anything **really** changed is for the caller to confirm (`store_signature_string` =
+/// `PRAGMA data_version` plus file identity). A file watch also fires on touches that mean nothing
+/// (a read updating the SHM, say), and that check is what drops the pointless emits.
 pub fn run(dir: Option<&Path>, mut on_wake: impl FnMut()) {
     let (tx, rx) = std::sync::mpsc::channel::<Wake>();
     // `_watcher` must be kept alive: dropping it tears the watch down.
@@ -211,27 +223,36 @@ pub fn run(dir: Option<&Path>, mut on_wake: impl FnMut()) {
     }
 }
 
-/// Take wake-ups and coalesce them (returns once the watcher dies, dropping the caller to its stat
-/// loop).
+/// Take wake-ups and coalesce them, and wake on our own after [`WATCH_SAFETY_INTERVAL`] of silence
+/// (returns once the watcher dies, dropping the caller to its stat loop).
 fn watch_loop(rx: &Receiver<Wake>, on_wake: &mut impl FnMut()) {
     loop {
-        if rx.recv().is_err() {
-            return; // The watcher died (the sender is gone): degrade to polling.
+        match rx.recv_timeout(WATCH_SAFETY_INTERVAL) {
+            Ok(()) => {
+                // Coalesce the burst of events a single write fires into one notification (wait for
+                // quiet). Writes that never pause would keep this waiting forever, so cap it at the
+                // safety interval: the caller still looks at least that often.
+                let cap = Instant::now() + WATCH_SAFETY_INTERVAL;
+                while Instant::now() < cap && rx.recv_timeout(WATCH_DEBOUNCE).is_ok() {}
+            }
+            // Nothing heard for a whole interval: look anyway, in case the kernel dropped the event.
+            Err(RecvTimeoutError::Timeout) => {}
+            // The watcher died (the sender is gone): degrade to polling.
+            Err(RecvTimeoutError::Disconnected) => return,
         }
-        // Coalesce the burst of events a single write fires into one notification (wait for quiet).
-        while rx.recv_timeout(WATCH_DEBOUNCE).is_ok() {}
         on_wake();
     }
 }
 
-/// The way in for the tests (`tests/store_watch.rs`) to exercise the fallback path, the poll
-/// interval and the FS-type check for real. Production code reaches them only through
+/// The way in for the tests (`tests/store_watch.rs`) to exercise the fallback path, the poll and
+/// safety intervals and the FS-type check for real. Production code reaches them only through
 /// [`spawn_store_watcher`].
 #[doc(hidden)]
 pub mod testonly {
     use super::*;
 
     pub const POLL_INTERVAL: Duration = WATCH_POLL_INTERVAL;
+    pub const SAFETY_INTERVAL: Duration = WATCH_SAFETY_INTERVAL;
 
     /// The fallback path itself: where `spawn_store_watcher` lands on a filesystem that kernel
     /// watching does not work on.

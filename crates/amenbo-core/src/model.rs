@@ -3072,7 +3072,8 @@ pub struct RunDefKey {
 ///
 /// A build before v154 wrote one of these down per step for every run (`automation_run_def`). Those rows
 /// carry their own `id` and `run_id`, and a run log written then keeps them under their id
-/// ([`crate::run_log`]); one assembled now belongs to no row, and its `id` is 0.
+/// ([`crate::run_log`]); one assembled now belongs to no row, and its `id` is 0. Nothing reads the rows
+/// any more, and they go a few at a time as runs end (`ops::automation`'s `let_copies_go`).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationRunDef {
     pub id: i64,

@@ -180,7 +180,8 @@ fn under_way(status: AutomationRunStatus) -> bool {
 /// **Its role's oldest runs may go with it** (`ops::automation`'s `let_old_runs_go`), where the role
 /// holds more than it keeps, and **the detail of finished runs** that the run log already holds — its
 /// role's first, then any other automation's and role's (`ops::automation`'s `let_finished_rounds_go`);
-/// its own last round's the next time a run ends.
+/// its own last round's the next time a run ends. **Some of the copies of the steps a build before v154
+/// took go too**, up to a cap each time (`ops::automation`'s `let_copies_go`).
 pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<Ended> {
     // Read before the stretch is closed below: whether it was already ended is what says the run
     // handed its task back on the way.
@@ -218,6 +219,8 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
     crate::ops::automation::let_old_runs_go(tx, &after)?;
     // And the rounds of finished runs that the run log holds let their detail go, its role's first.
     crate::ops::automation::let_finished_rounds_go(tx, &after)?;
+    // And some of the copies of the steps a build before v154 took, which nothing reads any more.
+    crate::ops::automation::let_copies_go(tx)?;
     Ok(Ended { run: after })
 }
 
@@ -2054,6 +2057,86 @@ mod tests {
             assert_eq!(automation::let_finished_rounds_go_past(tx, &runs[1], ROOM).expect("let go"), 0);
             assert_eq!(steps_left(tx, runs[0].id).len(), 1);
             assert_eq!(steps_left(tx, theirs.id).len(), 1);
+        });
+    }
+
+    // ─────────── the copies a build before v154 took (`automation::let_copies_go`) ───────────
+
+    /// Write `n` copies of a step for one run, as a build before v154 did.
+    fn copies_for(tx: &WriteTx<'_>, run_id: i64, n: usize) {
+        for _ in 0..n {
+            tx.conn()
+                .execute(
+                    "INSERT INTO automation_run_def \
+                         (run_id, name, prompt, agent, model, interactive, work_dir_ref, report_to_task, \
+                          show_history, exits, ins, cfg, created_at, updated_at) \
+                     VALUES (?1, 'look', 'p', 'claude', 'opus', 0, '', 0, 1, '[]', '[]', '{}', \
+                             '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+                    [run_id],
+                )
+                .expect("a copy");
+        }
+    }
+
+    /// The copies left in the store, oldest first.
+    fn copies_left(tx: &WriteTx<'_>) -> Vec<i64> {
+        read::automation_run_def_ids_oldest(tx.conn(), usize::MAX).expect("the copies")
+    }
+
+    /// **The copies go a few at a time, oldest first, of every run** — a run under way's too, since
+    /// nothing reads them — up to the cap each time, and what is left goes the next time.
+    #[test]
+    fn letting_copies_go_takes_the_oldest_up_to_the_cap() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let done = over(tx, &p, Ending::Completed);
+            let going = a_run(tx, &p.automation);
+            copies_for(tx, done.id, 3);
+            copies_for(tx, going.id, 2);
+            let all = copies_left(tx);
+            assert_eq!(all.len(), 5);
+
+            assert_eq!(automation::let_copies_go_past(tx, 2, ROOM).expect("let go"), 2);
+            assert_eq!(copies_left(tx), all[2..], "the oldest two went");
+            assert_eq!(automation::let_copies_go_past(tx, 2, ROOM).expect("let go"), 2);
+            assert_eq!(automation::let_copies_go_past(tx, 2, ROOM).expect("let go"), 1, "the run under way's went too");
+            assert!(copies_left(tx).is_empty());
+            assert_eq!(automation::let_copies_go_past(tx, 2, ROOM).expect("let go"), 0, "nothing is left to go");
+            assert!(read::automation_run(tx.conn(), going.id).expect("read").is_some(), "the runs stay");
+        });
+    }
+
+    /// **It stops before the feed is past the room**, between one copy and the next, and what is left
+    /// goes the next time.
+    #[test]
+    fn letting_copies_go_stops_at_the_room() {
+        let engine = crate::ops::test_support::new_engine();
+        {
+            let tx = engine.write().expect("write");
+            let p = picture(&tx, false);
+            let done = over(&tx, &p, Ending::Completed);
+            copies_for(&tx, done.id, 3);
+            tx.commit().expect("commit");
+        }
+        let tx = engine.write().expect("write");
+        assert_eq!(automation::let_copies_go_past(&tx, 10, 0).expect("let go"), 1, "one copy, and then it stopped");
+        assert_eq!(copies_left(&tx).len(), 2);
+        assert_eq!(automation::let_copies_go_past(&tx, 10, ROOM).expect("let go"), 2, "the rest went the next time");
+    }
+
+    /// **A run that ends lets the copies go**, its own and every other run's.
+    #[test]
+    fn a_run_ending_lets_the_copies_go() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let first = over(tx, &p, Ending::Completed);
+            copies_for(tx, first.id, 2);
+            let going = a_run(tx, &p.automation);
+            copies_for(tx, going.id, 1);
+            opened(tx, &going, &p.first);
+            let now = read::automation_run(tx.conn(), going.id).expect("read").expect("the run");
+            ended(tx, now, Ending::Canceled).expect("end");
+            assert!(copies_left(tx).is_empty());
         });
     }
 

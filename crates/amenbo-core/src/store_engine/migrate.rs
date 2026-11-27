@@ -1704,8 +1704,9 @@ pub const STEPS: &[Step] = &[
         name: "point each run at the saved version it reads, and each step execution at the step of that version it ran, in place of the run's copies",
         // `AMB-D-1219`: a run copies nothing of the definition any more, and reads the saved version it
         // names as it stands. The copies already written stay where they are (`automation_run_def`) —
-        // what is read off them here is which version each run and each step execution was on — and are
-        // let go of later. No task is touched.
+        // what is read off them here is which version each run and each step execution was on — and go
+        // a few at a time as runs end (`ops::automation::let_copies_go`), not here (`AMB-D-1166`). No task
+        // is touched.
         apply: Apply::Custom(point_each_run_at_its_version),
     },
 ];
@@ -1719,7 +1720,9 @@ pub const STEPS: &[Step] = &[
 ///   execution** are given the version of the last copy they took, and the default agent that copy was
 ///   read with ([`default_agent_copied`]). Those are the runs whose steps are still read from the store.
 ///   A run that is over and keeps none is given neither: what it ran is in the run log.
-/// - **The copies stay.** Nothing reads them from here on, and they are let go of later.
+/// - **The copies stay.** Nothing reads them from here on. They go a few at a time as runs end
+///   (`ops::automation::let_copies_go`): deleted here, every one would go to the change feed at once
+///   (`AMB-D-1166`).
 /// - **`run_def_id` loses its `REFERENCES` before it is dropped**, v91's procedure: SQLite drops no
 ///   column a foreign key is declared on, and the table cannot be rebuilt — `automation_run_value`,
 ///   `task` and `task_comment` reference it.

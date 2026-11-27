@@ -7902,10 +7902,28 @@ pub fn automation_run_ids_in_project(conn: &Connection, project_id: i64) -> Resu
 }
 
 /// The copies of the steps a build before v154 took for one run, which hold the run until they go
-/// with it (`ops::automation::run_delete`).
+/// with it (`ops::automation::run_delete`) — or until they are let go of first
+/// (`ops::automation::let_copies_go`).
 pub fn automation_run_def_ids(conn: &Connection, run_id: i64) -> Result<Vec<i64>> {
     const D: col::automation_run_def::Cols = col::automation_run_def::ALL;
     select_ids(conn, D.id, Some(&Pred::eq(D.run_id, run_id)))
+}
+
+/// **The oldest `limit` copies of the steps a build before v154 took**, of every run, by id — what
+/// `ops::automation::let_copies_go` lets go of next.
+pub fn automation_run_def_ids_oldest(conn: &Connection, limit: usize) -> Result<Vec<i64>> {
+    const D: col::automation_run_def::Cols = col::automation_run_def::ALL;
+    let mut sel = Select::new();
+    let slot = sel.col(D.id);
+    let mut sql = Sql::from(&sel, D.id.table());
+    sql.order_by([Sort::by(D.id)]).limit(i64::try_from(limit).unwrap_or(i64::MAX));
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let ids = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| slot.get(r))
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<i64>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(ids)
 }
 
 /// The tasks one run worked on, as rows of the run.

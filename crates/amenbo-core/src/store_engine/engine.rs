@@ -262,6 +262,10 @@ impl StoreEngine {
         // unlinked once per statement — where the WAL takes an append (`schema::JOURNAL_MODE_SQL`).
         let (journal_mode, ddl) = schema::genesis_sql();
         conn.execute_batch(journal_mode)?;
+        // Cap what the WAL keeps on disk once a checkpoint has emptied it. Without a cap the file stays at
+        // the largest size it ever reached, however small the writes that follow. Per connection — SQLite
+        // keeps it nowhere in the file — so it is set on every open, outside any transaction.
+        conn.execute_batch(&format!("PRAGMA journal_size_limit = {JOURNAL_SIZE_LIMIT_BYTES};"))?;
         // Create what is missing, and nothing else. `schema_sql` only ever issues
         // `CREATE … IF NOT EXISTS`, so this is genesis on a new file and a no-op on a store this
         // build already wrote. It does **not** evolve a store an older build left behind: bringing an
@@ -678,6 +682,12 @@ fn trim_change_feed(conn: &Connection) -> Result<()> {
 
 /// How a store asks SQLite to lay its file out for incremental vacuum — see [`return_free_pages`].
 const AUTO_VACUUM_INCREMENTAL: &str = "PRAGMA auto_vacuum = INCREMENTAL;";
+
+/// How large the WAL may stay once a checkpoint has emptied it, in bytes: 8 MiB. The next commit after a
+/// checkpoint starts the WAL over and cuts the file down to this, so a WAL a large write once grew does
+/// not keep its size for good. Above the ~4 MiB the auto-checkpoint lets the WAL reach (1,000 pages at
+/// the store's 4 KiB page), so ordinary writes do not cut and regrow the file each time.
+const JOURNAL_SIZE_LIMIT_BYTES: i64 = 8 * 1024 * 1024;
 
 /// What `PRAGMA auto_vacuum` reads back on a file laid out for incremental vacuum.
 const AUTO_VACUUM_MODE_INCREMENTAL: i64 = 2;
@@ -1172,6 +1182,42 @@ mod tests {
                  DROP TABLE ballast;"
             ))
             .unwrap();
+    }
+
+    /// Every open caps the WAL, since SQLite keeps the cap per connection and nowhere in the file.
+    #[test]
+    fn journal_size_limit_is_set() {
+        let dir = amenbo_scratch::scratch("journal-size-limit");
+        let path = dir.join("store.sqlite");
+        drop(StoreEngine::open(&path).unwrap());
+        let e = StoreEngine::open(&path).unwrap();
+        assert_eq!(pragma(&e, "journal_size_limit"), JOURNAL_SIZE_LIMIT_BYTES, "set again on reopen");
+    }
+
+    /// A WAL a large write grew is cut back to the cap once a checkpoint has emptied it and the next
+    /// commit starts it over.
+    #[test]
+    fn a_grown_wal_shrinks_to_the_cap() {
+        let dir = amenbo_scratch::scratch("wal-shrinks");
+        let path = dir.join("store.sqlite");
+        let e = StoreEngine::open(&path).unwrap();
+        let wal = dir.join("store.sqlite-wal");
+        let wal_len = || std::fs::metadata(&wal).unwrap().len() as i64;
+
+        // The insert is the batch's last commit: the auto-checkpoint after it empties the WAL, and no
+        // commit has yet started it over.
+        let pages = JOURNAL_SIZE_LIMIT_BYTES / 4096 * 2;
+        e.conn()
+            .execute_batch(&format!(
+                "CREATE TABLE ballast (b BLOB);
+                 WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < {pages})
+                 INSERT INTO ballast SELECT randomblob(4000) FROM n;"
+            ))
+            .unwrap();
+        assert!(wal_len() > JOURNAL_SIZE_LIMIT_BYTES, "the write grew the WAL past the cap ({})", wal_len());
+
+        e.conn().execute_batch("PRAGMA wal_checkpoint(PASSIVE); CREATE TABLE after_checkpoint (x);").unwrap();
+        assert!(wal_len() <= JOURNAL_SIZE_LIMIT_BYTES, "the WAL was cut to the cap ({})", wal_len());
     }
 
     /// A store is born laid out for incremental vacuum — on a file, where the WAL switch that follows

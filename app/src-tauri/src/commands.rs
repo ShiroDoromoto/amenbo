@@ -166,7 +166,7 @@ fn event_dto(ev: &serde_json::Value) -> EventDto {
 
 /// Build a [`TaskCardDto`] from a read-model [`amenbo_core::store_engine::read::TaskCardRow`].
 /// This is the card path: the row already carries the resolved project names, the actors' facets,
-/// the open blockers and the comment count, so a card costs one indexed query. Actors are facet
+/// the open blockers and the comment count, read for the whole page at once. Actors are facet
 /// one — the display name comes from `config` (`human_name`/`ai_name`). The top-level project id
 /// comes from the placement.
 fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskCardRow) -> TaskCardDto {
@@ -1465,7 +1465,7 @@ pub fn task_activity(task_id: i64, limit: Option<usize>) -> Result<Vec<ActivityI
 
 /// The **paged read** behind the task list. `store_engine::read::list_task_ids` gives back **one
 /// page of task ids** through an indexed `WHERE`/`ORDER BY`/`LIMIT`/`OFFSET`, and only those ids are
-/// hydrated, per task, into `TaskCardDto` (no all-rows blob comes back — memory stays bounded). The
+/// hydrated, all at once, into `TaskCardDto` (no all-rows blob comes back — memory stays bounded). The
 /// `filter` grammar is exactly that of `task list --filter` (they share `query::Filter`). The `Store`
 /// opened here queries the persistent read-model directly, projects just the window, and is released
 /// on return (it adds nothing resident). A read that goes straight to the engine **passes its reach
@@ -1508,13 +1508,13 @@ pub fn task_page(
     )
     ?;
 
-    let conn = read_model.conn();
-    let mut tasks: Vec<TaskCardDto> = Vec::with_capacity(page.ids.len());
-    for &id in &page.ids {
-        if let Some(row) = amenbo_core::store_engine::read::task_card_row(conn, id)? {
-            tasks.push(task_card_from_row(&store, row));
-        }
-    }
+    let mut rows = amenbo_core::store_engine::read::task_card_rows(read_model.conn(), &page.ids)?;
+    let tasks: Vec<TaskCardDto> = page
+        .ids
+        .iter()
+        .filter_map(|id| rows.remove(id))
+        .map(|row| task_card_from_row(&store, row))
+        .collect();
 
     Ok(TaskPageDto { tasks, total_matched: page.total_matched, offset: offset.unwrap_or(0), limit })
 }
@@ -1570,12 +1570,9 @@ pub fn tasks_by_ids(ids: Vec<i64>) -> Result<Vec<TaskCardDto>, CmdError> {
             return Ok(());
         }
         let read_model = store.read_model();
-        let conn = read_model.conn();
-        let present = amenbo_core::store_engine::read::present_task_ids(conn, &pending)?;
-        for id in present {
-            if let Some(row) = amenbo_core::store_engine::read::task_card_row(conn, id)? {
-                found.insert(id, task_card_from_row(store, row));
-            }
+        let rows = amenbo_core::store_engine::read::task_card_rows(read_model.conn(), &pending)?;
+        for (id, row) in rows {
+            found.insert(id, task_card_from_row(store, row));
         }
         Ok(())
     };

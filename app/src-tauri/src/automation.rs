@@ -188,7 +188,7 @@ pub fn automation_import(project_id: i64, src: String) -> Result<WriteAck, CmdEr
 /// axis left empty is written all the same, and the save and the launch check refuse it.
 ///
 /// Archiving takes nothing away, and like every rewrite it goes through while a run of the automation
-/// is going — the run keeps the copy it started with ([`amenbo_core::ops::automation::update`]). It
+/// is going — the run reads the saved version it points at ([`amenbo_core::ops::automation::update`]). It
 /// is what keeps a definition nobody launches any more out of a reader's way, so the row stays in the
 /// list carrying the mark rather than leaving it — which is why `automation_page` goes on answering
 /// with archived ones in it.
@@ -2081,10 +2081,10 @@ pub fn automation_run_acknowledge(run_id: i64) -> Result<WriteAck, CmdError> {
 /// **The action a spot on the picture stands on**, named — the half a step's own name stopped saying
 /// when a launch began opening a placement into a column of steps (`AMB-D-949`).
 ///
-/// It is walked from the live picture rather than kept in the run's copy, the same way the row reads
-/// the automation's name: what a reader is being told is which spot of the automation in front of
-/// them this is, and a name the picture no longer holds would point at nothing. `None` where the spot
-/// or its action has gone, and then what is drawn is the step alone.
+/// It is walked from the live picture rather than read off the version the run points at, the same way
+/// the row reads the automation's name: what a reader is being told is which spot of the automation in
+/// front of them this is, and a name the picture no longer holds would point at nothing. `None` where
+/// the spot or its action has gone, and then what is drawn is the step alone.
 fn placed_action_name(
     store: &amenbo_core::Store,
     placement_id: Option<i64>,
@@ -2113,10 +2113,10 @@ fn run_card(
 ) -> Result<AutomationRunCardDto, CmdError> {
     let conn = store.read_model().conn();
     let steps = read::automation_run_steps_of(conn, run.id)?;
-    // The step it is on, or the last one it ran — read through the run's own copy of the definition,
-    // which is what says what was asked at launch rather than what the automation says now.
+    // The step it is on, or the last one it ran — read off the saved version that step ran on, which is
+    // what says what was asked rather than what the automation says now.
     let last_def = match steps.last() {
-        Some(last) => read::automation_run_def(conn, last.run_def_id)?,
+        Some(last) => automation_run::def_of(conn, last)?,
         None => None,
     };
     let action_name =
@@ -2128,8 +2128,8 @@ fn run_card(
     // going, for a step that has left or a run that has stopped waits for nobody.
     let interactive = amenbo_core::ops::automation_run::waits_for_person(&run, steps.last(), last_def.as_ref());
     let step_name = last_def.map(|def| def.name);
-    // The version it goes on from: the newest copy of its entry, which a run back at its entry has
-    // taken afresh before its first step is opened (`take_up_newer`).
+    // The version it goes on from: the one it points at, which a run back at its entry has moved to
+    // the newest saved one before its first step is opened (`take_up_newer`).
     let version = amenbo_core::ops::automation_run::entry_def(conn, run.id)?
         .and_then(|def| def.automation_version);
     // The stretch it is in now. A run walks one per task, and a run between tasks is on none.
@@ -2137,7 +2137,7 @@ fn run_card(
     // The steps that owed the task their report and could not leave it, the task being closed.
     let mut report_withheld = Vec::new();
     for step in steps.iter().filter(|one| one.report_withheld) {
-        if let Some(def) = read::automation_run_def(conn, step.run_def_id)? {
+        if let Some(def) = automation_run::def_of(conn, step)? {
             report_withheld.push(def.name);
         }
     }
@@ -2236,10 +2236,10 @@ fn history_card(
     })
 }
 
-/// **The way out one execution left through**, by the name the run's copy declared it under. `None`
-/// while it has not left, and where the copy holds no way out of that id.
+/// **The way out one execution left through**, by the name the step it ran declared it under, in the
+/// version it ran on. `None` while it has not left, and where that step holds no way out of that id.
 ///
-/// Read off the copy rather than the live step, for the reason the step's own name is: what a reader
+/// Read off that version rather than the live step, for the reason the step's own name is: what a reader
 /// is told is the way out as it stood when the run took it, and a way out renamed or taken off since
 /// is still the one it left by.
 fn left_by(def: &amenbo_core::model::AutomationRunDef, exit_id: Option<i64>) -> Option<String> {
@@ -2475,8 +2475,8 @@ const STEP_EVENT: &str = "automation-step";
 /// **Open one step of a run**: write the execution down, build the text its terminal is started on,
 /// and tell the workspace to stand a terminal on it.
 ///
-/// `run_def_id` names which step, and **`None` is the first one** — the copy of the step the round of
-/// the run's role starts at ([`amenbo_core::ops::automation_run::entry_def`]). That is the whole of what a launch knows to
+/// `at` names which step, and **`None` is the first one** — the step the round of the run's role starts
+/// at, on the version the run points at ([`amenbo_core::ops::automation_run::entry_def`]). That is the whole of what a launch knows to
 /// ask for; which step comes after which is read from the way out the one before it took, and is the
 /// job of the op that receives a report (`AMB-T-5246`).
 ///
@@ -2487,12 +2487,12 @@ const STEP_EVENT: &str = "automation-step";
 pub fn automation_step_open(
     app: tauri::AppHandle,
     run_id: i64,
-    run_def_id: Option<i64>,
+    at: Option<amenbo_core::model::RunDefKey>,
 ) -> Result<AutomationStepOpenDto, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("automation_step_open");
     let mut store = crate::commands::open_store()?;
-    let def_id = match run_def_id {
-        Some(id) => id,
+    let at = match at {
+        Some(at) => at,
         // Uncoded on purpose. An automation where a run has nowhere to start is refused at the launch
         // check (`amenbo_core::ops::automation_run::Unmet::RoleStartsNowhere`), so the only way to
         // reach this is where it starts being taken off while a run of it is under way — which no
@@ -2504,10 +2504,10 @@ pub fn automation_step_open(
                         "run '{run_id}' has no step to start at — its automation lost its entry"
                     )))
                 })?
-                .id
+                .key()
         }
     };
-    let opened = open_one(&app, &mut store, run_id, def_id);
+    let opened = open_one(&app, &mut store, run_id, at);
     if opened.is_ok() {
         crate::delivery::drive(&store);
     }
@@ -2649,7 +2649,7 @@ fn open_one(
     app: &tauri::AppHandle,
     store: &mut amenbo_core::Store,
     run_id: i64,
-    def_id: i64,
+    at: amenbo_core::model::RunDefKey,
 ) -> Result<AutomationStepOpenDto, CmdError> {
     // What this machine can start, as the device's settings last had it from a probe
     // (`crate::wake`). Taken before the write because the store is borrowed for it, and `None` where
@@ -2669,7 +2669,7 @@ fn open_one(
     //
     // **Nor while it waits for room** in an action that takes one run at a time: nothing is carried
     // out until the action is free, and the watch opens it again on every look.
-    let mut about_to = read::automation_run_def(store.read_model().conn(), def_id)?
+    let mut about_to = automation_run::def_at(store.read_model().conn(), run_id, at)?
         .filter(|def| def.builtin.is_some());
     if about_to.is_some()
         && (amenbo_core::ops::automation_run::is_waiting(store.read_model().conn(), run_id)?
@@ -2692,7 +2692,7 @@ fn open_one(
             missing: Vec::new(),
         });
     }
-    let opened = store.automation_step_open(run_id, def_id, startable.as_deref())?;
+    let opened = store.automation_step_open(run_id, at, startable.as_deref())?;
     let mut script_to_run = None;
     let mut session = None;
     let (run, step, builtin, missing) = match opened {
@@ -2863,8 +2863,8 @@ fn tell(app: &tauri::AppHandle, dto: AutomationStepOpenDto) {
     }
 }
 
-/// **Take up what has been saved since a run's copy was taken, before the step its round starts at is
-/// opened** (`AMB-D-1015`, [`automation_run::take_up_newer`]) — and answer the step to open now, or
+/// **Take up what has been saved since the version a run points at, before the step its round starts at
+/// is opened** (`AMB-D-1015`, [`automation_run::take_up_newer`]) — and answer the step to open now, or
 /// `None` where the newer version did not pass and the run failed.
 ///
 /// **Asked of the store before it is written to.** The watch asks this of every run standing before a
@@ -2884,7 +2884,7 @@ pub(crate) fn take_up_newer(
         let store = open_store_read()?;
         let conn = store.read_model().conn();
         let Some(run) = read::automation_run(conn, run_id)? else { return Ok(Some(def)) };
-        if !matches!(automation_run::entry_def(conn, run_id)?, Some(start) if start.id == def.id) {
+        if !matches!(automation_run::entry_def(conn, run_id)?, Some(start) if start.key() == def.key()) {
             return Ok(Some(def));
         }
         read::automation_version_latest(conn, run.automation_id)?
@@ -2900,7 +2900,7 @@ pub(crate) fn take_up_newer(
     crate::delivery::drive(&store);
     match taken {
         automation_run::TakenUp::Same => Ok(Some(def)),
-        automation_run::TakenUp::Copied(entry) => {
+        automation_run::TakenUp::Moved(entry) => {
             log::info!("run {run_id} took up the newer saved version of its automation");
             let standing = app.state::<StepsStanding>();
             standing.0.lock().expect("steps standing lock").remove(&run_id);
@@ -2984,9 +2984,9 @@ fn builtin_of_step(
             "step '{run_step_id}' of run '{run_id}' not found"
         )))
     })?;
-    let def = read::automation_run_def(conn, run_step.run_def_id)?.ok_or_else(|| {
+    let def = automation_run::def_of(conn, &run_step)?.ok_or_else(|| {
         CmdError::from(amenbo_core::error::Error::not_found(format!(
-            "step '{run_step_id}' of run '{run_id}' has no copy to read"
+            "the step that execution '{run_step_id}' of run '{run_id}' ran is not found"
         )))
     })?;
     let held = run_step.status == amenbo_core::model::AutomationRunStepStatus::Running;
@@ -4129,10 +4129,10 @@ mod tests {
     }
 
     /// **The history tab reads a store whose ended runs have let go of their steps** — the shape v148
-    /// leaves: the run's row, its rounds and what they passed on, and no step, no copy of the
-    /// definition and no value. Each card still says how the run ended, who saw it fail, the task it
-    /// was on, the task its failed round was filed as and what it passed on, newest first; a failure
-    /// nobody has seen and a run still going stay off it (`AMB-D-955`).
+    /// leaves: the run's row, its rounds and what they passed on, and no step and no value. Each card
+    /// still says how the run ended, who saw it fail, the task it was on, the task its failed round was
+    /// filed as and what it passed on, newest first; a failure nobody has seen and a run still going stay
+    /// off it (`AMB-D-955`).
     #[test]
     fn the_history_tab_reads_runs_that_have_let_go_of_their_steps() {
         let _env = env_guard();

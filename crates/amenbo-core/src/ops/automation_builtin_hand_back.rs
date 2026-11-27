@@ -170,18 +170,18 @@ mod tests {
                 by: Some(ActorKind::Ai),
             };
             let run = launch(tx, p.automation.id, &by).expect("the hand back lets the task go");
-            let entry = read::automation_run_defs_of(tx.conn(), run.id)
+            let entry = crate::ops::automation_run::current_defs(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
                 .find(|d| !d.role_ids().is_empty())
                 .expect("the entry");
             let Opened::Carried { next: Next::Step(work), .. } =
-                open(tx, run.id, entry.id, Some(&claude)).expect("take")
+                open(tx, run.id, entry.key(), Some(&claude)).expect("take")
             else {
                 panic!("the take goes on to the work");
             };
             assert_eq!(work.placement_id, Some(p.work.id));
-            let Opened::Ready(opening) = open(tx, run.id, work.id, Some(&claude)).expect("open the work") else {
+            let Opened::Ready(opening) = open(tx, run.id, work.key(), Some(&claude)).expect("open the work") else {
                 panic!("the work opens a terminal");
             };
             let exits: Vec<crate::model::RunDefExit> =
@@ -195,7 +195,7 @@ mod tests {
             let second = for_ai(tx, &p, project, "中のもの");
             let head = outbox_head(tx);
             let Opened::Carried { next: Next::Step(take), .. } =
-                open(tx, run.id, back.id, Some(&claude)).expect("hand back")
+                open(tx, run.id, back.key(), Some(&claude)).expect("hand back")
             else {
                 panic!("a built-in is carried out, and the run goes on");
             };
@@ -216,7 +216,7 @@ mod tests {
             assert_eq!(comments(tx, first), vec!["This is not this project's.".to_string()]);
 
             let Opened::Carried { next: Next::Step(_), .. } =
-                open(tx, run.id, take.id, Some(&claude)).expect("take the next")
+                open(tx, run.id, take.key(), Some(&claude)).expect("take the next")
             else {
                 panic!("the take goes on to the work with the next task");
             };
@@ -244,18 +244,18 @@ mod tests {
         launch(tx, p.automation.id, &by).expect("launch")
     }
 
-    fn entry_of(tx: &WriteTx<'_>, run_id: i64) -> i64 {
-        read::automation_run_defs_of(tx.conn(), run_id)
+    fn entry_of(tx: &WriteTx<'_>, run_id: i64) -> crate::model::RunDefKey {
+        crate::ops::automation_run::current_defs(tx.conn(), run_id)
             .expect("defs")
             .into_iter()
             .find(|d| !d.role_ids().is_empty())
             .expect("the entry")
-            .id
+            .key()
     }
 
     /// Launch the picture, take the one task there is, look at it, and hand it back — leaving the run
     /// before its take again. Answers the run and the take's step.
-    fn handed_back(tx: &WriteTx<'_>, p: &Picture) -> (crate::model::AutomationRun, i64) {
+    fn handed_back(tx: &WriteTx<'_>, p: &Picture) -> (crate::model::AutomationRun, crate::model::RunDefKey) {
         let claude = ["claude".to_string()];
         let run = launched(tx, p);
         let Opened::Carried { next: Next::Step(work), .. } =
@@ -263,7 +263,7 @@ mod tests {
         else {
             panic!("the take goes on to the work");
         };
-        let Opened::Ready(opening) = open(tx, run.id, work.id, Some(&claude)).expect("open the work") else {
+        let Opened::Ready(opening) = open(tx, run.id, work.key(), Some(&claude)).expect("open the work") else {
             panic!("the work opens a terminal");
         };
         let Next::Step(back) =
@@ -272,11 +272,11 @@ mod tests {
             panic!("the work goes on to the hand back");
         };
         let Opened::Carried { next: Next::Step(take), .. } =
-            open(tx, run.id, back.id, Some(&claude)).expect("hand back")
+            open(tx, run.id, back.key(), Some(&claude)).expect("hand back")
         else {
             panic!("the hand back goes on to the take");
         };
-        (run, take.id)
+        (run, take.key())
     }
 
     /// **Another run that takes the handed-back task at once does not fail this one** — the task is no

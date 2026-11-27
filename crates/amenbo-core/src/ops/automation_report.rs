@@ -82,11 +82,10 @@ fn live_execution(tx: &WriteTx<'_>, run_step_id: i64) -> Result<AutomationRunSte
     Ok(run_step)
 }
 
-/// The step as it stood at launch — what this execution was asked to do, and the only thing its
+/// The step this execution ran, as its run reads it — what it was asked to do, and the only thing its
 /// declarations are read from.
 fn def_of(tx: &WriteTx<'_>, run_step: &AutomationRunStep) -> Result<AutomationRunDef> {
-    read::automation_run_def(tx.conn(), run_step.run_def_id)?
-        .ok_or_else(|| not_found("step of a run", run_step.run_def_id))
+    crate::ops::automation_run::def_of(tx.conn(), run_step)?.ok_or_else(|| not_found("step of a run", run_step.id))
 }
 
 /// The ways out this step was launched carrying, and what each of them hands on.
@@ -114,8 +113,8 @@ pub fn out_kind(
 ) -> Result<Option<AutomationPortKind>> {
     let run_step = read::automation_run_step(conn, run_step_id)?
         .ok_or_else(|| not_found("step execution", run_step_id))?;
-    let def = read::automation_run_def(conn, run_step.run_def_id)?
-        .ok_or_else(|| not_found("step of a run", run_step.run_def_id))?;
+    let def = crate::ops::automation_run::def_of(conn, &run_step)?
+        .ok_or_else(|| not_found("step of a run", run_step.id))?;
     Ok(declared_out(&exits_of(&def)?, port_id).map(|(_, port)| port.kind))
 }
 
@@ -308,7 +307,7 @@ fn in_the_runs_project(tx: &WriteTx<'_>, run_step: &AutomationRunStep, task_id: 
 /// **The step is finished**: it names the way out it took, hands its report over, and the run reads the
 /// picture to see what comes next.
 ///
-/// **The way out is named by its id** (`AMB-D-961`), as the step's copy keys it — the done one
+/// **The way out is named by its id** (`AMB-D-961`), as the step's version keys it — the done one
 /// included, which can also be said by leaving `--exit` off. An id the step does not declare is refused
 /// before anything is written, naming the ones it does: the way out is the condition the picture reads
 /// to pick what comes next, so one nobody drew cannot be walked, and reading it as the error one
@@ -337,7 +336,7 @@ pub fn done(
     };
     let took_a_task = stretch.as_ref().is_some_and(|s| s.task_id.is_some());
 
-    // The way out, as the step's copy declares it: by its id, or — left unsaid — the done one.
+    // The way out, as the step's version declares it: by its id, or — left unsaid — the done one.
     let Some(taken) = exits.iter().find(|e| match exit_id {
         Some(id) => e.id == id,
         None => e.name == DONE_EXIT,
@@ -464,14 +463,14 @@ fn no_task_after_all(
     Ok(())
 }
 
-/// Say what happens after the way out that was taken, as the step's copy says.
+/// Say what happens after the way out that was taken, as the step's version says.
 ///
-/// **The line is read off the copy** (`AMB-D-961`): what follows each way out was resolved at launch,
-/// across the action's edge where the line inside returns to one of the action's ways out
-/// ([`automation_run::onward`]). A run under way reads no picture but its own copies.
+/// **The line is read off the version** (`AMB-D-961`): what follows each way out is resolved across
+/// the action's edge where the line inside returns to one of the action's ways out
+/// ([`automation_run::onward`]). A run under way reads no picture but the saved version it points at.
 ///
 /// **A way out nothing decides stops the run.** The launch check refuses an automation with one, so
-/// reaching this means a copy carried in from before a launch copied the lines — and walking on from
+/// reaching this means a run carried in from before a launch resolved the lines — and walking on from
 /// a way out that says nothing would be the run choosing for itself.
 ///
 /// **A pause that was asked for is answered here and nowhere else**, because this is the one moment a
@@ -498,9 +497,9 @@ fn whats_next(
         // The way out halts the run, and the round is filed as a failure: an ending the author of the
         // picture chose, or an error way out nobody drew a line from.
         Onward::Halt => Ok(Next::Halted(failed(tx, run, AutomationStoppedReason::Halted)?)),
-        // Nothing says what follows the way out — or it leads somewhere the run never copied down,
-        // such as a placement added after the launch. The run has no snapshot of that and will not
-        // read a live one, so there is nowhere to go.
+        // Nothing says what follows the way out — or it leads somewhere the version the run points at
+        // does not hold, such as a placement added after the launch. The run will not read the draft,
+        // so there is nowhere to go.
         Onward::Nowhere => Ok(Next::Halted(failed(tx, run, AutomationStoppedReason::NoWayOn)?)),
         Onward::Go { def: next, line } => {
             if over_its_turns(tx, def, ended, &line)? {
@@ -521,11 +520,11 @@ fn whats_next(
 ///
 /// - **The round's stretch ends here**, so the run holds no task between two rounds.
 /// - **A pause asked for takes hold here** as the pause before the next task: the run holds no task, so
-///   picking it up copies the automation down afresh ([`automation_stop::resume`]). So does a person
+///   picking it up points it at the newest saved version ([`automation_stop::resume`]). So does a person
 ///   having stopped the automation ([`crate::model::Automation::stopped`]): the next round is not
 ///   started.
-/// - **Otherwise the next step is where the round of the run's seat starts, on its newest copy**
-///   ([`automation_run::entry_def`]). Nothing is copied down here: what has been saved since is taken
+/// - **Otherwise the next step is where the round of the run's seat starts, on the version it points
+///   at** ([`automation_run::entry_def`]). Nothing is moved here: what has been saved since is taken
 ///   up as that step is about to be opened
 ///   ([`automation_run::take_up_newer`]), so a newer definition starts with the next round and never
 ///   in the middle of one (`AMB-D-1015`).
@@ -571,14 +570,14 @@ fn failed(tx: &WriteTx<'_>, run: AutomationRun, reason: AutomationStoppedReason)
 /// An edge with no limit is never over its turns — which is the right answer for one leading into a
 /// spot that takes a fresh task, since that edge is walked once per task by design
 /// ([`crate::model::AutomationEdge::max_times`]). **Nor is a line that went down** when the run was
-/// launched: the copy keeps a limit on a way back alone ([`crate::ops::automation::lines_back`]).
+/// launched: a version keeps a limit on a way back alone ([`crate::ops::automation::lines_back`]).
 ///
 /// The execution that has just reported is counted with the rest: it is already stamped `done` and
 /// carrying its way out by the time this is asked, so the count is how many times the edge would have
 /// been taken including this one.
 ///
-/// **Everything is read off the run's copies** (`AMB-D-961`): the line as it was copied at launch, and
-/// which of the action's ways out each step's way out returned to ([`RunDefExit::returns_to`]).
+/// **Everything is read off the versions the steps ran on** (`AMB-D-961`): the line as the version holds
+/// it, and which of the action's ways out each step's way out returned to ([`RunDefExit::returns_to`]).
 fn over_its_turns(
     tx: &WriteTx<'_>,
     from: &AutomationRunDef,
@@ -591,8 +590,11 @@ fn over_its_turns(
     let Some(stretch) = ended.run_task_id else { return Ok(false) };
     let conn = tx.conn();
     let mut taken = 0;
-    for step in read::automation_run_steps_of_task(conn, stretch)? {
-        let Some(def) = read::automation_run_def(conn, step.run_def_id)? else { continue };
+    let walked = read::automation_run_steps_of_task(conn, stretch)?;
+    let Some(run) = read::automation_run(conn, ended.run_id)? else { return Ok(false) };
+    let defs = crate::ops::automation_run::defs_named(conn, &run, &walked)?;
+    for step in &walked {
+        let Some(def) = defs.get(&step.def_key()) else { continue };
         let Some(step_id) = def.step_id else { continue };
         let took_it = match edge.picture {
             AutomationPictureOwner::Action => {
@@ -604,7 +606,7 @@ fn over_its_turns(
                 def.placement_id == Some(edge.from_id)
                     && match step.exit_id {
                         Some(exit) => {
-                            exits_of(&def)?.iter().find(|e| e.id == exit).and_then(|e| e.returns_to)
+                            exits_of(def)?.iter().find(|e| e.id == exit).and_then(|e| e.returns_to)
                                 == Some(edge.exit_id)
                         }
                         None => false,
@@ -642,7 +644,7 @@ const OUTPUT_VERSION: u64 = 1;
 /// listed is put down then: an output is checked whole before any is written.
 ///
 /// `output.json` names a way out and its outputs by name, the way the step was built, and they are
-/// matched to the run's copy of the step here (`AMB-D-961`). A value is a string; a file is the name of
+/// matched to the step as the run reads it here (`AMB-D-961`). A value is a string; a file is the name of
 /// one the program left beside `output.json`, attached to this execution; a task is its `AMB-T-<n>`.
 /// An output the way out does not declare is not read. A report left out or blank is said for it: a
 /// step owes one.
@@ -908,15 +910,15 @@ mod tests {
         run: &AutomationRun,
         placement: &AutomationPlacement,
     ) -> AutomationRunDef {
-        read::automation_run_defs_of(tx.conn(), run.id)
+        crate::ops::automation_run::current_defs(tx.conn(), run.id)
             .expect("defs")
             .into_iter()
             .find(|d| d.placement_id == Some(placement.id))
-            .expect("the spot's snapshot")
+            .expect("the spot's step")
     }
 
     fn opened(tx: &WriteTx<'_>, run: &AutomationRun, placement: &AutomationPlacement) -> Opening {
-        match open(tx, run.id, def_of(tx, run, placement).id, None).expect("open") {
+        match open(tx, run.id, def_of(tx, run, placement).key(), None).expect("open") {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
@@ -1099,7 +1101,7 @@ mod tests {
             let step = opened(tx, &run, &p.first).run_step;
             let found = way_out(tx, step.id, "found");
             let on_found = out_port(tx, step.id, found, "note");
-            let done_exit = exits_of(&read::automation_run_def(tx.conn(), step.run_def_id).unwrap().unwrap())
+            let done_exit = exits_of(&crate::ops::automation_run::def_of(tx.conn(), &step).unwrap().unwrap())
                 .unwrap()
                 .into_iter()
                 .find(|e| e.name == DONE_EXIT)

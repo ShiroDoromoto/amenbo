@@ -167,16 +167,16 @@ mod tests {
             by: Some(ActorKind::Ai),
         };
         let run = launch(tx, automation.id, &by).expect("launch");
-        let entry = read::automation_run_defs_of(tx.conn(), run.id)
+        let entry = crate::ops::automation_run::current_defs(tx.conn(), run.id)
             .expect("defs")
             .into_iter()
             .find(|d| !d.role_ids().is_empty())
             .expect("the entry");
-        let Opened::Carried { next: Next::Step(fold), .. } = open(tx, run.id, entry.id, Some(&claude)).expect("take")
+        let Opened::Carried { next: Next::Step(fold), .. } = open(tx, run.id, entry.key(), Some(&claude)).expect("take")
         else {
             panic!("the take goes on to the fold");
         };
-        let Opened::Carried { run_step_id, next } = open(tx, run.id, fold.id, Some(&claude)).expect("fold") else {
+        let Opened::Carried { run_step_id, next } = open(tx, run.id, fold.key(), Some(&claude)).expect("fold") else {
             panic!("a built-in is carried out");
         };
         (run_step_id, next)

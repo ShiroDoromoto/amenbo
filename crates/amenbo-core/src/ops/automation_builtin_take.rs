@@ -457,9 +457,9 @@ mod tests {
         id
     }
 
-    /// The placement the step named `name` was copied from onto run `run`.
+    /// The placement the step named `name` stands on, as run `run` reads it.
     fn placed(tx: &WriteTx<'_>, run: i64, name: &str) -> i64 {
-        read::automation_run_defs_of(tx.conn(), run)
+        crate::ops::automation_run::current_defs(tx.conn(), run)
             .expect("defs")
             .into_iter()
             .find(|d| d.name == name)
@@ -591,7 +591,7 @@ mod tests {
             panic!("the run stands before its entry");
         };
         assert_eq!(entry.builtin.as_deref(), Some("take_task"));
-        open(tx, run.id, entry.id, Some(&[])).expect("open")
+        open(tx, run.id, entry.key(), Some(&[])).expect("open")
     }
 
     /// Who starts a run once a task turns up: nobody, with no agent probe and no window — as the app's
@@ -928,7 +928,7 @@ mod tests {
             .expect("read")
             .and_then(|s| s.task_id)
             .expect("the task it took");
-        let Opened::Ready(opening) = open(tx, run.id, work.id, Some(&claude)).expect("open the work") else {
+        let Opened::Ready(opening) = open(tx, run.id, work.key(), Some(&claude)).expect("open the work") else {
             panic!("the work opens a terminal");
         };
 
@@ -941,12 +941,12 @@ mod tests {
         assert_eq!(asked.status, AutomationRunStatus::Running);
 
         let Next::Step(close) = report_done(tx, &opening) else { panic!("the work goes on to the close") };
-        let Opened::Carried { next: Next::Step(take), .. } = open(tx, run.id, close.id, Some(&claude)).expect("close")
+        let Opened::Carried { next: Next::Step(take), .. } = open(tx, run.id, close.key(), Some(&claude)).expect("close")
         else {
             panic!("the close goes back round to the take");
         };
         assert_eq!(status(tx, first), TaskStatus::Done, "the task it was on is finished first");
-        let opened = open(tx, run.id, take.id, Some(&claude)).expect("open the take");
+        let opened = open(tx, run.id, take.key(), Some(&claude)).expect("open the take");
         (run, first, opened)
     }
 
@@ -982,16 +982,16 @@ mod tests {
             assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "back at the take");
             assert_eq!(resumed.run.pause_kind, None);
             assert!(matches!(
-                open(tx, run.id, resumed.next.id, Some(&[])).expect("open"),
+                open(tx, run.id, resumed.next.key(), Some(&[])).expect("open"),
                 Opened::Carried { next: Next::Step(_), .. }
             ));
             assert_eq!(status(tx, b), TaskStatus::InProgress, "and the next task is taken");
         });
     }
 
-    /// **Picked up after pausing before its next task, a run is copied down afresh from the automation as
-    /// it stands now, and starts at the new copy's entry** (`AMB-D-1015`). The copy it launched with is
-    /// kept: the steps it opened from it still point at it.
+    /// **Picked up after pausing before its next task, a run is pointed at the automation's newest saved
+    /// version, and starts at that version's entry** (`AMB-D-1015`, `AMB-D-1219`). The steps it opened
+    /// before still name the version they ran on, and nothing is copied.
     #[test]
     fn picked_up_before_its_next_task_a_run_goes_on_the_automation_as_it_stands_now() {
         with_tx(|tx| {
@@ -1001,9 +1001,8 @@ mod tests {
             let b = ours(tx, "b", &automation, Some(Priority::Low));
             let (run, _, opened) = paused_after_the_first(tx, &automation);
             assert!(matches!(opened, Opened::Waiting { .. }));
-            let launched_with = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
-            let last_copied = launched_with.last().expect("a copy").id;
-            let work = launched_with.iter().find(|d| d.name == "work").expect("the work's copy");
+            let launched_with = crate::ops::automation_run::current_defs(tx.conn(), run.id).expect("defs");
+            let work = launched_with.iter().find(|d| d.name == "work").expect("the work's step");
             let work_step = work.step_id.expect("the work's step");
             automation::step_update(
                 tx,
@@ -1029,35 +1028,37 @@ mod tests {
 
             let resumed = automation_stop::resume(tx, run.id, None, nothing_asked(), None).expect("resume");
             assert_eq!(resumed.run.status, AutomationRunStatus::Running);
-            assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "at the new copy's entry");
-            assert!(resumed.next.id > last_copied, "copied down afresh");
+            assert_eq!(resumed.next.builtin.as_deref(), Some("take_task"), "at the new version's entry");
+            assert_eq!(resumed.next.automation_version, Some(2), "pointed at the newer version");
+            assert_eq!(resumed.run.automation_version, Some(2));
             let Waiting::Step(waiting) = next_def(tx.conn(), run.id).expect("next") else {
                 panic!("the run stands before a step");
             };
-            assert_eq!(waiting.id, resumed.next.id, "the new copy's entry, not the take it paused before");
-            let kept = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
-            assert_eq!(kept.len(), launched_with.len() * 2, "the copy it launched with is kept");
-            assert!(
-                kept.iter().filter(|d| d.id > last_copied).all(|d| d.automation_version == Some(2)),
-                "the new copy records the version it was taken from"
-            );
+            assert_eq!(waiting.key(), resumed.next.key(), "the new version's entry, not the take it paused before");
+            let now = crate::ops::automation_run::current_defs(tx.conn(), run.id).expect("defs");
+            assert!(now.iter().all(|d| d.automation_version == Some(2)), "the run reads the newer version");
+            let copies: i64 = tx
+                .conn()
+                .query_row("SELECT COUNT(*) FROM automation_run_def WHERE run_id = ?1", [run.id], |r| r.get(0))
+                .expect("count");
+            assert_eq!(copies, 0, "nothing is copied");
             for step in read::automation_run_steps_of(tx.conn(), run.id).expect("steps") {
-                assert!(step.run_def_id <= last_copied, "what it opened before points at the old copy");
+                assert_eq!(step.automation_version, Some(1), "what it opened before names the version it ran on");
             }
 
             let Opened::Carried { next: Next::Step(next), .. } =
-                open(tx, run.id, resumed.next.id, Some(&[])).expect("open")
+                open(tx, run.id, resumed.next.key(), Some(&[])).expect("open")
             else {
                 panic!("the take goes on to the work");
             };
             assert_eq!(status(tx, b), TaskStatus::InProgress, "the next task is taken");
-            assert!(next.id > last_copied, "on the new copy");
+            assert_eq!(next.automation_version, Some(2), "on the new version");
             assert_eq!(next.prompt.as_deref(), Some("work on it again"), "the work as it was rewritten");
         });
     }
 
     /// **A run paused before its next task is not picked up on an automation that would not launch**
-    /// (`AMB-D-1015`): the resume is refused, nothing is copied down, and the run stays paused.
+    /// (`AMB-D-1015`): the resume is refused, the run keeps pointing at its version, and it stays paused.
     #[test]
     fn a_run_is_not_picked_up_on_an_automation_that_would_not_launch() {
         with_tx(|tx| {
@@ -1065,7 +1066,6 @@ mod tests {
             let automation = round_picture(tx, project);
             ours(tx, "a", &automation, Some(Priority::High));
             let (run, _, _) = paused_after_the_first(tx, &automation);
-            let copies = read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len();
             start_at(tx, automation.id, placed(tx, run.id, "work"));
             automation::version_add(tx, automation.id).expect("save past the check");
 
@@ -1074,11 +1074,7 @@ mod tests {
             let paused = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
             assert_eq!(paused.status, AutomationRunStatus::Paused, "it stays paused");
             assert_eq!(paused.pause_kind, Some(crate::model::AutomationPauseKind::BeforeNextTask));
-            assert_eq!(
-                read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len(),
-                copies,
-                "nothing is copied down",
-            );
+            assert_eq!(paused.automation_version, Some(1), "it still points at the version it ran on");
         });
     }
 
@@ -1155,17 +1151,17 @@ mod tests {
                 panic!("the take goes on to the work");
             };
             assert_eq!(status(tx, a), TaskStatus::InProgress);
-            let Opened::Ready(opening) = open(tx, run.id, work.id, Some(&claude)).expect("open the work") else {
+            let Opened::Ready(opening) = open(tx, run.id, work.key(), Some(&claude)).expect("open the work") else {
                 panic!("the work opens a terminal");
             };
             automation::stop(tx, rounds.id, true).expect("stop");
             let Next::Step(close) = report_done(tx, &opening) else { panic!("the work goes on to the close") };
-            let Opened::Carried { next: Next::Step(take), .. } = open(tx, run.id, close.id, Some(&claude)).expect("close")
+            let Opened::Carried { next: Next::Step(take), .. } = open(tx, run.id, close.key(), Some(&claude)).expect("close")
             else {
                 panic!("the close goes back round to the take");
             };
             assert_eq!(status(tx, a), TaskStatus::Done, "the round under way is finished");
-            let Opened::Waiting { run: paused } = open(tx, run.id, take.id, Some(&claude)).expect("open the take")
+            let Opened::Waiting { run: paused } = open(tx, run.id, take.key(), Some(&claude)).expect("open the take")
             else {
                 panic!("the run pauses before the take");
             };
@@ -1175,9 +1171,9 @@ mod tests {
         });
     }
 
-    /// **A run standing at its entry is copied down afresh once a newer version is saved**
-    /// (`AMB-D-1015`), and starts at the new copy's entry. The copy it launched with is kept, and with
-    /// nothing newer saved since, it is left as it is.
+    /// **A run standing at its entry is pointed at a newer version once one is saved** (`AMB-D-1015`,
+    /// `AMB-D-1219`), and starts at that version's entry. With nothing newer saved since, it is left as it
+    /// is.
     #[test]
     fn a_run_standing_at_its_entry_takes_up_the_version_saved_since() {
         with_tx(|tx| {
@@ -1185,33 +1181,31 @@ mod tests {
             let automation = picture(tx, project).0;
             let run = launched(tx, &automation);
             assert!(matches!(take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look"), TakenUp::Same));
-            let launched_with = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
-            let last_copied = launched_with.last().expect("a copy").id;
-            assert!(launched_with.iter().all(|d| d.automation_version == Some(1)), "taken from the first version");
+            let launched_with = crate::ops::automation_run::current_defs(tx.conn(), run.id).expect("defs");
+            assert!(launched_with.iter().all(|d| d.automation_version == Some(1)), "read off the first version");
 
             automation::version_add(tx, automation.id).expect("save the automation");
-            let TakenUp::Copied(entry) = take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look") else {
-                panic!("copied down afresh");
+            let TakenUp::Moved(entry) = take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look") else {
+                panic!("pointed at the newer version");
             };
-            assert!(entry.id > last_copied, "on the new copy");
             assert_eq!(entry.builtin.as_deref(), Some("take_task"));
             assert_eq!(entry.automation_version, Some(2));
             let Waiting::Step(waiting) = next_def(tx.conn(), run.id).expect("next") else {
                 panic!("the run stands before a step");
             };
-            assert_eq!(waiting.id, entry.id, "the new copy's entry is what is opened next");
-            let kept = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
-            assert_eq!(kept.len(), launched_with.len() * 2, "the copy it launched with is kept");
+            assert_eq!(waiting.key(), entry.key(), "the new version's entry is what is opened next");
+            let pointed = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
+            assert_eq!(pointed.automation_version, Some(2), "the run points at the newer version");
             assert!(matches!(take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look"), TakenUp::Same));
             let still = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
             assert_eq!(still.status, AutomationRunStatus::Running);
         });
     }
 
-    /// **A run partway through a task is left on the copy it has**, newer version or not: only a run
-    /// standing at its entry holds no task.
+    /// **A run partway through a task is left on the version it points at**, newer version or not: only a
+    /// run standing at its entry holds no task.
     #[test]
-    fn a_run_partway_through_a_task_is_left_on_its_copy() {
+    fn a_run_partway_through_a_task_is_left_on_its_version() {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let (automation, _) = picture(tx, project);
@@ -1219,22 +1213,21 @@ mod tests {
             let (run, _, next) = carried(tx, &automation);
             assert!(matches!(next, Next::Step(_)), "on to the work");
             automation::version_add(tx, automation.id).expect("save the automation");
-            let copies = read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len();
 
             assert!(matches!(take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look"), TakenUp::Same));
-            assert_eq!(read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len(), copies);
+            let kept = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
+            assert_eq!(kept.automation_version, Some(1), "it still points at the version it launched on");
         });
     }
 
     /// **A newer version that would not launch fails the run standing at its entry**, with what it did
-    /// not pass kept on the run. Nothing is copied down, and there is no task to hand back.
+    /// not pass kept on the run. It keeps pointing at its version, and there is no task to hand back.
     #[test]
     fn a_run_standing_at_its_entry_fails_on_a_version_that_would_not_launch() {
         with_tx(|tx| {
             let project = mk_project(tx, "amenbo");
             let automation = picture(tx, project).0;
             let run = launched(tx, &automation);
-            let copies = read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len();
             start_at(tx, automation.id, placed(tx, run.id, "work"));
             automation::version_add(tx, automation.id).expect("save past the check");
 
@@ -1247,7 +1240,7 @@ mod tests {
             assert_eq!(kept.stopped_reason, Some(AutomationStoppedReason::FailedCheck));
             let detail = kept.stopped_detail.expect("what it did not pass is kept");
             assert!(detail.starts_with("cannot launch 'take'"), "{detail}");
-            assert_eq!(read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len(), copies);
+            assert_eq!(kept.automation_version, Some(1), "it still points at the version it launched on");
         });
     }
 
@@ -1639,7 +1632,7 @@ mod tests {
         });
     }
 
-    /// **A run keeps its role until it ends**: copied down again from a newer version, it is still a seat
+    /// **A run keeps its role until it ends**: pointed at a newer version, it is still a seat
     /// of the role it launched in, and does not take a task of another role that has turned up since.
     #[test]
     fn a_run_keeps_its_role_when_it_takes_up_a_newer_version() {
@@ -1654,7 +1647,7 @@ mod tests {
             automation::version_add(tx, automation.id).expect("save the automation");
             assert!(matches!(
                 take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look"),
-                TakenUp::Copied(_)
+                TakenUp::Moved(_)
             ));
             assert_eq!(read::automation_run(tx.conn(), run.id).expect("read").expect("run").role_id, Some(builder));
             open_entry(tx, &run);
@@ -1778,11 +1771,11 @@ mod tests {
     /// the run went from the close.
     fn round_finished(tx: &WriteTx<'_>, run: i64, work: &crate::model::AutomationRunDef) -> Next {
         let claude = ["claude".to_string()];
-        let Opened::Ready(opening) = open(tx, run, work.id, Some(&claude)).expect("open the work") else {
+        let Opened::Ready(opening) = open(tx, run, work.key(), Some(&claude)).expect("open the work") else {
             panic!("the work opens a terminal");
         };
         let Next::Step(close) = report_done(tx, &opening) else { panic!("the work goes on to the close") };
-        let Opened::Carried { next, .. } = open(tx, run, close.id, Some(&claude)).expect("close") else {
+        let Opened::Carried { next, .. } = open(tx, run, close.key(), Some(&claude)).expect("close") else {
             panic!("the close is carried out");
         };
         next
@@ -1832,7 +1825,7 @@ mod tests {
             assert!(launches_to_top_up(tx.conn(), &[launch]).expect("ask").is_empty());
 
             let Next::Step(take) = round_finished(tx, first.id, &first_work) else { panic!("back round to the take") };
-            let Opened::LetGo { run: let_go } = open(tx, first.id, take.id, Some(&[])).expect("open the take") else {
+            let Opened::LetGo { run: let_go } = open(tx, first.id, take.key(), Some(&[])).expect("open the take") else {
                 panic!("the first to finish its task lets its seat go");
             };
             assert_eq!(let_go.status, AutomationRunStatus::Completed);
@@ -1841,7 +1834,7 @@ mod tests {
 
             let Next::Step(take) = round_finished(tx, second.id, &second_work) else { panic!("back round to the take") };
             assert!(
-                matches!(open(tx, second.id, take.id, Some(&[])).expect("open the take"), Opened::Carried { .. }),
+                matches!(open(tx, second.id, take.key(), Some(&[])).expect("open the take"), Opened::Carried { .. }),
                 "the seat left takes its next task",
             );
         });
@@ -1898,14 +1891,14 @@ mod tests {
             assert!(launches_to_top_up(tx.conn(), &[launch]).expect("ask").is_empty());
 
             let Next::Step(take) = round_finished(tx, second.id, &second_work) else { panic!("back round to the take") };
-            let Opened::LetGo { run: let_go } = open(tx, second.id, take.id, Some(&[])).expect("open the take") else {
+            let Opened::LetGo { run: let_go } = open(tx, second.id, take.key(), Some(&[])).expect("open the take") else {
                 panic!("the first to finish its task goes, whichever it is");
             };
             assert_eq!(let_go.status, AutomationRunStatus::Completed);
 
             let Next::Step(take) = round_finished(tx, first.id, &first_work) else { panic!("back round to the take") };
             assert!(
-                matches!(open(tx, first.id, take.id, Some(&[])).expect("open the take"), Opened::Carried { .. }),
+                matches!(open(tx, first.id, take.key(), Some(&[])).expect("open the take"), Opened::Carried { .. }),
                 "the one left takes its next task",
             );
         });
@@ -1930,7 +1923,7 @@ mod tests {
 
             let Next::Step(take) = round_finished(tx, first.id, &first_work) else { panic!("back round to the take") };
             assert!(
-                matches!(open(tx, first.id, take.id, Some(&[])).expect("open the take"), Opened::Carried { .. }),
+                matches!(open(tx, first.id, take.key(), Some(&[])).expect("open the take"), Opened::Carried { .. }),
                 "the run keeps its seat and takes its next task",
             );
         });
@@ -1972,7 +1965,7 @@ mod tests {
             panic!("the take goes on to the work");
         };
         let Next::Step(take) = round_finished(tx, run.id, &work) else { panic!("back round to the take") };
-        open(tx, run.id, take.id, Some(&[])).expect("open the take")
+        open(tx, run.id, take.key(), Some(&[])).expect("open the take")
     }
 
     /// **At the run limit, a run that finishes a task gives its seat back while another role has a task
@@ -2202,7 +2195,7 @@ mod tests {
 
             let Next::Step(take) = round_finished(tx, first.id, &first_work) else { panic!("back round to the take") };
             assert!(
-                matches!(open(tx, first.id, take.id, Some(&[])).expect("open the take"), Opened::Carried { .. }),
+                matches!(open(tx, first.id, take.key(), Some(&[])).expect("open the take"), Opened::Carried { .. }),
                 "the run keeps its seat and takes its next task",
             );
         });
@@ -2240,7 +2233,7 @@ mod tests {
 
             for (run, work) in [(&first, &first_work), (&second, &second_work)] {
                 let Next::Step(take) = round_finished(tx, run.id, work) else { panic!("back round to the take") };
-                let Opened::LetGo { run: let_go } = open(tx, run.id, take.id, Some(&[])).expect("open the take")
+                let Opened::LetGo { run: let_go } = open(tx, run.id, take.key(), Some(&[])).expect("open the take")
                 else {
                     panic!("a run of a stopped role takes no new task");
                 };
@@ -2615,7 +2608,7 @@ mod tests {
         let Opened::Carried { next: Next::Step(def), .. } = open_entry(tx, &run) else {
             panic!("the take goes on to the work");
         };
-        let Opened::Ready(opening) = open(tx, run.id, def.id, Some(&claude)).expect("open the work") else {
+        let Opened::Ready(opening) = open(tx, run.id, def.key(), Some(&claude)).expect("open the work") else {
             panic!("the work opens a terminal");
         };
         (run, launch, *opening, built, builder)

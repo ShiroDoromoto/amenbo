@@ -7201,8 +7201,8 @@ pub fn automation_wire_between(
         .next())
 }
 
-/// The steps of one library action, in display order — what the launch check walks and what the launch
-/// copies into the run.
+/// The steps of one library action, in display order — what the launch check walks and what a
+/// run's steps are assembled from.
 pub fn automation_action_steps_of(
     conn: &Connection,
     action_id: i64,
@@ -7352,8 +7352,8 @@ pub fn automation_action_version_ids(conn: &Connection, action_id: i64) -> Resul
     select_ids(conn, V.id, Some(&Pred::eq(V.action_id, action_id)))
 }
 
-/// The newest saved version of one automation, or `None` for one nobody has saved — what a run copied
-/// down from it records.
+/// The newest saved version of one automation, or `None` for one nobody has saved — what a run is
+/// pointed at.
 pub fn automation_version_latest(
     conn: &Connection,
     automation_id: i64,
@@ -7760,11 +7760,6 @@ pub fn automation_launch_roles(
     )
 }
 
-/// The `automation_run_def` record with this id.
-pub fn automation_run_def(conn: &Connection, id: i64) -> Result<Option<crate::model::AutomationRunDef>> {
-    super::hydrate::row_by_id(conn, "automation_run_def", id, super::hydrate::automation_run_def_row)
-}
-
 /// **The runs going right now** — the ones that are `running`, across every project.
 ///
 /// It crosses projects because a terminal does: what a run holds is a terminal on this machine, and
@@ -7900,28 +7895,14 @@ fn automation_run_rows(
     Ok(rows)
 }
 
-/// The steps copied into one run, oldest key first — the picture as it stood at launch.
-pub fn automation_run_defs_of(
-    conn: &Connection,
-    run_id: i64,
-) -> Result<Vec<crate::model::AutomationRunDef>> {
-    const D: col::automation_run_def::Cols = col::automation_run_def::ALL;
-    automation_rows(
-        conn,
-        D.table,
-        &Pred::eq(D.run_id, run_id),
-        &[Sort::by(D.id)],
-        super::hydrate::automation_run_def_row,
-    )
-}
-
 /// The runs filed under one project, for the project delete's walk.
 pub fn automation_run_ids_in_project(conn: &Connection, project_id: i64) -> Result<Vec<i64>> {
     const R: col::automation_run::Cols = col::automation_run::ALL;
     select_ids(conn, R.id, Some(&Pred::eq(R.project_id, project_id)))
 }
 
-/// The step snapshots one run took at launch.
+/// The copies of the steps a build before v154 took for one run, which hold the run until they go
+/// with it (`ops::automation::run_delete`).
 pub fn automation_run_def_ids(conn: &Connection, run_id: i64) -> Result<Vec<i64>> {
     const D: col::automation_run_def::Cols = col::automation_run_def::ALL;
     select_ids(conn, D.id, Some(&Pred::eq(D.run_id, run_id)))

@@ -39,7 +39,7 @@ use crate::model::{
     AutomationLaunch, AutomationLaunchRole, AutomationLaunchStatus, AutomationPauseKind, AutomationPlacementStep,
     AutomationRole,
     AutomationPort, AutomationPortDirection, AutomationPortKind,
-    AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
+    AutomationPortOwner, AutomationRun, AutomationRunStatus,
     AutomationRunPass, AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
     AutomationFailureValue, AutomationStep, AutomationStoppedReason, AutomationTrigger, AutomationTriggerValue,
     AutomationVersion, AutomationWire, Database, RoleStart, TakeOrder, TriggerCondition, TriggerRefusal, TriggerTask,
@@ -879,6 +879,8 @@ pub(super) fn automation_run_row(r: &Row) -> rusqlite::Result<AutomationRun> {
         trigger_id: get(r, C.trigger_id)?,
         incident_task_id: get(r, C.incident_task_id)?,
         start_key: get(r, C.start_key)?,
+        automation_version: get(r, C.automation_version)?,
+        default_agent: get(r, C.default_agent)?,
         created_at,
         updated_at,
     })
@@ -956,41 +958,6 @@ pub(super) fn automation_version_row(r: &Row) -> rusqlite::Result<AutomationVers
     })
 }
 
-pub(super) fn automation_run_def_row(r: &Row) -> rusqlite::Result<AutomationRunDef> {
-    const C: col::automation_run_def::Cols = col::automation_run_def::ALL;
-    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
-    Ok(AutomationRunDef {
-        id: get(r, C.id)?,
-        run_id: get(r, C.run_id)?,
-        placement_id: get(r, C.placement_id)?,
-        action_id: get(r, C.action_id)?,
-        one_at_a_time: get(r, C.one_at_a_time)?,
-        step_id: get(r, C.step_id)?,
-        name: get(r, C.name)?,
-        prompt: get(r, C.prompt)?,
-        builtin: get(r, C.builtin)?,
-        builtin_version: get(r, C.builtin_version)?,
-        automation_version: get(r, C.automation_version)?,
-        script: script(r, C.script_program, C.script_args, C.script_timeout_minutes)?,
-        agent: get(r, C.agent)?,
-        model: get(r, C.model)?,
-        interactive: get(r, C.interactive)?,
-        work_dir_ref: get(r, C.work_dir_ref)?,
-        report_to_task: get(r, C.report_to_task)?,
-        show_history: get(r, C.show_history)?,
-        show_notes: get(r, C.show_notes)?,
-        show_decisions: get(r, C.show_decisions)?,
-        show_comments: get(r, C.show_comments)?,
-        expected_minutes: get(r, C.expected_minutes)?,
-        exits: get(r, C.exits)?,
-        ins: get(r, C.ins)?,
-        cfg: get(r, C.cfg)?,
-        roles: get(r, C.roles)?,
-        created_at,
-        updated_at,
-    })
-}
-
 pub(super) fn automation_run_task_row(r: &Row) -> rusqlite::Result<AutomationRunTask> {
     const C: col::automation_run_task::Cols = col::automation_run_task::ALL;
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
@@ -1030,7 +997,6 @@ pub(super) fn automation_run_step_row(r: &Row) -> rusqlite::Result<AutomationRun
     Ok(AutomationRunStep {
         id: get(r, C.id)?,
         run_id: get(r, C.run_id)?,
-        run_def_id: get(r, C.run_def_id)?,
         run_task_id: get(r, C.run_task_id)?,
         seq: get(r, C.seq)?,
         exit_id: get(r, C.exit_id)?,
@@ -1041,6 +1007,9 @@ pub(super) fn automation_run_step_row(r: &Row) -> rusqlite::Result<AutomationRun
         started_at: ts_opt(r, C.started_at)?,
         ended_at: ts_opt(r, C.ended_at)?,
         exit_code: get(r, C.exit_code)?,
+        automation_version: get(r, C.automation_version)?,
+        placement_id: get(r, C.placement_id)?,
+        step_id: get(r, C.step_id)?,
         created_at,
         updated_at,
     })

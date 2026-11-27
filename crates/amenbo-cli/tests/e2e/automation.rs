@@ -1773,7 +1773,7 @@ fn inside_a_step_its_own_run_is_not_paused_or_force_canceled() {
         let paths = amenbo_core::config::Paths::at(cli.home.clone());
         let mut store = amenbo_core::Store::open_at(paths).expect("the store");
         let entry = store.automation_run_defs(run).expect("defs").into_iter().find(|d| !d.role_ids().is_empty()).expect("an entry");
-        match store.automation_step_open(run, entry.id, None).expect("open") {
+        match store.automation_step_open(run, entry.key(), None).expect("open") {
             amenbo_core::ops::automation_step::Opened::Carried { run_step_id, .. } => run_step_id.to_string(),
             _ => panic!("the entry takes a task and is carried out"),
         }
@@ -1829,7 +1829,7 @@ fn a_person_stops_a_launch_and_a_step_does_not() {
         let paths = amenbo_core::config::Paths::at(cli.home.clone());
         let mut store = amenbo_core::Store::open_at(paths).expect("the store");
         let entry = store.automation_run_defs(run).expect("defs").into_iter().find(|d| !d.role_ids().is_empty()).expect("an entry");
-        match store.automation_step_open(run, entry.id, None).expect("open") {
+        match store.automation_step_open(run, entry.key(), None).expect("open") {
             amenbo_core::ops::automation_step::Opened::Carried { run_step_id, .. } => run_step_id.to_string(),
             _ => panic!("the entry takes a task and is carried out"),
         }
@@ -1877,7 +1877,7 @@ fn a_task_filed_inside_a_step_remembers_the_step() {
     let step = {
         let mut store = open();
         let entry = store.automation_run_defs(run).expect("defs").into_iter().find(|d| !d.role_ids().is_empty()).expect("an entry");
-        match store.automation_step_open(run, entry.id, None).expect("open") {
+        match store.automation_step_open(run, entry.key(), None).expect("open") {
             amenbo_core::ops::automation_step::Opened::Carried { run_step_id, .. } => run_step_id,
             _ => panic!("the entry takes a task and is carried out"),
         }
@@ -2003,7 +2003,7 @@ fn run_show_says_when_a_run_is_waiting_for_room() {
         for run in [&first, &second] {
             let run: i64 = run.parse().unwrap();
             let entry = store.automation_run_defs(run).expect("defs").into_iter().find(|d| !d.role_ids().is_empty()).expect("an entry");
-            match store.automation_step_open(run, entry.id, None).expect("open") {
+            match store.automation_step_open(run, entry.key(), None).expect("open") {
                 amenbo_core::ops::automation_step::Opened::Carried { .. } => {}
                 _ => panic!("the entry takes a task and is carried out"),
             }
@@ -2031,10 +2031,11 @@ fn run_show_says_when_a_run_is_waiting_for_room() {
 }
 
 /// **A run picked up after a pause before its next task goes on from the newest saved version**
-/// (`AMB-D-1015`), and `run-show` says which versions it was copied from, in turn. A run standing at its
-/// entry has run no step yet, so which version each step ran on is not held here.
+/// (`AMB-D-1015`), and `run-show` says which version it goes by. A run standing at its entry has run no
+/// step yet, and a run points at one version at a time (`AMB-D-1219`): the version it was pointed at
+/// before, with no step run on it, leaves no record.
 #[test]
-fn run_show_names_the_versions_a_run_was_copied_from() {
+fn run_show_names_the_version_a_run_goes_by() {
     let cli = Cli::new();
     let _app = cli.the_app_up();
     let (a, _, _, take) = a_picture(&cli, false);
@@ -2063,9 +2064,10 @@ fn run_show_names_the_versions_a_run_was_copied_from() {
     let shown = cli.json(&["automation", "run-show", &run, "--json"]);
     let versions: Vec<Option<i64>> =
         shown["versions"].as_array().unwrap().iter().map(|v| v["version"].as_i64()).collect();
-    assert_eq!(versions, vec![Some(1), Some(2)], "{shown}");
+    assert_eq!(versions, vec![Some(2)], "{shown}");
+    assert_eq!(shown["run"]["automation_version"], 2, "{shown}");
     let (text, _) = cli.run(&["automation", "run-show", &run]);
-    assert!(text.contains("copied from: version 1 → version 2 (taken up at "), "{text}");
+    assert!(text.contains("copied from: version 2"), "{text}");
 
     cli.json(&["automation", "cancel", &run, "--force", "--json"]);
 }

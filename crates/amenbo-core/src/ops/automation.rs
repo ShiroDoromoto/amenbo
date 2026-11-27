@@ -1218,28 +1218,25 @@ pub fn action_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 }
 
 /// **The runs still going that read one action** — each `running` or `paused` run, in every project,
-/// whose version uses it. The version is the one the run reads now ([`automation_run::current_defs`]):
-/// a run picked up again goes by the newer version, and the copy of an earlier round is not asked.
+/// whose version uses it. The version is the one the run points at now
+/// ([`crate::model::AutomationRun::automation_version`]): a run picked up again goes by the newer
+/// version, and the version an earlier round ran on is not asked.
 ///
-/// The version says which actions its placements stand on. A copy that names no version, or a version
-/// no longer kept, is read by the actions the copy itself names.
+/// The version says which actions its placements stand on. A run that points at no version, or at one
+/// no longer kept, reads nothing.
 fn runs_reading_action(conn: &Connection, action_id: i64) -> Result<Vec<i64>> {
     let mut out = Vec::new();
     for run_id in read::automation_run_ids_under_way_everywhere(conn)? {
         let Some(run) = read::automation_run(conn, run_id)? else { continue };
-        let defs = automation_run::current_defs(conn, run_id)?;
-        // Every row of one copy holds the same version.
-        let saved = match defs.first().and_then(|def| def.automation_version) {
+        let saved = match run.automation_version {
             Some(version) => read::automation_version_at(conn, run.automation_id, version)?,
             None => None,
         };
-        let reads = match saved {
-            Some(saved) => serde_json::from_str::<Vec<AutomationPlacement>>(&saved.placements)
-                .map_err(Error::from)?
-                .iter()
-                .any(|placement| placement.action_id == action_id),
-            None => defs.iter().any(|def| def.action_id == Some(action_id)),
-        };
+        let Some(saved) = saved else { continue };
+        let reads = serde_json::from_str::<Vec<AutomationPlacement>>(&saved.placements)
+            .map_err(Error::from)?
+            .iter()
+            .any(|placement| placement.action_id == action_id);
         if reads {
             out.push(run_id);
         }
@@ -2441,8 +2438,8 @@ pub(crate) fn launch_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 }
 
 /// Delete one run and everything filed under it — the values each step execution carried, the
-/// executions themselves with whatever was attached to them, the tasks the run worked on, and the step
-/// snapshots it took at launch and on each resume that copied it down afresh. Returns the blob hashes
+/// executions themselves with whatever was attached to them, the tasks the run worked on, and the copies
+/// of the steps a build before v154 took for it. Returns the blob hashes
 /// those attachments pointed at, for the caller to reclaim once the transaction commits. **Its folder in
 /// the run log goes too**, once the transaction commits ([`WriteTx::forget_run`]).
 ///
@@ -2453,8 +2450,7 @@ pub(crate) fn launch_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 ///
 /// The order is what the `RESTRICT` clauses insist on: a value names the execution that produced it as
 /// well as the one that received it (`from_run_step_id`), so every value of the run goes before any
-/// execution does; and an execution names the task row and the snapshot it was run from, so those go
-/// after it.
+/// execution does; and an execution names the task row it was run under, so that goes after it.
 pub(crate) fn run_delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     // The row is read only for the folder's name, so a store keeping no run log never reads it.
     if tx.run_logs().is_some() {
@@ -2581,9 +2577,9 @@ impl FeedRoom {
 
 /// **Let the detail of finished runs go from the store, once the run log holds it** — of the runs that
 /// are over, the step executions of each round whose file the run log holds, with their values and the
-/// files attached to them, and each copy of the definition no step left names and whose file the run log
-/// holds ([`let_rounds_of_a_finished_run_go`]). The runs of `run`'s role go first, then those of every
-/// other automation and role, oldest run first within each. Answers how many rounds let their detail go.
+/// files attached to them ([`let_rounds_of_a_finished_run_go`]). The runs of `run`'s role go first, then
+/// those of every other automation and role, oldest run first within each. Answers how many rounds let
+/// their detail go.
 /// Asked as each run ends (`ops::automation_stop`'s `ended`), after the runs past what the role keeps have
 /// gone ([`let_old_runs_go`]), and sharing the room they left in the feed.
 ///
@@ -2627,14 +2623,12 @@ pub(crate) fn let_finished_rounds_go_past(tx: &WriteTx<'_>, run: &crate::model::
 }
 
 /// **Let the detail of one finished run's rounds go**, each round whose file the run log holds, oldest
-/// first, until the feed is full ([`FeedRoom::is_full`]) — then each copy of the definition no step left
-/// names and whose file the run log holds. Answers how many rounds went.
+/// first, until the feed is full ([`FeedRoom::is_full`]). Answers how many rounds went.
 ///
 /// - **Only a run that is over** — completed, failed or canceled — and **a failure only once somebody has
 ///   seen it** (`AMB-D-989`): until then its last step's screen is what the person looks at. Any other
 ///   run lets nothing go, and so does an engine with no run log or a run with no folder in it.
-/// - **The order** is a round's let-go's ([`super::automation_step::let_steps_go`]); a copy goes after
-///   every step naming it has.
+/// - **The order** is a round's let-go's ([`super::automation_step::let_steps_go`]).
 /// - **The blobs** of the files that go are reclaimed once the commit succeeds ([`WriteTx::let_blobs_go`]).
 pub(crate) fn let_rounds_of_a_finished_run_go(tx: &WriteTx<'_>, run: &crate::model::AutomationRun, feed: &FeedRoom) -> Result<usize> {
     use crate::model::AutomationRunStatus as S;
@@ -2665,12 +2659,6 @@ pub(crate) fn let_rounds_of_a_finished_run_go(tx: &WriteTx<'_>, run: &crate::mod
         super::automation_step::let_steps_go(tx, &going, now)?;
         steps = staying;
         gone += 1;
-    }
-    let named: BTreeSet<i64> = steps.iter().map(|s| s.run_def_id).collect();
-    for def in read::automation_run_def_ids(conn, run.id)? {
-        if !named.contains(&def) && crate::run_log::def_path(&dir, def).exists() {
-            tx.delete_record("automation_run_def", def)?;
-        }
     }
     Ok(gone)
 }
@@ -8961,8 +8949,8 @@ mod tests {
 }
 
 /// **A definition a run is going on is rewritten all the same** (`AMB-D-1015`): no op that rewrites one
-/// refuses because a run launched from it is `running` or `paused`, and the run goes on with the copy it
-/// took at launch. Deleting an action such a run reads is the one refused (`AMB-D-1219`,
+/// refuses because a run launched from it is `running` or `paused`, and the run goes on with the saved
+/// versions it was launched on. Deleting an action such a run reads is the one refused (`AMB-D-1219`,
 /// [`action_delete`]).
 #[cfg(test)]
 mod rewritten_under_a_run {
@@ -9009,7 +8997,18 @@ mod rewritten_under_a_run {
         Picture { automation, first_action, first, second_action, onward, wire, cfg }
     }
 
+    /// A run of `automation`, launched with each action it places saved and stood on — a run reads the
+    /// saved version of each action, and an action nobody saved is read as it stands (`AMB-D-1219`).
     fn launched(tx: &WriteTx<'_>, automation: &Automation) -> AutomationRun {
+        for placement in read::automation_placements_of(tx.conn(), automation.id).expect("placements") {
+            let builtin =
+                read::automation_action(tx.conn(), placement.action_id).expect("read").is_some_and(|a| a.builtin.is_some());
+            if builtin || placement.version.is_some() {
+                continue;
+            }
+            let saved = action_version_add(tx, placement.action_id).expect("save the action");
+            placement_version_set(tx, placement.id, saved.version).expect("stand on it");
+        }
         let startable = vec!["claude".to_string()];
         let launcher = Launcher {
             default_agent: None,
@@ -9030,14 +9029,14 @@ mod rewritten_under_a_run {
         paused
     }
 
-    /// One copy a run took at launch: its name, prompt, agent, ways out, inputs, settings and the roles
+    /// One step as a run reads it: its name, prompt, agent, ways out, inputs, settings and the roles
     /// whose round starts at it.
     type Copy = (String, Option<String>, String, String, String, String, String);
 
-    /// What a run copied at launch, without the ways back to the live definition — those let go of a
-    /// placement or a step that is taken off.
+    /// What a run reads, without the ways back to the live definition — those let go of a placement or a
+    /// step that is taken off.
     fn copied(tx: &WriteTx<'_>, run: &AutomationRun) -> Vec<Copy> {
-        read::automation_run_defs_of(tx.conn(), run.id)
+        crate::ops::automation_run::current_defs(tx.conn(), run.id)
             .expect("read")
             .into_iter()
             .map(|d| (d.name, d.prompt, d.agent, d.exits, d.ins, d.cfg, d.roles))
@@ -9166,7 +9165,7 @@ mod rewritten_under_a_run {
     }
 
     #[test]
-    fn no_rewrite_is_refused_while_a_run_is_running_and_the_run_keeps_its_copy() {
+    fn no_rewrite_is_refused_while_a_run_is_running_and_the_run_keeps_its_version() {
         with_tx(|tx| {
             let p = picture(tx);
             let run = launched(tx, &p.automation);
@@ -9177,7 +9176,7 @@ mod rewritten_under_a_run {
     }
 
     #[test]
-    fn no_rewrite_is_refused_while_a_run_is_paused_and_the_run_keeps_its_copy() {
+    fn no_rewrite_is_refused_while_a_run_is_paused_and_the_run_keeps_its_version() {
         with_tx(|tx| {
             let p = picture(tx);
             let run = paused(tx, &launched(tx, &p.automation));
@@ -9330,12 +9329,9 @@ mod rewritten_under_a_run {
             version_add(tx, automation.id).expect("save without it");
             refused_for_the_run(tx, second_action.id, &run);
 
-            automation_stop::resume(tx, run.id, Some(&startable), nothing_asked(), None).expect("pick it up");
-            let defs = read::automation_run_defs_of(tx.conn(), run.id).expect("read");
-            assert!(
-                defs.iter().any(|def| def.action_id == Some(second_action.id)),
-                "the copy of the round before still names it",
-            );
+            let picked =
+                automation_stop::resume(tx, run.id, Some(&startable), nothing_asked(), None).expect("pick it up");
+            assert_eq!(picked.run.automation_version, Some(2), "it goes by the version saved without it");
             action_delete(tx, second_action.id).expect("the version the run goes by does not use it");
         });
     }

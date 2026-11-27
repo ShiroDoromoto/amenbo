@@ -1,6 +1,6 @@
-# A run works from the copy of its definition it took at the start, so the definition it came from is
-# not held while the run is running or paused: the automation is renamed and archived, and the action
-# placed on it renamed, with the run still going on from its copy. On the screen the run is named over
+# A run works from the saved version it was started on, so the definition it came from is not held
+# while the run is running or paused: the automation is renamed and archived, and the action placed on
+# it renamed, with the run still going on from that version. On the screen the run is named over
 # the picture it is going on, and the picture still takes writes.
 id: edit-a-definition-while-a-run-of-it-is-going
 title: A definition a run is going on is still edited, and the run goes on
@@ -75,7 +75,7 @@ steps_cli:
       target: auto
       archived: true
 
-  # An action placed on it is written too — the run copied its steps at the start.
+  # An action placed on it is written too — the run reads the version it was started on.
   - type: action
     domain: automation
     op: action-update
@@ -83,7 +83,7 @@ steps_cli:
       target: take
       name: take, renamed under a run
 
-  # None of it reached the run, which goes on from its copy.
+  # None of it reached the run, which goes on from the version it was started on.
   - type: assert
     domain: automation
     op: run
@@ -185,7 +185,7 @@ steps_gui:
     with:
       target: run
 
-  # Neither write reached the run, which goes on from its copy.
+  # Neither write reached the run, which goes on from the version it was started on.
   - type: action
     domain: workspace
     op: show-face

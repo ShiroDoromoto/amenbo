@@ -105,7 +105,7 @@ pub(crate) fn last_report(tx: &WriteTx<'_>, this: &AutomationRunStep) -> Result<
         {
             continue;
         }
-        let by_an_agent = read::automation_run_def(tx.conn(), execution.run_def_id)?
+        let by_an_agent = crate::ops::automation_run::def_of(tx.conn(), &execution)?
             .is_some_and(|def| def.builtin.is_none());
         if by_an_agent {
             last = Some(execution);
@@ -192,17 +192,17 @@ mod tests {
             by: Some(ActorKind::Ai),
         };
         let run = launch(tx, p.automation.id, &by).expect("launch");
-        let entry = read::automation_run_defs_of(tx.conn(), run.id)
+        let entry = crate::ops::automation_run::current_defs(tx.conn(), run.id)
             .expect("defs")
             .into_iter()
             .find(|d| !d.role_ids().is_empty())
             .expect("the entry");
-        let Opened::Carried { next: Next::Step(work), .. } = open(tx, run.id, entry.id, Some(&claude)).expect("take")
+        let Opened::Carried { next: Next::Step(work), .. } = open(tx, run.id, entry.key(), Some(&claude)).expect("take")
         else {
             panic!("the take goes on to the work");
         };
         assert_eq!(work.placement_id, Some(p.work.id));
-        let Opened::Ready(opening) = open(tx, run.id, work.id, Some(&claude)).expect("open the work") else {
+        let Opened::Ready(opening) = open(tx, run.id, work.key(), Some(&claude)).expect("open the work") else {
             panic!("the work opens a terminal");
         };
         let run_step = opening.run_step.id;
@@ -215,7 +215,7 @@ mod tests {
         let Next::Step(close) = automation_report::done(tx, run_step, done, report).expect("report") else {
             panic!("the work goes on to the close");
         };
-        let Opened::Carried { next, .. } = open(tx, run.id, close.id, Some(&claude)).expect("close") else {
+        let Opened::Carried { next, .. } = open(tx, run.id, close.key(), Some(&claude)).expect("close") else {
             panic!("a built-in is carried out");
         };
         (run, next)
@@ -252,7 +252,7 @@ mod tests {
             assert_eq!(comments(tx, task), vec!["Fixed it.\n\nThe test covers it.".to_string()]);
 
             let Opened::LeftToWait { .. } =
-                open(tx, run.id, again.id, Some(&["claude".to_string()])).expect("take again")
+                open(tx, run.id, again.key(), Some(&["claude".to_string()])).expect("take again")
             else {
                 panic!("with nothing left to take, the run comes to its end");
             };
@@ -279,16 +279,16 @@ mod tests {
             assert_eq!(after_one.len(), 1);
             assert!(after_one[0].ended_at.is_some(), "the round that is over has ended its stretch");
             match next_def(tx.conn(), run.id).expect("next") {
-                Waiting::Step(def) => assert_eq!(def.id, entry.id, "the watch reads the same entry"),
+                Waiting::Step(def) => assert_eq!(def.key(), entry.key(), "the watch reads the same entry"),
                 other => panic!("between two rounds the run stands at its entry: {other:?}"),
             }
 
             let Opened::Carried { next: Next::Step(work), .. } =
-                open(tx, run.id, entry.id, Some(&claude)).expect("take the next")
+                open(tx, run.id, entry.key(), Some(&claude)).expect("take the next")
             else {
                 panic!("the take goes on to the work");
             };
-            let Opened::Ready(opening) = open(tx, run.id, work.id, Some(&claude)).expect("work") else {
+            let Opened::Ready(opening) = open(tx, run.id, work.key(), Some(&claude)).expect("work") else {
                 panic!("the work opens a terminal");
             };
             let Next::Step(close) =
@@ -297,7 +297,7 @@ mod tests {
                 panic!("the work goes on to the close");
             };
             let Opened::Carried { next: Next::Step(entry), .. } =
-                open(tx, run.id, close.id, Some(&claude)).expect("close")
+                open(tx, run.id, close.key(), Some(&claude)).expect("close")
             else {
                 panic!("the round is over, and the run goes round again");
             };
@@ -309,7 +309,7 @@ mod tests {
             let held: Vec<Option<i64>> = rounds.iter().map(|r| r.task_id).collect();
             assert!(held.contains(&Some(first)) && held.contains(&Some(second)), "{held:?}");
 
-            let Opened::LeftToWait { .. } = open(tx, run.id, entry.id, Some(&claude)).expect("take again") else {
+            let Opened::LeftToWait { .. } = open(tx, run.id, entry.key(), Some(&claude)).expect("take again") else {
                 panic!("with nothing left to take, the run comes to its end");
             };
             let run = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
@@ -336,16 +336,16 @@ mod tests {
                 by: Some(ActorKind::Ai),
             };
             let run = launch(tx, p.automation.id, &by).expect("launch");
-            let entry = read::automation_run_defs_of(tx.conn(), run.id)
+            let entry = crate::ops::automation_run::current_defs(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
                 .find(|d| !d.role_ids().is_empty())
                 .expect("the entry");
-            let Opened::Carried { next: Next::Step(work), .. } = open(tx, run.id, entry.id, Some(&claude)).expect("take")
+            let Opened::Carried { next: Next::Step(work), .. } = open(tx, run.id, entry.key(), Some(&claude)).expect("take")
             else {
                 panic!("the take goes on to the work");
             };
-            let Opened::Ready(opening) = open(tx, run.id, work.id, Some(&claude)).expect("work") else {
+            let Opened::Ready(opening) = open(tx, run.id, work.key(), Some(&claude)).expect("work") else {
                 panic!("the work opens a terminal");
             };
             let Next::Step(close) = automation_report::done(tx, opening.run_step.id, None, "Done.").expect("report")
@@ -356,7 +356,7 @@ mod tests {
             assert!(matches!(asked, crate::ops::automation_stop::Paused::Asked(_)), "{asked:?}");
 
             let Opened::Carried { next: Next::Paused(paused), .. } =
-                open(tx, run.id, close.id, Some(&claude)).expect("close")
+                open(tx, run.id, close.key(), Some(&claude)).expect("close")
             else {
                 panic!("the round is over, and the pause takes hold");
             };
@@ -386,12 +386,12 @@ mod tests {
                 by: Some(ActorKind::Ai),
             };
             let run = launch(tx, p.automation.id, &by).expect("launch");
-            let entry = read::automation_run_defs_of(tx.conn(), run.id)
+            let entry = crate::ops::automation_run::current_defs(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
                 .find(|d| !d.role_ids().is_empty())
                 .expect("the entry");
-            let Opened::Carried { next: Next::Step(work), .. } = open(tx, run.id, entry.id, Some(&claude)).expect("take")
+            let Opened::Carried { next: Next::Step(work), .. } = open(tx, run.id, entry.key(), Some(&claude)).expect("take")
             else {
                 panic!("the take goes on to the work");
             };
@@ -399,7 +399,7 @@ mod tests {
             assert!(stopped.automation.stopped);
             assert!(stopped.paused.is_empty(), "a run in the middle of its round is not paused");
 
-            let Opened::Ready(opening) = open(tx, run.id, work.id, Some(&claude)).expect("work") else {
+            let Opened::Ready(opening) = open(tx, run.id, work.key(), Some(&claude)).expect("work") else {
                 panic!("the round under way goes on");
             };
             let Next::Step(close) = automation_report::done(tx, opening.run_step.id, None, "Done.").expect("report")
@@ -407,7 +407,7 @@ mod tests {
                 panic!("the work goes on to the close");
             };
             let Opened::Carried { next: Next::Paused(paused), .. } =
-                open(tx, run.id, close.id, Some(&claude)).expect("close")
+                open(tx, run.id, close.key(), Some(&claude)).expect("close")
             else {
                 panic!("the round is over, and the next one is not started");
             };

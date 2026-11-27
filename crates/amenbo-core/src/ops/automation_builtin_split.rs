@@ -18,8 +18,10 @@
 //!
 //! **The ways out follow the axis** ([`follow`]). A value added, renamed, moved or deleted is written
 //! onto every action that splits by the axis in the same transaction — renamed rather than rewritten, so
-//! the lines an automation hangs on it stay. A value added after a run was launched has no way out on
-//! that run's copy, so a task carrying it leaves by [`UNSORTED`], as a task carrying no value does.
+//! the lines an automation hangs on it stay. A run reads a split's ways out as they stand, not as they
+//! were saved (`automation_run::run_defs`), so a value added after a run was launched is a way out of
+//! that run's split too. A task carrying a value the split has no way out for leaves by [`UNSORTED`], as
+//! a task carrying no value does.
 //!
 //! **A way out left without a line is not refused** (`AMB-D-1140`). A value added to the axis adds a
 //! way out to every split by it, and refusing the save and the launch until a line is drawn from it
@@ -41,8 +43,8 @@ use crate::run_wording::builtin as say;
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
-/// The way out a task carrying no value on the axis leaves by — and one carrying a value its run's copy
-/// has no way out for.
+/// The way out a task carrying no value on the axis leaves by — and one carrying a value the split has no
+/// way out for.
 pub const UNSORTED: &str = "分類なし";
 
 pub(crate) const SPLIT_BY_DIM: Builtin = Builtin {
@@ -202,13 +204,11 @@ fn split(carry: &Carry<'_, '_>) -> Result<Named> {
     Ok(Named { exit, report })
 }
 
-/// The axis the action this step was copied from splits by. A step deleted since the launch, or an
-/// axis deleted from under the action, leaves nothing to split by.
+/// The axis the action this step stands in splits by. A step deleted since the launch, or an axis
+/// deleted from under the action, leaves nothing to split by.
 fn axis_of(carry: &Carry<'_, '_>) -> Result<i64> {
     let conn = carry.tx.conn();
-    let def = read::automation_run_def(conn, carry.run_step.run_def_id)?
-        .ok_or_else(|| Error::invalid("the step's copy is gone"))?;
-    let step = match def.step_id {
+    let step = match carry.run_step.step_id {
         Some(id) => read::automation_action_step(conn, id)?,
         None => None,
     };
@@ -405,15 +405,15 @@ mod tests {
     /// left by and its report.
     fn walked(tx: &WriteTx<'_>, p: &Picture) -> (String, String) {
         let run = launched(tx, &p.automation);
-        let entry = read::automation_run_defs_of(tx.conn(), run.id)
+        let entry = crate::ops::automation_run::current_defs(tx.conn(), run.id)
             .expect("defs")
             .into_iter()
             .find(|d| !d.role_ids().is_empty())
             .expect("the entry");
-        let Opened::Carried { next: Next::Step(split), .. } = open(tx, run.id, entry.id, None).expect("take") else {
+        let Opened::Carried { next: Next::Step(split), .. } = open(tx, run.id, entry.key(), None).expect("take") else {
             panic!("the take goes on to the split");
         };
-        let run_step_id = match open(tx, run.id, split.id, None).expect("split") {
+        let run_step_id = match open(tx, run.id, split.key(), None).expect("split") {
             Opened::Carried { run_step_id, .. } => run_step_id,
             other => panic!("the split is carried out, not {other:?}"),
         };
@@ -445,10 +445,12 @@ mod tests {
         });
     }
 
-    /// **A task with no value leaves by [`UNSORTED`]**, and so does one whose value was added after the
-    /// launch — the run's copy has no way out for it.
+    /// **A task with no value leaves by [`UNSORTED`]**, and one whose value was added after the launch by
+    /// that value's own way out: a split follows its axis, so a run reads its ways out as they stand
+    /// (`automation_run::run_defs`). Nothing is drawn from that way out yet, so the run stops there
+    /// (`AMB-D-1140`).
     #[test]
-    fn a_task_with_no_value_or_a_value_added_since_leaves_unsorted() {
+    fn a_task_with_no_value_leaves_unsorted_and_one_added_since_by_its_own_way_out() {
         with_tx(|tx| {
             let p = picture(tx);
             for_ai(tx, &p);
@@ -460,23 +462,24 @@ mod tests {
             let run = launched(tx, &p.automation);
             let planning = dimension::value_add(tx, p.role, "企画", None).expect("added under the run");
             dimension::set(tx, task, planning.id).expect("classify");
-            let entry = read::automation_run_defs_of(tx.conn(), run.id)
+            let entry = crate::ops::automation_run::current_defs(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
                 .find(|d| !d.role_ids().is_empty())
                 .expect("the entry");
-            let Opened::Carried { next: Next::Step(split), .. } = open(tx, run.id, entry.id, None).expect("take")
+            let Opened::Carried { next: Next::Step(split), .. } = open(tx, run.id, entry.key(), None).expect("take")
             else {
                 panic!("the take goes on to the split");
             };
-            let Opened::Carried { run_step_id, .. } = open(tx, run.id, split.id, None).expect("split") else {
+            let Opened::Carried { run_step_id, next } = open(tx, run.id, split.key(), None).expect("split") else {
                 panic!("the split is carried out");
             };
             let ran = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
             let exits: Vec<crate::model::RunDefExit> = serde_json::from_str(&split.exits).expect("exits");
             let left = exits.into_iter().find(|e| Some(e.id) == ran.exit_id).expect("declared");
-            assert_eq!(left.name, UNSORTED);
+            assert_eq!(left.name, "企画", "the value's own way out, added under the run");
             assert!(ran.report.contains("企画"), "{}", ran.report);
+            assert!(matches!(next, Next::Halted(_)), "nothing is drawn from it yet: {next:?}");
         });
     }
 
@@ -514,15 +517,15 @@ mod tests {
             let task = for_ai(tx, &p);
             dimension::set(tx, task, planning.id).expect("classify");
             let run = launched(tx, &p.automation);
-            let entry = read::automation_run_defs_of(tx.conn(), run.id)
+            let entry = crate::ops::automation_run::current_defs(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
                 .find(|d| !d.role_ids().is_empty())
                 .expect("the entry");
-            let Opened::Carried { next: Next::Step(split), .. } = open(tx, run.id, entry.id, None).expect("take") else {
+            let Opened::Carried { next: Next::Step(split), .. } = open(tx, run.id, entry.key(), None).expect("take") else {
                 panic!("the take goes on to the split");
             };
-            let Opened::Carried { next: Next::Halted(_), .. } = open(tx, run.id, split.id, None).expect("split") else {
+            let Opened::Carried { next: Next::Halted(_), .. } = open(tx, run.id, split.key(), None).expect("split") else {
                 panic!("the split has nowhere to send a task of the value with no line");
             };
             let run = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
@@ -577,16 +580,16 @@ mod tests {
             dimension::set(tx, task, value_id(tx, role, "技術")).expect("classify");
             let by = Launcher { startable: None, models: nothing_asked(), default_agent: None, workspace_open: Some(true), by: Some(ActorKind::Ai) };
             let run = crate::ops::automation_run::launch_past_the_task_checks(tx, automation.id, &by).expect("launch");
-            let entry = read::automation_run_defs_of(tx.conn(), run.id)
+            let entry = crate::ops::automation_run::current_defs(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
                 .find(|d| !d.role_ids().is_empty())
                 .expect("the entry");
-            let Opened::Carried { next: Next::Step(at_split), .. } = open(tx, run.id, entry.id, None).expect("take") else {
+            let Opened::Carried { next: Next::Step(at_split), .. } = open(tx, run.id, entry.key(), None).expect("take") else {
                 panic!("the take goes on down the line drawn from it");
             };
             assert_eq!(at_split.placement_id, Some(split.id));
-            let Opened::Carried { next: Next::Step(after), .. } = open(tx, run.id, at_split.id, None).expect("split") else {
+            let Opened::Carried { next: Next::Step(after), .. } = open(tx, run.id, at_split.key(), None).expect("split") else {
                 panic!("the split goes on down the line of the task's value");
             };
             assert_eq!(after.placement_id, Some(close.id), "where the other role's round starts");

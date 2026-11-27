@@ -1222,7 +1222,8 @@ mod tests {
              VALUES ('automation_run', ?1, 'url', 'https://example.com/issue', 'human', 'a0', ?2, ?2)",
             rusqlite::params![run, at],
         );
-        let run_def = put(
+        // A copy of a step a build before v154 took, which a project still carries until it is let go.
+        put(
             "INSERT INTO automation_run_def \
                  (run_id, placement_id, step_id, name, prompt, automation_version, agent, model, \
                   interactive, work_dir_ref, report_to_task, show_history, exits, ins, cfg, created_at, \
@@ -1245,10 +1246,10 @@ mod tests {
         );
         let run_step = put(
             "INSERT INTO automation_run_step \
-                 (run_id, run_def_id, run_task_id, seq, exit_id, report, status, \
+                 (run_id, automation_version, placement_id, step_id, run_task_id, seq, exit_id, report, status, \
                   started_at, ended_at, created_at, updated_at) \
-             VALUES (?1, ?2, ?3, 1, ?5, '切った', 'done', ?4, ?4, ?4, ?4)",
-            rusqlite::params![run, run_def, run_task, at, exit],
+             VALUES (?1, 1, ?2, ?6, ?3, 1, ?5, '切った', 'done', ?4, ?4, ?4, ?4)",
+            rusqlite::params![run, placement, run_task, at, exit, step],
         );
         let file = put(
             "INSERT INTO attachment \

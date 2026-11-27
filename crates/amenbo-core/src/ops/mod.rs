@@ -219,11 +219,11 @@ pub(crate) mod test_support {
     pub(crate) fn open(
         tx: &WriteTx<'_>,
         run_id: i64,
-        run_def_id: i64,
+        at: crate::model::RunDefKey,
         startable: Option<&[String]>,
     ) -> crate::error::Result<crate::ops::automation_step::Opened> {
-        let outside = crate::ops::automation_builtin::work_outside(tx.conn(), tx.language(), run_id, run_def_id)?;
-        crate::ops::automation_step::open(tx, run_id, run_def_id, startable, outside)
+        let outside = crate::ops::automation_builtin::work_outside(tx.conn(), tx.language(), run_id, at)?;
+        crate::ops::automation_step::open(tx, run_id, at, startable, outside)
     }
 
     /// **Let an automation have as many runs going at once as one role may hold**
@@ -296,13 +296,7 @@ pub(crate) mod test_support {
         handed: &crate::ops::automation_run::HandedAtLaunch,
     ) -> crate::error::Result<crate::model::AutomationRun> {
         save_draft(tx, automation_id);
-        crate::ops::automation_run::launch_handing(
-            tx,
-            automation_id,
-            by,
-            handed,
-            crate::ops::automation_run::ReadsFrom::Saved,
-        )
+        crate::ops::automation_run::launch_handing(tx, automation_id, by, handed)
     }
 
     /// [`save_draft`], then [`crate::ops::automation_run::start`].
@@ -380,12 +374,12 @@ pub(crate) mod test_support {
         (action, placement)
     }
 
-    /// **The id a step execution's copy keys one way out by**, found by its name — what a test that
-    /// reads "leave by `found`" hands `step-done`, which takes the id (`AMB-D-961`). `None` where the
-    /// copy declares no such way out.
+    /// **The id the step a step execution ran keys one way out by**, found by its name — what a test
+    /// that reads "leave by `found`" hands `step-done`, which takes the id (`AMB-D-961`). `None` where
+    /// the step declares no such way out.
     pub(crate) fn way_out(tx: &WriteTx<'_>, run_step_id: i64, name: &str) -> Option<i64> {
         let step = crate::store_engine::read::automation_run_step(tx.conn(), run_step_id).ok()??;
-        let def = crate::store_engine::read::automation_run_def(tx.conn(), step.run_def_id).ok()??;
+        let def = crate::ops::automation_run::def_of(tx.conn(), &step).ok()??;
         let exits: Vec<crate::model::RunDefExit> = serde_json::from_str(&def.exits).ok()?;
         exits.into_iter().find(|e| e.name == name).map(|e| e.id)
     }
@@ -401,9 +395,7 @@ pub(crate) mod test_support {
         let step = crate::store_engine::read::automation_run_step(tx.conn(), run_step_id)
             .expect("read")
             .expect("the step execution");
-        let def = crate::store_engine::read::automation_run_def(tx.conn(), step.run_def_id)
-            .expect("read")
-            .expect("the step's copy");
+        let def = crate::ops::automation_run::def_of(tx.conn(), &step).expect("read").expect("the step it ran");
         let exits: Vec<crate::model::RunDefExit> = serde_json::from_str(&def.exits).expect("exits");
         exits
             .iter()
@@ -415,9 +407,7 @@ pub(crate) mod test_support {
 
     /// **The id of one input a run's step declares**, by its name — what the values handed to it key.
     pub(crate) fn in_port(tx: &WriteTx<'_>, run_step: &crate::model::AutomationRunStep, name: &str) -> i64 {
-        let def = crate::store_engine::read::automation_run_def(tx.conn(), run_step.run_def_id)
-            .expect("read")
-            .expect("the step's copy");
+        let def = crate::ops::automation_run::def_of(tx.conn(), run_step).expect("read").expect("the step it ran");
         let ins: Vec<crate::model::RunDefIn> = serde_json::from_str(&def.ins).expect("ins");
         ins.iter()
             .find(|i| i.port.name == name)

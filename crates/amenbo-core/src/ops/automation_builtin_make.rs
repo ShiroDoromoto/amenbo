@@ -346,8 +346,7 @@ fn record_pass(carry: &Carry<'_, '_>, to_role_id: i64, task_id: i64) -> Result<(
     if round.role_id.is_none_or(|from| from == to_role_id) {
         return Ok(());
     }
-    let placement_id =
-        read::automation_run_def(tx.conn(), carry.run_step.run_def_id)?.and_then(|def| def.placement_id);
+    let placement_id = carry.run_step.placement_id;
     let now = Timestamp::now();
     let pass = crate::model::AutomationRunPass {
         id: read::next_id(tx.conn(), "automation_run_pass")?,
@@ -943,13 +942,13 @@ mod tests {
         let run = launched(tx, &p.automation);
         let claude = ["claude".to_string()];
         let def_of = |placement: i64| {
-            read::automation_run_defs_of(tx.conn(), run.id)
+            crate::ops::automation_run::current_defs(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
                 .find(|d| d.placement_id == Some(placement))
                 .expect("the spot's copy")
         };
-        let opening = match open(tx, run.id, def_of(p.first.id).id, Some(&claude)).expect("open") {
+        let opening = match open(tx, run.id, def_of(p.first.id).key(), Some(&claude)).expect("open") {
             Opened::Ready(opening) => *opening,
             other => panic!("the agent's step opens a terminal, not {other:?}"),
         };
@@ -972,7 +971,7 @@ mod tests {
         if close_first {
             task::set_status(tx, first, TaskStatus::Done, crate::model::ActorKind::Ai).expect("close the first");
         }
-        match open(tx, run.id, def_of(p.make.id).id, Some(&claude)).expect("open") {
+        match open(tx, run.id, def_of(p.make.id).key(), Some(&claude)).expect("open") {
             Opened::Carried { run_step_id, next } => (run, first, run_step_id, next),
             other => panic!("a built-in is carried out, not {other:?}"),
         }
@@ -1064,8 +1063,8 @@ mod tests {
             answer(tx, &p, WHAT_THEN, TAKE_IT);
             let run = launched(tx, &p.automation);
             let claude = ["claude".to_string()];
-            let defs = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
-            let def = |placement: i64| defs.iter().find(|d| d.placement_id == Some(placement)).expect("copy").id;
+            let defs = crate::ops::automation_run::current_defs(tx.conn(), run.id).expect("defs");
+            let def = |placement: i64| defs.iter().find(|d| d.placement_id == Some(placement)).expect("copy").key();
             let opening = match open(tx, run.id, def(p.first.id), Some(&claude)).expect("open") {
                 Opened::Ready(opening) => *opening,
                 other => panic!("{other:?}"),
@@ -1582,12 +1581,12 @@ mod tests {
             answer(tx, &p, AI_AXES, "職能");
             let run = launched(tx, &p.automation);
             let claude = ["claude".to_string()];
-            let def = read::automation_run_defs_of(tx.conn(), run.id)
+            let def = crate::ops::automation_run::current_defs(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
                 .find(|d| d.placement_id == Some(p.first.id))
                 .expect("the first spot's copy");
-            let opening = match open(tx, run.id, def.id, Some(&claude)).expect("open") {
+            let opening = match open(tx, run.id, def.key(), Some(&claude)).expect("open") {
                 Opened::Ready(opening) => *opening,
                 other => panic!("{other:?}"),
             };
@@ -1681,13 +1680,13 @@ mod tests {
 
     /// Open the run's first step, the built-in that takes a task, and say which task it took.
     fn taken_first(tx: &WriteTx<'_>, run: &AutomationRun, take: &AutomationPlacement) -> crate::model::Task {
-        let def = read::automation_run_defs_of(tx.conn(), run.id)
+        let def = crate::ops::automation_run::current_defs(tx.conn(), run.id)
             .expect("defs")
             .into_iter()
             .find(|d| d.placement_id == Some(take.id))
             .expect("the entry's copy");
         let claude = ["claude".to_string()];
-        match open(tx, run.id, def.id, Some(&claude)).expect("open") {
+        match open(tx, run.id, def.key(), Some(&claude)).expect("open") {
             Opened::Carried { next, .. } => assert!(matches!(next, Next::Step(_)), "the run goes on: {next:?}"),
             other => panic!("the entry is carried out, not {other:?}"),
         }

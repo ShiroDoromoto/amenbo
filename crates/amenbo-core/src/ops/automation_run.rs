@@ -6,7 +6,7 @@
 //! refused**, which is the moment a person is actually about to be let down by them.
 //!
 //! **There are two entrances and one launch** — the CLI and the automations screen. Putting the check
-//! and the copy in one place is what keeps them from behaving differently depending on which was
+//! and the run it writes in one place is what keeps them from behaving differently depending on which was
 //! pressed.
 //!
 //! **The check ([`check`]) and the refusal ([`launch`]) are separate doors on purpose.** A build screen
@@ -22,15 +22,18 @@
 //! their screen. Read here, they would be read from whatever process happened to be running — which is
 //! the reason [`crate::ops::MadeIn`] is handed in too.
 //!
-//! **A run stops reading the definition the moment it starts.** Every step inside every placed action,
-//! as the version the placement stands on holds it, is copied into `automation_run_def` at launch — one
-//! column of them, each saying which placement it was opened from, which action that placement stood on
-//! and whether that action takes one run at a time, with the wires joined to each input resolved into
-//! it — so editing the automation afterwards cannot change what a run already under way is
-//! doing, and a run stays readable months later when the automation it came from has moved on. The
-//! exceptions are a run with no task in hand: one paused before its next task, which picking up copies
-//! the automation down onto again ([`copy_down_again`]), and one standing where its round starts, copied
-//! down again where a newer version has been saved ([`take_up_newer`]) (`AMB-D-1015`).
+//! **A run reads only the saved version it was launched on** (`AMB-D-1219`). A launch points the run at
+//! the automation's newest saved version ([`AutomationRun::automation_version`]) and copies nothing of
+//! it: a saved version is never written on, and nor is the saved version of an action each of its
+//! placements stands on. Every step inside every placed action is read off those versions as the run
+//! needs it ([`run_defs`]) — one column of them, each saying which placement it was opened from, which
+//! action that placement stood on and whether that action takes one run at a time, with the wires joined
+//! to each input resolved into it — so editing the automation afterwards cannot change what a run already
+//! under way is doing. Each step execution names the version it ran on, so a run stays readable when the
+//! automation has moved on. The exceptions are a run with no task in hand: one paused before its next
+//! task, which picking up points at the newest saved version ([`move_to_newest`]), and one standing where
+//! its round starts, pointed at a newer version where one has been saved ([`take_up_newer`])
+//! (`AMB-D-1015`).
 //!
 //! **A launched run goes round once per task.** A run sits in the seat of one role, and starts where
 //! that role's round starts (`AMB-D-1123`, [`entry_def`]). Each round takes one task there and walks the
@@ -49,9 +52,9 @@
 //! launch standing, and opens one where none is. A test run belongs to none.
 //!
 //! **A run sits in a seat of one role** ([`AutomationRun::role_id`]). An automation's roles each name the
-//! placement their round starts at, and a launch copies that onto the run ([`AutomationRunDef::roles`]).
+//! placement their round starts at, and the run reads that off its version ([`AutomationRunDef::roles`]).
 //! The launch also binds the run to one of those roles ([`seat`]), and the run keeps it until it ends —
-//! copying the automation down again does not change it. Only a task worked under that role is taken
+//! pointing it at a newer version does not change it. Only a task worked under that role is taken
 //! ([`roles_started`]), and the way out that hands on the task taken goes on to where the role starts
 //! rather than along a line ([`by_role`]). A task with no role, or of another role, is not taken at all.
 //! An automation with no role naming where its round starts is not launched.
@@ -69,8 +72,8 @@ use crate::model::{
     AutomationRole,
     AutomationPortDirection,
     AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef, AutomationRunStatus,
-    AutomationRunStepStatus, AutomationStep, AutomationStoppedReason, AutomationEdge,
-    Priority, RoleStart, RunDefCfg, RunDefExit, RunDefIn, RunDefLine, RunDefPort, RunDefSource, StepScript,
+    AutomationRunStep, AutomationRunStepStatus, AutomationStep, AutomationStoppedReason, AutomationEdge,
+    Priority, RoleStart, RunDefCfg, RunDefExit, RunDefIn, RunDefKey, RunDefLine, RunDefPort, RunDefSource, StepScript,
     ACTION_BOUNDARY,
     DEFAULT_EXPECTED_MINUTES, ERROR_EXIT, MAX_TRIGGER_DATA_BYTES, TakeOrder,
 };
@@ -766,7 +769,7 @@ fn not_found(what: &str, id: i64) -> Error {
 /// `default_agent` is [`Launcher::default_agent`], Amenbo's own default.
 ///
 /// Asked of the draft — the automation's picture as it is written now. A launch asks it of the
-/// picture it is about to copy down ([`check_picture`]). It is what the save asks, so it does not ask
+/// picture it is about to read ([`check_picture`]). It is what the save asks, so it does not ask
 /// whether the automation was ever saved; [`check_launch`] does.
 pub fn check(
     conn: &Connection,
@@ -1024,8 +1027,8 @@ pub fn incidents_waiting_in_launch(conn: &Connection, launch_id: i64) -> Result<
 
 /// **Whether a run's step may be waiting for a person now** — the step it is on is still open, the run
 /// is still going, and the step says it may wait for one (`interactive`). A step that has left, and a
-/// run that has stopped or paused, waits for nobody. `last` is the run's newest step and `def` the copy
-/// it was opened from.
+/// run that has stopped or paused, waits for nobody. `last` is the run's newest step and `def` the step
+/// it ran ([`def_of`]).
 pub fn waits_for_person(
     run: &AutomationRun,
     last: Option<&crate::model::AutomationRunStep>,
@@ -1123,7 +1126,7 @@ pub fn attention_in_launch(conn: &Connection, launch_id: i64) -> Result<Vec<Laun
         let Some(run) = read::automation_run(conn, run_id)? else { continue };
         let steps = read::automation_run_steps_of(conn, run_id)?;
         let Some(last) = steps.last() else { continue };
-        let Some(def) = read::automation_run_def(conn, last.run_def_id)? else { continue };
+        let Some(def) = def_of(conn, last)? else { continue };
         if !waits_for_person(&run, Some(last), Some(&def)) {
             continue;
         }
@@ -1513,8 +1516,8 @@ fn check_picture(
 }
 
 /// **The action each placement of one automation stands on**, by placement id — read once, as the
-/// version the placement points at holds it ([`ActionDef::placed`]), and asked by every check and copy
-/// below rather than the action's rows as they stand now.
+/// version the placement points at holds it ([`ActionDef::placed`]), and asked by every check and every
+/// step assembled below rather than the action's rows as they stand now.
 type Defs = BTreeMap<i64, ActionDef>;
 
 fn defs_of(conn: &Connection, placements: &[AutomationPlacement]) -> Result<Defs> {
@@ -1919,7 +1922,7 @@ fn action_name(conn: &Connection, action_id: i64) -> Result<String> {
 ///
 /// Which of them one run walks is decided by the ways out taken while it goes; this is every one it
 /// could walk, in display order, and that is what the agent and the model are asked of ([`carrier`])
-/// and what a launch copies into the run ([`snapshot`]).
+/// and what a run reads of the placement ([`step_def`]).
 /// A step nothing inside leads to is left out for the reason [`reachable`] leaves a placement out: no
 /// pane ever comes up on it, so refusing the launch over the agent it names would hold a run back for
 /// a box still being drawn.
@@ -2218,7 +2221,7 @@ pub(crate) fn answered(
     Ok(out)
 }
 
-/// One setting as a run's copy keeps it.
+/// One setting as a run reads it.
 fn run_def_cfg(c: AutomationCfg) -> RunDefCfg {
     RunDefCfg { name: c.name, kind: c.kind, required: c.required, options: c.options, value: c.value }
 }
@@ -2235,7 +2238,7 @@ fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> V
         .collect()
 }
 
-/// **Launch an automation**: check it, copy what is placed on it into a run, and start it.
+/// **Launch an automation**: check it, point a run at its newest saved version, and start it.
 ///
 /// Six things refuse, in this order.
 ///
@@ -2259,11 +2262,11 @@ fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> V
 /// The run is born `running`, so a launch never waits (`AMB-D-947`): it is either refused or under
 /// way. `started_at` is the moment of the launch itself.
 ///
-/// It reads the saved definition ([`ReadsFrom::Saved`]). It makes the run even where its round would
-/// start by waiting for a task, and the run then ends where its round starts ([`end_with_no_task`]);
-/// a person's start asks that first and makes no run ([`start`]).
+/// It reads the newest saved version, and the run points at it ([`AutomationRun::automation_version`]).
+/// It makes the run even where its round would start by waiting for a task, and the run then ends where
+/// its round starts ([`end_with_no_task`]); a person's start asks that first and makes no run ([`start`]).
 pub fn launch(tx: &WriteTx<'_>, automation_id: i64, by: &Launcher<'_>) -> Result<AutomationRun> {
-    launch_handing(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved)
+    launch_handing(tx, automation_id, by, &HandedAtLaunch::default())
 }
 
 /// **What a start of an automation came to** ([`start`]).
@@ -2310,18 +2313,17 @@ pub fn start(
     automation_id: i64,
     by: &Launcher<'_>,
 ) -> Result<Started> {
-    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, Sit::Free, true, |_| true)
+    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), Sit::Free, true, |_| true)
 }
 
-/// **Which definition of an automation a launch reads** — what is checked and copied down onto the run.
+/// **Which definition of an automation is read** — by the check and by what a build screen draws of who
+/// carries each step out and where each round goes. A launch always reads the newest saved version.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReadsFrom {
     /// Its newest saved version, so what is being written on the automation is not what runs. An
-    /// automation nobody has saved has none, and is refused ([`definition`]). A launch and a run picked
-    /// up before its next task read this.
+    /// automation nobody has saved has none, and is refused ([`definition`]).
     Saved,
-    /// The draft — its picture as it is written now, saved or not. A test run reads this, to try what is
-    /// being written before it is saved.
+    /// The draft — its picture as it is written now, saved or not.
     Draft,
 }
 
@@ -2568,17 +2570,15 @@ fn never_saved(automation: &Automation) -> Error {
     not_ready("launch", &automation.name, &[Unmet::NeverSaved])
 }
 
-/// [`launch`], with what a trigger or a test run handed over along with it ([`HandedAtLaunch`]),
-/// reading the definition `reads` names. What was handed is filed as a task before the run is written
-/// ([`file_handed`]).
+/// [`launch`], with what a trigger or a test run handed over along with it ([`HandedAtLaunch`]). What
+/// was handed is filed as a task before the run is written ([`file_handed`]).
 pub fn launch_handing(
     tx: &WriteTx<'_>,
     automation_id: i64,
     by: &Launcher<'_>,
     handed: &HandedAtLaunch,
-    reads: ReadsFrom,
 ) -> Result<AutomationRun> {
-    launch_asking(tx, automation_id, by, handed, reads, Sit::Free, false, |_| true)?.run()
+    launch_asking(tx, automation_id, by, handed, Sit::Free, false, |_| true)?.run()
 }
 
 /// **The seats a test run sits in, one after another** ([`seat_roles`]) — the roles of `automation_id`
@@ -2603,10 +2603,9 @@ pub(crate) fn launch_in_seat_past_the_limit(
     automation_id: i64,
     by: &Launcher<'_>,
     handed: &HandedAtLaunch,
-    reads: ReadsFrom,
     role_id: Option<i64>,
 ) -> Result<AutomationRun> {
-    launch_asking(tx, automation_id, by, handed, reads, Sit::Rehearsal(role_id), false, |_| true)?.run()
+    launch_asking(tx, automation_id, by, handed, Sit::Rehearsal(role_id), false, |_| true)?.run()
 }
 
 /// **What the triggers say on one look** ([`triggers_due`]): the triggers due now, the ones due but for
@@ -2852,7 +2851,6 @@ pub fn fire(
                 automation_id,
                 by,
                 &HandedAtLaunch::default(),
-                ReadsFrom::Saved,
                 Sit::Role(role),
                 false,
                 |_| true,
@@ -2874,7 +2872,7 @@ pub fn fire(
                 role_id: trigger.role_id,
                 trigger: Some(trigger.name.clone()),
             };
-            launch_handing(tx, automation_id, by, &handed, ReadsFrom::Saved)?
+            launch_handing(tx, automation_id, by, &handed)?
         }
     };
     let handed = Handed {
@@ -2979,7 +2977,7 @@ fn started_by_trigger(pic: &Picture, role_id: Option<i64>) -> bool {
 
 /// **Where the seats of `role_id` start, as a waiting built-in reads it** ([`start_of`]): the key of the
 /// built-in placed there (`None` for an agent's step or a script), with the answers written for it there
-/// as a run's copy would keep them — or `None` where they start nowhere on `pic`.
+/// as a run would read them — or `None` where they start nowhere on `pic`.
 fn start_builtin(conn: &Connection, pic: &Picture, role_id: Option<i64>) -> Result<Option<StartBuiltin>> {
     let Some(start) = start_of(pic, role_id) else { return Ok(None) };
     let cfg = answers(pic, start, &ActionDef::placed(conn, start)?).into_iter().map(run_def_cfg).collect();
@@ -3200,7 +3198,7 @@ pub fn top_up(tx: &WriteTx<'_>, launch_id: i64, by: &Launcher<'_>) -> Result<Opt
     }
     let launch = read::automation_launch(tx.conn(), launch_id)?.ok_or_else(|| not_found("launch", launch_id))?;
     let by = Launcher { by: launch.started_by_kind, ..*by };
-    launch_handing(tx, launch.automation_id, &by, &HandedAtLaunch::default(), ReadsFrom::Saved).map(Some)
+    launch_handing(tx, launch.automation_id, &by, &HandedAtLaunch::default()).map(Some)
 }
 
 /// **How many are in one role for one launch, beside its definition** ([`launch_headcounts`]) — what the
@@ -4595,7 +4593,7 @@ pub(crate) fn launch_past_the_task_checks(
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
     crate::ops::test_support::save_draft(tx, automation_id);
-    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, Sit::Free, false, |unmet| {
+    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), Sit::Free, false, |unmet| {
         !past_the_task_checks(unmet)
     })?
     .run()
@@ -4627,7 +4625,7 @@ pub(crate) fn launch_past_the_setting_checks(
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
     crate::ops::test_support::save_draft(tx, automation_id);
-    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, Sit::Free, false, |unmet| {
+    launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), Sit::Free, false, |unmet| {
         !past_the_task_checks(unmet)
             && !matches!(
                 unmet,
@@ -4666,14 +4664,15 @@ enum Sit {
 /// the run started in it once a task turns up ([`top_up`]) joins it. **The run sits in the seat of the role
 /// the task handed was filed under** where that seat is free, so it takes that task. A test run sits in the
 /// seat it names, free or not, and joins no launch. **It starts where the round of its seat's role starts**
-/// ([`start_of`], `AMB-D-1123`), and is copied down marking that spot ([`copy_down`]).
-#[allow(clippy::too_many_arguments)]
+/// ([`start_of`], `AMB-D-1123`). **The run points at the newest saved version** and keeps `by`'s default
+/// agent beside it ([`AutomationRun::automation_version`], `AMB-D-1219`): nothing of the definition is
+/// copied, the version being one nobody writes on again. An automation nobody has saved is refused
+/// ([`definition`]).
 fn launch_asking(
     tx: &WriteTx<'_>,
     automation_id: i64,
     by: &Launcher<'_>,
     handed: &HandedAtLaunch,
-    reads: ReadsFrom,
     sit: Sit,
     may_wait: bool,
     counts: impl Fn(&Unmet) -> bool,
@@ -4701,7 +4700,7 @@ fn launch_asking(
     if automation.export_only {
         return Err(not_ready("launch", &automation.name, &[Unmet::ExportOnly]));
     }
-    let (pic, version) = definition(tx.conn(), &automation, reads)?;
+    let (pic, version) = newest_saved(tx.conn(), &automation)?.ok_or_else(|| never_saved(&automation))?;
     let unmet: Vec<Unmet> = check_picture(tx.conn(), &automation, &pic, by.startable, by.models, by.default_agent)?
         .into_iter()
         .filter(|u| counts(u))
@@ -4830,11 +4829,12 @@ fn launch_asking(
         start_key: None,
         trigger_id: None,
         incident_task_id: None,
+        automation_version: Some(version),
+        default_agent: by.default_agent.map(str::to_string),
         created_at: now,
         updated_at: now,
     };
     emit_create(tx, record::automation_run(&run))?;
-    copy_down(tx, run.id, &pic, version, role_id, by.default_agent, now)?;
     Ok(Started::Run(Box::new(run)))
 }
 
@@ -4966,82 +4966,54 @@ fn notes_with_data(notes: &str, data: Option<&str>) -> String {
     }
 }
 
-/// **Copy every step of `automation` down onto the run** — [`snapshot`] for each step of each
-/// placement, at launch and again where a run paused before its next task is picked up (`AMB-D-1015`).
+/// **Point a run paused before its next task at the automation's newest saved version** (`AMB-D-1015`,
+/// `AMB-D-1219`), with `default_agent` as the default it reads it with from here on — answering the run
+/// as it now stands and where the round of its seat's role starts on that version ([`entry_def`]), where
+/// the run picks up.
 ///
-/// **The copy of where the run starts is written first** — the first step of the placement the round of
-/// `role_id`, the run's seat, starts at ([`start_of`]), which names that role among its
-/// [`AutomationRunDef::roles`]. So a run's copies fall into one run of rows per time they were taken,
-/// each starting at the spot the run starts at ([`current_defs`]). The rows of an earlier copy are kept: the executions opened from them
-/// still point at them.
-///
-/// What is copied is `pic`, the definition the launch read ([`ReadsFrom`]), and every row of one copy
-/// records the saved version it is — `version`, `None` for the draft. **What is copied of each placement
-/// is the version of the action it stands on** ([`ActionDef::placed`]), not the action as it has since
-/// been written on.
-fn copy_down(
-    tx: &WriteTx<'_>,
-    run_id: i64,
-    pic: &Picture,
-    version: Option<i64>,
-    role_id: Option<i64>,
-    default_agent: Option<&str>,
-    now: Timestamp,
-) -> Result<()> {
-    let defs = defs_of(tx.conn(), &pic.placements)?;
-    let by_id: BTreeMap<i64, &AutomationPlacement> = pic.placements.iter().map(|p| (p.id, p)).collect();
-    let roles = roles_by_placement(pic, &by_id, &defs);
-    let start = start_of(pic, role_id).map(|p| p.id);
-    let mut steps = Vec::new();
-    for placement in &pic.placements {
-        let def = &defs[&placement.id];
-        for step in steps_opened_by(def) {
-            let first = start == Some(placement.id) && def.entry_step_id == Some(step.id);
-            steps.push((placement, step, first));
-        }
-    }
-    steps.sort_by_key(|(_, _, first)| !first);
-    for (placement, step, _) in steps {
-        let carried = carrier(pic, &roles, placement.id, step.id, default_agent);
-        if let Some(def) = snapshot(tx, run_id, version, pic, placement, &defs, &step, carried, now)? {
-            emit_create(tx, record::automation_run_def(&def))?;
-        }
-    }
-    Ok(())
-}
-
-/// **Copy the automation down onto a run paused before its next task, afresh** (`AMB-D-1015`), and
-/// answer the copy of where the round of its seat's role starts ([`entry_def`]) — where the run picks
-/// up.
-///
-/// It reads the saved definition, as a launch does ([`ReadsFrom::Saved`]). The new copy is checked
-/// first, as a launch checks it ([`checked_saved`]): an archived automation, a stopped one, or one
-/// [`check`] finds anything unmet in, is refused, and nothing is written.
-pub(crate) fn copy_down_again(
+/// The version is checked first, as a launch checks it ([`checked_saved`]): an archived automation, a
+/// stopped one, or one [`check`] finds anything unmet in, is refused, and nothing is written. Only the run
+/// row is written: the steps it ran before keep naming the version they ran on.
+pub(crate) fn move_to_newest(
     tx: &WriteTx<'_>,
     run: &AutomationRun,
     startable: Option<&[String]>,
     models: &ModelsHere,
     default_agent: Option<&str>,
-) -> Result<AutomationRunDef> {
-    let (pic, version) = checked_saved(tx.conn(), run, startable, models, default_agent)?;
-    copy_down(tx, run.id, &pic, version, run.role_id, default_agent, Timestamp::now())?;
-    entry_def(tx.conn(), run.id)?.ok_or_else(|| {
-        Error::invalid(format!("run '{}' was copied down with no step to start at", run.id))
-    })
+) -> Result<(AutomationRun, AutomationRunDef)> {
+    let version = checked_saved(tx.conn(), run, startable, models, default_agent)?;
+    let run = point_at(tx, run, version, default_agent)?;
+    let entry = entry_def(tx.conn(), run.id)?.ok_or_else(|| {
+        Error::invalid(format!("run '{}' has no step to start at on version {version}", run.id))
+    })?;
+    Ok((run, entry))
 }
 
-/// **The automation's newest saved definition, checked as a launch checks it** ([`launch_asking`]) — for
-/// a run about to be copied down afresh. An archived automation, a stopped one, or one [`check`] finds
-/// anything unmet in, is refused, and so is one where the role the run is a seat of no longer starts its
-/// round anywhere ([`start_of`]): the run would have nowhere to start.
+/// **Point `run` at version `version`**, read with `default_agent` — the run row alone is written, and
+/// only where either moves. What it answers is the run as it now stands.
+fn point_at(tx: &WriteTx<'_>, run: &AutomationRun, version: i64, default_agent: Option<&str>) -> Result<AutomationRun> {
+    if run.automation_version == Some(version) && run.default_agent.as_deref() == default_agent {
+        return Ok(run.clone());
+    }
+    let mut moved = run.clone();
+    moved.automation_version = Some(version);
+    moved.default_agent = default_agent.map(str::to_string);
+    moved.updated_at = Timestamp::now();
+    crate::ops::emit_update(tx, record::automation_run(run), record::automation_run(&moved))?;
+    Ok(moved)
+}
+
+/// **The automation's newest saved version, checked as a launch checks it** ([`launch_asking`]) — for a
+/// run about to be pointed at it. An archived automation, a stopped one, or one [`check`] finds anything
+/// unmet in, is refused, and so is one where the role the run is a seat of no longer starts its round
+/// anywhere ([`start_of`]): the run would have nowhere to start.
 fn checked_saved(
     conn: &Connection,
     run: &AutomationRun,
     startable: Option<&[String]>,
     models: &ModelsHere,
     default_agent: Option<&str>,
-) -> Result<(Picture, Option<i64>)> {
+) -> Result<i64> {
     let automation: Automation =
         read::automation(conn, run.automation_id)?.ok_or_else(|| not_found("automation", run.automation_id))?;
     if automation.archived {
@@ -5061,7 +5033,7 @@ fn checked_saved(
             automation.name, run.id, automation.id
         )));
     }
-    let (pic, version) = definition(conn, &automation, ReadsFrom::Saved)?;
+    let (pic, version) = newest_saved(conn, &automation)?.ok_or_else(|| never_saved(&automation))?;
     let unmet = check_picture(conn, &automation, &pic, startable, models, default_agent)?;
     if !unmet.is_empty() {
         return Err(not_ready("launch", &automation.name, &unmet));
@@ -5073,38 +5045,38 @@ fn checked_saved(
             automation.name, run.id
         )));
     }
-    Ok((pic, version))
+    Ok(version)
 }
 
 /// **What [`take_up_newer`] did to a run.**
 #[derive(Clone, Debug)]
 pub enum TakenUp {
-    /// Nothing: the run is not standing where its round starts, or nothing newer than its copy has been
-    /// saved.
+    /// Nothing: the run is not standing where its round starts, or nothing newer than the version it
+    /// points at has been saved.
     Same,
-    /// The run was copied down afresh from the newer version, and starts at this, the new copy of where
-    /// its round starts. What was waiting to open the old one is stale.
-    Copied(Box<AutomationRunDef>),
+    /// The run was pointed at the newer version, and starts at this, where its round starts on that
+    /// version. What was waiting to open the step of the old one is stale.
+    Moved(Box<AutomationRunDef>),
     /// The newer version did not pass, so the run failed with
     /// [`AutomationStoppedReason::FailedCheck`]; this is the run as it ended.
     Failed(Box<AutomationRun>),
 }
 
-/// **Copy a run standing where its round starts down afresh, where the automation has been saved since
-/// its copy was taken** (`AMB-D-1015`) — asked before that step is opened, so a run starting its next
-/// round ([`goes_round`]), one a line brings back to where its round starts, or one waiting there for a
-/// task to turn up, starts from the newest saved definition.
+/// **Point a run standing where its round starts at a newer saved version, where the automation has been
+/// saved since the one it points at** (`AMB-D-1015`, `AMB-D-1219`) — asked before that step is opened,
+/// so a run starting its next round ([`goes_round`]), one a line brings back to where its round starts,
+/// or one waiting there for a task to turn up, starts from the newest saved definition.
 ///
 /// - **Standing where its round starts** is a `running` run with nothing under way whose next step is
-///   the copy of where the round of its seat's role starts ([`next_def`], [`entry_def`]). Anywhere else
-///   the run may be partway through a task, and is left alone.
-/// - **Newer** is a saved version later than the one that copy was taken from. A copy taken from the
-///   draft (`None`) is older than any saved version.
+///   where the round of its seat's role starts ([`next_def`], [`entry_def`]). Anywhere else the run may
+///   be partway through a task, and is left alone.
+/// - **Newer** is a saved version later than the one the run points at. A run pointing at none is older
+///   than any saved version.
 /// - **The newer version is checked as a launch checks it** ([`checked_saved`]). A refusal fails the
-///   run, with what it did not pass kept on it ([`AutomationRun::stopped_detail`]), and nothing is
-///   copied. The run holds no task here, so there is nothing to hand back (`AMB-D-967`).
+///   run, with what it did not pass kept on it ([`AutomationRun::stopped_detail`]), and the run keeps
+///   pointing where it did. The run holds no task here, so there is nothing to hand back (`AMB-D-967`).
 ///
-/// The rows of the old copy are kept ([`copy_down`]).
+/// Only the run row is written ([`point_at`]): the steps it ran keep naming the version they ran on.
 pub fn take_up_newer(
     tx: &WriteTx<'_>,
     run_id: i64,
@@ -5114,22 +5086,22 @@ pub fn take_up_newer(
 ) -> Result<TakenUp> {
     let run = read::automation_run(tx.conn(), run_id)?.ok_or_else(|| not_found("run", run_id))?;
     let Waiting::Step(standing) = next_def(tx.conn(), run_id)? else { return Ok(TakenUp::Same) };
-    if entry_def(tx.conn(), run_id)?.is_none_or(|start| start.id != standing.id) {
+    if entry_def(tx.conn(), run_id)?.is_none_or(|start| start.key() != standing.key()) {
         return Ok(TakenUp::Same);
     }
     let Some(saved) = read::automation_version_latest(tx.conn(), run.automation_id)? else {
         return Ok(TakenUp::Same);
     };
-    if standing.automation_version.is_some_and(|copied| copied >= saved.version) {
+    if run.automation_version.is_some_and(|pointed| pointed >= saved.version) {
         return Ok(TakenUp::Same);
     }
     let refused = match checked_saved(tx.conn(), &run, startable, models, default_agent) {
-        Ok((pic, version)) => {
-            copy_down(tx, run.id, &pic, version, run.role_id, default_agent, Timestamp::now())?;
-            let entry = entry_def(tx.conn(), run.id)?.ok_or_else(|| {
-                Error::invalid(format!("run '{}' was copied down with no step to start at", run.id))
+        Ok(version) => {
+            let moved = point_at(tx, &run, version, default_agent)?;
+            let entry = entry_def(tx.conn(), moved.id)?.ok_or_else(|| {
+                Error::invalid(format!("run '{}' has no step to start at on version {version}", moved.id))
             })?;
-            return Ok(TakenUp::Copied(Box::new(entry)));
+            return Ok(TakenUp::Moved(Box::new(entry)));
         }
         Err(refusal @ (Error::Invalid(_) | Error::NotReady(_))) => refusal.to_string(),
         Err(other) => return Err(other),
@@ -5169,61 +5141,27 @@ fn refused_over(head: String, code: ErrorCode, field: &'static str, name: &str, 
     Error::NotReady(msg)
 }
 
-/// **One step of one placement, as it stands at this moment** — the copy a run reads from then on.
+/// **One step of one placement as a run reads it** — what [`assembled`] builds of each. It belongs to no
+/// run and was never written, so `id` and `run_id` are 0 and `created_at` / `updated_at` the epoch
+/// ([`Timestamp::default`]).
 ///
-/// A placement is opened into **one row per step its action could open** ([`steps_opened_by`]), so the
+/// A placement is opened into **one step per step its action could open** ([`steps_opened_by`]), so the
 /// run holds a single column of steps and never has to ask, while it moves, whether it is inside an
-/// action. Each row says which placement it was opened from, since one action placed twice gives two
-/// rows for every step inside it and only `placement_id` tells them apart.
+/// action. Each says which placement it was opened from, since one action placed twice gives two of
+/// every step inside it and only `placement_id` tells them apart.
 ///
 /// The ways out and the inputs are **the step's own**: they are what the agent is told it may leave by
 /// and what it is handed, and the action's declarations are reached through the lines drawn across its
 /// edge ([`onward`], [`wired_into`]). Each input carries the outputs wired into it, resolved here, so a
-/// run hands a value along the wires it launched with (`AMB-D-961`). The settings are the placement's —
-/// the action's declarations with this spot's answers written in — because a step reads them by name and
-/// the answer is given once, where the action is placed. The agent and the model are `carried` — the
-/// step's own choice at the placement, else its role's default, else Amenbo's ([`carrier`]). The prompt,
-/// the agent, the model and the three flags are resolved here rather than kept as a pointer, so the
-/// step is not read halfway through the run as whatever it had since been edited into.
+/// run hands a value along the wires of the version it points at (`AMB-D-961`). The settings are the
+/// placement's — the action's declarations with this spot's answers written in. The agent and the model
+/// are `carried` — the step's own choice at the placement, else its role's default, else Amenbo's
+/// ([`carrier`]).
 ///
-/// **A step none of the three names an agent for is not copied**, and `None` says so. The launch
-/// check refuses a run that could open one ([`Unmet::AgentUnchosen`]), so the only such step left here
-/// stands on a placement no run reaches — copied, it would need an agent it does not have. A built-in is copied
-/// with nobody named and no prompt: Amenbo carries it out itself (`AMB-D-964`). A script is copied with
-/// nobody named too: its program is what is started (`AMB-D-1016`).
-///
-/// No cycle can be met here: an action places no action (`AMB-D-949`), so opening a placement goes one
-/// level down and stops. A loop drawn inside an action is a way back between its steps, walked at run
-/// time and held by `max_times`, not something this expands.
-#[allow(clippy::too_many_arguments)]
-fn snapshot(
-    tx: &WriteTx<'_>,
-    run_id: i64,
-    automation_version: Option<i64>,
-    pic: &Picture,
-    placement: &AutomationPlacement,
-    defs: &Defs,
-    step: &AutomationStep,
-    carried: Option<Carrier>,
-    now: Timestamp,
-) -> Result<Option<AutomationRunDef>> {
-    let Some(def) = step_def(tx.conn(), automation_version, pic, placement, defs, step, carried)? else {
-        return Ok(None);
-    };
-    Ok(Some(AutomationRunDef {
-        id: read::next_id(tx.conn(), "automation_run_def")?,
-        run_id,
-        created_at: now,
-        updated_at: now,
-        ..def
-    }))
-}
-
-/// **One step of one placement as a run reads it** — what [`snapshot`] writes down and [`assembled`]
-/// builds, made in one place so the two cannot drift apart. It belongs to no run and was never written,
-/// so `id` and `run_id` are 0 and `created_at` / `updated_at` the epoch ([`Timestamp::default`]); the
-/// caller that writes it puts its own in. `None` where an agent would carry the step out and nobody was
-/// chosen for it.
+/// **A step none of the three names an agent for is left out**, and `None` says so. The launch check
+/// refuses a run that could open one ([`Unmet::AgentUnchosen`]), so the only such step left here stands
+/// on a placement no run reaches. A built-in names nobody and has no prompt: Amenbo carries it out
+/// itself (`AMB-D-964`). A script names nobody either: its program is what is started (`AMB-D-1016`).
 fn step_def(
     conn: &Connection,
     automation_version: Option<i64>,
@@ -5235,7 +5173,7 @@ fn step_def(
 ) -> Result<Option<AutomationRunDef>> {
     let def = &defs[&placement.id];
     // A built-in is carried out by Amenbo and a script by its program, so nobody was chosen for either
-    // and its copy names nobody.
+    // and it names nobody.
     let (agent, model) = if step.builtin.is_some() || step.script.is_some() {
         (String::new(), None)
     } else {
@@ -5261,13 +5199,13 @@ fn step_def(
         ins.push(RunDefIn { port, from });
     }
     // The version of the built-in the placed action was written from (`AMB-D-1000`) — the one whose ways
-    // out were just copied, and so the one its code is to behave as.
+    // out were just read, and so the one its code is to behave as.
     let builtin_version = match &step.builtin {
         Some(_) => read::automation_action(conn, placement.action_id)?.and_then(|a| a.builtin_version),
         None => None,
     };
     let cfg: Vec<RunDefCfg> = answers(pic, placement, def).into_iter().map(run_def_cfg).collect();
-    // The roles whose round starts here: those naming this placement, on the copy of its first step.
+    // The roles whose round starts here: those naming this placement, on its first step.
     let roles: Vec<i64> = match def.entry_step_id == Some(step.id) {
         true => pic.roles().iter().filter(|r| r.entry_placement_id == Some(placement.id)).map(|r| r.id).collect(),
         false => Vec::new(),
@@ -5294,8 +5232,8 @@ fn step_def(
         show_notes: step.show_notes,
         show_decisions: step.show_decisions,
         show_comments: step.show_comments,
-        // Copied with the default already put in, so the copy says what was expected at launch even
-        // where the default moves on afterwards.
+        // With the default already put in, so the step says what was expected even where a step names
+        // nothing.
         expected_minutes: Some(step.expected_minutes.unwrap_or(DEFAULT_EXPECTED_MINUTES)),
         exits: serde_json::to_string(&exits).map_err(Error::from)?,
         ins: serde_json::to_string(&ins).map_err(Error::from)?,
@@ -5307,15 +5245,15 @@ fn step_def(
 }
 
 /// **The definition a run reads, assembled from the saved version it points at** (`AMB-D-1219`) — every
-/// step of every placement of version `version` of the automation, each as [`snapshot`] would copy it
-/// for a run launched on it with `default_agent` as Amenbo's own default ([`carrier`]). Only saved rows
+/// step of every placement of version `version` of the automation ([`step_def`]), for a run launched on
+/// it with `default_agent` as Amenbo's own default ([`carrier`]). Only saved rows
 /// are read: the version's picture ([`Picture::saved`]) and the version of the action each placement
 /// stands on ([`ActionDef::placed`]), never the draft.
 ///
 /// **The steps come in the order of the placements, and of each placement's steps**
-/// ([`steps_opened_by`]). Where the run starts is not moved to the front as [`copy_down`] does: that
-/// depends on the role the run is a seat of, which is not part of what is assembled, so it is for the
-/// caller to find ([`AutomationRunDef::roles`]).
+/// ([`steps_opened_by`]). Where the run starts depends on the role the run is a seat of, which is not
+/// part of what is assembled, so it is for the caller to find ([`AutomationRunDef::roles`],
+/// [`entry_def`]).
 ///
 /// Each step belongs to no run and was never written ([`step_def`]): `id` and `run_id` are 0, and
 /// `created_at` / `updated_at` the epoch. Read through [`run_defs`] to have it kept in memory.
@@ -5402,7 +5340,7 @@ pub fn run_defs(
 
 /// What one assembled definition is kept under ([`run_defs`]).
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct RunDefKey {
+struct KeptUnder {
     /// The path of the database file it was read from.
     store: String,
     automation_id: i64,
@@ -5419,7 +5357,7 @@ struct RunDefsHeld {
     /// Counts up on every read, so the one read longest ago can be told.
     tick: u64,
     /// Each definition, with the tick it was last read at.
-    defs: BTreeMap<RunDefKey, (u64, std::sync::Arc<[AutomationRunDef]>)>,
+    defs: BTreeMap<KeptUnder, (u64, std::sync::Arc<[AutomationRunDef]>)>,
 }
 
 impl RunDefCache {
@@ -5441,7 +5379,7 @@ impl RunDefCache {
         default_agent: Option<&str>,
     ) -> Result<std::sync::Arc<[AutomationRunDef]>> {
         let Some(store) = store else { return Ok(assemble(conn, automation_id, version, default_agent)?.into()) };
-        let key = RunDefKey {
+        let key = KeptUnder {
             store: store.to_string(),
             automation_id,
             version,
@@ -5466,7 +5404,7 @@ impl RunDefCache {
 }
 
 impl RunDefsHeld {
-    fn read(&mut self, key: &RunDefKey) -> Option<std::sync::Arc<[AutomationRunDef]>> {
+    fn read(&mut self, key: &KeptUnder) -> Option<std::sync::Arc<[AutomationRunDef]>> {
         self.tick += 1;
         let tick = self.tick;
         self.defs.get_mut(key).map(|(read_at, defs)| {
@@ -5475,7 +5413,7 @@ impl RunDefsHeld {
         })
     }
 
-    fn keep(&mut self, key: RunDefKey, defs: std::sync::Arc<[AutomationRunDef]>) {
+    fn keep(&mut self, key: KeptUnder, defs: std::sync::Arc<[AutomationRunDef]>) {
         self.tick += 1;
         self.defs.insert(key, (self.tick, defs));
         while self.defs.len() > RUN_DEFS_KEPT {
@@ -5489,7 +5427,7 @@ impl RunDefsHeld {
 }
 
 /// **What follows one way out of one step of one placement**, read off the two pictures at launch —
-/// the line the copy keeps ([`RunDefExit::then`]), and the action's way out it returns to where it
+/// the line the step keeps ([`RunDefExit::then`]), and the action's way out it returns to where it
 /// leaves the action ([`RunDefExit::returns_to`]).
 ///
 /// The step's own action is asked first: the line drawn inside it from this way out either goes on to
@@ -5532,7 +5470,7 @@ fn line_after(
     (line, Some(action_exit))
 }
 
-/// One live line as the copy keeps it, going on to `placement_id` / `step_id` where it goes on at all.
+/// One live line as the step keeps it, going on to `placement_id` / `step_id` where it goes on at all.
 ///
 /// **The limit is kept on a line that goes back, and on no other**
 /// ([`crate::ops::automation::lines_back`]). A line going down carries the standing limit it was drawn
@@ -5617,59 +5555,71 @@ fn wired_into(
     out
 }
 
-/// **The copies a run reads from now** — the last time the automation was copied down onto it
-/// ([`copy_down`]): from the last copy of where the round of its seat's role starts on, the one
-/// [`copy_down`] writes first each time ([`AutomationRunDef::roles`]).
-///
-/// A run carrying a single such copy reads all of its copies. That is every run copied down once, and
-/// it covers one launched before that copy was written first. A run in the seats of no role reads all
-/// of its copies too.
-pub(crate) fn current_defs(conn: &Connection, run_id: i64) -> Result<Vec<AutomationRunDef>> {
+/// **The steps a run reads at version `version`** of its automation — that version assembled with the
+/// run's default agent ([`run_defs`], [`AutomationRun::default_agent`]), each marked as the run's
+/// ([`AutomationRunDef::run_id`]).
+fn defs_at(conn: &Connection, run: &AutomationRun, version: i64) -> Result<Vec<AutomationRunDef>> {
+    let defs = run_defs(conn, run.automation_id, version, run.default_agent.as_deref())?;
+    Ok(defs.iter().map(|def| AutomationRunDef { run_id: run.id, ..def.clone() }).collect())
+}
+
+/// **The steps a run reads now** — the saved version it points at ([`AutomationRun::automation_version`],
+/// `AMB-D-1219`), as [`defs_at`] reads it. None for a run that points at no version — one that had ended
+/// before runs pointed at one — and for one whose version cannot be read any more: a run that is over
+/// holds no action it stands on back from being deleted ([`crate::ops::automation::action_delete`]).
+pub fn current_defs(conn: &Connection, run_id: i64) -> Result<Vec<AutomationRunDef>> {
     let run = read::automation_run(conn, run_id)?.ok_or_else(|| not_found("run", run_id))?;
-    let mut defs = read::automation_run_defs_of(conn, run_id)?;
-    let Some(role) = run.role_id else { return Ok(defs) };
-    let starts = |def: &AutomationRunDef| def.role_ids().contains(&role);
-    if defs.iter().filter(|def| starts(def)).count() > 1 {
-        if let Some(from) = defs.iter().rposition(starts) {
-            defs.drain(..from);
-        }
+    let Some(version) = run.automation_version else { return Ok(Vec::new()) };
+    match defs_at(conn, &run, version) {
+        Err(Error::NotFound(_)) => Ok(Vec::new()),
+        defs => defs,
     }
-    Ok(defs)
 }
 
-/// **The copies a run has stopped reading and no step execution of it names** — the row ids of each
-/// whole copy before the one it reads now ([`current_defs`]) that none of `named` points into. Each
-/// copy runs from where the round of its seat's role starts to the row before the next one does, and
-/// rows before the first such row go with the first copy.
-///
-/// **A copy goes whole or not at all.** Were its first row to go with the rows after it kept, the run
-/// would be left with fewer such rows than copies, and [`current_defs`] would read a copy it has moved
-/// on from. A run carrying a single such row, and one in the seats of no role, has nothing to let go:
-/// it reads all of its copies.
-pub(crate) fn copies_let_go(conn: &Connection, run: &AutomationRun, named: &BTreeSet<i64>) -> Result<Vec<i64>> {
-    let Some(role) = run.role_id else { return Ok(Vec::new()) };
-    let defs = read::automation_run_defs_of(conn, run.id)?;
-    let starts = |def: &AutomationRunDef| def.role_ids().contains(&role);
-    if defs.iter().filter(|def| starts(def)).count() < 2 {
-        return Ok(Vec::new());
-    }
-    let Some(now) = defs.iter().rposition(starts) else { return Ok(Vec::new()) };
-    let mut copies: Vec<Vec<&AutomationRunDef>> = Vec::new();
-    for def in &defs[..now] {
-        match copies.last_mut() {
-            Some(copy) if !starts(def) || !copy.iter().any(|d| starts(d)) => copy.push(def),
-            _ => copies.push(vec![def]),
-        }
-    }
-    Ok(copies
-        .into_iter()
-        .filter(|copy| copy.iter().all(|def| !named.contains(&def.id)))
-        .flatten()
-        .map(|def| def.id)
-        .collect())
+/// **The step `at` names, as run `run_id` reads it** — in the version `at` names, which for a step of an
+/// earlier round may be older than the one the run points at now. `None` where the run, that version or
+/// the step is gone: a run that is over may name a version of an action deleted since.
+pub fn def_at(conn: &Connection, run_id: i64, at: RunDefKey) -> Result<Option<AutomationRunDef>> {
+    let Some(run) = read::automation_run(conn, run_id)? else { return Ok(None) };
+    let Some(version) = at.automation_version else { return Ok(None) };
+    let defs = match run_defs(conn, run.automation_id, version, run.default_agent.as_deref()) {
+        Ok(defs) => defs,
+        Err(Error::NotFound(_)) => return Ok(None),
+        Err(other) => return Err(other),
+    };
+    Ok(defs
+        .iter()
+        .find(|def| def.placement_id == at.placement_id && def.step_id == at.step_id)
+        .map(|def| AutomationRunDef { run_id: run.id, ..def.clone() }))
 }
 
-/// The copy a run took of one step of one placement, the last time it was copied down.
+/// **The step one execution ran**, as its run reads it ([`def_at`]).
+pub fn def_of(conn: &Connection, step: &AutomationRunStep) -> Result<Option<AutomationRunDef>> {
+    def_at(conn, step.run_id, step.def_key())
+}
+
+/// **Every step `steps` name**, as `run` reads them, by [`RunDefKey`] — each version they name assembled
+/// once ([`defs_at`]). A version that cannot be assembled any more — an action it stands on deleted
+/// since — is left out, and so are its steps.
+pub fn defs_named(
+    conn: &Connection,
+    run: &AutomationRun,
+    steps: &[AutomationRunStep],
+) -> Result<BTreeMap<RunDefKey, AutomationRunDef>> {
+    let versions: BTreeSet<i64> = steps.iter().filter_map(|step| step.automation_version).collect();
+    let mut named = BTreeMap::new();
+    for version in versions {
+        let defs = match defs_at(conn, run, version) {
+            Ok(defs) => defs,
+            Err(Error::NotFound(_)) => continue,
+            Err(other) => return Err(other),
+        };
+        named.extend(defs.into_iter().map(|def| (def.key(), def)));
+    }
+    Ok(named)
+}
+
+/// The step `step_id` of the placement `placement_id`, as the run reads it now ([`current_defs`]).
 fn copy_of(
     conn: &Connection,
     run_id: i64,
@@ -5681,10 +5631,9 @@ fn copy_of(
         .find(|def| def.placement_id == Some(placement_id) && def.step_id == Some(step_id)))
 }
 
-/// **The spot a run starts its rounds at** (`AMB-D-1123`), the last time it was copied down — the copy
-/// of the step the round of its seat's role starts at ([`AutomationRun::role_id`],
-/// [`AutomationRunDef::roles`]), or `None` where the run carries no such copy or sits in the seats of
-/// no role.
+/// **The spot a run starts its rounds at** (`AMB-D-1123`), on the version it points at now — the step
+/// the round of its seat's role starts at ([`AutomationRun::role_id`], [`AutomationRunDef::roles`]), or
+/// `None` where that version names no such step or the run sits in the seats of no role.
 pub fn entry_def(conn: &Connection, run_id: i64) -> Result<Option<AutomationRunDef>> {
     let run = read::automation_run(conn, run_id)?.ok_or_else(|| not_found("run", run_id))?;
     let Some(role) = run.role_id else { return Ok(None) };
@@ -5697,28 +5646,28 @@ pub(crate) fn starts_by_taking_a_task(conn: &Connection, run_id: i64) -> Result<
     Ok(entry_def(conn, run_id)?.is_some_and(|start| crate::ops::automation_stop::takes_a_task(&start)))
 }
 
-/// **Whether `def` is where this run takes its next task** — the copy of where its round starts
-/// ([`entry_def`]), being the built-in that takes one.
+/// **Whether `def` is where this run takes its next task** — where its round starts ([`entry_def`]), on
+/// the version it points at, being the built-in that takes one.
 pub(crate) fn takes_its_task_at(conn: &Connection, run_id: i64, def: &AutomationRunDef) -> Result<bool> {
     if !crate::ops::automation_stop::takes_a_task(def) {
         return Ok(false);
     }
-    Ok(entry_def(conn, run_id)?.is_some_and(|start| start.id == def.id))
+    Ok(entry_def(conn, run_id)?.is_some_and(|start| start.key() == def.key()))
 }
 
-/// **Whether `def` is where this run's round starts** — the copy of where the round of its seat's role
-/// starts ([`entry_def`]). For a run whose round starts by taking a task, that is where it takes its next
+/// **Whether `def` is where this run's round starts** — where the round of its seat's role starts
+/// ([`entry_def`]), on the version it points at. For a run whose round starts by taking a task, that is where it takes its next
 /// one ([`takes_its_task_at`]); for one of a role started by a trigger, the step it starts at, which
 /// takes none. Where a pause before the next task takes hold (`AMB-D-1019`), and where a seat still to
 /// go is let go.
 pub(crate) fn round_starts_at(conn: &Connection, run_id: i64, def: &AutomationRunDef) -> Result<bool> {
-    Ok(entry_def(conn, run_id)?.is_some_and(|start| start.id == def.id))
+    Ok(entry_def(conn, run_id)?.is_some_and(|start| start.key() == def.key()))
 }
 
-/// **What follows one way out of one step**, as the step's copy says ([`RunDefExit::then`]) — resolved
-/// at launch, so a run under way reads no picture but its own copies (`AMB-D-961`).
+/// **What follows one way out of one step**, as the step says ([`RunDefExit::then`]) — resolved from the
+/// version the run points at, so a run under way reads no picture being written (`AMB-D-961`).
 pub(crate) enum Onward {
-    /// Open this copy next. `line` is the line that leads to it — the one inside the action for a step
+    /// Open this step next. `line` is the line that leads to it — the one inside the action for a step
     /// of the same placement, the automation's for the first step of another — which is what a limit on
     /// how often it may be taken is counted against ([`crate::ops::automation_report`]).
     Go { def: Box<AutomationRunDef>, line: RunDefLine },
@@ -5727,7 +5676,7 @@ pub(crate) enum Onward {
     /// The way out halts the run and calls a person — drawn so, or an error way out with no line after
     /// it.
     Halt,
-    /// Nothing says what follows, or what it leads to was never copied into this run.
+    /// Nothing says what follows, or what it leads to is not in the version the run points at.
     Nowhere,
 }
 
@@ -5771,8 +5720,8 @@ pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64
     })
 }
 
-/// **Where the built-in that takes a task goes once it has taken one, in a run whose copies start roles'
-/// rounds** — on to the copy the round's role starts at ([`AutomationRunDef::roles`]), whatever line is
+/// **Where the built-in that takes a task goes once it has taken one, in a run whose steps start roles'
+/// rounds** — on to the step the round's role starts at ([`AutomationRunDef::roles`]), whatever line is
 /// drawn from it. `None` for any other way out, for every way out of a run whose automation defines no
 /// role that names where its round starts, and where the built-in is itself where the round's role
 /// starts (`AMB-D-1123`): those walk the picture as it is drawn.
@@ -5780,8 +5729,8 @@ pub(crate) fn onward(conn: &Connection, def: &AutomationRunDef, exit: Option<i64
 /// The role is the one the round was taken under ([`crate::model::AutomationRunTask::role_id`]), which is
 /// the run's own: only a task of that role is taken ([`roles_started`]). A round with none has nowhere to
 /// go ([`Onward::Nowhere`]) — which a task whose role was changed under the run as it was being taken
-/// reaches, and so does a run whose role no copy starts any longer, the automation having been copied
-/// down again without it ([`copy_down_again`], [`take_up_newer`]).
+/// reaches, and so does a run whose role no step starts any longer, the run having been pointed at a
+/// version without it ([`move_to_newest`], [`take_up_newer`]).
 ///
 /// No line is drawn for it, so the line it hands back is made up: on the automation's picture, from the
 /// placement it leaves, with no edge (`edge_id` 0) and no limit on how often it is taken. That it is on the
@@ -5801,7 +5750,7 @@ fn by_role(conn: &Connection, def: &AutomationRunDef, taken: &RunDefExit) -> Res
     let Some(next) = role.and_then(|role| defs.into_iter().find(|d| d.role_ids().contains(&role))) else {
         return Ok(Some(Onward::Nowhere));
     };
-    if next.id == def.id {
+    if next.key() == def.key() {
         return Ok(None);
     }
     let line = RunDefLine {
@@ -5818,10 +5767,10 @@ fn by_role(conn: &Connection, def: &AutomationRunDef, taken: &RunDefExit) -> Res
 }
 
 /// **The roles a run takes tasks of** — the one role it is a seat of ([`AutomationRun::role_id`]), which
-/// it keeps until it ends, however its copies are copied down again.
+/// it keeps until it ends, whichever version it is pointed at.
 ///
-/// A run with no role takes those its copies start rounds of ([`AutomationRunDef::roles`]), as it was last
-/// copied down, each once: what a run launched before runs were given a role (v128) did, and what one
+/// A run with no role takes those the steps of its version start rounds of ([`AutomationRunDef::roles`]),
+/// each once: what a run launched before runs were given a role (v128) did, and what one
 /// does whose role has since been taken out. Empty for a run whose automation defines no role that names
 /// where its round starts.
 ///
@@ -5862,7 +5811,7 @@ pub(crate) fn take_order(conn: &Connection, run: &AutomationRun) -> Result<Optio
 /// **Which of an action's ways out one way out of a step inside it returns to** — the action's way out
 /// the line drawn from it inside the action keys, where that line is an [`AutomationEnds::Exit`].
 /// `None` where it leaves the action by no way out. Read off the version a placement stands on, which is
-/// what a launch resolves its copies from; a run under way reads [`RunDefExit::returns_to`] instead.
+/// what a run's steps are resolved from; a run under way reads [`RunDefExit::returns_to`] instead.
 fn returns_to(def: &ActionDef, step_id: i64, exit: i64) -> Option<i64> {
     def.edge_for_exit(step_id, exit)
         .filter(|edge| edge.ends == AutomationEnds::Exit)
@@ -5876,18 +5825,18 @@ fn returns_to(def: &ActionDef, step_id: i64, exit: i64) -> Option<i64> {
 /// sits `running` for good, holding a task nobody is working.
 #[derive(Debug, Clone)]
 pub enum Waiting {
-    /// This step is waiting to be opened. Boxed because the other two carry nothing, and a copy of a
-    /// step is the whole of what one is.
+    /// This step is waiting to be opened. Boxed because the other two carry nothing, and a step as a
+    /// run reads it is the whole of what one is.
     Step(Box<AutomationRunDef>),
     /// Nothing for anybody to do: a step is under way, or the run is not running at all.
     Nothing,
-    /// **The run cannot go on.** Nothing is under way and nothing leads anywhere — its copies say
-    /// nothing follows the way out it took, or mark no step to start at. It will never move again on
+    /// **The run cannot go on.** Nothing is under way and nothing leads anywhere — its version says
+    /// nothing follows the way out it took, or marks no step to start at. It will never move again on
     /// its own, so it is ended rather than looked at every second.
     ///
     /// **Nobody can walk a run into this on purpose**, which is why it is held by the tests below and
-    /// by no scenario (`AMB-T-5307`). A launch copies every line and marks where it starts
-    /// (`AMB-D-961`); what is left is a store carried in from before it did, whose copies hold neither.
+    /// by no scenario (`AMB-T-5307`). A version resolves every line and marks where each round starts
+    /// (`AMB-D-961`); what is left is a store carried in from before it did, whose runs hold neither.
     NoWayOn,
 }
 
@@ -5895,18 +5844,18 @@ pub enum Waiting {
 ///
 /// A run that is `running` is either carrying a step out or standing between two of them, and only the
 /// second is anybody's to act on. So this answers a step in exactly two cases — a run that has just
-/// been launched and has no execution yet, or was copied down again as it was picked up and has none
-/// from the new copy, where the answer is where its round starts ([`entry_def`]); and a run whose last
+/// been launched and has no execution yet, or was pointed at a newer version as it was picked up and has
+/// none on it, where the answer is where its round starts ([`entry_def`]); and a run whose last
 /// execution has reported, where the answer is read off the way out it took — where its round starts
 /// again where that way out ended one round ([`goes_round`]).
 ///
 /// **It derives rather than remembers**, because the report already wrote down everything it takes:
-/// the execution carries the way out, and the step's copy says what follows one
+/// the execution carries the way out, and the step it ran says what follows one
 /// ([`crate::ops::automation_report::done`] resolved the same line to decide whether the run goes on
 /// at all). A second copy kept for the watcher's benefit would be a second thing to keep true.
 ///
-/// **Deriving is also what puts a run in the way of `NoWayOn`**: a copy carried in from before a
-/// launch copied the lines can say nothing follows the way out a run has already taken.
+/// **Deriving is also what puts a run in the way of `NoWayOn`**: a run carried in from before a launch
+/// resolved the lines can say nothing follows the way out it has already taken.
 pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
     let Some(run) = read::automation_run(conn, run_id)? else {
         return Err(not_found("run", run_id));
@@ -5916,23 +5865,23 @@ pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
     }
     let Some(last) = read::automation_run_steps_of(conn, run_id)?.pop() else {
         // Nothing has run yet, so what is waiting to be opened is where the run starts. A run whose
-        // copies mark none cannot start at all.
+        // version marks none cannot start at all.
         return Ok(entry_def(conn, run_id)?
             .map_or(Waiting::NoWayOn, |def| Waiting::Step(Box::new(def))));
     };
     if last.status == AutomationRunStepStatus::Running {
         return Ok(Waiting::Nothing);
     }
-    // A step opened from an earlier copy is behind a run copied down again as it was picked up
-    // (`AMB-D-1015`), which starts afresh where its round starts on the new copy.
-    if current_defs(conn, run_id)?.first().is_some_and(|first| last.run_def_id < first.id) {
+    // A step opened on an earlier version is behind a run pointed at a newer one as it was picked up
+    // (`AMB-D-1015`), which starts afresh where its round starts on that version.
+    if last.automation_version != run.automation_version {
         return Ok(entry_def(conn, run_id)?
             .map_or(Waiting::NoWayOn, |def| Waiting::Step(Box::new(def))));
     }
     // Everything below is a run standing between two steps. A way out that closed or halted the run
     // would have done so in the report that took it, so a run still `running` here is standing
-    // towards the step the copy says comes next — or towards nothing, where the copy says nothing.
-    let Some(from) = read::automation_run_def(conn, last.run_def_id)? else {
+    // towards the step the version says comes next — or towards nothing, where it says nothing.
+    let Some(from) = def_of(conn, &last)? else {
         return Ok(Waiting::NoWayOn);
     };
     Ok(match onward(conn, &from, last.exit_id)? {
@@ -5949,7 +5898,7 @@ pub fn next_def(conn: &Connection, run_id: i64) -> Result<Waiting> {
 /// **Whether the end of the picture is the end of one round rather than of the run** — one task a
 /// round, each round walking the picture from where the round of the run's seat starts to its end.
 ///
-/// It is, where the run's round, as its newest copy holds it, starts at the built-in that takes a task
+/// It is, where the run's round, as the version it points at holds it, starts at the built-in that takes a task
 /// ([`starts_by_taking_a_task`]), and the step that came to the end belongs to a stretch that held one
 /// ([`AutomationRunTask`]): that built-in then takes the next task, and the round after starts there.
 /// **A round never goes without a task.** A step that went looking for one and found none keeps no
@@ -6025,13 +5974,13 @@ pub fn waits_for_room(conn: &Connection, run_id: i64) -> Result<Option<ForRoom>>
 /// **Whether opening `def` would put `run` inside an action somebody else is in, or ahead of a run
 /// that came to it first** — answered as the run whom it waits behind, or `None` where it goes in now.
 ///
-/// Read off the run's own copy (`AMB-D-961`): only a copy that says its action takes one run at a
-/// time waits, and only on its way into that action — a step after another step of the same spot is
+/// Read off the version the run points at (`AMB-D-961`): only a step that says its action takes one run
+/// at a time waits, and only on its way into that action — a step after another step of the same spot is
 /// already inside. Nothing is remembered for it. **Who is inside** is read off each other run's last
 /// step: one under way in the action, or one that left by a line that stays inside it. A run paused
 /// there still holds the action, since picking it up goes on inside; one paused before its next task
-/// does not, since picking it up starts afresh where its round starts. Whether that other run's copy takes one
-/// run at a time does not matter: it is in the same action.
+/// does not, since picking it up starts afresh where its round starts. Whether that other run's version
+/// takes one run at a time does not matter: it is in the same action.
 ///
 /// **Arrival order** is when each run came to stand before the action ([`arrived`]). A run waiting on
 /// a built-in first ([`crate::ops::automation_builtin::waiting`]) is not in the line: it is not ready
@@ -6082,16 +6031,17 @@ pub(crate) fn room_for(conn: &Connection, run: &AutomationRun, def: &AutomationR
     Ok(ahead.map(|(_, behind)| ForRoom { action_id, behind }))
 }
 
-/// **The copy of the step whose action this run is inside**, or `None` where it stands between two
-/// actions. Inside is its last step still under way, or left by a line that stays inside the action
-/// — the run is going on to another of the action's steps. A step from before the run was copied down
-/// again is behind it: the run starts afresh where its round starts.
+/// **The step whose action this run is inside**, or `None` where it stands between two actions. Inside
+/// is its last step still under way, or left by a line that stays inside the action — the run is going
+/// on to another of the action's steps. A step of a version older than the one the run points at is
+/// behind it: the run starts afresh where its round starts.
 fn action_held_by(conn: &Connection, run_id: i64) -> Result<Option<AutomationRunDef>> {
     let Some(last) = read::automation_run_steps_of(conn, run_id)?.pop() else { return Ok(None) };
-    if current_defs(conn, run_id)?.first().is_some_and(|first| last.run_def_id < first.id) {
+    let Some(run) = read::automation_run(conn, run_id)? else { return Ok(None) };
+    if last.automation_version != run.automation_version {
         return Ok(None);
     }
-    let Some(def) = read::automation_run_def(conn, last.run_def_id)? else { return Ok(None) };
+    let Some(def) = def_of(conn, &last)? else { return Ok(None) };
     let stays = match last.status {
         AutomationRunStepStatus::Running => true,
         _ => matches!(
@@ -6102,19 +6052,16 @@ fn action_held_by(conn: &Connection, run_id: i64) -> Result<Option<AutomationRun
     Ok(stays.then_some(def))
 }
 
-/// **When a run came to stand where it stands now**: when its last step ended, or, with none since
-/// it was last copied down, when that copy was taken — the launch, or the pick-up after a pause before
-/// its next task. A pause at the end of an action moves nothing, so a run picked up from one keeps the
-/// place it had.
+/// **When a run came to stand where it stands now**: when its last step ended; with none on the version
+/// it points at, when it was pointed at that version — the pick-up after a pause before its next task,
+/// or the start of a round on a newer one ([`AutomationRun::updated_at`], which pointing moves); and with
+/// none at all, the launch. A pause at the end of an action moves nothing, so a run picked up from one
+/// keeps the place it had.
 fn arrived(conn: &Connection, run: &AutomationRun) -> Result<Timestamp> {
-    let defs = current_defs(conn, run.id)?;
-    let last = read::automation_run_steps_of(conn, run.id)?.pop();
-    Ok(match (last, defs.first()) {
-        (Some(last), first) if first.is_none_or(|first| last.run_def_id >= first.id) => {
-            last.ended_at.unwrap_or(last.updated_at)
-        }
-        (_, Some(first)) => first.created_at,
-        (_, None) => run.started_at.unwrap_or(run.created_at),
+    Ok(match read::automation_run_steps_of(conn, run.id)?.pop() {
+        Some(last) if last.automation_version == run.automation_version => last.ended_at.unwrap_or(last.updated_at),
+        Some(_) => run.updated_at,
+        None => run.started_at.unwrap_or(run.created_at),
     })
 }
 
@@ -6125,13 +6072,13 @@ fn arrived(conn: &Connection, run: &AutomationRun) -> Result<Timestamp> {
 pub struct Trail {
     pub passed: Vec<Passed>,
     /// The placement whose step is under way, or the one the run is about to open or waiting on.
-    /// `None` for a run that is not `running`, and where the copy names no spot.
+    /// `None` for a run that is not `running`, and where the step names no spot.
     pub at: Option<i64>,
     /// The steps the run passed inside the spot it is in, in the order it passed them — empty once it
     /// has left that spot, and before it opens one there. A step passed twice is two of these.
     pub steps: Vec<PassedStep>,
     /// The step under way, or the one the run is about to open or waiting on — the first step of the
-    /// spot for a run that has not opened one there yet. `None` where [`Trail::at`] is `None`, and where the copy
+    /// spot for a run that has not opened one there yet. `None` where [`Trail::at`] is `None`, and where the step
     /// names no step.
     pub step: Option<i64>,
 }
@@ -6140,7 +6087,7 @@ pub struct Trail {
 /// and lines.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct PassedStep {
-    /// `None` where the run's copy names no step.
+    /// `None` where the step names no step of the action.
     pub step_id: Option<i64>,
     pub status: AutomationRunStepStatus,
     /// The line on the action's picture the run walked from there to the next step. `None` while the
@@ -6152,7 +6099,7 @@ pub struct PassedStep {
 /// in the order the run came to them.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Passed {
-    /// `None` where the run's copy names no spot.
+    /// `None` where the step names no spot.
     pub placement_id: Option<i64>,
     /// How the last step the run opened there stands.
     pub status: AutomationRunStepStatus,
@@ -6172,13 +6119,13 @@ pub struct Passed {
 /// next task opens a new one, so what lights up starts again with each task. The steps inside one
 /// spot fold into one pass, so the picture — which draws spots, not steps — reads one box per pass;
 /// the steps of the spot the run is in are kept beside them, for the action's picture inside it.
-/// Read off the run's copies, the same as the run goes on by them (`AMB-D-961`).
+/// Read off the version each step ran on, the same as the run goes on by them (`AMB-D-961`).
 pub fn trail(conn: &Connection, run_id: i64) -> Result<Trail> {
-    if read::automation_run(conn, run_id)?.is_none() {
+    let Some(run) = read::automation_run(conn, run_id)? else {
         return Err(not_found("run", run_id));
-    }
-    let defs: BTreeMap<i64, AutomationRunDef> =
-        read::automation_run_defs_of(conn, run_id)?.into_iter().map(|def| (def.id, def)).collect();
+    };
+    let walked = read::automation_run_steps_of(conn, run_id)?;
+    let defs = defs_named(conn, &run, &walked)?;
     let mut passed: Vec<Passed> = Vec::new();
     let mut steps: Vec<PassedStep> = Vec::new();
     // Whether the run is still in the spot of the last pass — its step is under way, or went on to
@@ -6187,8 +6134,8 @@ pub fn trail(conn: &Connection, run_id: i64) -> Result<Trail> {
     if let Some(stretch) = read::automation_run_task_last(conn, run_id)? {
         // Whether the last pass is still inside its spot — its step went on to another of the action's.
         let mut inside = false;
-        for step in read::automation_run_steps_of_task(conn, stretch.id)? {
-            let Some(def) = defs.get(&step.run_def_id) else { continue };
+        for step in walked.iter().filter(|step| step.run_task_id == Some(stretch.id)) {
+            let Some(def) = defs.get(&step.def_key()) else { continue };
             let taken = match step.exit_id {
                 Some(id) => {
                     let exits: Vec<RunDefExit> = serde_json::from_str(&def.exits).map_err(Error::from)?;
@@ -6228,9 +6175,9 @@ pub fn trail(conn: &Connection, run_id: i64) -> Result<Trail> {
     if !open {
         steps.clear();
     }
-    let (at, step) = match read::automation_run_steps_of(conn, run_id)?.pop() {
+    let (at, step) = match walked.last() {
         Some(last) if last.status == AutomationRunStepStatus::Running => defs
-            .get(&last.run_def_id)
+            .get(&last.def_key())
             .map_or((None, None), |def| (def.placement_id, def.step_id)),
         _ => match next_def(conn, run_id)? {
             Waiting::Step(def) => (def.placement_id, def.step_id),
@@ -7488,7 +7435,7 @@ mod tests {
         });
     }
 
-    /// **A launch copies the agent a step falls back to** into the run, so the pane opens on it.
+    /// **A run reads the agent a step falls back to** on the launch's default, so the pane opens on it.
     #[test]
     fn a_launch_copies_the_agent_a_step_falls_back_to() {
         with_tx(|tx| {
@@ -7498,7 +7445,7 @@ mod tests {
             let startable = claude();
             let by = Launcher { default_agent: Some("claude"), ..here(&startable) };
             let run = launch(tx, automation.id, &by).expect("launch");
-            let copy = read::automation_run_defs_of(tx.conn(), run.id)
+            let copy = current_defs(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
                 .find(|def| def.step_id == Some(step.id))
@@ -7589,8 +7536,8 @@ mod tests {
     }
 
     /// **The run carries out a step by whoever is chosen where it is placed** — the agent and the model
-    /// are copied from the placement at launch, and choosing again afterwards leaves the run's copy as
-    /// it was.
+    /// are read off the saved version the run points at, and choosing again afterwards leaves what the
+    /// run reads as it was.
     #[test]
     fn a_run_copies_the_agent_and_the_model_chosen_where_the_step_is_placed() {
         with_tx(|tx| {
@@ -7603,7 +7550,7 @@ mod tests {
                 .expect("stop");
             automation::placement_step_set(tx, placement.id, step.id, "codex", None)
                 .expect("choose again once the run is over");
-            let copy = read::automation_run_defs_of(tx.conn(), run.id)
+            let copy = current_defs(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
                 .find(|d| d.placement_id == Some(placement.id))
@@ -7876,21 +7823,26 @@ mod tests {
         });
     }
 
+    /// **What is placed is read off the versions the run points at, and stops following the definition**
+    /// (`AMB-D-1219`): the automation's saved version, and the saved version of the action its placement
+    /// stands on.
     #[test]
-    fn what_is_placed_is_copied_into_the_run_and_stops_following_the_definition() {
+    fn what_is_placed_is_read_off_its_versions_and_stops_following_the_definition() {
         with_tx(|tx| {
             let (automation, action, placement) = launchable(tx);
             let step = only_step(tx, &action);
+            let saved = automation::action_save(tx, action.id).expect("save the action");
+            automation::placement_version_set(tx, placement.id, saved.version).expect("stand on that version");
             let run = launch(tx, automation.id, &here(&claude())).expect("launch");
             let copy_of_it = |tx: &WriteTx<'_>| {
-                read::automation_run_defs_of(tx.conn(), run.id)
+                current_defs(tx.conn(), run.id)
                     .expect("defs")
                     .into_iter()
                     .find(|d| d.placement_id == Some(placement.id))
-                    .expect("the placement's copy")
+                    .expect("the placement's step")
             };
             assert_eq!(
-                read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len(),
+                current_defs(tx.conn(), run.id).expect("defs").len(),
                 3,
                 "and the take's and the close's",
             );
@@ -7901,8 +7853,8 @@ mod tests {
             let exits: Vec<RunDefExit> = serde_json::from_str(&copy.exits).expect("exits");
             assert_eq!(exits.len(), 2, "the done way out and the error one");
 
-            // Once the run is ended, the copy is what its record reads from (`AMB-D-961`), whatever the
-            // definition becomes.
+            // Once the run is ended, the versions are what its record reads from (`AMB-D-961`), whatever
+            // the definition becomes.
             crate::ops::automation_stop::stop(tx, run.id, crate::ops::automation_stop::Ending::Canceled)
                 .expect("stop");
             automation::action_update(tx, action.id, Some("取り直す"), None)
@@ -7910,24 +7862,29 @@ mod tests {
             automation::step_update(tx, step.id, None, Some("take another"), None, None, None, None, None, None, None, None, None)
             .expect("rewrite the prompt once the run is over");
             let copy = copy_of_it(tx);
-            assert_eq!(copy.name, "直す", "the copy is what the run reads from here on");
+            assert_eq!(copy.name, "直す", "the version is what the run reads from here on");
             assert_eq!(copy.prompt.as_deref(), Some("fix it"));
         });
     }
 
-    /// **A run copies how long each step is expected to take**, with the default put in where the step
-    /// says nothing, so the copy keeps saying it once the step is written on.
+    /// **A run reads how long each step is expected to take**, with the default put in where the step
+    /// says nothing, off the version the placement stands on — so it keeps saying it once the step is
+    /// written on.
     #[test]
-    fn a_run_copies_how_long_a_step_is_expected_to_take() {
+    fn a_run_reads_how_long_a_step_is_expected_to_take() {
         with_tx(|tx| {
             let (automation, action, placement) = launchable(tx);
             let step = only_step(tx, &action);
+            let stand_on_it = |tx: &WriteTx<'_>| {
+                let saved = automation::action_save(tx, action.id).expect("save the action");
+                automation::placement_version_set(tx, placement.id, saved.version).expect("stand on it");
+            };
             let expected_of = |tx: &WriteTx<'_>, run: i64| {
-                read::automation_run_defs_of(tx.conn(), run)
+                current_defs(tx.conn(), run)
                     .expect("defs")
                     .into_iter()
                     .find(|d| d.placement_id == Some(placement.id))
-                    .expect("the placement's copy")
+                    .expect("the placement's step")
                     .expected_minutes
             };
             let expect = |tx: &WriteTx<'_>, minutes| {
@@ -7939,23 +7896,25 @@ mod tests {
                     .expect("stop")
             };
 
+            stand_on_it(tx);
             let first = launch(tx, automation.id, &here(&claude())).expect("launch");
             assert_eq!(expected_of(tx, first.id), Some(DEFAULT_EXPECTED_MINUTES), "a step that says nothing");
             stop(tx, first.id);
 
             expect(tx, Some(Some(25)));
+            stand_on_it(tx);
             let second = launch(tx, automation.id, &here(&claude())).expect("launch");
             assert_eq!(expected_of(tx, second.id), Some(25));
             stop(tx, second.id);
 
             expect(tx, Some(Some(40)));
-            assert_eq!(expected_of(tx, second.id), Some(25), "the copy is what the run reads from");
+            assert_eq!(expected_of(tx, second.id), Some(25), "the version is what the run reads from");
         });
     }
 
-    /// **A placement standing on a saved version is checked and copied as that version holds the
+    /// **A placement standing on a saved version is checked and read as that version holds the
     /// action**, not as the action has been written on since: a way out and a required input written
-    /// after the save ask nothing of it, and the run copies the prompt as it was saved.
+    /// after the save ask nothing of it, and the run reads the prompt as it was saved.
     #[test]
     fn a_placement_is_checked_and_copied_as_the_version_it_stands_on() {
         with_tx(|tx| {
@@ -7981,7 +7940,7 @@ mod tests {
             assert!(unmet.is_empty(), "version 1 has neither: {unmet:?}");
 
             let run = launch(tx, automation.id, &here(&claude())).expect("launch");
-            let copy = read::automation_run_defs_of(tx.conn(), run.id)
+            let copy = current_defs(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
                 .find(|d| d.placement_id == Some(placement.id))
@@ -7993,7 +7952,7 @@ mod tests {
         });
     }
 
-    /// **A copy names the action its placement stood on, and whether one run at a time may be inside
+    /// **A step names the action its placement stands on, and whether one run at a time may be inside
     /// it, as the version stood on says** — and keeps both once the placement is taken off.
     #[test]
     fn a_copy_keeps_the_action_and_its_one_run_at_a_time_after_the_placement_goes() {
@@ -8008,7 +7967,7 @@ mod tests {
 
             let run = launch(tx, automation.id, &here(&claude())).expect("launch");
             let copy_of_it = |tx: &WriteTx<'_>| {
-                read::automation_run_defs_of(tx.conn(), run.id)
+                current_defs(tx.conn(), run.id)
                     .expect("defs")
                     .into_iter()
                     .find(|d| d.placement_id == Some(placement.id))
@@ -8017,7 +7976,7 @@ mod tests {
             let copy = copy_of_it(tx);
             assert_eq!(copy.action_id, Some(action.id));
             assert!(copy.one_at_a_time, "as version 1 holds it, not as the action is written now");
-            let others = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
+            let others = current_defs(tx.conn(), run.id).expect("defs");
             assert!(
                 others.iter().filter(|d| d.placement_id != Some(placement.id)).all(|d| !d.one_at_a_time),
                 "the take's and the close's are off",
@@ -8030,23 +7989,24 @@ mod tests {
         });
     }
 
-    /// **A launch reads the saved definition and a test run the draft** — checked and copied alike. Before
-    /// anybody saves, a launch has no version to read and is refused, with no run made; a test run reads
-    /// the draft all the same.
+    /// **A launch reads the saved definition** (`AMB-D-1219`) — checked and pointed at alike. Before anybody
+    /// saves, a launch has no version to read and is refused, with no run made, however it is asked for;
+    /// what is written on the draft since a save is not what runs. A test run tries the draft by saving it
+    /// in a transaction it throws away ([`crate::ops::automation_rehearse`]).
     #[test]
-    fn a_launch_reads_the_saved_definition_and_a_test_run_the_draft() {
+    fn a_launch_reads_the_saved_definition() {
         with_tx(|tx| {
             let (automation, action, placement) = launchable(tx);
             crate::ops::test_support::room_for_runs(tx, automation.id);
             let step = only_step(tx, &action);
             let startable = vec!["claude".to_string(), "codex".to_string()];
-            let copied = |tx: &WriteTx<'_>, run: &AutomationRun| {
-                let copy = read::automation_run_defs_of(tx.conn(), run.id)
+            let read_by = |tx: &WriteTx<'_>, run: &AutomationRun| {
+                let def = current_defs(tx.conn(), run.id)
                     .expect("defs")
                     .into_iter()
                     .find(|d| d.placement_id == Some(placement.id))
-                    .expect("the placement's copy");
-                (copy.agent, copy.automation_version)
+                    .expect("the placement's step");
+                (def.agent, def.automation_version, run.automation_version)
             };
             let refused = super::launch(tx, automation.id, &here(&startable)).expect_err("never saved");
             let Error::NotReady(msg) = &refused else { panic!("{refused:?}") };
@@ -8057,25 +8017,19 @@ mod tests {
                 "{refused}"
             );
             assert!(refused.to_string().contains("has never been saved"), "{refused}");
+            let handed = launch_handing(tx, automation.id, &here(&startable), &HandedAtLaunch::default())
+                .expect_err("nor is one handed something");
+            assert!(matches!(handed, Error::NotReady(_)), "{handed:?}");
             assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty(), "no run made");
-            let unsaved =
-                launch_handing(tx, automation.id, &here(&startable), &HandedAtLaunch::default(), ReadsFrom::Draft)
-                    .expect("a test run of what was never saved");
-            assert_eq!(copied(tx, &unsaved), ("claude".to_string(), None), "never saved: the draft");
 
             automation::save(tx, automation.id, None).expect("save");
             automation::placement_step_set(tx, placement.id, step.id, "codex", None).expect("choose another");
             let saved = super::launch(tx, automation.id, &here(&startable)).expect("launch");
-            assert_eq!(copied(tx, &saved), ("claude".to_string(), Some(1)), "the saved version");
-            let tried = launch_handing(tx, automation.id, &here(&startable), &HandedAtLaunch::default(), ReadsFrom::Draft)
-                .expect("test run");
-            assert_eq!(copied(tx, &tried), ("codex".to_string(), None), "the draft");
+            assert_eq!(read_by(tx, &saved), ("claude".to_string(), Some(1), Some(1)), "the saved version");
+            assert!(read::automation_run_def_ids(tx.conn(), saved.id).expect("defs").is_empty(), "nothing is copied");
 
             start_at(tx, automation.id, placement.id);
             super::launch(tx, automation.id, &here(&startable)).expect("the saved version still starts by taking a task");
-            let err = launch_handing(tx, automation.id, &here(&startable), &HandedAtLaunch::default(), ReadsFrom::Draft)
-                .expect_err("the draft starts where no task is taken");
-            assert!(matches!(err, Error::NotReady(_)), "{err:?}");
         });
     }
 
@@ -8206,7 +8160,7 @@ mod tests {
 
             // Carried out on the spot, it takes the task, and the answer is read off the way out it
             // took — the one leading on to the step that works on it.
-            match crate::ops::test_support::open(tx, run.id, first.id, None).expect("take") {
+            match crate::ops::test_support::open(tx, run.id, first.key(), None).expect("take") {
                 crate::ops::automation_step::Opened::Carried { .. } => {}
                 other => panic!("a built-in is carried out, not {other:?}"),
             }
@@ -8216,7 +8170,7 @@ mod tests {
             assert_eq!(work.placement_id, Some(placement.id));
 
             // A step under way is nobody's to open a second time.
-            let opening = match crate::ops::test_support::open(tx, run.id, work.id, None)
+            let opening = match crate::ops::test_support::open(tx, run.id, work.key(), None)
                 .expect("open")
             {
                 crate::ops::automation_step::Opened::Ready(ready) => *ready,
@@ -8244,15 +8198,15 @@ mod tests {
 
             // Carried out on the spot, it closes the task and the round with it: the run goes round,
             // and what it waits for is its entry again.
-            crate::ops::test_support::open(tx, run.id, close.id, None).expect("close");
+            crate::ops::test_support::open(tx, run.id, close.key(), None).expect("close");
             let Waiting::Step(again) = next_def(tx.conn(), run.id).expect("next") else {
                 panic!("the next round starts at the entry")
             };
-            assert_eq!(again.id, first.id, "the entry of the copy it has");
+            assert_eq!(again.key(), first.key(), "the entry of the version it points at");
 
             // With nothing left to take, the run comes to its end: nothing is waiting, and the run is no
             // longer running.
-            crate::ops::test_support::open(tx, run.id, again.id, None).expect("take again");
+            crate::ops::test_support::open(tx, run.id, again.key(), None).expect("take again");
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::Nothing));
             assert_eq!(
                 read::automation_run(tx.conn(), run.id).expect("read").expect("the run").status,
@@ -8264,11 +8218,11 @@ mod tests {
     /// **A run with nowhere to go says so**, rather than reading as a run somebody is about to move.
     ///
     /// The two are one answer to look at — nothing is open either way — and telling them apart is the
-    /// whole of why there are three. A run reads where it starts off its copies (`AMB-D-961`), and a
-    /// store carried in from before a launch marked it can hold a run whose copies mark none; left as
-    /// "nothing to do" it holds its task for the rest of the session.
+    /// whole of why there are three. A run reads where it starts off its version (`AMB-D-961`), and a
+    /// store carried in from before a version marked it can hold a run whose version marks none; left
+    /// as "nothing to do" it holds its task for the rest of the session.
     #[test]
-    fn a_run_whose_copies_mark_no_start_says_it_cannot_go_on() {
+    fn a_run_whose_version_marks_no_start_says_it_cannot_go_on() {
         with_tx(|tx| {
             let (automation, _, _) = launchable(tx);
             let run = launch(tx, automation.id, &here(&claude())).expect("launch");
@@ -8276,12 +8230,11 @@ mod tests {
                 panic!("the entry is what a fresh run waits for")
             };
             assert!(run.role_id.is_some(), "it sits in the seat of the role that starts there");
-            assert!(!entry.role_ids().is_empty(), "the copy its role starts at is marked at launch");
+            assert!(!entry.role_ids().is_empty(), "the step its role starts at is marked on the version");
 
-            // A run in a role's seat reads where it starts off the roles its copies name.
-            let mut unmarked = (*entry).clone();
-            unmarked.roles = "[]".to_string();
-            crate::ops::emit_update(tx, record::automation_run_def(&entry), record::automation_run_def(&unmarked))
+            // A run in a role's seat reads where it starts off the roles its version holds.
+            tx.conn()
+                .execute("UPDATE automation_version SET roles = '[]' WHERE automation_id = ?1", [automation.id])
                 .expect("unmark it");
 
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
@@ -8334,7 +8287,7 @@ mod tests {
         let Waiting::Step(entry) = next_def(tx.conn(), run.id).expect("next") else {
             panic!("the entry is what a fresh run waits for")
         };
-        let opening = match crate::ops::test_support::open(tx, run.id, entry.id, None).expect("open") {
+        let opening = match crate::ops::test_support::open(tx, run.id, entry.key(), None).expect("open") {
             crate::ops::automation_step::Opened::Ready(ready) => *ready,
             crate::ops::automation_step::Opened::Stopped { missing, .. } => {
                 panic!("stopped for {missing:?}")
@@ -8358,8 +8311,8 @@ mod tests {
         read::automation_run(tx.conn(), run.id).expect("read").expect("the run")
     }
 
-    /// **A run goes on by its copies, whatever the picture has become** (`AMB-D-961`). What follows a
-    /// way out was copied at launch, so a picture moved under the run — the spot it left taken off, the
+    /// **A run goes on by its version, whatever the picture has become** (`AMB-D-961`). What follows a
+    /// way out is read off the saved version it points at, so a picture moved under the run — the spot it left taken off, the
     /// line out of it pointed at an ending, or at a placement added since — changes nothing about where
     /// it goes next (`AMB-D-1015`).
     #[test]
@@ -8375,12 +8328,12 @@ mod tests {
 
             automation::edge_update(tx, onward.id, Some(EdgeTarget::Halt), None)
                 .expect("point it at an ending");
-            assert_eq!(waits_for(tx), "読む", "the line it copied still leads on");
+            assert_eq!(waits_for(tx), "読む", "the line its version holds still leads on");
 
             let (_, late) = mk_placed(tx, &automation, "直す", "fix it", "claude");
             automation::edge_update(tx, onward.id, Some(EdgeTarget::Go(late.id)), None)
                 .expect("point it at a new placement");
-            assert_eq!(waits_for(tx), "読む", "a placement added since is not in its copies");
+            assert_eq!(waits_for(tx), "読む", "a placement added since is not in its version");
 
             automation::edge_delete(tx, onward.id).expect("delete the edge");
             // The spot taken off is the one added since.
@@ -8390,26 +8343,16 @@ mod tests {
         });
     }
 
-    /// **A copy that says nothing follows its way out leaves the run nowhere to go**, and it says so. A
-    /// launch always copies the line; a copy carried in from before one did, of a run that had ended by
-    /// then, is the shape that holds none.
+    /// **A version that says nothing follows a way out leaves the run nowhere to go**, and it says so. A
+    /// version always holds the line; a store carried in from before one did is the shape that holds
+    /// none.
     #[test]
-    fn a_run_whose_copy_says_nothing_follows_says_it_cannot_go_on() {
+    fn a_run_whose_version_says_nothing_follows_says_it_cannot_go_on() {
         with_tx(|tx| {
-            let (automation, first, _) = two_spots(tx);
+            let (automation, _, _) = two_spots(tx);
             let run = standing_between(tx, &automation);
-            let copy = read::automation_run_defs_of(tx.conn(), run.id)
-                .expect("defs")
-                .into_iter()
-                .find(|d| d.placement_id == Some(first.id))
-                .expect("the first spot's copy");
-            let mut exits: Vec<RunDefExit> = serde_json::from_str(&copy.exits).expect("exits");
-            for exit in exits.iter_mut() {
-                exit.then = None;
-            }
-            let mut bare = copy.clone();
-            bare.exits = serde_json::to_string(&exits).expect("json");
-            crate::ops::emit_update(tx, record::automation_run_def(&copy), record::automation_run_def(&bare))
+            tx.conn()
+                .execute("UPDATE automation_version SET edges = '[]' WHERE automation_id = ?1", [automation.id])
                 .expect("strip the lines");
 
             assert!(matches!(next_def(tx.conn(), run.id).expect("next"), Waiting::NoWayOn));
@@ -8421,14 +8364,14 @@ mod tests {
         let Waiting::Step(def) = next_def(tx.conn(), run_id).expect("next") else {
             panic!("the run waits for a step")
         };
-        match crate::ops::test_support::open(tx, run_id, def.id, None).expect("open") {
+        match crate::ops::test_support::open(tx, run_id, def.key(), None).expect("open") {
             crate::ops::automation_step::Opened::Ready(ready) => ready.run_step,
             _ => panic!("a person's step opens a terminal"),
         }
     }
 
     /// **A run's trail is the spots it passed on its task, the way out it left each by and the line
-    /// it walked, and where it stands** — read off its copies, one pass per spot.
+    /// it walked, and where it stands** — read off the versions its steps ran on, one pass per spot.
     #[test]
     fn a_run_s_trail_is_the_spots_it_passed_and_the_one_it_stands_at() {
         with_tx(|tx| {
@@ -8657,7 +8600,6 @@ mod tests {
                 automation.id,
                 &here(&startable),
                 &HandedAtLaunch::default(),
-                ReadsFrom::Saved,
                 role,
             )
             .expect("a test run is not held to it");
@@ -10307,7 +10249,7 @@ mod tests {
             let start = entry_def(tx.conn(), run.id).expect("read").expect("where its round starts");
             assert_eq!(start.placement_id, Some(deciding.id));
             assert!(round_starts_at(tx.conn(), run.id, &start).expect("read"));
-            match crate::ops::test_support::open(tx, run.id, start.id, Some(&claude())).expect("open") {
+            match crate::ops::test_support::open(tx, run.id, start.key(), Some(&claude())).expect("open") {
                 Opened::Waiting { run } => {
                     assert_eq!(run.status, AutomationRunStatus::Paused);
                     assert_eq!(run.pause_kind, Some(crate::model::AutomationPauseKind::BeforeNextTask));
@@ -10335,11 +10277,11 @@ mod tests {
         defs.iter().map(|def| serde_json::to_value(def).expect("a step reads as JSON")).collect()
     }
 
-    /// **What is assembled from a saved version is what a launch on it copies down** (`AMB-D-1219`) —
-    /// step for step, the agent a step falls back to on Amenbo's default included, but for the id, the
-    /// run, when it was written, and where the run starts being put first.
+    /// **What a launched run reads is what is assembled from the saved version it points at**
+    /// (`AMB-D-1219`) — step for step, the agent a step falls back to on the launch's default included,
+    /// which the run keeps beside the version.
     #[test]
-    fn assembling_a_version_gives_what_a_launch_copies_down() {
+    fn a_run_reads_what_is_assembled_from_its_version() {
         with_tx(|tx| {
             let (automation, action, placement) = launchable(tx);
             let step = only_step(tx, &action);
@@ -10348,8 +10290,10 @@ mod tests {
             let startable = claude();
             let by = Launcher { default_agent: Some("claude"), ..here(&startable) };
             let run = launch(tx, automation.id, &by).expect("launch");
-            let copied = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
+            assert_eq!(run.default_agent.as_deref(), Some("claude"), "the launch's default is kept on the run");
+            let copied = current_defs(tx.conn(), run.id).expect("defs");
             let version = copied[0].automation_version.expect("a launch reads a saved version");
+            assert_eq!(run.automation_version, Some(version));
 
             let assembled = assemble(tx.conn(), automation.id, version, Some("claude")).expect("assemble");
             assert!(copied.len() >= 3, "the built-in that takes the task, the action, and the close");

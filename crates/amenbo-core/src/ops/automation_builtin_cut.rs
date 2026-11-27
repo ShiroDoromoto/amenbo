@@ -13,7 +13,7 @@
 //! way leaves its task's worktree and branch behind, and the next run to take that task meets them. The
 //! cut then leaves by [`ALREADY_THERE`], handing on the worktree's path and what it still holds
 //! ([`LEFT`]), so the automation can fold a leftover with nothing in it and cut again, or call a person
-//! where there is work in it. A copy made from version 1 declares no such way out, and leaves by the
+//! where there is work in it. A step read off version 1 declares no such way out, and leaves by the
 //! error way out as it always did.
 //!
 //! **Done before the step's transaction** ([`Work::Outside`]): the fetch waits on the remote, and the
@@ -258,16 +258,16 @@ mod tests {
             by: Some(ActorKind::Ai),
         };
         let run = launch(tx, automation.id, &by).expect("launch");
-        let entry = read::automation_run_defs_of(tx.conn(), run.id)
+        let entry = crate::ops::automation_run::current_defs(tx.conn(), run.id)
             .expect("defs")
             .into_iter()
             .find(|d| !d.role_ids().is_empty())
             .expect("the entry");
-        let Opened::Carried { next: Next::Step(cut), .. } = open(tx, run.id, entry.id, Some(&claude)).expect("take")
+        let Opened::Carried { next: Next::Step(cut), .. } = open(tx, run.id, entry.key(), Some(&claude)).expect("take")
         else {
             panic!("the take goes on to the cut");
         };
-        let Opened::Carried { run_step_id, next } = open(tx, run.id, cut.id, Some(&claude)).expect("cut") else {
+        let Opened::Carried { run_step_id, next } = open(tx, run.id, cut.key(), Some(&claude)).expect("cut") else {
             panic!("a built-in is carried out");
         };
         (run, run_step_id, next)
@@ -313,8 +313,8 @@ mod tests {
 
     /// What the cut handed on, output by output.
     fn handed(tx: &WriteTx<'_>, run_step_id: i64) -> Vec<(String, String)> {
-        let def = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
-        let copy = read::automation_run_def(tx.conn(), def.run_def_id).expect("read").expect("copy");
+        let step = read::automation_run_step(tx.conn(), run_step_id).expect("read").expect("row");
+        let copy = crate::ops::automation_run::def_of(tx.conn(), &step).expect("read").expect("the step it ran");
         read::automation_run_values_of(tx.conn(), run_step_id)
             .expect("values")
             .into_iter()
@@ -375,7 +375,7 @@ mod tests {
         });
     }
 
-    /// **A copy made from version 1 declares no such way out**, and leaves by the error way out as it
+    /// **A step read off version 1 declares no such way out**, and leaves by the error way out as it
     /// always did.
     #[test]
     fn a_copy_of_version_one_still_fails_where_a_worktree_is_there() {
@@ -415,16 +415,16 @@ mod tests {
                 by: Some(ActorKind::Ai),
             };
             let run = launch(tx, automation.id, &by).expect("launch");
-            let entry = read::automation_run_defs_of(tx.conn(), run.id)
+            let entry = crate::ops::automation_run::current_defs(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
                 .find(|d| !d.role_ids().is_empty())
                 .expect("the entry");
-            let Opened::Carried { next: Next::Step(cut), .. } = open(tx, run.id, entry.id, Some(&claude)).expect("take")
+            let Opened::Carried { next: Next::Step(cut), .. } = open(tx, run.id, entry.key(), Some(&claude)).expect("take")
             else {
                 panic!("the take goes on to the cut");
             };
-            let opened = crate::ops::automation_step::open(tx, run.id, cut.id, Some(&claude), None).expect("cut");
+            let opened = crate::ops::automation_step::open(tx, run.id, cut.key(), Some(&claude), None).expect("cut");
             let Opened::Carried { next, .. } = opened else { panic!("a built-in is carried out") };
             assert!(matches!(next, Next::Halted(_)), "it leaves by the error way out: {next:?}");
             let root = worktree_cut::git_root(&app).expect("root");

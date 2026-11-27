@@ -2664,7 +2664,7 @@ pub struct AutomationActionVersion {
 }
 
 /// **One saved version of an automation** — its picture at the moment it was saved, copied whole and
-/// never rewritten. A run records which one it was copied from ([`AutomationRunDef::automation_version`]).
+/// never rewritten. A run reads one of these, and names which ([`AutomationRun::automation_version`]).
 ///
 /// The six JSON fields are the rows as they stood, each its own record under its own id, for the reason
 /// [`AutomationActionVersion`]'s are (`AMB-D-961`).
@@ -2849,9 +2849,9 @@ pub enum AutomationStoppedReason {
     NoAgent,
     /// A step's required input had nothing to fill it ([`crate::ops::automation_step`]).
     NoInput,
-    /// Nothing was left for it to open: the picture it was copied from stopped leading anywhere while
-    /// it was out ([`crate::ops::automation_run::Waiting::NoWayOn`]), or a way out leads to a spot the
-    /// run never copied down.
+    /// Nothing was left for it to open: the version it points at stopped leading anywhere while it was
+    /// out ([`crate::ops::automation_run::Waiting::NoWayOn`]), or a way out leads to a spot that version
+    /// does not hold.
     NoWayOn,
     /// A step left through a way out the picture wires to halt the run — an ending the author of the
     /// automation chose, rather than one the machinery ran into. Its round is filed as any failure's is.
@@ -2860,8 +2860,8 @@ pub enum AutomationStoppedReason {
     /// (`AMB-D-967`). The launch check refuses a picture that can do this, so reaching it means the
     /// check missed a line: the machinery's fault, not the author's and not the agent's.
     LeftTaskOpen,
-    /// The run came back to where its round starts, the automation had been saved since it was copied,
-    /// and the newer
+    /// The run came back to where its round starts, the automation had been saved since the version it
+    /// points at, and the newer
     /// version did not pass the check a launch asks — or starts by filing a task, which only a launch is
     /// handed what to file ([`crate::ops::automation_run::take_up_newer`]). What it did not pass is kept
     /// on the run ([`AutomationRun::stopped_detail`]).
@@ -3032,36 +3032,65 @@ pub struct AutomationRun {
     /// ([`crate::ops::automation_run::TriggerHeld::FailureOpen`]). `None` for every other run.
     #[serde(default)]
     pub incident_task_id: Option<i64>,
+    /// **The saved version of the automation the run reads** ([`AutomationVersion::version`],
+    /// `AMB-D-1219`) — the newest saved one at launch, moved on only where the run takes up a newer one
+    /// before its next round ([`crate::ops::automation_run::take_up_newer`]). A saved version is never
+    /// written on, so the run reads it as it was launched on. `None` on a run that had ended before runs
+    /// pointed at a version (v154).
+    #[serde(default)]
+    pub automation_version: Option<i64>,
+    /// **Amenbo's own default agent as it stood for this run**
+    /// ([`crate::ops::automation_run::Launcher::default_agent`]) — the one setting of this machine's a
+    /// step falls back to, kept so the version reads the same for as long as the run goes. Set again where
+    /// the run takes up a newer version. `None` where none was set.
+    #[serde(default)]
+    pub default_agent: Option<String>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
 
-/// **The step as it was at launch** — one record per step of the automation, written when the run is
-/// created and never rewritten. A run paused before its next task is copied down again as it is picked
-/// up (`AMB-D-1015`); the new records are added after the old ones, which are kept.
+/// **Which step a run opens, or opened** — the step `step_id` of the placement `placement_id`, as version
+/// `automation_version` of the automation holds it (`AMB-D-1219`). What a step execution names
+/// ([`AutomationRunStep::def_key`]) and what a step as a run reads it is found by
+/// ([`AutomationRunDef::key`]).
 ///
-/// This is what makes a run readable months later: the automation it came from has moved on, and these
-/// columns still say what was actually asked. The three JSON fields hold what has no column of its own —
-/// the ways out and each one's outputs, the step's inputs, and the settings' answers — and are read back
-/// whole, never queried into.
+/// Each part is `None` only on a step execution carried in from a copy that named none (v154).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct RunDefKey {
+    #[serde(default)]
+    pub automation_version: Option<i64>,
+    #[serde(default)]
+    pub placement_id: Option<i64>,
+    #[serde(default)]
+    pub step_id: Option<i64>,
+}
+
+/// **One step of one placement, as a run reads it** — assembled from the saved version the run points at
+/// ([`crate::ops::automation_run::assemble`], `AMB-D-1219`) with the run's default agent put in, so every
+/// run of one version reads the same. The three JSON fields hold what has no field of its own — the ways
+/// out and each one's outputs, the step's inputs, and the settings' answers — and are read back whole.
+///
+/// A build before v154 wrote one of these down per step for every run (`automation_run_def`). Those rows
+/// carry their own `id` and `run_id`, and a run log written then keeps them under their id
+/// ([`crate::run_log`]); one assembled now belongs to no row, and its `id` is 0.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AutomationRunDef {
     pub id: i64,
     pub run_id: i64,
-    /// Which spot of the picture this copy was opened from. Kept after that placement is taken off;
+    /// Which spot of the picture this step stands on. Kept after that placement is taken off;
     /// `None` only where an earlier build cleared it.
     #[serde(default)]
     pub placement_id: Option<i64>,
-    /// The action that placement stood on ([`AutomationPlacement::action_id`]), copied with it so a run
-    /// still says which action it is inside once the placement is taken off. `None` on a copy written
-    /// before this was copied.
+    /// The action that placement stood on ([`AutomationPlacement::action_id`]), kept with it so a run
+    /// still says which action it is inside once the placement is taken off. `None` on a row a build
+    /// before this was kept wrote.
     #[serde(default)]
     pub action_id: Option<i64>,
     /// Whether one run at a time may be inside that action, as the version the placement stood on said
-    /// at launch ([`AutomationAction::one_at_a_time`]). Off on a copy written before this was copied.
+    /// ([`AutomationAction::one_at_a_time`]). Off on a row a build before this was kept wrote.
     #[serde(default)]
     pub one_at_a_time: bool,
-    /// Which step of the live definition this is a copy of. Kept after that step is deleted; `None`
+    /// Which step of the placement's action this is. Kept after that step is deleted; `None`
     /// only where an earlier build cleared it.
     #[serde(default)]
     pub step_id: Option<i64>,
@@ -3070,15 +3099,15 @@ pub struct AutomationRunDef {
     #[serde(default)]
     pub prompt: Option<String>,
     /// The built-in the step was, or `None` for one an agent carries out — what makes opening it carry
-    /// it out in place rather than open a terminal. `agent` is empty on such a copy.
+    /// it out in place rather than open a terminal. `agent` is empty on such a step.
     #[serde(default)]
     pub builtin: Option<String>,
-    /// The version of the built-in the step was, copied with it (`AMB-D-1000`): what its code reads to
-    /// behave as the definition this copy's ways out were written from.
+    /// The version of the built-in the step was (`AMB-D-1000`): what its code reads to behave as the
+    /// definition this step's ways out were written from.
     #[serde(default)]
     pub builtin_version: Option<i64>,
-    /// The saved version of the automation this copy was taken from ([`AutomationVersion::version`]), or
-    /// `None` where the automation had none saved then. Every copy taken at one time carries the same one.
+    /// The saved version of the automation this step was read from ([`AutomationVersion::version`]).
+    /// `None` only on a copy a build before v154 took from a draft.
     #[serde(default)]
     pub automation_version: Option<i64>,
     /// The script the step was, or `None` for one that was not ([`StepScript`]).
@@ -3100,7 +3129,7 @@ pub struct AutomationRunDef {
     pub show_comments: bool,
     /// How long the step was expected to take, in minutes, as it stood at launch with
     /// [`DEFAULT_EXPECTED_MINUTES`] already put in where the step said nothing
-    /// ([`AutomationStep::expected_minutes`]). `None` only on a copy written before this was copied,
+    /// ([`AutomationStep::expected_minutes`]). `None` only on a row a build before this was kept wrote,
     /// which [`AutomationRunDef::expected_minutes_or_default`] reads as the default.
     #[serde(default)]
     pub expected_minutes: Option<i64>,
@@ -3111,9 +3140,9 @@ pub struct AutomationRunDef {
     /// The settings and the answers written for them — JSON ([`RunDefCfg`]).
     pub cfg: String,
     /// **The roles whose round starts at this step** — JSON, an array of [`AutomationRole`] ids. A role
-    /// names the placement its round starts at (`entry_placement_id`), and this is the copy of that
-    /// placement's first step, as the roles stood at launch. `[]` on every other copy, and on one written
-    /// before roles were copied.
+    /// names the placement its round starts at (`entry_placement_id`), and this is that placement's first
+    /// step, as the roles stand in the version. `[]` on every other step, and on a row a build before
+    /// roles were kept wrote.
     #[serde(default)]
     pub roles: String,
     pub created_at: Timestamp,
@@ -3121,21 +3150,26 @@ pub struct AutomationRunDef {
 }
 
 impl AutomationRunDef {
-    /// **How long the step was expected to take**, in minutes: what was copied at launch, or
-    /// [`DEFAULT_EXPECTED_MINUTES`] on a copy written before that was copied.
+    /// **How long the step was expected to take**, in minutes: what the version says, or
+    /// [`DEFAULT_EXPECTED_MINUTES`] on a row a build before that was kept wrote.
     pub fn expected_minutes_or_default(&self) -> i64 {
         self.expected_minutes.unwrap_or(DEFAULT_EXPECTED_MINUTES)
     }
 
-    /// **The roles whose round starts at this copy** ([`AutomationRunDef::roles`]) — none where its JSON
+    /// **The roles whose round starts at this step** ([`AutomationRunDef::roles`]) — none where its JSON
     /// is empty or does not read.
     pub fn role_ids(&self) -> Vec<i64> {
         serde_json::from_str(&self.roles).unwrap_or_default()
     }
 
-    /// **The name one port of this copy was declared under**, by the id the run's values key it by
+    /// **Which step this is** ([`RunDefKey`]) — what a step execution opened from it names.
+    pub fn key(&self) -> RunDefKey {
+        RunDefKey { automation_version: self.automation_version, placement_id: self.placement_id, step_id: self.step_id }
+    }
+
+    /// **The name one port of this step was declared under**, by the id the run's values key it by
     /// ([`RunDefPort::id`]) — an output on any of its ways out, or one of its inputs. `None` where the
-    /// copy declares no port of that id, or its JSON does not read.
+    /// step declares no port of that id, or its JSON does not read.
     pub fn port_name(&self, port_id: i64) -> Option<String> {
         let exits: Vec<RunDefExit> = serde_json::from_str(&self.exits).ok()?;
         if let Some(port) = exits.iter().flat_map(|e| e.outs.iter()).find(|p| p.id == port_id) {
@@ -3150,10 +3184,10 @@ impl AutomationRunDef {
 /// through it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunDefExit {
-    /// The [`AutomationExit`] row this was copied from — what `step-done --exit` names and what the
+    /// The [`AutomationExit`] row this was read from — what `step-done --exit` names and what the
     /// run's records key the way out by. Kept after the row itself is renamed or gone.
     pub id: i64,
-    /// [`ERROR_EXIT`] is the error one. Every copy carries one (v74 named the ones written before).
+    /// [`ERROR_EXIT`] is the error one. Every step carries one (v74 named the ones written before).
     pub name: String,
     pub outs: Vec<RunDefPort>,
     /// What follows leaving by it, resolved at launch across the action's edge — `None` where nothing
@@ -3167,9 +3201,9 @@ pub struct RunDefExit {
     pub returns_to: Option<i64>,
 }
 
-/// **What follows one way out**, as the run copied it at launch ([`RunDefExit::then`]): the line walked,
-/// and where it goes. A line inside the action that returns to one of the action's ways out has been
-/// followed out to the automation's line from that way out, so what is kept is always the line the
+/// **What follows one way out**, as the version the run points at says ([`RunDefExit::then`]): the line
+/// walked, and where it goes. A line inside the action that returns to one of the action's ways out has
+/// been followed out to the automation's line from that way out, so what is kept is always the line the
 /// run actually walks next — never [`AutomationEnds::Exit`].
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunDefLine {
@@ -3183,7 +3217,7 @@ pub struct RunDefLine {
     pub exit_id: i64,
     /// `Go`, `Done` or `Halt`.
     pub ends: AutomationEnds,
-    /// For `Go`: the copy opened next, by the placement and the step it was taken from. `step_id` is
+    /// For `Go`: the step opened next, by its placement and its step. `step_id` is
     /// `None` where the placement's action had no step to open.
     #[serde(default)]
     pub placement_id: Option<i64>,
@@ -3199,7 +3233,7 @@ pub struct RunDefLine {
 /// has to be there.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunDefPort {
-    /// The [`AutomationPort`] row this was copied from — what `step-out` names and what the run's values
+    /// The [`AutomationPort`] row this was read from — what `step-out` names and what the run's values
     /// key the port by. Kept after the row itself is renamed or gone.
     pub id: i64,
     pub name: String,
@@ -3210,19 +3244,20 @@ pub struct RunDefPort {
 /// One input, as [`AutomationRunDef::ins`] holds it: the port, and every step output the wires joined
 /// to it at launch.
 ///
-/// The wires are copied with the step, not read while the run moves (`AMB-D-961`): a value reaches this
-/// input from the outputs named here and from nothing else, whatever the picture has since become.
+/// The wires are read off the version with the step, not off the draft while the run moves
+/// (`AMB-D-961`): a value reaches this input from the outputs named here and from nothing else, whatever
+/// the picture has since become.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunDefIn {
     #[serde(flatten)]
     pub port: RunDefPort,
-    /// Empty where no wire reached it — and in a copy no launch ever resolved, which v63 fills in only
+    /// Empty where no wire reached it — and in a row no launch ever resolved, which v63 fills in only
     /// for runs that could still open a step.
     #[serde(default)]
     pub from: Vec<RunDefSource>,
 }
 
-/// One output of one step of one placement that a wire joined to an input — which copy of a step it
+/// One output of one step of one placement that a wire joined to an input — which step it
 /// leaves ([`AutomationRunDef::placement_id`], [`AutomationRunDef::step_id`]), the way out it leaves by,
 /// and the output, keyed as [`RunDefPort::id`] keys it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -3302,7 +3337,7 @@ pub struct AutomationRunTask {
     #[serde(default)]
     pub ended_at: Option<Timestamp>,
     /// **The role the round is worked under** — the role the task named when it was taken, among the
-    /// roles the run's copies start ([`AutomationRunDef::roles`]). `None` for a round of a run whose
+    /// roles the steps the run reads start ([`AutomationRunDef::roles`]). `None` for a round of a run whose
     /// automation defines no role, for one that has not taken its task yet, and where the role has since
     /// been taken out.
     #[serde(default)]
@@ -3364,14 +3399,12 @@ pub struct AutomationRunPass {
 pub struct AutomationRunStep {
     pub id: i64,
     pub run_id: i64,
-    /// The step as it stood at launch — what this execution was asked to do.
-    pub run_def_id: i64,
     /// The stretch of the run this execution belongs to. `None` only where a step went looking for a
     /// task and found none.
     #[serde(default)]
     pub run_task_id: Option<i64>,
     pub seq: i64,
-    /// The way out the agent left through, keyed as the run's copy of the step keys it
+    /// The way out the agent left through, keyed as the step it ran keys it
     /// ([`RunDefExit::id`]) — `None` while it is still running.
     #[serde(default)]
     pub exit_id: Option<i64>,
@@ -3398,8 +3431,27 @@ pub struct AutomationRunStep {
     /// every other step.
     #[serde(default)]
     pub exit_code: Option<i64>,
+    /// **The saved version of the automation this execution was opened on** — what it was asked to do is
+    /// that version's step ([`AutomationRunStep::def_key`], `AMB-D-1219`). A step of an earlier round
+    /// may name an earlier version than its run does now.
+    #[serde(default)]
+    pub automation_version: Option<i64>,
+    /// The spot of the picture it was opened from, in that version. Kept after the placement is taken off.
+    #[serde(default)]
+    pub placement_id: Option<i64>,
+    /// Which step of the action at that spot it ran. Kept after the step is deleted.
+    #[serde(default)]
+    pub step_id: Option<i64>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
+}
+
+impl AutomationRunStep {
+    /// **Which step this execution ran** ([`RunDefKey`]) — read as its run reads it
+    /// ([`crate::ops::automation_run::def_of`]).
+    pub fn def_key(&self) -> RunDefKey {
+        RunDefKey { automation_version: self.automation_version, placement_id: self.placement_id, step_id: self.step_id }
+    }
 }
 
 /// **One value that went in or came out of a step execution**, under the port's *name* — the port row
@@ -3416,7 +3468,7 @@ pub struct AutomationRunValue {
     /// an `In`, and on an `Out` whose step has not finished.
     #[serde(default)]
     pub exit_id: Option<i64>,
-    /// The port it went through, keyed as the run's copy of the step keys it ([`RunDefPort::id`]).
+    /// The port it went through, keyed as the step it went through keys it ([`RunDefPort::id`]).
     pub port_id: i64,
     pub kind: AutomationPortKind,
     #[serde(default)]

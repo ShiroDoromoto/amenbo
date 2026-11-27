@@ -269,7 +269,6 @@ mod tests {
                 step,
                 &[
                     ("run_id", int(run)),
-                    ("run_def_id", int(def)),
                     ("run_task_id", int(run_task)),
                     ("seq", int(seq)),
                     ("status", text("done")),

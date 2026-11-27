@@ -139,17 +139,17 @@ mod tests {
                 by: Some(ActorKind::Ai),
             };
             let run = launch(tx, p.automation.id, &by).expect("putting it off lets the task go");
-            let entry = read::automation_run_defs_of(tx.conn(), run.id)
+            let entry = crate::ops::automation_run::current_defs(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
                 .find(|d| !d.role_ids().is_empty())
                 .expect("the entry");
             let Opened::Carried { next: Next::Step(work), .. } =
-                open(tx, run.id, entry.id, Some(&claude)).expect("take")
+                open(tx, run.id, entry.key(), Some(&claude)).expect("take")
             else {
                 panic!("the take goes on to the work");
             };
-            let Opened::Ready(opening) = open(tx, run.id, work.id, Some(&claude)).expect("open the work") else {
+            let Opened::Ready(opening) = open(tx, run.id, work.key(), Some(&claude)).expect("open the work") else {
                 panic!("the work opens a terminal");
             };
             // The step files the fix the task waits for, on a person here so the take does not find it.
@@ -163,7 +163,7 @@ mod tests {
             };
             let head = outbox_head(tx);
             let Opened::Carried { next: Next::Step(take), .. } =
-                open(tx, run.id, later.id, Some(&claude)).expect("defer")
+                open(tx, run.id, later.key(), Some(&claude)).expect("defer")
             else {
                 panic!("a built-in is carried out, and the run goes on");
             };
@@ -179,7 +179,7 @@ mod tests {
             assert_eq!(deferred.assignee_kind, Some(ActorKind::Ai));
             assert_eq!(comments(tx, task), vec!["Waits for the fix on main.".to_string()]);
 
-            let Opened::LeftToWait { run: ended } = open(tx, run.id, take.id, Some(&claude)).expect("take again")
+            let Opened::LeftToWait { run: ended } = open(tx, run.id, take.key(), Some(&claude)).expect("take again")
             else {
                 panic!("with the task waiting on the fix, there is nothing to take and the run ends");
             };
@@ -188,13 +188,13 @@ mod tests {
 
             crate::ops::task::set_status(tx, fix, TaskStatus::Done, ActorKind::Human).expect("the fix lands");
             let again = launch(tx, p.automation.id, &by).expect("launch again");
-            let entry = read::automation_run_defs_of(tx.conn(), again.id)
+            let entry = crate::ops::automation_run::current_defs(tx.conn(), again.id)
                 .expect("defs")
                 .into_iter()
                 .find(|d| !d.role_ids().is_empty())
                 .expect("the entry");
             let Opened::Carried { next: Next::Step(_), .. } =
-                open(tx, again.id, entry.id, Some(&claude)).expect("take")
+                open(tx, again.id, entry.key(), Some(&claude)).expect("take")
             else {
                 panic!("the task put off is taken again");
             };
@@ -232,18 +232,18 @@ mod tests {
                 by: Some(ActorKind::Ai),
             };
             let run = launch(tx, automation.id, &by).expect("launch");
-            let entry = read::automation_run_defs_of(tx.conn(), run.id)
+            let entry = crate::ops::automation_run::current_defs(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
                 .find(|d| !d.role_ids().is_empty())
                 .expect("the entry");
             let Opened::Carried { next: Next::Step(later), .. } =
-                open(tx, run.id, entry.id, Some(&claude)).expect("take")
+                open(tx, run.id, entry.key(), Some(&claude)).expect("take")
             else {
                 panic!("the take goes on to the defer");
             };
             let Opened::Carried { next: Next::Closed(ended), .. } =
-                open(tx, run.id, later.id, Some(&claude)).expect("defer")
+                open(tx, run.id, later.key(), Some(&claude)).expect("defer")
             else {
                 panic!("the task put off is not taken straight back: the run ends");
             };

@@ -71,8 +71,8 @@
 //! `attachment.target_id` is polymorphic — no `REFERENCES` can branch on a sibling `target_type`
 //! column — so no constraint holds it and the delete ops sweep it by hand. Nor does one hold
 //! `automation_run_def.placement_id`, `action_id` and `step_id`, which keep naming what a run's copy was
-//! taken from after it is gone, or `automation_placement_step.step_id`, which deleting a step sweeps by
-//! hand.
+//! taken from after it is gone, `automation_run_step.placement_id` and `step_id`, which keep naming
+//! the step a run opened, or `automation_placement_step.step_id`, which deleting a step sweeps by hand.
 //!
 //! Enforcement is per-connection (`PRAGMA foreign_keys = ON`, set by `super::engine::init`) and
 //! per-table: `CREATE TABLE IF NOT EXISTS` leaves an existing table exactly as it was, so an existing
@@ -178,7 +178,8 @@ const ROLE_START: &str = "TEXT NOT NULL DEFAULT 'task'";
 const KEY_REF: &str = "BIGINT NOT NULL DEFAULT 0";
 /// The nullable half of [`KEY_REF`]: a polymorphic reference that may be unset — `automation_edge.to_id`,
 /// where a line that closes or stops the picture goes nowhere. Also `automation_run_def.placement_id`,
-/// `action_id` and `step_id`, which keep naming the placement, its action and the step after any is gone.
+/// `action_id` and `step_id`, which keep naming the placement, its action and the step after any is gone,
+/// and `automation_run_step.placement_id` and `step_id`, for the same reason.
 const KEY_REF_OPT: &str = "BIGINT";
 /// Fractional index: ordered by string comparison, never parsed as a number.
 const ORDER_KEY: &str = "TEXT NOT NULL DEFAULT ''";
@@ -1058,9 +1059,9 @@ datasets! {
     // ───────────────────────── automation: what is built ─────────────────────────
     //
     // Twelve tables for the definition and five for the run, and the line between them is that a run
-    // never reads a definition again once it has started: `automation_run_def` is the copy taken at
-    // the moment of launch, so editing an automation cannot change what a run already under way is
-    // doing. The definition half is built through `crate::ops::automation`, and the run is opened by
+    // never reads a definition being written once it has started: it points at the saved version it was
+    // launched on (`automation_run.automation_version`), which is never written on, so editing an
+    // automation cannot change what a run already under way is doing. The definition half is built through `crate::ops::automation`, and the run is opened by
     // `crate::ops::automation_run`, which writes the first two of the five; the three a step execution
     // is written in are `crate::ops::automation_step`'s, as each step of a run is opened and reports.
     //
@@ -1230,7 +1231,7 @@ datasets! {
         placement_id: fk("automation_placement", "RESTRICT"),
         // A plain id, not a key: a placement points at a saved version of its action, which keeps the
         // step's id (`AMB-D-961`), so the choice stays when the step is deleted from the action; and a
-        // run under way still matches its copies to the step by this id after the step is gone.
+        // run under way still matches the steps it reads to the step by this id after the step is gone.
         step_id: col(KEY_REF),
         agent: col(REQ),
         model: col(OPT),
@@ -1520,8 +1521,8 @@ datasets! {
     } => "UNIQUE (action_id, version)"
 
     // **One saved version of an automation** — its picture at the moment it was saved, copied whole and
-    // never rewritten. The tables above are the automation as it is being written; a run is copied
-    // down from it and records which version it was (`automation_run_def.automation_version`).
+    // never rewritten. The tables above are the automation as it is being written; a run reads one of
+    // these and names which (`automation_run.automation_version`).
     //
     // `version` counts up from 1 within one automation.
     //
@@ -1658,13 +1659,22 @@ datasets! {
         // the run straight into a role started by a trigger: while this run is running or paused, no
         // other run of that role with the same key is started. NULL for none and on every other run.
         start_key: col(OPT),
+        // The saved version of the automation the run reads (`automation_version.version`, `AMB-D-1219`):
+        // the newest saved one at launch, moved on only where the run takes up a newer one before its next
+        // round. The run copies nothing of it, since a saved version is never written on. NULL on a run
+        // that had ended before runs pointed at a version (v154).
+        automation_version: col(INT_OPT),
+        // Amenbo's own default agent as it stood for the run — the one setting of this machine's a step
+        // falls back to, kept on the run so the version reads as it did at launch. Set again where the run
+        // takes up a newer version. NULL where none was set, and on a run that had ended before v154.
+        default_agent: col(OPT),
     }
 
-    // **The step as it was at launch** — one row per step of the automation, written when the run is
-    // created and never rewritten. A run paused before its next task is copied down again as it is
-    // picked up (`AMB-D-1015`); the new rows are added after the old ones, which are kept. This is what
-    // makes a run readable months later: the automation it came from has moved on, and the columns
-    // here still say what was actually asked.
+    // **The step as it was at launch, copied** — one row per step of the automation, written by a build
+    // that copied the definition onto each run. Nothing writes one now: a run points at a saved version
+    // (`automation_run.automation_version`) and reads it as it stands, a saved version never being
+    // written on (`AMB-D-1219`). The rows already here are kept until they are let go (v154 read the
+    // version and the steps of each run off them).
     //
     // The three JSON columns hold what has no columns of its own — the ways out and each one's ports,
     // the step's inputs, and the settings' answers. They are read back as a whole, never queried
@@ -1767,7 +1777,7 @@ datasets! {
     // rather than kept twice. `to_role_id` and `task_id` are `SET NULL` for the reason the round's
     // `task_id` is.
     //
-    // `placement_id` is the spot of the picture whose step filed it (`automation_run_def.placement_id`),
+    // `placement_id` is the spot of the picture whose step filed it (`automation_run_step.placement_id`),
     // a plain id for the reason that one is: the record still stands once the placement is taken off.
     // What the build screen reads the title of the task a spot last passed on by. NULL on a row written
     // before this was kept.
@@ -1788,9 +1798,15 @@ datasets! {
     // `report` is what the agent said when it finished, kept whole. The story handed to later steps
     // shows its first line only, and the full text is here.
     //
-    // `exit_id` is the way out it left by, NULL while it is running. It keys the way out as the run's
-    // copy of the step does (`automation_run_def.exits`), and its name is read from there: the live
-    // row may since have been renamed or deleted, and the record says what was declared then.
+    // `automation_version`, `placement_id` and `step_id` say which step this was: the step `step_id` of
+    // the placement `placement_id`, as version `automation_version` of the automation holds it
+    // (`AMB-D-1219`). Plain ids, for the reason `automation_run_def.placement_id` is: the record still
+    // says what ran once the placement is taken off. A step of an earlier round may name an earlier
+    // version than the run does now. NULL only where the copy it was opened from named none (v154).
+    //
+    // `exit_id` is the way out it left by, NULL while it is running. It keys the way out as the step
+    // that version holds does, and its name is read from there: the live row may since have been
+    // renamed or deleted, and the version says what was declared then.
     //
     // `report_withheld` is set where the step was built to carry its report onto the task and the
     // task was closed by then, so the report stayed here alone (`AMB-D-963`).
@@ -1804,7 +1820,6 @@ datasets! {
     // the program ended by itself and the code was heard. NULL on every other step.
     automation_run_step {
         run_id: fk("automation_run", "RESTRICT"),
-        run_def_id: fk("automation_run_def", "RESTRICT"),
         run_task_id: fk_opt("automation_run_task", "RESTRICT"),
         seq: col(COUNT),
         exit_id: col(KEY_REF_OPT),
@@ -1815,13 +1830,16 @@ datasets! {
         started_at: ts_opt,
         ended_at: ts_opt,
         exit_code: col(INT_OPT),
+        automation_version: col(INT_OPT),
+        placement_id: col(KEY_REF_OPT),
+        step_id: col(KEY_REF_OPT),
     }
 
     // **One value that went in or came out of a step execution**, under the port it went through —
-    // `port_id` keys the port as the run's copy of the step does (`automation_run_def`), and its name
-    // is read from there: the live row may since have been renamed or deleted, and the record says what
-    // was declared then. `exit_id` is the way out it left by, keyed the same way
-    // (`automation_run_def.exits`).
+    // `port_id` keys the port as the step the execution ran holds it, in the version it names
+    // (`automation_run_step.automation_version`), and its name is read from there: the live row may
+    // since have been renamed or deleted, and the version says what was declared then. `exit_id` is the
+    // way out it left by, keyed the same way.
     // Which of the three payload columns means anything is `kind`'s to say, the way `attachment`'s
     // mode decides between its two.
     //

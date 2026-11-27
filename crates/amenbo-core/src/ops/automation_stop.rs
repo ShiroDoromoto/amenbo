@@ -47,7 +47,8 @@
 //! **A launch is paused, picked up and stopped as one** ([`pause_launch`] and the ops beside it). Each
 //! acts on every run of the launch still under way, one at a time, through the op for one run — so a
 //! pause still waits for the action under way, a cancel is still for a paused run only, and a run
-//! paused before its next task is still copied down afresh when picked up (`AMB-D-1002`, `AMB-D-1015`).
+//! paused before its next task is still pointed at the newest saved version when picked up (`AMB-D-1002`,
+//! `AMB-D-1015`).
 //! Only that launch's runs are touched, never another launch's (`AMB-D-1019`). A paused launch starts no
 //! run until it is picked up again. **A launch ends only where a person cancels or stops it**: one with
 //! no run under way stays open, and starts a run in a role's free seat once a task turns up for it.
@@ -491,7 +492,7 @@ fn failure_notes(tx: &WriteTx<'_>, run: &AutomationRun, task_id: Option<i64>, en
     let walked = read::automation_run_steps_of(conn, run.id)?;
     let last = walked.last();
     let def = match last {
-        Some(step) => read::automation_run_def(conn, step.run_def_id)?,
+        Some(step) => crate::ops::automation_run::def_of(conn, step)?,
         None => None,
     };
     let reached = match (last, &def) {
@@ -546,8 +547,7 @@ fn unsaid_report(tx: &WriteTx<'_>, run: &AutomationRun) -> Result<Option<(i64, S
     if last.report.trim().is_empty() {
         return Ok(None);
     }
-    let carried = read::automation_run_def(tx.conn(), last.run_def_id)?
-        .is_some_and(|def| def.report_to_task);
+    let carried = crate::ops::automation_run::def_of(tx.conn(), &last)?.is_some_and(|def| def.report_to_task);
     Ok((!carried).then_some((last.id, last.report)))
 }
 
@@ -561,7 +561,7 @@ fn said(tx: &WriteTx<'_>, run: &AutomationRun, ending: Ending) -> Result<String>
     let walked = read::automation_run_steps_of(tx.conn(), run.id)?;
     let last = walked
         .last()
-        .map(|step| read::automation_run_def(tx.conn(), step.run_def_id).ok().flatten());
+        .map(|step| crate::ops::automation_run::def_of(tx.conn(), step).ok().flatten());
     let reached = match &last {
         Some(Some(def)) => Reached::Step(&def.name),
         Some(None) => Reached::Gone,
@@ -725,16 +725,16 @@ pub fn settle(tx: &WriteTx<'_>, before: AutomationRun, kind: AutomationPauseKind
 
 /// **Pick a paused run up again** — how depends on which pause it stopped at (`AMB-D-1015`).
 ///
-/// - **Paused before its next task**, it holds no task, so it is copied down afresh from the automation's
-///   newest saved version, as a launch reads it, and starts where the round of its seat's role starts on
-///   the new copy. The new copy is
-///   checked as a launch checks it, with `startable`, `models` and `default_agent` as
-///   [`crate::ops::automation_run::Launcher`] takes them; one that does not pass is refused, and the run
-///   stays paused.
-/// - **Paused at the end of an action**, it goes on from the copy it has, at the step the way out the
-///   last step left through leads to — never from the automation as it stands now, since it may be in
-///   the middle of a task and the step it stood at may be gone from it. A run whose copy leads nowhere
-///   from there fails rather than resumes. A run paused before the pause was kept on it (`None`) is
+/// - **Paused before its next task**, it holds no task, so it is pointed at the automation's newest
+///   saved version, as a launch reads it, with `default_agent` as the default it reads it with, and
+///   starts where the round of its seat's role starts on that version
+///   ([`crate::ops::automation_run::move_to_newest`]). The version is checked as a launch checks it, with
+///   `startable`, `models` and `default_agent` as [`crate::ops::automation_run::Launcher`] takes them; one
+///   that does not pass is refused, and the run stays paused.
+/// - **Paused at the end of an action**, it goes on from the version it points at, at the step the way
+///   out the last step left through leads to — never from the automation as it stands now, since it may
+///   be in the middle of a task and the step it stood at may be gone from it. A run whose version leads
+///   nowhere from there fails rather than resumes. A run paused before the pause was kept on it (`None`) is
 ///   taken as this one: it may hold a task as well.
 pub fn resume(
     tx: &WriteTx<'_>,
@@ -743,7 +743,7 @@ pub fn resume(
     models: &crate::ops::automation_run::ModelsHere,
     default_agent: Option<&str>,
 ) -> Result<Resumed> {
-    let before = live_run(tx, run_id)?;
+    let mut before = live_run(tx, run_id)?;
     if before.status != AutomationRunStatus::Paused {
         return Err(Error::invalid(format!(
             "run '{run_id}' is {}, and only a paused one is picked up again",
@@ -752,7 +752,10 @@ pub fn resume(
     }
     let next = match before.pause_kind {
         Some(AutomationPauseKind::BeforeNextTask) => {
-            crate::ops::automation_run::copy_down_again(tx, &before, startable, models, default_agent)?
+            let (moved, entry) =
+                crate::ops::automation_run::move_to_newest(tx, &before, startable, models, default_agent)?;
+            before = moved;
+            entry
         }
         Some(AutomationPauseKind::EndOfAction) | None => match next_after_the_pause(tx.conn(), &before)? {
             Some(next) => next,
@@ -789,7 +792,7 @@ fn next_after_the_pause(
     let Some(last) = read::automation_run_steps_of(conn, run.id)?.pop() else {
         return crate::ops::automation_run::entry_def(conn, run.id);
     };
-    let Some(def) = read::automation_run_def(conn, last.run_def_id)? else { return Ok(None) };
+    let Some(def) = crate::ops::automation_run::def_of(conn, &last)? else { return Ok(None) };
     Ok(match crate::ops::automation_run::onward(conn, &def, last.exit_id)? {
         crate::ops::automation_run::Onward::Go { def, .. } => Some(*def),
         _ => None,
@@ -931,7 +934,7 @@ pub fn pause_launch_before_next_task(tx: &WriteTx<'_>, launch_id: i64) -> Result
 ///
 /// A run that cannot be picked up refuses the whole launch, as it refuses alone, and nothing is
 /// written. `startable`, `models` and `default_agent` are a launch's
-/// ([`crate::ops::automation_run::Launcher`]), for the runs copied down afresh.
+/// ([`crate::ops::automation_run::Launcher`]), for the runs pointed at the newest saved version.
 pub fn resume_launch(
     tx: &WriteTx<'_>,
     launch_id: i64,
@@ -1298,11 +1301,11 @@ mod tests {
         run: &AutomationRun,
         placement: &crate::model::AutomationPlacement,
     ) -> AutomationRunDef {
-        read::automation_run_defs_of(tx.conn(), run.id)
+        crate::ops::automation_run::current_defs(tx.conn(), run.id)
             .expect("defs")
             .into_iter()
             .find(|d| d.placement_id == Some(placement.id))
-            .expect("the spot's snapshot")
+            .expect("the spot's step")
     }
 
     fn opened(
@@ -1310,7 +1313,7 @@ mod tests {
         run: &AutomationRun,
         placement: &crate::model::AutomationPlacement,
     ) -> Opening {
-        match open(tx, run.id, def_of(tx, run, placement).id, None).expect("open") {
+        match open(tx, run.id, def_of(tx, run, placement).key(), None).expect("open") {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
@@ -1899,9 +1902,8 @@ mod tests {
 
     /// **A finished run lets its last round's detail go the next time a run of its role ends** — once
     /// its file is written, not in the transaction that ends it. Its step executions go with their
-    /// values, and the copy of the definition they were opened from; the run row and its round rows stay,
-    /// as does the copy no step was opened from, which the run log does not hold. The run reads back from
-    /// the run log.
+    /// values; the run row and its round rows stay. The run reads back from the run log, with the step
+    /// each execution ran.
     #[test]
     fn a_finished_runs_last_round_lets_its_detail_go_once_the_run_log_holds_it() {
         on_a_run_log("finished-let-go", |engine, place| {
@@ -1924,15 +1926,12 @@ mod tests {
             let blob = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
             crate::ops::attachment::add_blob(&tx, AttachmentTarget::AutomationRunStep, step, blob, "notes.txt", None, 1, ActorKind::Ai)
                 .expect("a file on its last round");
-            let used = read::automation_run_step(tx.conn(), step).expect("read").expect("the step").run_def_id;
-            let defs = read::automation_run_def_ids(tx.conn(), first.id).expect("defs");
+            let used = read::automation_run_step(tx.conn(), step).expect("read").expect("the step").def_key();
             let second = over(&tx, &p, Ending::Completed);
 
             assert!(steps_left(&tx, first.id).is_empty(), "the round the run log holds lets its detail go");
             assert_eq!(tx.take_blobs_let_go(), vec![blob.to_string()], "its blob is reclaimed once this commits");
             assert!(read::automation_run_values_of(tx.conn(), step).expect("values").is_empty());
-            let left: Vec<i64> = defs.into_iter().filter(|d| *d != used).collect();
-            assert_eq!(read::automation_run_def_ids(tx.conn(), first.id).expect("defs"), left, "the copy the run log holds goes");
             assert!(read::automation_run(tx.conn(), first.id).expect("read").is_some(), "the run row stays");
             assert_eq!(read::automation_run_task_ids(tx.conn(), first.id).expect("rounds").len(), 1, "its round row stays");
             assert_eq!(steps_left(&tx, second.id).len(), 1, "the run just ended keeps its last round");
@@ -1943,7 +1942,11 @@ mod tests {
 
             let detail = crate::run_log::detail(tx.conn(), Some(&place.runs), first.id).expect("read").expect("the run");
             assert_eq!(detail.steps.iter().map(|s| s.step.id).collect::<Vec<_>>(), vec![step], "read back from the run log");
-            assert!(detail.defs.iter().any(|d| d.id == used), "with the copy it was opened from");
+            assert!(detail.defs.iter().any(|d| d.key() == used), "with the step it ran");
+            assert!(
+                dir.join("defs").read_dir().expect("the steps' folder").count() > 0,
+                "the step it ran is written beside its round",
+            );
         });
     }
 
@@ -2159,19 +2162,20 @@ mod tests {
         });
     }
 
-    /// **Picked up after pausing at the end of an action, a run goes on from the copy it launched with,
-    /// not from the automation rewritten since** (`AMB-D-1015`): nothing is copied down, and the step it
-    /// opens next is the one written before.
+    /// **Picked up after pausing at the end of an action, a run goes on from the version it launched
+    /// on, not from the automation rewritten since** (`AMB-D-1015`): it is pointed at no newer version,
+    /// and the step it opens next is the one written before.
     #[test]
-    fn resuming_after_the_end_of_an_action_keeps_the_copy_it_has() {
+    fn resuming_after_the_end_of_an_action_keeps_the_version_it_has() {
         with_tx(|tx| {
             let p = picture(tx, false);
+            let saved = automation::action_save(tx, p.second.action_id).expect("save the fix");
+            automation::placement_version_set(tx, p.second.id, saved.version).expect("stand on it");
             let run = a_run(tx, &p.automation);
             let step = opened(tx, &run, &p.first);
             a_task_in_hand(tx, p.project, step.run_step.id);
             pause(tx, run.id).expect("pause");
             done(tx, step.run_step.id, None, "Looked at it.").expect("done");
-            let launched_with = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
             let second = def_of(tx, &run, &p.second);
             automation::step_update(
                 tx,
@@ -2193,13 +2197,9 @@ mod tests {
             let Resumed { run: after, next } =
                 resume(tx, run.id, None, crate::ops::automation_run::nothing_asked(), None).expect("resume");
             assert_eq!(after.status, AutomationRunStatus::Running);
-            assert_eq!(next.id, second.id, "the step after the one it paused on, from the copy it has");
-            assert_eq!(next.prompt.as_deref(), Some("fix"), "the fix as it was written at launch");
-            assert_eq!(
-                read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len(),
-                launched_with.len(),
-                "nothing is copied down afresh",
-            );
+            assert_eq!(next.key(), second.key(), "the step after the one it paused on, on the version it has");
+            assert_eq!(next.prompt.as_deref(), Some("fix"), "the fix as it was saved when the run launched");
+            assert_eq!(after.automation_version, run.automation_version, "the run stays on the version it has");
         });
     }
 
@@ -2651,7 +2651,7 @@ mod tests {
             let fixing = opened(tx, &run, &second);
             done(tx, fixing.run_step.id, None, "Fixed it.").expect("done");
 
-            match open(tx, run.id, def_of(tx, &run, &first).id, None).expect("open") {
+            match open(tx, run.id, def_of(tx, &run, &first).key(), None).expect("open") {
                 Opened::LeftTaskOpen { run: stopped } => {
                     assert_eq!(stopped.status, AutomationRunStatus::Failed);
                     assert_eq!(stopped.stopped_reason, Some(AutomationStoppedReason::LeftTaskOpen));
@@ -2696,7 +2696,7 @@ mod tests {
             let task = a_task_in_hand(tx, project, step.run_step.id);
             done(tx, step.run_step.id, None, "Not ours.").expect("done");
             let Opened::Carried { .. } =
-                open(tx, run.id, def_of(tx, &run, &back).id, None).expect("hand back")
+                open(tx, run.id, def_of(tx, &run, &back).key(), None).expect("hand back")
             else {
                 panic!("the hand back is carried out");
             };
@@ -3026,22 +3026,22 @@ mod tests {
         Inside { automation, project, first, second, write, review }
     }
 
-    /// The copy of one step of one placement.
+    /// One step of one placement, as the run reads it.
     fn copy_of(
         tx: &WriteTx<'_>,
         run: &AutomationRun,
         placement: &crate::model::AutomationPlacement,
         step: &crate::model::AutomationStep,
     ) -> AutomationRunDef {
-        read::automation_run_defs_of(tx.conn(), run.id)
+        crate::ops::automation_run::current_defs(tx.conn(), run.id)
             .expect("defs")
             .into_iter()
             .find(|d| d.placement_id == Some(placement.id) && d.step_id == Some(step.id))
-            .expect("the step's copy")
+            .expect("the step")
     }
 
     fn opened_step(tx: &WriteTx<'_>, run: &AutomationRun, def: &AutomationRunDef) -> Opening {
-        match open(tx, run.id, def.id, None).expect("open") {
+        match open(tx, run.id, def.key(), None).expect("open") {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => panic!("stopped for {missing:?}"),
             Opened::NoAgent { agent, .. } => panic!("cannot start {agent}"),
@@ -3067,8 +3067,8 @@ mod tests {
         with_tx(|tx| {
             let p = two_steps_inside(tx, false);
             let run = a_run(tx, &p.automation);
-            let defs = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
-            assert_eq!(defs.len(), 3, "one row for the first placement, two for the second");
+            let defs = crate::ops::automation_run::current_defs(tx.conn(), run.id).expect("defs");
+            assert_eq!(defs.len(), 3, "one step for the first placement, two for the second");
             let second_rows: Vec<_> =
                 defs.iter().filter(|d| d.placement_id == Some(p.second.id)).collect();
             assert_eq!(
@@ -3080,13 +3080,13 @@ mod tests {
             let first = opened(tx, &run, &p.first);
             a_task_in_hand(tx, p.project, first.run_step.id);
             let next = stepped_to(done(tx, first.run_step.id, None, "Looked.").expect("done"));
-            assert_eq!(next.id, copy_of(tx, &run, &p.second, &p.write).id, "the action's entry first");
+            assert_eq!(next.key(), copy_of(tx, &run, &p.second, &p.write).key(), "the action's entry first");
 
             let write = opened_step(tx, &run, &next);
             let next = stepped_to(done(tx, write.run_step.id, None, "Wrote.").expect("done"));
-            assert_eq!(next.id, copy_of(tx, &run, &p.second, &p.review).id, "then on inside it");
+            assert_eq!(next.key(), copy_of(tx, &run, &p.second, &p.review).key(), "then on inside it");
             match crate::ops::automation_run::next_def(tx.conn(), run.id).expect("next") {
-                crate::ops::automation_run::Waiting::Step(def) => assert_eq!(def.id, next.id),
+                crate::ops::automation_run::Waiting::Step(def) => assert_eq!(def.key(), next.key()),
                 other => panic!("the watcher reads the same step: {other:?}"),
             }
 
@@ -3179,7 +3179,7 @@ mod tests {
             for turn in 0..2 {
                 let write = opened_step(tx, &run, &next);
                 next = stepped_to(done(tx, write.run_step.id, None, "Wrote.").expect("done"));
-                assert_eq!(next.id, copy_of(tx, &run, &p.second, &p.review).id, "down again, turn {turn}");
+                assert_eq!(next.key(), copy_of(tx, &run, &p.second, &p.review).key(), "down again, turn {turn}");
                 let review = opened_step(tx, &run, &next);
                 next = stepped_to(
                     done(tx, review.run_step.id, way_out(tx, review.run_step.id, "again"), "Not yet.")
@@ -3188,7 +3188,7 @@ mod tests {
             }
             let write = opened_step(tx, &run, &next);
             let next = stepped_to(done(tx, write.run_step.id, None, "Wrote.").expect("done"));
-            assert_eq!(next.id, copy_of(tx, &run, &p.second, &p.review).id, "the third time down too");
+            assert_eq!(next.key(), copy_of(tx, &run, &p.second, &p.review).key(), "the third time down too");
         });
     }
 
@@ -3207,7 +3207,7 @@ mod tests {
 
             let review = opened_step(tx, &run, &next);
             let next = stepped_to(done(tx, review.run_step.id, way_out(tx, review.run_step.id, "again"), "Not yet.").expect("done"));
-            assert_eq!(next.id, copy_of(tx, &run, &p.second, &p.review).id, "one turn is allowed");
+            assert_eq!(next.key(), copy_of(tx, &run, &p.second, &p.review).key(), "one turn is allowed");
             let twice = opened_step(tx, &run, &next);
             let stopped = done(tx, twice.run_step.id, way_out(tx, twice.run_step.id, "again"), "Still not.").expect("done");
             assert!(matches!(stopped, Next::Halted(_)));
@@ -3233,7 +3233,7 @@ mod tests {
 
             pause(tx, run.id).expect("pause");
             let next = stepped_to(done(tx, write.run_step.id, None, "Wrote.").expect("done"));
-            assert_eq!(next.id, copy_of(tx, &run, &p.second, &p.review).id, "on to the second step");
+            assert_eq!(next.key(), copy_of(tx, &run, &p.second, &p.review).key(), "on to the second step");
             let still = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
             assert_eq!(still.status, AutomationRunStatus::Running, "not paused half way through the action");
             assert!(still.pause_requested, "and still asked to pause at the end of it");

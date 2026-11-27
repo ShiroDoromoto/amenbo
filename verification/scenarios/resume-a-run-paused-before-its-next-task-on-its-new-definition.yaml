@@ -1,9 +1,9 @@
 # A run paused before its next task holds no task, so it is picked up again as the same run on the
 # automation's newest saved version, from that version's entry. What the road rebuilds and saves is
-# the one thing that tells the two copies apart: how long the built-in that waits holds a task. On the
-# copy taken at the start it holds one for a minute; on the new one, for a second. The resumed run
-# takes the next task filed with its role, so that task is done well inside the minute only if it went
-# on the new copy.
+# the one thing that tells the two versions apart: how long the built-in that waits holds a task. On the
+# version the run was started on it holds one for a minute; on the new one, for a second. The resumed
+# run takes the next task filed with its role, so that task is done well inside the minute only if it
+# went on the new version.
 #
 # The run takes the task filed with its role and holds it in the built-in that waits, so the pause
 # after that task is asked for while it is still being worked; the task going to done says the pause
@@ -104,7 +104,7 @@ steps_gui:
   - { type: action, domain: automation, op: save, with: { target: auto } }
 
   # Picked up again, the same run starts at the new definition's entry: it takes the next task and
-  # holds it for a second rather than the minute the copy it started with would have held it. Then it
+  # holds it for a second rather than the minute the version it started on would have held it. Then it
   # finds no task and ends.
   - { type: assert, domain: task, op: field, with: { target: next, field: status, equals: todo } }
   - { type: action, domain: automation, op: screen, with: { tab: running } }

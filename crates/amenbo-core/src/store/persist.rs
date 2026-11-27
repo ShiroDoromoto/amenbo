@@ -2079,7 +2079,7 @@ impl Store {
 
     /// **Pick a paused run up again** ([`crate::ops::automation_stop::resume`]). `startable` and
     /// `models` are a launch's ([`crate::ops::automation_run::Launcher`]): a run paused before its next
-    /// task is copied down afresh and checked as a launch is, with this store's default agent
+    /// task is pointed at the newest saved version and checked as a launch is, with this store's default agent
     /// ([`Self::automation_default_agent`]).
     pub fn automation_resume(
         &mut self,
@@ -2093,7 +2093,7 @@ impl Store {
         })
     }
 
-    /// **Copy a run standing where its role starts down afresh from a newer saved version**
+    /// **Point a run standing where its role starts at a newer saved version**
     /// ([`crate::ops::automation_run::take_up_newer`]). `startable` and `models` are a launch's, as
     /// [`Self::automation_resume`]'s are. The reach is the run's.
     pub fn automation_take_up_newer(
@@ -2338,14 +2338,13 @@ impl Store {
     pub fn automation_step_open(
         &mut self,
         run_id: i64,
-        run_def_id: i64,
+        at: crate::model::RunDefKey,
         startable: Option<&[String]>,
     ) -> Result<crate::ops::automation_step::Opened> {
         let language = self.config.language.as_deref().unwrap_or("en");
-        let outside =
-            crate::ops::automation_builtin::work_outside(self.engine.conn(), language, run_id, run_def_id)?;
+        let outside = crate::ops::automation_builtin::work_outside(self.engine.conn(), language, run_id, at)?;
         self.write_one(&[WriteTarget::AutomationPart(AutomationPart::Run, run_id)], |tx| {
-            crate::ops::automation_step::open(tx, run_id, run_def_id, startable, outside)
+            crate::ops::automation_step::open(tx, run_id, at, startable, outside)
         })
     }
 

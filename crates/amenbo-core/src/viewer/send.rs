@@ -13,8 +13,9 @@
 //!
 //! **What is placed is what the store holds, one record per row, sealed.** The Worker runs somewhere the
 //! reader merely rents, so it is handed ciphertext and an ordering and nothing that says what any of it
-//! means ([`super::sealing`]). An automation run's working rows are the exception: the phone shows none
-//! of them, so they are not placed at all ([`WITHHELD_FROM_THE_VIEWER`]).
+//! means ([`super::sealing`]). An automation's working rows — its launches and its runs — are the
+//! exception: the phone shows none of them, so they are not placed at all
+//! ([`WITHHELD_FROM_THE_VIEWER`]).
 //!
 //! **A server set up before that may still hold them**, and nothing on it reads them any more. Whether it
 //! does is read once per server, a few pages a turn, and kept on this device ([`look_for_strays`]). Where
@@ -65,15 +66,17 @@ pub const RECORDS_PER_WRITE: usize = 500;
 /// The tables the Viewer is never sent, on top of what [`crate::export::WITHHELD_ON_THE_WAY_OUT`] keeps on
 /// this machine for every road out.
 ///
-/// **They are an automation run's working rows**: the run, the copy of its definition, the tasks it
-/// carried, its passes, its steps and the values they handed on. The phone shows none of them, and they
-/// are written on every step of every run — sent, they are what fills the feed this carrier reads and the
-/// server it writes to. They stay on the export's road, which is why this is a list of its own rather than
-/// more lines on that one.
+/// **They are an automation's working rows**: a launch and the headcount it holds for each role, and a
+/// run — the run, the copy of its definition, the tasks it carried, its passes, its steps and the values
+/// they handed on. The phone shows none of them, and they are written on every launch and every step of
+/// every run — sent, they are what fills the feed this carrier reads and the server it writes to. They
+/// stay on the export's road, which is why this is a list of its own rather than more lines on that one.
 ///
 /// Both halves of a turn answer to it — the feed's stretch and the whole picture — and so does what was
 /// queued before it was drawn ([`super::carried::drop_withheld`]).
 pub(super) const WITHHELD_FROM_THE_VIEWER: &[&str] = &[
+    "automation_launch",
+    "automation_launch_role",
     "automation_run",
     "automation_run_def",
     "automation_run_pass",
@@ -437,8 +440,8 @@ pub fn carry_at(store: &Store, now: DateTime<Utc>) -> Result<Sent> {
     // A queue filled before a key's older version was taken off as the newer was queued still holds
     // them, and each would cost the day's rows (`AMB-T-5812`).
     store.fold_viewer()?;
-    // A queue filled before the run's working rows were withheld from the Viewer still holds them. Once
-    // they are gone nothing puts them back, so every later turn finds nothing to take.
+    // A queue filled before an automation's working rows were withheld from the Viewer still holds
+    // them. Once they are gone nothing puts them back, so every later turn finds nothing to take.
     store.drop_viewer_withheld()?;
 
     // **Once per server, and never in the way of the sending.** A server that cannot be read this turn is
@@ -524,8 +527,8 @@ fn the_number_to_send(version: i64, left: &Carried) -> i64 {
     }
 }
 
-/// Read the server's keys for a run's working rows a build before the Worker's build 4 placed there, and
-/// write down in `left` whether any are there.
+/// Read the server's keys for an automation's working rows an older build placed there, and write down in
+/// `left` whether any are there.
 ///
 /// **One is enough.** The reading stops at the first key whose dataset is in [`WITHHELD_FROM_THE_VIEWER`],
 /// whether what the server last heard of it was a write or a delete: either is a row that is still there.
@@ -563,8 +566,8 @@ fn strays_to_clear(left: &Carried) -> bool {
         && left.build >= BUILD_THAT_TAKES_KEYS_OUT
 }
 
-/// Delete from the server the run's working rows a build before the Worker's build 4 placed there, and
-/// answer how many keys went.
+/// Delete from the server the automation's working rows an older build placed there, and answer how many
+/// keys went.
 ///
 /// **The keys are chosen here, and the Worker deletes what it is handed.** The server is read from the
 /// beginning of its ordering, page by page as [`look_for_strays`] reads it, and every key whose dataset is
@@ -662,7 +665,7 @@ fn where_the_strays_were_read_to(left: &Carried) -> i64 {
     left.strays_read_to.as_deref().and_then(|at| at.parse::<i64>().ok()).unwrap_or(0)
 }
 
-/// Whether a key on the server is one of a run's working rows.
+/// Whether a key on the server is one of an automation's working rows.
 fn is_a_stray(key: &str) -> bool {
     key.split_once('/').is_some_and(|(dataset, _)| !carried_to_the_viewer(dataset))
 }
@@ -1415,15 +1418,19 @@ mod tests {
         assert!(carried_out_of(unpositioned.as_bytes()).is_err());
     }
 
-    /// **An automation run's working rows are not sent to the Viewer**, and the list that says so is the
-    /// registry's own `automation_run*` tables, no more and no fewer — a table added beside them is one
-    /// this list has to be told about.
+    /// **An automation's working rows are not sent to the Viewer**, and the list that says so is the
+    /// registry's own `automation_launch*` and `automation_run*` tables, no more and no fewer — a table
+    /// added beside them is one this list has to be told about.
     #[test]
-    fn the_viewer_is_sent_none_of_a_runs_working_rows() {
+    fn the_viewer_is_sent_none_of_an_automations_working_rows() {
         let in_the_schema: Vec<&str> = crate::store_engine::schema::DATASETS
             .iter()
             .map(|d| d.name)
-            .filter(|name| *name == "automation_run" || name.starts_with("automation_run_"))
+            .filter(|name| {
+                ["automation_launch", "automation_run"]
+                    .iter()
+                    .any(|family| *name == *family || name.starts_with(&format!("{family}_")))
+            })
             .collect();
         let mut withheld = WITHHELD_FROM_THE_VIEWER.to_vec();
         withheld.sort_unstable();

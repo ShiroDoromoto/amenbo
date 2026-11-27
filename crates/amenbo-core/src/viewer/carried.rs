@@ -87,7 +87,7 @@ pub struct Carried {
     /// nowhere else, and setup knows it only because it is the one that placed the Worker (`AMB-D-1167`).
     /// Zero is "neither has happened yet", not "an old Worker".
     pub build: i64,
-    /// Whether the server holds run rows a build before the Worker's build 4 placed there: `None` is
+    /// Whether the server holds an automation's working rows an older build placed there: `None` is
     /// "not read yet", `Some(false)` "none", `Some(true)` "some".
     ///
     /// **It is read once per server.** Pointing the store at a server it has not sent to throws this row

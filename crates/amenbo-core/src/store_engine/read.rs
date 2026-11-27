@@ -7339,6 +7339,25 @@ pub fn automation_version_latest(
     .next())
 }
 
+/// One saved version of one automation by its number, or `None` where the automation has no such
+/// version.
+pub fn automation_version(
+    conn: &Connection,
+    automation_id: i64,
+    version: i64,
+) -> Result<Option<crate::model::AutomationVersion>> {
+    const V: col::automation_version::Cols = col::automation_version::ALL;
+    Ok(automation_rows(
+        conn,
+        V.table,
+        &Pred::eq(V.automation_id, automation_id).and(Pred::eq(V.version, version)),
+        &[Sort::by(V.id)],
+        super::hydrate::automation_version_row,
+    )?
+    .into_iter()
+    .next())
+}
+
 /// The saved versions of one automation — what goes when the automation does.
 pub fn automation_version_ids(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
     const V: col::automation_version::Cols = col::automation_version::ALL;

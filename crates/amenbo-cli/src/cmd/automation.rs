@@ -2489,7 +2489,7 @@ fn render_run(flags: &Flags, run: &AutomationRun, room: Option<ForRoom>, detail:
     // before its next task, goes on from a newer one (`AMB-D-1015`).
     let versions = taken_up(run, &moves);
     if let Some(((first, _), rest)) = versions.split_first() {
-        let mut line = format!("copied from: {}", version_label(*first));
+        let mut line = format!("goes by: {}", version_label(*first));
         for (version, at) in rest {
             line.push_str(&format!(" → {} (taken up at {})", version_label(*version), at.to_rfc3339_z()));
         }
@@ -2645,7 +2645,8 @@ fn switches(moves: &[AutomationRunStep]) -> Vec<(i64, Option<i64>, Option<i64>)>
     found
 }
 
-/// A saved version by its number, and a step a build before v154 copied from a draft as that.
+/// A saved version by its number — and, for a step a build before v154 copied from a draft, that it ran on
+/// no saved version.
 fn version_label(version: Option<i64>) -> String {
     match version {
         Some(n) => format!("version {n}"),

@@ -12,9 +12,13 @@
 //! - **One JSONL file per round**, `round-<seq>.jsonl` ([`Round`]): the run as it stood when the round
 //!   was written, the round itself, then one line per step execution carrying its values, then one line
 //!   per file handed between its steps. Reports and values have no size cap, so neither does a line.
-//! - **The step definitions once per run**, `defs/<id>.json`: a run copies its steps again when the
-//!   definition changes under it (`AMB-D-1015`), and each copy is written the first time a round uses it.
-//!   Writing them into every round would repeat the same text round after round.
+//! - **The step definitions once per run**, `defs/v<version>-p<placement>-s<step>.json` ([`def_path`]):
+//!   each step a round ran, as the run read it off the saved version it ran on (`AMB-D-1219`), written
+//!   the first time a round uses it. A run picked up on a newer version (`AMB-D-1015`) writes that
+//!   version's steps beside the older ones. Writing them into every round would repeat the same text
+//!   round after round. A build before v153 wrote the run's copies of the steps here instead, under
+//!   their row ids (`defs/<id>.json`), and its round files name a step's copy by that id
+//!   (`run_def_id`); both are still read ([`detail`]).
 //! - **The files handed between steps**, `files/<attachment id>`: the bytes of each blob attachment,
 //!   copied out of the blob store. The line for it in the round file carries its name and type.
 //! - **Written after the commit** succeeds, as the activity ledger is — gathered inside the transaction
@@ -23,7 +27,7 @@
 //!   loses the round. The round is not lost from the store by that: the store lets a round's detail go
 //!   only once its file is here — an old round of a run under way (`ops::automation_step`'s
 //!   `let_go_of_a_round`), and every round of a finished run of any automation and role, a little as
-//!   each run ends (`ops::automation`'s `let_finished_rounds_go`), its copies of the definition with it.
+//!   each run ends (`ops::automation`'s `let_finished_rounds_go`).
 //! - **When a round is over** is when the next one begins or the run ends — not when the round row is
 //!   given its `ended_at`. A step that hands its task back closes the round there, and the steps after it
 //!   still belong to it.
@@ -50,6 +54,7 @@ use serde_json::{json, Value};
 
 use crate::model::{
     Attachment, AttachmentTarget, AutomationRun, AutomationRunDef, AutomationRunStep, AutomationRunTask, AutomationRunValue,
+    RunDefKey,
 };
 use crate::store_engine::read;
 
@@ -81,9 +86,13 @@ pub fn round_file_name(seq: i64) -> String {
     format!("round-{seq}.jsonl")
 }
 
-/// The file one copy of a step definition is written to, in its run's folder `dir`.
-pub fn def_path(dir: &Path, def_id: i64) -> PathBuf {
-    dir.join("defs").join(format!("{def_id}.json"))
+/// **The file one step is written to**, in its run's folder `dir` — named by the version it was read off,
+/// the placement and the step ([`RunDefKey`]), so each step of each version a run ran on has one. A part
+/// a step does not name reads `x`.
+pub fn def_path(dir: &Path, at: RunDefKey) -> PathBuf {
+    let part = |n: Option<i64>| n.map_or_else(|| "x".to_string(), |n| n.to_string());
+    let name = format!("v{}-p{}-s{}.json", part(at.automation_version), part(at.placement_id), part(at.step_id));
+    dir.join("defs").join(name)
 }
 
 /// One finished round, read out of the store inside the transaction that ended it, ready to write once
@@ -94,7 +103,7 @@ pub struct Round {
     pub round: AutomationRunTask,
     /// The step executions of the round, in the order they happened, each with its values.
     pub steps: Vec<Value>,
-    /// The copies of the steps the round's executions were opened from.
+    /// The steps the round's executions ran, as the run read them.
     pub defs: Vec<AutomationRunDef>,
     /// The files attached to the round's step executions.
     pub files: Vec<Attachment>,
@@ -103,7 +112,7 @@ pub struct Round {
 impl Round {
     /// **Read one round out of the store** — the round row `round_id` of run `run_id`, as the connection
     /// sees it now. `None` when either row is gone.
-    pub fn gather(conn: &rusqlite::Connection, run_id: i64, round_id: i64) -> crate::store_engine::Result<Option<Round>> {
+    pub fn gather(conn: &rusqlite::Connection, run_id: i64, round_id: i64) -> crate::error::Result<Option<Round>> {
         let (Some(run), Some(round)) = (read::automation_run(conn, run_id)?, read::automation_run_task(conn, round_id)?)
         else {
             return Ok(None);
@@ -118,8 +127,7 @@ impl Round {
                 files.extend(read::attachment(conn, row.id)?);
             }
         }
-        let used: std::collections::BTreeSet<i64> = executions.iter().map(|s| s.run_def_id).collect();
-        let defs = read::automation_run_defs_of(conn, run.id)?.into_iter().filter(|d| used.contains(&d.id)).collect();
+        let defs = crate::ops::automation_run::defs_named(conn, &run, &executions)?.into_values().collect();
         Ok(Some(Round { run, round, steps, defs, files }))
     }
 
@@ -158,8 +166,8 @@ pub fn write(place: &Place, round: &Round) {
     }
     for def in &round.defs {
         let bytes = serde_json::to_vec(&json!({ "v": LINE_VERSION, "def": def })).unwrap_or_default();
-        if let Err(e) = write_once(&def_path(&dir, def.id), |f| f.write_all(&bytes)) {
-            tracing::warn!(run = round.run.id, def = def.id, error = %e, "run log: step definition not written");
+        if let Err(e) = write_once(&def_path(&dir, def.key()), |f| f.write_all(&bytes)) {
+            tracing::warn!(run = round.run.id, step = ?def.key(), error = %e, "run log: step definition not written");
         }
     }
     let blobs = crate::blob::BlobStore::at(place.blobs.clone());
@@ -192,8 +200,9 @@ pub fn forget(place: &Place, run: &AutomationRun) {
 /// **One run read back whole** — the run log's rounds and the store's, joined ([`detail`]).
 #[derive(Clone, Debug, Default)]
 pub struct Detail {
-    /// Every copy of the steps the run took, the run log's and the store's, by id: the order they were
-    /// taken in.
+    /// Every step the run's executions ran, as the run read them, in the order of [`RunDefKey`] — the
+    /// run log's where it holds one, and read off the saved version otherwise. What an execution ran is
+    /// the one whose [`AutomationRunDef::key`] is its [`AutomationRunStep::def_key`].
     pub defs: Vec<AutomationRunDef>,
     /// Every round of the run, from the store, which keeps each round row.
     pub rounds: Vec<AutomationRunTask>,
@@ -214,26 +223,31 @@ pub struct StepDetail {
 /// already be letting its detail go. `None` where the store has no such run: a folder no run names is
 /// not read.
 ///
+/// **The steps the executions ran** are read from the run's folder where it holds them, and off the saved
+/// versions they name otherwise ([`crate::ops::automation_run::defs_named`]). A round file a build before
+/// v153 wrote names the run's copy of a step by its row id, and that copy is in the folder under the same
+/// id: the execution is given the version, the placement and the step the copy names.
+///
 /// `runs` is `<base>/runs`, or `None` for a store that keeps no run log, which reads the store alone.
-pub fn detail(conn: &rusqlite::Connection, runs: Option<&Path>, run_id: i64) -> crate::store_engine::Result<Option<Detail>> {
+pub fn detail(conn: &rusqlite::Connection, runs: Option<&Path>, run_id: i64) -> crate::error::Result<Option<Detail>> {
     let Some(run) = read::automation_run(conn, run_id)? else { return Ok(None) };
     let rounds = read::automation_run_tasks_of(conn, run_id)?;
-    let mut defs: std::collections::BTreeMap<i64, AutomationRunDef> =
-        read::automation_run_defs_of(conn, run_id)?.into_iter().map(|d| (d.id, d)).collect();
+    let mut defs: std::collections::BTreeMap<RunDefKey, AutomationRunDef> = std::collections::BTreeMap::new();
     let mut steps = Vec::new();
     let mut from_file = std::collections::BTreeSet::new();
     if let Some(runs) = runs {
         let dir = dir_of(runs, &run);
+        let written = read_defs(&dir);
+        let copies: std::collections::BTreeMap<i64, RunDefKey> =
+            written.iter().filter(|def| def.id != 0).map(|def| (def.id, def.key())).collect();
         for round in &rounds {
-            if let Some(read) = read_round(&dir, round.seq) {
+            if let Some(read) = read_round(&dir, round.seq, &copies) {
                 from_file.insert(round.id);
                 steps.extend(read);
             }
         }
-        if !from_file.is_empty() {
-            for def in read_defs(&dir) {
-                defs.entry(def.id).or_insert(def);
-            }
+        for def in written {
+            defs.entry(def.key()).or_insert(def);
         }
     }
     for step in read::automation_run_steps_of(conn, run_id)? {
@@ -244,12 +258,20 @@ pub fn detail(conn: &rusqlite::Connection, runs: Option<&Path>, run_id: i64) -> 
         steps.push(StepDetail { step, values });
     }
     steps.sort_by_key(|s| (s.step.seq, s.step.id));
+    let unread: Vec<AutomationRunStep> =
+        steps.iter().filter(|s| !defs.contains_key(&s.step.def_key())).map(|s| s.step.clone()).collect();
+    for (key, def) in crate::ops::automation_run::defs_named(conn, &run, &unread)? {
+        defs.entry(key).or_insert(def);
+    }
     Ok(Some(Detail { defs: defs.into_values().collect(), rounds, steps }))
 }
 
 /// The step executions of one round, read from its file in the run's folder `dir`. `None` where there
 /// is no file, or it cannot be read whole — a `warn`, and the caller reads the store instead.
-fn read_round(dir: &Path, seq: i64) -> Option<Vec<StepDetail>> {
+///
+/// An execution a build before v153 wrote names the copy of its step by row id (`run_def_id`) rather
+/// than by version and step: it is given the key `copies` holds for that id ([`RunDefKey`]).
+fn read_round(dir: &Path, seq: i64, copies: &std::collections::BTreeMap<i64, RunDefKey>) -> Option<Vec<StepDetail>> {
     let path = dir.join(round_file_name(seq));
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
@@ -267,7 +289,14 @@ fn read_round(dir: &Path, seq: i64) -> Option<Vec<StepDetail>> {
             if line["kind"] != "step" {
                 return Ok(None);
             }
-            let step = serde_json::from_value(line["step"].clone())?;
+            let mut step: AutomationRunStep = serde_json::from_value(line["step"].clone())?;
+            if let Some(at) = line["step"]["run_def_id"].as_i64().and_then(|id| copies.get(&id)) {
+                if step.def_key() == RunDefKey::default() {
+                    step.automation_version = at.automation_version;
+                    step.placement_id = at.placement_id;
+                    step.step_id = at.step_id;
+                }
+            }
             let values = serde_json::from_value(line["values"].clone())?;
             Ok(Some(StepDetail { step, values }))
         })
@@ -281,8 +310,8 @@ fn read_round(dir: &Path, seq: i64) -> Option<Vec<StepDetail>> {
     }
 }
 
-/// The copies of the steps written in the run's folder `dir`. One that cannot be read is a `warn` and
-/// is left out.
+/// The steps written in the run's folder `dir` — under either name ([`def_path`], and a build before
+/// v153's `<id>.json`). One that cannot be read is a `warn` and is left out.
 fn read_defs(dir: &Path) -> Vec<AutomationRunDef> {
     let Ok(entries) = std::fs::read_dir(dir.join("defs")) else { return Vec::new() };
     let mut defs = Vec::new();
@@ -345,13 +374,31 @@ mod tests {
         AutomationRun { id, created_at: Timestamp::parse_rfc3339(at).unwrap(), ..Default::default() }
     }
 
+    /// The step every round below ran: step 3 of placement 2, in version 1.
+    const AT: RunDefKey = RunDefKey { automation_version: Some(1), placement_id: Some(2), step_id: Some(3) };
+
     fn round(run: &AutomationRun, seq: i64, report: &str) -> Round {
-        let step = AutomationRunStep { id: seq * 10, run_id: run.id, run_def_id: 5, report: report.into(), ..Default::default() };
+        let step = AutomationRunStep {
+            id: seq * 10,
+            run_id: run.id,
+            automation_version: AT.automation_version,
+            placement_id: AT.placement_id,
+            step_id: AT.step_id,
+            report: report.into(),
+            ..Default::default()
+        };
+        let def = AutomationRunDef {
+            automation_version: AT.automation_version,
+            placement_id: AT.placement_id,
+            step_id: AT.step_id,
+            name: "Alice".into(),
+            ..Default::default()
+        };
         Round {
             run: run.clone(),
             round: AutomationRunTask { id: seq, run_id: run.id, seq, ..Default::default() },
             steps: vec![json!({ "step": step, "values": [] })],
-            defs: vec![AutomationRunDef { id: 5, run_id: run.id, name: "Alice".into(), ..Default::default() }],
+            defs: vec![def],
             files: vec![],
         }
     }
@@ -395,7 +442,8 @@ mod tests {
         assert_eq!(lines[0]["run"]["id"], json!(3));
         assert_eq!(lines[1]["round"]["seq"], json!(1));
         assert_eq!(lines[2]["step"]["report"], json!(long));
-        assert!(folder.join("defs/5.json").exists(), "the definition the round used is written beside it");
+        assert!(folder.join("defs/v1-p2-s3.json").exists(), "the step the round ran is written beside it");
+        assert_eq!(def_path(&folder, AT), folder.join("defs/v1-p2-s3.json"));
         let leftovers: Vec<_> = std::fs::read_dir(&folder).unwrap().flatten().filter(|e| e.file_name().to_string_lossy().ends_with(".tmp")).collect();
         assert!(leftovers.is_empty(), "no temporary file is left behind");
 
@@ -408,7 +456,7 @@ mod tests {
         let (dir, place) = place("defs");
         let run = run(4, "2026-11-13T10:00:00Z");
         write(&place, &round(&run, 1, "first"));
-        let def = dir_of(&place.runs, &run).join("defs/5.json");
+        let def = def_path(&dir_of(&place.runs, &run), AT);
         std::fs::write(&def, b"kept").unwrap();
 
         write(&place, &round(&run, 2, "second"));
@@ -498,17 +546,56 @@ mod tests {
         write(&place, &round(&run, 1, &long));
         let folder = dir_of(&place.runs, &run);
 
-        let steps = read_round(&folder, 1).expect("the round reads back");
+        let none = std::collections::BTreeMap::new();
+        let steps = read_round(&folder, 1, &none).expect("the round reads back");
         assert_eq!(steps.len(), 1);
         assert_eq!(steps[0].step.report, long);
+        assert_eq!(steps[0].step.def_key(), AT);
         assert!(steps[0].values.is_empty());
         let defs = read_defs(&folder);
         assert_eq!(defs.len(), 1);
         assert_eq!(defs[0].name, "Alice");
+        assert_eq!(defs[0].key(), AT);
 
-        assert!(read_round(&folder, 2).is_none(), "no file, nothing read");
+        assert!(read_round(&folder, 2, &none).is_none(), "no file, nothing read");
         std::fs::write(folder.join(round_file_name(3)), b"{\"v\":1,\"kind\":\"step\",\"step\":{}}\n").unwrap();
-        assert!(read_round(&folder, 3).is_none(), "a round that does not read whole is not read");
+        assert!(read_round(&folder, 3, &none).is_none(), "a round that does not read whole is not read");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// **A run folder an older build wrote still reads**: its copies of the steps under their row ids
+    /// (`defs/<id>.json`), and its round files naming a step's copy by that id (`run_def_id`). The step
+    /// is given the version, placement and step its copy names, and the copy reads beside the steps
+    /// written under the name a version and a step make.
+    #[test]
+    fn a_folder_an_older_build_wrote_reads_back() {
+        let (dir, place) = place("older");
+        let run = run(12, "2026-11-13T10:00:00Z");
+        let folder = dir_of(&place.runs, &run);
+        std::fs::create_dir_all(folder.join("defs")).unwrap();
+        let copy = json!({ "v": 1, "def": {
+            "id": 5, "run_id": 12, "placement_id": 2, "step_id": 3, "automation_version": 1, "name": "Bob",
+            "agent": "claude", "interactive": false, "report_to_task": false, "show_history": false,
+            "exits": "[]", "ins": "[]", "cfg": "[]", "roles": "[]",
+            "created_at": "2026-11-13T10:00:00Z", "updated_at": "2026-11-13T10:00:00Z"
+        } });
+        std::fs::write(folder.join("defs/5.json"), serde_json::to_vec(&copy).unwrap()).unwrap();
+        let step = json!({ "v": 1, "kind": "step", "values": [], "step": {
+            "id": 10, "run_id": 12, "run_def_id": 5, "seq": 1, "report": "山田", "status": "done",
+            "created_at": "2026-11-13T10:00:00Z", "updated_at": "2026-11-13T10:00:00Z"
+        } });
+        std::fs::write(folder.join(round_file_name(1)), format!("{step}\n")).unwrap();
+        write(&place, &round(&run, 2, "now"));
+
+        let defs = read_defs(&folder);
+        assert_eq!(defs.len(), 2, "the copy under its id and the step under its version both read");
+        let copies: std::collections::BTreeMap<i64, RunDefKey> =
+            defs.iter().filter(|d| d.id != 0).map(|d| (d.id, d.key())).collect();
+        assert_eq!(copies.get(&5), Some(&AT));
+        let steps = read_round(&folder, 1, &copies).expect("the older round reads back");
+        assert_eq!(steps.len(), 1);
+        assert_eq!(steps[0].step.def_key(), AT, "the step is given what its copy names");
+        assert_eq!(steps[0].step.report, "山田");
         std::fs::remove_dir_all(&dir).ok();
     }
 

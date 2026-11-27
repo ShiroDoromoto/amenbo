@@ -1650,50 +1650,11 @@ pub const STEPS: &[Step] = &[
         // table, and on a store with tens of thousands of steps this step ran for many minutes; with the
         // indexes it takes seconds. They are dropped at the end, so the store leaves this step in the
         // shape frozen for v148, the same as v147's.
-        apply: Apply::Sql(
-            "CREATE INDEX v148_run_value_by_step ON automation_run_value(run_step_id);
-             CREATE INDEX v148_run_value_by_from_step ON automation_run_value(from_run_step_id);
-             CREATE INDEX v148_run_value_by_attachment ON automation_run_value(attachment_id);
-             CREATE INDEX v148_task_by_run_step ON task(made_in_run_step_id);
-             CREATE INDEX v148_task_comment_by_run_step ON task_comment(automation_run_step_id);
-             CREATE INDEX v148_run_step_by_def ON automation_run_step(run_def_id);
-             UPDATE automation_run_value
-                SET from_run_step_id = NULL,
-                    attachment_id = CASE WHEN kind = 'file' THEN NULL ELSE attachment_id END
-              WHERE from_run_step_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
-                                          WHERE r.status IN ('completed', 'failed', 'canceled'))
-                AND run_step_id NOT IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
-                                         WHERE r.status IN ('completed', 'failed', 'canceled'));
-             DELETE FROM automation_run_value
-              WHERE run_step_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
-                                     WHERE r.status IN ('completed', 'failed', 'canceled'));
-             DELETE FROM search_doc
-              WHERE owner_kind = 'attachment'
-                AND owner_id IN (SELECT a.id FROM attachment a
-                                  WHERE a.target_type = 'automation_run_step'
-                                    AND a.target_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
-                                                         WHERE r.status IN ('completed', 'failed', 'canceled')));
-             DELETE FROM attachment
-              WHERE target_type = 'automation_run_step'
-                AND target_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
-                                   WHERE r.status IN ('completed', 'failed', 'canceled'));
-             UPDATE task SET made_in_run_step_id = NULL
-              WHERE made_in_run_step_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
-                                             WHERE r.status IN ('completed', 'failed', 'canceled'));
-             UPDATE task_comment SET automation_run_step_id = NULL
-              WHERE automation_run_step_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
-                                                WHERE r.status IN ('completed', 'failed', 'canceled'));
-             DELETE FROM automation_run_step
-              WHERE run_id IN (SELECT id FROM automation_run WHERE status IN ('completed', 'failed', 'canceled'));
-             DELETE FROM automation_run_def
-              WHERE run_id IN (SELECT id FROM automation_run WHERE status IN ('completed', 'failed', 'canceled'));
-             DROP INDEX v148_run_value_by_step;
-             DROP INDEX v148_run_value_by_from_step;
-             DROP INDEX v148_run_value_by_attachment;
-             DROP INDEX v148_task_by_run_step;
-             DROP INDEX v148_task_comment_by_run_step;
-             DROP INDEX v148_run_step_by_def;",
-        ),
+        //
+        // **The index on `automation_run_step.run_def_id` is made only where the column is there**: a
+        // store raised from before the automation tables were created has them created in the live shape,
+        // which v153 took the column out of (`let_go_of_what_ended_runs_kept`).
+        apply: Apply::Custom(let_go_of_what_ended_runs_kept),
     },
     Step {
         to: 149,
@@ -1729,7 +1690,263 @@ pub const STEPS: &[Step] = &[
         // without the layout the pages it leaves free never leave the file.
         apply: Apply::Sql(""),
     },
+    Step {
+        to: 153,
+        name: "point each run at the saved version it reads, and each step execution at the step of that version it ran, in place of the run's copies",
+        // `AMB-D-1219`: a run copies nothing of the definition any more, and reads the saved version it
+        // names as it stands. The copies already written stay where they are (`automation_run_def`) —
+        // what is read off them here is which version each run and each step execution was on — and are
+        // let go of later. No task is touched.
+        apply: Apply::Custom(point_each_run_at_its_version),
+    },
 ];
+
+/// v153: `automation_run.automation_version` and `default_agent`, and `automation_run_step`'s
+/// `automation_version`, `placement_id` and `step_id` in place of `run_def_id` (`AMB-D-1219`).
+///
+/// - **Each step execution names what its copy names**: the copy's saved version, its placement and its
+///   step. A copy taken from a draft named no version, and its executions name none.
+/// - **A run that is not over, a failure nobody has seen yet, and a run that still keeps a step
+///   execution** are given the version of the last copy they took, and the default agent that copy was
+///   read with ([`default_agent_copied`]). Those are the runs whose steps are still read from the store.
+///   A run that is over and keeps none is given neither: what it ran is in the run log.
+/// - **The copies stay.** Nothing reads them from here on, and they are let go of later.
+/// - **`run_def_id` loses its `REFERENCES` before it is dropped**, v91's procedure: SQLite drops no
+///   column a foreign key is declared on, and the table cannot be rebuilt — `automation_run_value`,
+///   `task` and `task_comment` reference it.
+/// - **Each column is appended only where it is missing, and `run_def_id` read and dropped only where it
+///   is there**, v68's guard and v80's: a store raised from before the automation tables were created has
+///   them created in the live shape.
+fn point_each_run_at_its_version(ctx: &Ctx<'_>) -> Result<()> {
+    /// The declaration `automation_run_step.run_def_id` carries up to v152, and the one it is loosened
+    /// to before it goes — frozen text, like every step's.
+    const BY_COPY: &str = "run_def_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_run_def(id) ON DELETE RESTRICT \
+                           ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED";
+    const LOOSE: &str = "run_def_id BIGINT NOT NULL DEFAULT 0";
+
+    let tx = ctx.tx;
+    let runs = column_names(tx, "automation_run")?;
+    for (column, decl) in [("automation_version", "BIGINT"), ("default_agent", "TEXT")] {
+        if !runs.iter().any(|c| c == column) {
+            tx.execute_batch(&format!("ALTER TABLE automation_run ADD COLUMN {column} {decl};"))?;
+        }
+    }
+    let steps = column_names(tx, "automation_run_step")?;
+    for column in ["automation_version", "placement_id", "step_id"] {
+        if !steps.iter().any(|c| c == column) {
+            tx.execute_batch(&format!("ALTER TABLE automation_run_step ADD COLUMN {column} BIGINT;"))?;
+        }
+    }
+    if !steps.iter().any(|c| c == "run_def_id") {
+        return Ok(());
+    }
+
+    tx.execute_batch(
+        "UPDATE automation_run_step
+            SET automation_version = (SELECT d.automation_version FROM automation_run_def d WHERE d.id = automation_run_step.run_def_id),
+                placement_id = (SELECT d.placement_id FROM automation_run_def d WHERE d.id = automation_run_step.run_def_id),
+                step_id = (SELECT d.step_id FROM automation_run_def d WHERE d.id = automation_run_step.run_def_id);",
+    )?;
+
+    let mut to_point: Vec<(i64, i64)> = Vec::new();
+    {
+        let mut stmt = tx.prepare(
+            "SELECT r.id, r.automation_id FROM automation_run r
+              WHERE r.status IN ('running', 'paused')
+                 OR (r.status = 'failed' AND r.acknowledged_at IS NULL)
+                 OR EXISTS (SELECT 1 FROM automation_run_step s WHERE s.run_id = r.id)
+              ORDER BY r.id",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        for row in rows {
+            to_point.push(row?);
+        }
+    }
+    // What each saved version chose for itself — read once per version, as many runs share one.
+    let mut chosen: BTreeMap<(i64, i64), Chosen> = BTreeMap::new();
+    for (run_id, automation_id) in to_point {
+        let version: Option<i64> = tx
+            .query_row(
+                "SELECT automation_version FROM automation_run_def WHERE run_id = ?1 ORDER BY id DESC LIMIT 1",
+                [run_id],
+                |r| r.get(0),
+            )
+            .optional()?
+            .flatten();
+        let Some(version) = version else { continue };
+        if !chosen.contains_key(&(automation_id, version)) {
+            let held = chosen_in(tx, automation_id, version)?;
+            chosen.insert((automation_id, version), held);
+        }
+        let mut copied: Vec<(Option<i64>, Option<i64>, String)> = Vec::new();
+        {
+            let mut stmt = tx.prepare(
+                "SELECT placement_id, step_id, agent FROM automation_run_def
+                  WHERE run_id = ?1 AND automation_version = ?2 AND agent <> '' ORDER BY id",
+            )?;
+            let rows = stmt.query_map(rusqlite::params![run_id, version], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
+            for row in rows {
+                copied.push(row?);
+            }
+        }
+        let agent = default_agent_copied(&copied, &chosen[&(automation_id, version)]);
+        tx.execute(
+            "UPDATE automation_run SET automation_version = ?1, default_agent = ?2 WHERE id = ?3",
+            rusqlite::params![version, agent, run_id],
+        )?;
+    }
+
+    let keyed: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM pragma_foreign_key_list('automation_run_step') WHERE \"from\" = 'run_def_id'",
+        [],
+        |r| r.get(0),
+    )?;
+    if keyed > 0 {
+        let declared: String = tx.query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'automation_run_step'",
+            [],
+            |r| r.get(0),
+        )?;
+        let Some(at) = declared.find(BY_COPY) else {
+            return Err(super::StoreEngineError::UnrecognisedDdl { table: "automation_run_step", expected: BY_COPY });
+        };
+        let loosened = format!("{}{LOOSE}{}", &declared[..at], &declared[at + BY_COPY.len()..]);
+        let before = column_names(tx, "automation_run_step")?;
+        tx.execute_batch("PRAGMA writable_schema = ON;")?;
+        let wrote = tx.execute(
+            "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'automation_run_step'",
+            [&loosened],
+        );
+        // `RESET` both shuts the door and drops the connection's parsed schema, so the `DROP COLUMN`
+        // below reads the declaration this left.
+        tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+        wrote?;
+        if column_names(tx, "automation_run_step")? != before {
+            return Err(super::StoreEngineError::UnrecognisedDdl { table: "automation_run_step", expected: BY_COPY });
+        }
+    }
+    tx.execute_batch("ALTER TABLE automation_run_step DROP COLUMN run_def_id;")?;
+    Ok(())
+}
+
+/// What one saved version chose for its steps itself, read for v153: the (placement, step) pairs a
+/// choice names an agent for, and the agents its roles fall back to.
+#[derive(Default)]
+struct Chosen {
+    steps: BTreeSet<(i64, i64)>,
+    by_roles: BTreeSet<String>,
+}
+
+/// The choices version `version` of automation `automation_id` holds ([`Chosen`]) — none where the row is
+/// gone or its JSON does not read.
+fn chosen_in(tx: &Transaction<'_>, automation_id: i64, version: i64) -> Result<Chosen> {
+    let row: Option<(String, String)> = tx
+        .query_row(
+            "SELECT placement_steps, roles FROM automation_version WHERE automation_id = ?1 AND version = ?2",
+            [automation_id, version],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()?;
+    let Some((steps, roles)) = row else { return Ok(Chosen::default()) };
+    let steps: Vec<serde_json::Value> = serde_json::from_str(&steps).unwrap_or_default();
+    let roles: Vec<serde_json::Value> = serde_json::from_str(&roles).unwrap_or_default();
+    Ok(Chosen {
+        steps: steps
+            .iter()
+            .filter(|s| s["agent"].as_str().is_some_and(|a| !a.is_empty()))
+            .filter_map(|s| Some((s["placement_id"].as_i64()?, s["step_id"].as_i64()?)))
+            .collect(),
+        by_roles: roles.iter().filter_map(|r| r["agent"].as_str()).map(str::to_string).collect(),
+    })
+}
+
+/// **The default agent a run's last copy was read with**, as v153 recovers it from `copied` — that copy's
+/// (placement, step, agent), the agent never empty. A step chose its agent where it was placed, else
+/// fell back to its role's, else to Amenbo's own default; the copy kept only the agent it ended up
+/// with. So the steps no choice of their own names ([`Chosen::steps`]) are what fell back, and of those,
+/// one whose agent is no role's fell back to the default. The agent most of them name is taken, and
+/// where every one names a role's, the agent most of the steps that fell back name — the default may be
+/// that agent too, and nothing reads it otherwise. `None` where no step fell back: nothing reads the
+/// default, and the version reads the same without one.
+fn default_agent_copied(copied: &[(Option<i64>, Option<i64>, String)], chosen: &Chosen) -> Option<String> {
+    let fell_back: Vec<&str> = copied
+        .iter()
+        .filter(|(placement, step, _)| match (placement, step) {
+            (Some(placement), Some(step)) => !chosen.steps.contains(&(*placement, *step)),
+            _ => true,
+        })
+        .map(|(_, _, agent)| agent.as_str())
+        .collect();
+    let by_default: Vec<&str> = fell_back.iter().copied().filter(|agent| !chosen.by_roles.contains(*agent)).collect();
+    let pool = if by_default.is_empty() { &fell_back } else { &by_default };
+    let mut counted: BTreeMap<&str, usize> = BTreeMap::new();
+    for agent in pool.iter() {
+        *counted.entry(*agent).or_default() += 1;
+    }
+    let most = counted.values().copied().max()?;
+    counted.into_iter().find(|(_, n)| *n == most).map(|(agent, _)| agent.to_string())
+}
+
+/// v148's statements, but for the index on `automation_run_step.run_def_id` — frozen text, like every
+/// step's ([`let_go_of_what_ended_runs_kept`]).
+const LET_GO_OF_WHAT_ENDED_RUNS_KEPT: &str =
+    "CREATE INDEX v148_run_value_by_step ON automation_run_value(run_step_id);
+             CREATE INDEX v148_run_value_by_from_step ON automation_run_value(from_run_step_id);
+             CREATE INDEX v148_run_value_by_attachment ON automation_run_value(attachment_id);
+             CREATE INDEX v148_task_by_run_step ON task(made_in_run_step_id);
+             CREATE INDEX v148_task_comment_by_run_step ON task_comment(automation_run_step_id);
+             UPDATE automation_run_value
+                SET from_run_step_id = NULL,
+                    attachment_id = CASE WHEN kind = 'file' THEN NULL ELSE attachment_id END
+              WHERE from_run_step_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
+                                          WHERE r.status IN ('completed', 'failed', 'canceled'))
+                AND run_step_id NOT IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
+                                         WHERE r.status IN ('completed', 'failed', 'canceled'));
+             DELETE FROM automation_run_value
+              WHERE run_step_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
+                                     WHERE r.status IN ('completed', 'failed', 'canceled'));
+             DELETE FROM search_doc
+              WHERE owner_kind = 'attachment'
+                AND owner_id IN (SELECT a.id FROM attachment a
+                                  WHERE a.target_type = 'automation_run_step'
+                                    AND a.target_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
+                                                         WHERE r.status IN ('completed', 'failed', 'canceled')));
+             DELETE FROM attachment
+              WHERE target_type = 'automation_run_step'
+                AND target_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
+                                   WHERE r.status IN ('completed', 'failed', 'canceled'));
+             UPDATE task SET made_in_run_step_id = NULL
+              WHERE made_in_run_step_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
+                                             WHERE r.status IN ('completed', 'failed', 'canceled'));
+             UPDATE task_comment SET automation_run_step_id = NULL
+              WHERE automation_run_step_id IN (SELECT s.id FROM automation_run_step s JOIN automation_run r ON r.id = s.run_id
+                                                WHERE r.status IN ('completed', 'failed', 'canceled'));
+             DELETE FROM automation_run_step
+              WHERE run_id IN (SELECT id FROM automation_run WHERE status IN ('completed', 'failed', 'canceled'));
+             DELETE FROM automation_run_def
+              WHERE run_id IN (SELECT id FROM automation_run WHERE status IN ('completed', 'failed', 'canceled'));
+             DROP INDEX v148_run_value_by_step;
+             DROP INDEX v148_run_value_by_from_step;
+             DROP INDEX v148_run_value_by_attachment;
+             DROP INDEX v148_task_by_run_step;
+             DROP INDEX v148_task_comment_by_run_step;";
+
+/// v148: let go of what an ended run kept of its steps ([`LET_GO_OF_WHAT_ENDED_RUNS_KEPT`]), with an
+/// index on `automation_run_step.run_def_id` for the step's length where that column is there. A store
+/// raised from before the automation tables were created has `automation_run_step` created in the live
+/// shape, with no such column since v153, and nothing in it to let go.
+fn let_go_of_what_ended_runs_kept(ctx: &Ctx<'_>) -> Result<()> {
+    let tx = ctx.tx;
+    let by_def = column_names(tx, "automation_run_step")?.iter().any(|c| c == "run_def_id");
+    if by_def {
+        tx.execute_batch("CREATE INDEX v148_run_step_by_def ON automation_run_step(run_def_id);")?;
+    }
+    tx.execute_batch(LET_GO_OF_WHAT_ENDED_RUNS_KEPT)?;
+    if by_def {
+        tx.execute_batch("DROP INDEX v148_run_step_by_def;")?;
+    }
+    Ok(())
+}
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
 /// already there — the order the built-in that takes a task listed them in when nobody chose one.
@@ -16898,6 +17115,114 @@ mod tests {
             [],
         );
         assert!(refused.is_err(), "a way out written without a name is refused: {refused:?}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v153: each step execution names what its copy named — the version, the placement and the step —
+    /// and `run_def_id` goes, with its reference. A run not over, a failure nobody has seen and a run that
+    /// still keeps a step are given the version of the last copy they took, and the default agent that
+    /// copy was read with: the agent of the steps that chose none of their own and fell back to no role's.
+    /// A run that is over and keeps no step is given neither. The copies stay.
+    #[test]
+    fn each_run_points_at_the_version_its_last_copy_was_taken_from_at_v153() {
+        let dir = scratch("runs-point-at-versions");
+        let engine = store_at(&dir, 152);
+        let at = "2026-11-27T00:00:00Z";
+        engine
+            .conn()
+            .execute_batch(&format!(
+                r#"BEGIN;
+                 INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO automation (id, project_id, name) VALUES (1, 1, 'A');
+                 INSERT INTO automation_version (id, automation_id, version, placements, cfgs, placement_steps, edges, wires, roles)
+                     VALUES (1, 1, 2, '[]', '[]', '[{{"placement_id":7,"step_id":70,"agent":"codex"}}]', '[]', '[]',
+                             '[{{"id":1,"agent":"claude-code"}}]');
+                 INSERT INTO automation_run (id, automation_id, project_id, status, acknowledged_at) VALUES
+                     (1, 1, 1, 'running', NULL), (2, 1, 1, 'paused', NULL), (3, 1, 1, 'failed', NULL),
+                     (4, 1, 1, 'failed', '{at}'), (5, 1, 1, 'completed', NULL), (6, 1, 1, 'completed', NULL),
+                     (7, 1, 1, 'running', NULL);
+                 INSERT INTO automation_run_def (id, run_id, placement_id, step_id, automation_version, name, agent) VALUES
+                     (10, 1, 7, 70, 2, '選ぶ', 'codex'), (11, 1, 8, 80, 2, '書く', 'gemini'),
+                     (12, 1, 9, 90, 2, '見る', 'claude-code'), (13, 1, 6, 60, 2, '取る', ''),
+                     (20, 2, 9, 90, 2, '見る', 'claude-code'),
+                     (30, 3, 7, 70, 2, '選ぶ', 'codex'),
+                     (40, 4, 8, 80, 2, '書く', 'gemini'),
+                     (50, 5, 8, 80, 2, '書く', 'gemini'),
+                     (71, 7, 8, 80, 1, '書く', 'gemini'), (72, 7, 8, 80, 2, '書く', 'gemini');
+                 INSERT INTO automation_run_step (id, run_id, run_def_id, seq, status) VALUES
+                     (14, 1, 10, 1, 'done'), (15, 1, 11, 2, 'running'), (51, 5, 50, 1, 'done'), (73, 7, 71, 1, 'done');
+                 COMMIT;"#
+            ))
+            .unwrap();
+        let copies_before: i64 =
+            engine.conn().query_row("SELECT COUNT(*) FROM automation_run_def", [], |r| r.get(0)).unwrap();
+
+        run(&engine, &dir, steps_through(153), &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(engine.format_version().unwrap(), 153);
+        let columns = |table: &str| -> Vec<String> {
+            let conn = engine.conn();
+            let mut stmt = conn.prepare("SELECT name FROM pragma_table_info(?1)").unwrap();
+            stmt.query_map([table], |r| r.get(0)).unwrap().map(|r| r.unwrap()).collect()
+        };
+        let steps = columns("automation_run_step");
+        assert!(!steps.iter().any(|c| c == "run_def_id"), "{steps:?}");
+        for column in ["automation_version", "placement_id", "step_id"] {
+            assert!(steps.iter().any(|c| c == column), "{column} in {steps:?}");
+        }
+        let runs = columns("automation_run");
+        assert!(runs.iter().any(|c| c == "automation_version") && runs.iter().any(|c| c == "default_agent"), "{runs:?}");
+        let references: i64 = engine
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_foreign_key_list('automation_run_step') WHERE \"table\" = 'automation_run_def'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(references, 0, "nothing holds a copy any more");
+
+        let key = |id: i64| -> (Option<i64>, Option<i64>, Option<i64>) {
+            engine
+                .conn()
+                .query_row(
+                    "SELECT automation_version, placement_id, step_id FROM automation_run_step WHERE id = ?1",
+                    [id],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                )
+                .unwrap()
+        };
+        assert_eq!(key(14), (Some(2), Some(7), Some(70)));
+        assert_eq!(key(15), (Some(2), Some(8), Some(80)));
+        assert_eq!(key(51), (Some(2), Some(8), Some(80)));
+        assert_eq!(key(73), (Some(1), Some(8), Some(80)), "a step names the copy it ran, not the run's last");
+
+        let pointed = |id: i64| -> (Option<i64>, Option<String>) {
+            engine
+                .conn()
+                .query_row("SELECT automation_version, default_agent FROM automation_run WHERE id = ?1", [id], |r| {
+                    Ok((r.get(0)?, r.get(1)?))
+                })
+                .unwrap()
+        };
+        assert_eq!(pointed(1), (Some(2), Some("gemini".into())), "the agent a step fell back to that is no role's");
+        assert_eq!(pointed(2), (Some(2), Some("claude-code".into())), "a role's, where every step fell back to one");
+        assert_eq!(pointed(3), (Some(2), None), "every step chose its own: nothing reads the default");
+        assert_eq!(pointed(4), (None, None), "a failure somebody has seen, keeping no step");
+        assert_eq!(pointed(5), (Some(2), Some("gemini".into())), "a run that is over but still keeps a step");
+        assert_eq!(pointed(6), (None, None), "a run that is over and took no copy");
+        assert_eq!(pointed(7), (Some(2), Some("gemini".into())), "the version of the last copy it took");
+
+        let copies_after: i64 =
+            engine.conn().query_row("SELECT COUNT(*) FROM automation_run_def", [], |r| r.get(0)).unwrap();
+        assert_eq!(copies_after, copies_before, "the copies stay");
+        let broken = {
+            let conn = engine.conn();
+            let mut check = conn.prepare("PRAGMA foreign_key_check").unwrap();
+            let rows = check.query_map([], |_| Ok(())).unwrap();
+            rows.count()
+        };
+        assert_eq!(broken, 0, "no row names one that is not there");
         std::fs::remove_dir_all(&dir).ok();
     }
 }

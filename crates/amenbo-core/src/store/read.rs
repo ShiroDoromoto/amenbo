@@ -1031,17 +1031,17 @@ impl Store {
         Ok(crate::store_engine::read::automation_run_steps_of(self.engine.conn(), run_id)?)
     }
 
-    /// The steps one run copied down — at launch, and again each time it was picked up after pausing
-    /// before its next task — what each execution was asked to do.
+    /// **The steps one run reads now** — the saved version it points at, as the run reads it
+    /// ([`crate::ops::automation_run::current_defs`]).
     pub fn automation_run_defs(&self, run_id: i64) -> Result<Vec<crate::model::AutomationRunDef>> {
         self.reachable(&format!("automation run #{run_id}"), |c| {
             super::owner::automation_run(c, run_id)
         })?;
-        Ok(crate::store_engine::read::automation_run_defs_of(self.engine.conn(), run_id)?)
+        Ok(crate::ops::automation_run::current_defs(self.engine.conn(), run_id)?)
     }
 
-    /// **One run read back whole** — every round, every step execution with its values and every copy
-    /// of the steps it took, joined from the run log and the store ([`crate::run_log::detail`]): a
+    /// **One run read back whole** — every round, every step execution with its values and every step
+    /// it ran, joined from the run log and the store ([`crate::run_log::detail`]): a
     /// finished round from its file, the round under way from the store. `None` where there is no such
     /// run.
     pub fn automation_run_detail(&self, run_id: i64) -> Result<Option<crate::run_log::Detail>> {

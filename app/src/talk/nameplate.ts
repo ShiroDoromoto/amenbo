@@ -113,7 +113,7 @@ export type Say = {
   /** The step running now, by the name it was built under. */
   readonly step: string;
   /** The automation the run was launched from, by its id, and the spot on its picture the step was
-   *  opened from, or null where the run's copy names none. They are what the step is numbered by. */
+   *  opened from, or null where the version it was read from names none. They are what the step is numbered by. */
   readonly automationId: number;
   readonly placement: number | null;
   /** **The number the picture gives that spot's box** (`AMB-T-5538`), the same one the build screen

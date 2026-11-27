@@ -307,8 +307,8 @@ fn advance(
         let waiting =
             read(|store| Ok(amenbo_core::ops::automation_run::next_def(store.read_model().conn(), *run)?))?;
         match waiting {
-            // Before the entry is opened, what has been saved since the run's copy was taken is taken
-            // up (`AMB-D-1015`): a run that came back to its entry starts from the newest saved
+            // Before the entry is opened, what has been saved since the version the run points at is
+            // taken up (`AMB-D-1015`): a run that came back to its entry starts from the newest saved
             // definition. A run that failed its check has nothing left to open.
             Waiting::Step(def) => {
                 let def = match crate::automation::take_up_newer(app, *run, *def) {
@@ -319,8 +319,8 @@ fn advance(
                         continue;
                     }
                 };
-                if let Err(e) = crate::automation::automation_step_open(app.clone(), *run, Some(def.id)) {
-                    log::warn!("run {run} could not open step {}: {}", def.id, e.message_en)
+                if let Err(e) = crate::automation::automation_step_open(app.clone(), *run, Some(def.key())) {
+                    log::warn!("run {run} could not open step {:?}: {}", def.key(), e.message_en)
                 }
             }
             // A step under way that the built-in that waits holds open ends here once its time has
@@ -339,9 +339,9 @@ fn advance(
                 }
             }
             // Ended here rather than by whatever changed the definition: what a run can still do is
-            // read off the run's own copies, and an edit that leaves one of a dozen runs with nowhere
-            // to go does not know which. A stop hands the task back with a comment saying how far it
-            // got, which is where the reader finds it.
+            // read off the version the run points at, and an edit that leaves one of a dozen runs with
+            // nowhere to go does not know which. A stop hands the task back with a comment saying how
+            // far it got, which is where the reader finds it.
             Waiting::NoWayOn => {
                 if let Err(e) = give_up(*run) {
                     log::warn!("run {run} has nowhere to go and could not be stopped: {}", e.message_en);

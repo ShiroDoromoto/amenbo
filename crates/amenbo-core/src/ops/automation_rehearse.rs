@@ -9,14 +9,16 @@
 //! refused by the launch check, as a launch of it is.
 //!
 //! **It walks the same road a run does.** The launch check refuses it where it would refuse a launch,
-//! the steps are copied into a run, each step is opened by [`super::automation_step`] — which resolves
+//! the run points at a saved version, each step is opened by [`super::automation_step`] — which resolves
 //! what is wired into it, reads the answers where it was placed and composes the whole prompt an agent
 //! would be started on — and each report goes through [`super::automation_report::done`], which is what
 //! decides where the run goes next. A second walker written for tests alone would be a second reading of
 //! the picture, and it would drift from the one that runs.
 //!
-//! **It tries the draft** ([`automation_run::ReadsFrom::Draft`]) — the automation as it is being written,
-//! saved or not — where a launch reads the saved definition.
+//! **It tries the draft** — the automation as it is being written, saved or not. A run points at a saved
+//! version (`AMB-D-1219`), so the draft is saved as the automation's next version first, in the same
+//! transaction, and the runs point at that ([`draft_saved`]). The transaction is never committed, so the
+//! version goes with the rest.
 //!
 //! **What is stood in for is the work**: no agent is started, and no built-in is carried out — no task
 //! is filed, taken or closed, no worktree is cut or folded, nothing is fetched or merged. In their place
@@ -49,7 +51,7 @@ use serde::Serialize;
 use crate::error::{Error, Result};
 use crate::model::{
     ActorKind, AttachmentTarget, AutomationPortKind, AutomationRun, AutomationRunDef, AutomationRunStatus,
-    AutomationStoppedReason, RunDefExit, TaskStatus, ERROR_EXIT,
+    AutomationStoppedReason, RunDefExit, RunDefKey, TaskStatus, ERROR_EXIT,
 };
 use crate::ops::automation_builtin_close;
 use crate::ops::automation_builtin_defer;
@@ -140,10 +142,11 @@ pub fn rehearse(
         cut: None,
     };
     let nothing = HandedAtLaunch::default();
-    let project_id = read::automation(tx.conn(), automation_id)?
-        .ok_or_else(|| Error::not_found(format!("automation '{automation_id}' not found")))?
-        .project_id;
+    let automation = read::automation(tx.conn(), automation_id)?
+        .ok_or_else(|| Error::not_found(format!("automation '{automation_id}' not found")))?;
+    let project_id = automation.project_id;
     let seats = automation_run::rehearsal_seats(tx.conn(), automation_id, ReadsFrom::Draft)?;
+    draft_saved(tx, &automation)?;
     let mut to_hand = Some(handed);
     for (role_id, by_trigger) in seats {
         // A role started by a trigger takes no task (`AMB-D-1127`): nothing is made up for it, and what
@@ -152,8 +155,7 @@ pub fn rehearse(
             true => (&nothing, None),
             false => (to_hand.take().unwrap_or(&nothing), Some(made_up(tx, project_id, role_id)?)),
         };
-        let run =
-            automation_run::launch_in_seat_past_the_limit(tx, automation_id, &by, handed, ReadsFrom::Draft, role_id)?;
+        let run = automation_run::launch_in_seat_past_the_limit(tx, automation_id, &by, handed, role_id)?;
         walk_run(tx, &run, &by, &mut filed, &mut rehearsal)?;
         let ended = read::automation_run(tx.conn(), run.id)?.unwrap_or(run);
         rehearsal.status = ended.status;
@@ -169,6 +171,24 @@ pub fn rehearse(
     Ok(rehearsal)
 }
 
+/// **Save the draft as the automation's next version, inside `tx`**, where it holds anything its newest
+/// version does not, or nothing is saved yet — so the runs of a test run point at the draft as a launched
+/// run points at what was saved (`AMB-D-1219`). Nothing is asked of it here: the launch checks it, as it
+/// checks any version. A version saved in `tx` goes when `tx` is thrown away.
+///
+/// An archived automation, and one kept only to be written out, are not saved: the launch refuses them
+/// before it reads a version, as it always has.
+fn draft_saved(tx: &WriteTx<'_>, automation: &crate::model::Automation) -> Result<()> {
+    if automation.archived || automation.export_only {
+        return Ok(());
+    }
+    let saved = read::automation_version_latest(tx.conn(), automation.id)?.is_some();
+    if !saved || crate::ops::automation::unsaved(tx.conn(), automation.id)? {
+        crate::ops::automation::version_add(tx, automation.id)?;
+    }
+    Ok(())
+}
+
 /// **Walk one run of a test run** from where it starts to its end, putting every step it opens on
 /// `rehearsal`. `filed` is the task filed under the run's role before it was launched, which the first
 /// step that takes a task takes.
@@ -179,13 +199,13 @@ fn walk_run(
     filed: &mut Option<i64>,
     rehearsal: &mut Rehearsal,
 ) -> Result<()> {
-    let mut visits: BTreeMap<i64, usize> = BTreeMap::new();
+    let mut visits: BTreeMap<RunDefKey, usize> = BTreeMap::new();
     while let Waiting::Step(def) = automation_run::next_def(tx.conn(), run.id)? {
         if rehearsal.steps.len() >= MOST {
             rehearsal.cut = Some(Cut::TooLong);
             break;
         }
-        if visits.get(&def.id).is_some_and(|seen| *seen > 0)
+        if visits.get(&def.key()).is_some_and(|seen| *seen > 0)
             && def.builtin.as_deref() == Some(automation_builtin_take::TAKE_TASK.key)
         {
             let standing = read::automation_run(tx.conn(), run.id)?
@@ -193,7 +213,7 @@ fn walk_run(
             automation_run::end_with_no_task(tx, standing)?;
             break;
         }
-        let opening = match automation_step::open_rehearsing(tx, run.id, def.id, by.startable)? {
+        let opening = match automation_step::open_rehearsing(tx, run.id, def.key(), by.startable)? {
             Opened::Ready(opening) => *opening,
             Opened::Stopped { missing, .. } => {
                 rehearsal.missing = missing;
@@ -209,7 +229,7 @@ fn walk_run(
         };
         let def = opening.run_def;
         let exits: Vec<RunDefExit> = serde_json::from_str(&def.exits).map_err(Error::from)?;
-        let seen = visits.entry(def.id).or_default();
+        let seen = visits.entry(def.key()).or_default();
         let Some(exit) = choose(&def, &exits, *seen)? else {
             rehearsal.cut = Some(Cut::Looped);
             break;
@@ -437,6 +457,52 @@ mod tests {
             assert!(work.prompt.as_deref().is_some_and(|p| p.contains("work on it")), "{work:?}");
             assert!(rehearsal.steps[0].prompt.is_none(), "a built-in is started on no prompt");
             assert_eq!(read::task_status(tx.conn(), real).expect("read"), Some(TaskStatus::Todo), "the real task is left alone");
+        });
+    }
+
+    /// **A test run tries the draft, saved as the automation's next version inside the walk's own
+    /// transaction** (`AMB-D-1219`): what has been written since the newest save is what is walked, and
+    /// the run walked points at the version saved for it.
+    #[test]
+    fn a_test_run_tries_the_draft_as_a_version_saved_for_the_walk() {
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation =
+                automation::add(tx, project, NewAutomation { name: "draft".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
+                    .expect("automation");
+            let on = AutomationPictureOwner::Automation;
+            let take = automation::placement_add(tx, automation.id, action(tx, "take_task").expect("take").id)
+                .expect("place take");
+            let (_, work) = mk_placed(tx, &automation, "work", "work on it", "claude");
+            let close = automation::placement_add(tx, automation.id, action(tx, "close_task").expect("close").id)
+                .expect("place close");
+            automation::edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(work.id), None).expect("take → work");
+            let onward =
+                automation::edge_add(tx, on, work.id, None, EdgeTarget::Go(close.id), None).expect("work → close");
+            automation::edge_add(tx, on, close.id, None, EdgeTarget::Done, None).expect("close → done");
+            start_at(tx, automation.id, take.id);
+            let saved = automation::save(tx, automation.id, None).expect("save").version;
+
+            let (_, check) = mk_placed(tx, &automation, "check", "check it", "claude");
+            automation::edge_update(tx, onward.id, Some(EdgeTarget::Go(check.id)), None).expect("work → check");
+            automation::edge_add(tx, on, check.id, None, EdgeTarget::Go(close.id), None).expect("check → close");
+
+            let rehearsal = walk(tx, &automation, &HandedAtLaunch::default());
+            assert_eq!(
+                walked(&rehearsal),
+                vec![
+                    ("タスクに着手する", TAKEN),
+                    ("work", DONE_EXIT),
+                    ("check", DONE_EXIT),
+                    ("タスクを閉じる", DONE_EXIT),
+                ],
+                "the draft is what is walked: {rehearsal:?}",
+            );
+            let newest = read::automation_version_latest(tx.conn(), automation.id).expect("read").expect("a version");
+            assert_eq!(newest.version, saved + 1, "the draft is saved for the walk");
+            let run = read::automation_run_ids(tx.conn(), automation.id).expect("runs").into_iter().max().expect("a run");
+            let run = read::automation_run(tx.conn(), run).expect("read").expect("the run");
+            assert_eq!(run.automation_version, Some(newest.version), "the run walked points at it");
         });
     }
 

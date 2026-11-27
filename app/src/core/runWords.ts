@@ -59,8 +59,8 @@ export function runReasonWord(run: Pick<AutomationRunCardDto, "stoppedReason">):
 }
 
 /**
- * **A way out a run left through**, as the screen names it — the name the run's copy holds. A
- * built-in's is drawn in the screen's language, so `builtin` is the key of the step it left.
+ * **A way out a run left through**, as the screen names it — the name the version it ran on holds.
+ * A built-in's is drawn in the screen's language, so `builtin` is the key of the step it left.
  */
 export function runExitWord(builtin: string | null | undefined, name: string): string {
   if (name === ERROR_EXIT) return t("auto.pic.errorExit");

@@ -4603,7 +4603,7 @@ pub struct AutomationTestStepDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) folder: Option<String>,
-    /// The way out it was taken to leave by, as the run's copy names it.
+    /// The way out it was taken to leave by, as the version the step was read from names it.
     pub(crate) exit: String,
 }
 
@@ -4771,8 +4771,8 @@ pub struct AutomationBuiltinRunDto {
     #[ts(optional, type = "number")]
     pub(crate) run_step: Option<i64>,
     /// **The spot on the picture this step was opened from**, by the placement's id — the row numbers
-    /// the step with the number the picture's box carries (`AMB-T-5538`). Absent where the run's copy
-    /// names no spot.
+    /// the step with the number the picture's box carries (`AMB-T-5538`). Absent where the version the
+    /// step was read from names no spot.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub(crate) placement: Option<i64>,
@@ -4821,8 +4821,8 @@ pub struct AutomationBuiltinRunDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) args: Option<Vec<String>>,
-    /// **How long a script step is expected to take, in minutes** (`automation_run_def.expected_minutes`,
-    /// or the default where the run's copy predates it). Absent on a built-in, beside `program`: a
+    /// **How long a script step is expected to take, in minutes** (`automation_action_step.expected_minutes`
+    /// on the version the step was read from, or the default where it says none). Absent on a built-in, beside `program`: a
     /// script runs in a terminal whose silence is marked on its card (`app/src/talk/moving.ts`), and a
     /// built-in has no terminal.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -4852,8 +4852,8 @@ pub struct AutomationStepRunDto {
     #[ts(type = "number")]
     pub(crate) automation: i64,
     /// **The spot on the picture this step was opened from**, by the placement's id — the row numbers
-    /// the step with the number the picture's box carries (`AMB-T-5538`). Absent where the run's copy
-    /// names no spot.
+    /// the step with the number the picture's box carries (`AMB-T-5538`). Absent where the version the
+    /// step was read from names no spot.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub(crate) placement: Option<i64>,
@@ -4891,8 +4891,8 @@ pub struct AutomationStepRunDto {
     pub(crate) folder: Option<String>,
     /// Whether this step may stop and wait for a person (`automation_action_step.interactive`).
     pub(crate) interactive: bool,
-    /// **How long the step is expected to take, in minutes** (`automation_run_def.expected_minutes`, or
-    /// the default where the run's copy predates it). A silence in the step's terminal twice this long is
+    /// **How long the step is expected to take, in minutes** (`automation_action_step.expected_minutes` on
+    /// the version the step was read from, or the default where it says none). A silence in the step's terminal twice this long is
     /// marked on its card (`app/src/talk/moving.ts`).
     #[ts(type = "number")]
     pub(crate) expected_minutes: i64,
@@ -5337,10 +5337,10 @@ pub struct AutomationRunCardDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) stopped_reason: Option<&'static str>,
-    /// **The saved version of the automation its copy was taken from** (`AMB-D-1015`) — the newest
-    /// copy, which is what it goes on from and what it last took up at its entry. Absent where that
-    /// copy was taken from unsaved changes — a run every saved version is newer than — and on a run
-    /// that carries no copy of its entry.
+    /// **The saved version of the automation the run points at** (`AMB-D-1219`) — what it goes on
+    /// from, and what it last moved to at its entry (`AMB-D-1015`). Absent on a run that points at
+    /// none — one that had ended before runs pointed at a version (v153) — and on a run whose seat has
+    /// no entry on that version.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub(crate) version: Option<i64>,
@@ -5348,8 +5348,8 @@ pub struct AutomationRunCardDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) step_name: Option<String>,
-    /// **The step under way now may stop and wait for a person**, as the run's copy of it says
-    /// (`automation_action_step.interactive`) — what the run's pane marks the seat by. Whether it is
+    /// **The step under way now may stop and wait for a person**, as the version it was read from
+    /// says (`automation_action_step.interactive`) — what the run's pane marks the seat by. Whether it is
     /// waiting is not read (`AMB-D-858`). Absent where the run is not running, where its last step has
     /// ended, and where that step says no such thing.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -5376,7 +5376,7 @@ pub struct AutomationRunCardDto {
     /// a reader asks of a run they are not watching.
     #[ts(type = "number")]
     pub(crate) steps_done: usize,
-    /// **The way out the last step left through**, by the name the run's copy declared it under.
+    /// **The way out the last step left through**, by the name the version it was read from declares it under.
     /// Absent while that step is still under way, and where it ended
     /// without leaving by one — a program that exited before it reported. On a failure it is the
     /// half of "where did it fail" the step's name does not say.

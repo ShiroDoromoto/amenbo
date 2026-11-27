@@ -5,10 +5,10 @@
 //! has done so far, the values wired into it, and the settings answered where it was placed. An agent that had to fetch would need a
 //! vocabulary for fetching, and every step would spend its first turns on it.
 //!
-//! **What is read from the snapshot, and what is not.** The step's own declarations — its ways out,
-//! its inputs, its settings — and the wires joined to its inputs come from
-//! [`crate::model::AutomationRunDef`], the copy taken at launch, so editing an automation cannot
-//! change what a run under way is doing (`AMB-D-961`). The preamble is not: no row holds it, so it is
+//! **What is read from the saved version, and what is not.** The step's own declarations — its ways
+//! out, its inputs, its settings — and the wires joined to its inputs come from
+//! [`crate::model::AutomationRunDef`], read off the saved version the run points at, so editing an
+//! automation cannot change what a run under way is doing (`AMB-D-961`, `AMB-D-1219`). The preamble is not: no row holds it, so it is
 //! composed from the build ([`crate::agents::preamble`]) at every launch.
 //!
 //! **A value travels along a wire and along nothing else.** A later step is handed what an earlier one
@@ -30,7 +30,7 @@ use crate::idref::{self, RefKind};
 use crate::model::{
     AttachmentTarget, AutomationCfgKind, AutomationPauseKind, AutomationPortDirection, AutomationPortKind, AutomationRun,
     AutomationRunDef, AutomationRunStatus, AutomationRunStep, AutomationRunStepStatus, AutomationRunTask, AutomationRunValue,
-    AutomationStoppedReason, RunDefCfg, RunDefExit, RunDefIn, RunDefPort, StepScript, ERROR_EXIT,
+    AutomationStoppedReason, RunDefCfg, RunDefExit, RunDefIn, RunDefKey, RunDefPort, StepScript, ERROR_EXIT,
 };
 use crate::ops::automation_script::Given;
 use crate::ops::automation_stop::Ended;
@@ -44,8 +44,8 @@ pub struct Opening {
     /// The execution row this step is being run under — what a report, a value or an attachment hangs
     /// off from here on.
     pub run_step: AutomationRunStep,
-    /// The step as it stood at launch — the agent to start, the model, whether it may wait for a
-    /// person, and where its working folder is taken from.
+    /// The step as the run reads it — the agent to start, the model, whether it may wait for a person,
+    /// and where its working folder is taken from.
     pub run_def: AutomationRunDef,
     /// The whole text handed to the agent, preamble first and the step's own prompt after the material
     /// it is to read.
@@ -235,14 +235,17 @@ fn not_found(what: &str, id: i64) -> Error {
 /// **`outside` is a built-in's work that drives git, already done** before this transaction
 /// ([`super::automation_builtin::work_outside`]), so the fetch does not hold every other writer to
 /// the store while it waits on the remote. Here it is only written down.
+///
+/// **`at` names the step** ([`RunDefKey`]): which step of which placement, in which saved version — the
+/// one the run points at, as [`super::automation_run::next_def`] answers it.
 pub fn open(
     tx: &WriteTx<'_>,
     run_id: i64,
-    run_def_id: i64,
+    at: RunDefKey,
     startable: Option<&[String]>,
     outside: Option<super::automation_builtin::DoneOutside>,
 ) -> Result<Opened> {
-    open_as(tx, run_id, run_def_id, startable, outside, false)
+    open_as(tx, run_id, at, startable, outside, false)
 }
 
 /// [`open`] for a test run ([`super::automation_rehearse`]): **a built-in is opened as an agent's step
@@ -252,16 +255,16 @@ pub fn open(
 pub(crate) fn open_rehearsing(
     tx: &WriteTx<'_>,
     run_id: i64,
-    run_def_id: i64,
+    at: RunDefKey,
     startable: Option<&[String]>,
 ) -> Result<Opened> {
-    open_as(tx, run_id, run_def_id, startable, None, true)
+    open_as(tx, run_id, at, startable, None, true)
 }
 
 fn open_as(
     tx: &WriteTx<'_>,
     run_id: i64,
-    run_def_id: i64,
+    at: RunDefKey,
     startable: Option<&[String]>,
     outside: Option<super::automation_builtin::DoneOutside>,
     rehearsing: bool,
@@ -274,13 +277,14 @@ fn open_as(
             run.status.as_str()
         )));
     }
-    let def = read::automation_run_def(conn, run_def_id)?
-        .ok_or_else(|| not_found("step of a run", run_def_id))?;
-    if def.run_id != run_id {
-        return Err(Error::invalid(format!(
-            "step '{run_def_id}' belongs to another run — a run opens its own steps"
-        )));
-    }
+    let def = super::automation_run::def_at(conn, run_id, at)?.ok_or_else(|| {
+        Error::not_found(format!(
+            "step '{}' of placement '{}' in version {} of run '{run_id}''s automation not found",
+            at.step_id.unwrap_or_default(),
+            at.placement_id.unwrap_or_default(),
+            at.automation_version.unwrap_or_default(),
+        ))
+    })?;
     // **The agent is asked for again here.** The launch check asked it of every step the run can
     // reach (`crate::ops::automation_run::check`), but that was once, and a run is out for as long
     // as its work takes — an agent uninstalled in the middle of one leaves every step after it with
@@ -371,7 +375,7 @@ fn open_as(
     // **An action that takes one run at a time is gone into in arrival order, one run at a time.**
     // Asked here, after a built-in's own wait, so a run that ends there for want of a task never holds
     // a place in the line; and before anything is written, so a run kept out leaves nothing
-    // behind it on each look. A test run is not kept out: it walks a copy nobody else is in.
+    // behind it on each look. A test run is not kept out: it walks a version nobody else is in.
     if !rehearsing {
         if let Some(room) = super::automation_run::room_for(conn, &run, &def)? {
             let run = match run.pause_requested {
@@ -622,16 +626,13 @@ fn latest_for(
     };
     let mut best: Option<(i64, AutomationRunValue)> = None;
     for execution in executions {
-        let Some(from_def) = read::automation_run_def(conn, execution.run_def_id)? else {
-            continue;
-        };
         for value in read::automation_run_values_of(conn, execution.id)? {
             if value.direction != AutomationPortDirection::Out {
                 continue;
             }
             let joined = input.from.iter().any(|source| {
-                Some(source.placement_id) == from_def.placement_id
-                    && Some(source.step_id) == from_def.step_id
+                Some(source.placement_id) == execution.placement_id
+                    && Some(source.step_id) == execution.step_id
                     && source.exit_id == value.exit_id
                     && source.port_id == value.port_id
             });
@@ -723,14 +724,12 @@ fn new_stretch(
 
 /// **Let the detail of one old round go from the store**, as the next round begins — the oldest round
 /// before `before` that still has step executions and whose file the run log already holds. Its step
-/// executions go, with their values and the files attached to them, and so does every copy of the
-/// definition no step left names ([`super::automation_run::copies_let_go`]).
+/// executions go, with their values and the files attached to them.
 ///
 /// - **What stays** is every round row (`automation_run_task`), which the run's list by task and the
-///   count of rounds stopped in a row read; every task a round passed on (`automation_run_pass`); the
-///   round under way and the one just closed, whose detail the next steps still read (`latest_for`);
-///   and the copy the run reads now. The steps no round holds (`run_task_id` NULL) stay too: no round
-///   file has them.
+///   count of rounds stopped in a row read; every task a round passed on (`automation_run_pass`); and
+///   the round under way and the one just closed, whose detail the next steps still read
+///   (`latest_for`). The steps no round holds (`run_task_id` NULL) stay too: no round file has them.
 /// - **Only a round the run log holds goes.** An engine with no run log lets none go, and nor is a
 ///   round let go whose file is not there — one written before the run log was kept, or lost to a crash
 ///   after its commit. Those stay, and the next round asks of the one after them.
@@ -757,13 +756,8 @@ fn let_go_of_a_round(tx: &WriteTx<'_>, run_id: i64, before: &AutomationRunTask, 
     else {
         return Ok(());
     };
-    let (going, staying): (Vec<_>, Vec<_>) = steps.into_iter().partition(|s| s.run_task_id == Some(round.id));
-    let going: Vec<i64> = going.iter().map(|s| s.id).collect();
+    let going: Vec<i64> = steps.iter().filter(|s| s.run_task_id == Some(round.id)).map(|s| s.id).collect();
     let_steps_go(tx, &going, now)?;
-    let named: BTreeSet<i64> = staying.iter().map(|s| s.run_def_id).collect();
-    for def in super::automation_run::copies_let_go(conn, &run, &named)? {
-        tx.delete_record("automation_run_def", def)?;
-    }
     Ok(())
 }
 
@@ -811,7 +805,6 @@ fn new_execution(
     let run_step = AutomationRunStep {
         id: read::next_id(tx.conn(), "automation_run_step")?,
         run_id: run.id,
-        run_def_id: def.id,
         run_task_id: stretch.map(|s| s.id),
         seq: moves.iter().map(|s| s.seq).max().unwrap_or(0) + 1,
         exit_id: None,
@@ -822,6 +815,9 @@ fn new_execution(
         started_at: Some(now),
         ended_at: None,
         exit_code: None,
+        automation_version: def.automation_version,
+        placement_id: def.placement_id,
+        step_id: def.step_id,
         created_at: now,
         updated_at: now,
     };
@@ -944,15 +940,15 @@ fn from_the_trigger(start: &StartHanded) -> String {
     out
 }
 
-/// The lines one output may say, keyed by (way out, output) as the run's copy keys them.
+/// The lines one output may say, keyed by (way out, output) as the step keys them.
 type Choices = ((i64, i64), Vec<String>);
 
 /// **What each of this step's outputs may say, where a built-in reading it offers a closed set** — the
 /// classification the built-in that files a task takes from the step before it, on the axes its
-/// placement offers (`AMB-D-971`). Keyed by (way out, output) as the copy keys them; each entry is the
+/// placement offers (`AMB-D-971`). Keyed by (way out, output) as the step keys them; each entry is the
 /// lines [`handing_back`] shows under that output.
 ///
-/// Read off the run's copies, so it follows the wires the run launched with: a copy that reads
+/// Read off the version the run points at, so it follows the wires the run goes by: a step that reads
 /// [`super::automation_builtin_make::CHOSEN`] from one of this step's outputs is what makes that output
 /// one with a closed set.
 fn choices_for(tx: &WriteTx<'_>, def: &AutomationRunDef) -> Result<Vec<Choices>> {
@@ -1107,7 +1103,7 @@ fn story_so_far(tx: &WriteTx<'_>, stretch: Option<&AutomationRunTask>) -> Result
         if execution.status == AutomationRunStepStatus::Running {
             continue;
         }
-        let def = read::automation_run_def(conn, execution.run_def_id)?;
+        let def = super::automation_run::def_of(conn, &execution)?;
         let left_by = def.as_ref().and_then(|d| exit_in(d, execution.exit_id));
         let name = def.map(|d| d.name).unwrap_or_else(|| "a step".to_string());
         let first = execution.report.lines().next().unwrap_or("").trim().to_string();
@@ -1123,8 +1119,8 @@ fn story_so_far(tx: &WriteTx<'_>, stretch: Option<&AutomationRunTask>) -> Result
     Ok(Some(format!("## What has happened so far\n\n{}", lines.join("\n"))))
 }
 
-/// The name of the way out an execution left by, read from the run's copy of the step it ran — the
-/// live row may have been renamed or deleted since. `None` where it left by none, or by one the copy
+/// The name of the way out an execution left by, read from the step it ran as its version holds it — the
+/// live row may have been renamed or deleted since. `None` where it left by none, or by one the step
 /// does not hold.
 fn exit_in(def: &AutomationRunDef, exit_id: Option<i64>) -> Option<String> {
     let exits: Vec<RunDefExit> = serde_json::from_str(&def.exits).ok()?;
@@ -1358,17 +1354,17 @@ mod tests {
         launch(tx, automation.id, &by).expect("launch")
     }
 
-    /// The snapshot taken of one live spot at launch.
+    /// The step of one spot as the run reads it, off the version it points at.
     fn def_of(
         tx: &WriteTx<'_>,
         run: &AutomationRun,
         placement: &AutomationPlacement,
     ) -> AutomationRunDef {
-        read::automation_run_defs_of(tx.conn(), run.id)
+        crate::ops::automation_run::current_defs(tx.conn(), run.id)
             .expect("defs")
             .into_iter()
             .find(|d| d.placement_id == Some(placement.id))
-            .expect("the spot's snapshot")
+            .expect("the spot's step")
     }
 
     fn ready(opened: Opened) -> Opening {
@@ -1421,7 +1417,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
 
             assert_eq!(opening.run_step.seq, 1, "the first move of the run");
             assert_eq!(opening.run_step.status, AutomationRunStepStatus::Running);
@@ -1435,18 +1431,18 @@ mod tests {
     }
 
     /// **A round goes to the run log when the next one begins** — with every step it walked, their
-    /// reports and values, and the step copies they were opened from — and not before.
+    /// reports and values, and the steps they ran as the run read them — and not before.
     #[test]
     fn a_round_is_gathered_for_the_run_log_when_the_next_one_begins() {
         crate::ops::test_support::with_tx_keeping_runs(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             reported(tx, &first.run_step, "found", "Alice looked", "the note");
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open"));
             assert!(tx.queued_rounds().is_empty(), "the round is not over while nothing has begun after it");
 
-            ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open again"));
+            ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open again"));
 
             let rounds = tx.queued_rounds();
             assert_eq!(rounds.len(), 1);
@@ -1457,8 +1453,8 @@ mod tests {
             let reports: Vec<&str> = round.steps.iter().map(|s| s["step"]["report"].as_str().unwrap()).collect();
             assert_eq!(reports, vec!["Alice looked", ""]);
             assert_eq!(round.steps[0]["values"][0]["value"], serde_json::json!("the note"));
-            let mut defs: Vec<i64> = round.defs.iter().map(|d| d.id).collect();
-            let mut used = vec![first.run_def.id, second.run_def.id];
+            let mut defs: Vec<RunDefKey> = round.defs.iter().map(|d| d.key()).collect();
+            let mut used = vec![first.run_def.key(), second.run_def.key()];
             defs.sort();
             used.sort();
             assert_eq!(defs, used);
@@ -1489,9 +1485,9 @@ mod tests {
 
     /// One round of the picture: the first spot, which opens it and hands a note on, then the second.
     fn a_round(tx: &WriteTx<'_>, p: &Picture, run: &AutomationRun) -> (AutomationRunStep, AutomationRunStep) {
-        let first = ready(open(tx, run.id, def_of(tx, run, &p.first).id, None).expect("open the first"));
+        let first = ready(open(tx, run.id, def_of(tx, run, &p.first).key(), None).expect("open the first"));
         reported(tx, &first.run_step, "found", "Alice looked", "the note");
-        let second = ready(open(tx, run.id, def_of(tx, run, &p.second).id, None).expect("open the second"));
+        let second = ready(open(tx, run.id, def_of(tx, run, &p.second).key(), None).expect("open the second"));
         (first.run_step, second.run_step)
     }
 
@@ -1502,13 +1498,12 @@ mod tests {
 
     /// **The third round lets the first one's detail go** — its step executions, their values and the
     /// files attached to them — once the run log holds it. Every round row stays, as does the task a
-    /// round passed on, the detail of the second and third, and the copy the run reads.
+    /// round passed on and the detail of the second and third. No copy of the definition is written.
     #[test]
     fn the_third_round_lets_the_first_ones_detail_go() {
         in_a_run_log("let-go", |tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            let defs = read::automation_run_def_ids(tx.conn(), run.id).expect("defs");
             let (a1, b1) = a_round(tx, &p, &run);
             written(tx);
             crate::ops::attachment::add_url(
@@ -1567,7 +1562,7 @@ mod tests {
                 read::automation_run_tasks_of(tx.conn(), run.id).expect("rounds").iter().map(|r| r.seq).collect();
             assert_eq!(seqs, vec![1, 2, 3], "every round row stays");
             assert_eq!(read::automation_run_pass_ids(tx.conn(), run.id).expect("passes"), vec![pass.id]);
-            assert_eq!(read::automation_run_def_ids(tx.conn(), run.id).expect("defs"), defs, "the copy it reads stays");
+            assert!(read::automation_run_def_ids(tx.conn(), run.id).expect("defs").is_empty(), "nothing is copied");
             assert_eq!(read::automation_run_values_of(tx.conn(), b2.id).expect("values").len(), 1);
             let kept = read::automation_run_values_of(tx.conn(), a2.id).expect("values");
             let kept = kept.iter().find(|v| v.id == from_before.id).expect("the value handed across stays");
@@ -1586,7 +1581,7 @@ mod tests {
 
     /// **A run reads back whole after its first round's detail went** — the finished rounds from the run
     /// log, the round under way from the store, each step once, in the order they happened, with their
-    /// reports, values and the copies they were opened from.
+    /// reports, values and the steps they ran.
     #[test]
     fn a_run_reads_back_whole_from_the_run_log_and_the_store() {
         in_a_run_log("read-back", |tx| {
@@ -1598,7 +1593,7 @@ mod tests {
                 written(tx);
                 walked.extend([a.id, b.id]);
             }
-            let a4 = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open the fourth")).run_step;
+            let a4 = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open the fourth")).run_step;
             reported(tx, &a4, "found", "Carol is still at it", "the last note");
             walked.push(a4.id);
             assert!(!steps_left(tx, &run).contains(&walked[0]), "the first round's detail went from the store");
@@ -1616,7 +1611,7 @@ mod tests {
             assert_eq!(last.values[0].value.as_deref(), Some("the last note"));
             assert_eq!(detail.rounds.iter().map(|r| r.seq).collect::<Vec<_>>(), vec![1, 2, 3, 4]);
             for s in &detail.steps {
-                assert!(detail.defs.iter().any(|d| d.id == s.step.run_def_id), "each step's copy is there");
+                assert!(detail.defs.iter().any(|d| d.key() == s.step.def_key()), "each step it ran is there");
             }
 
             let store_alone = crate::run_log::detail(tx.conn(), None, run.id).expect("read").expect("the run");
@@ -1641,54 +1636,36 @@ mod tests {
         crate::ops::test_support::with_tx_keeping_runs(three_rounds);
     }
 
-    /// **A copy goes whole, and only once no step left names any row of it** — and never the one the
-    /// run reads now, so the run reads the same copy after as before.
+    /// **A run points at the saved version it was launched on and copies nothing** (`AMB-D-1219`) — each
+    /// step execution names the step of that version it ran, and the run reads the same steps after the
+    /// automation is saved again.
     #[test]
-    fn an_old_copy_goes_whole_once_no_step_names_it() {
+    fn a_run_points_at_its_version_and_each_step_names_what_it_ran() {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            assert!(run.role_id.is_some(), "the run sits in its role's seats");
-            let first = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
-            assert_eq!(first.len(), 2);
-            let copied = || -> Vec<i64> {
-                first
-                    .iter()
-                    .map(|def| {
-                        let mut again = def.clone();
-                        again.id = read::next_id(tx.conn(), "automation_run_def").expect("id");
-                        emit_create(tx, record::automation_run_def(&again)).expect("copy down again");
-                        again.id
-                    })
-                    .collect()
-            };
-            let second = copied();
-            let third = copied();
-            let first: Vec<i64> = first.iter().map(|d| d.id).collect();
-            let let_go = |named: Vec<i64>| {
-                let run = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
-                crate::ops::automation_run::copies_let_go(tx.conn(), &run, &named.into_iter().collect())
-                    .expect("copies")
-            };
-            let reads_now = || -> Vec<i64> {
-                crate::ops::automation_run::current_defs(tx.conn(), run.id).expect("now").iter().map(|d| d.id).collect()
-            };
+            let saved = read::automation_version_latest(tx.conn(), p.automation.id).expect("read").expect("saved");
+            assert_eq!(run.automation_version, Some(saved.version));
+            assert!(read::automation_run_def_ids(tx.conn(), run.id).expect("defs").is_empty(), "nothing is copied");
 
-            assert_eq!(let_go(vec![]), [first.clone(), second.clone()].concat());
-            assert_eq!(let_go(vec![second[1]]), first, "a copy one of whose rows is named stays whole");
-            for def in let_go(vec![second[1]]) {
-                tx.delete_record("automation_run_def", def).expect("let go");
-            }
-            assert_eq!(reads_now(), third);
-            for def in let_go(vec![]) {
-                tx.delete_record("automation_run_def", def).expect("let go");
-            }
-            assert_eq!(reads_now(), third, "the copy it reads now is left alone");
-            assert!(let_go(vec![]).is_empty());
-
-            copied();
-            tx.conn().execute("UPDATE automation_run SET role_id = NULL WHERE id = ?1", [run.id]).expect("no role");
-            assert!(let_go(vec![]).is_empty(), "a run in the seats of no role reads all of its copies");
+            let (a, _) = a_round(tx, &p, &run);
+            assert_eq!(
+                a.def_key(),
+                RunDefKey {
+                    automation_version: Some(saved.version),
+                    placement_id: Some(p.first.id),
+                    step_id: p.first_action.entry_step_id,
+                },
+            );
+            let before = crate::ops::automation_run::current_defs(tx.conn(), run.id).expect("defs");
+            automation::placement_delete(tx, p.second.id).expect("the definition moves on");
+            crate::ops::test_support::save_draft(tx, p.automation.id);
+            let after = crate::ops::automation_run::current_defs(tx.conn(), run.id).expect("defs");
+            assert_eq!(
+                after.iter().map(|d| d.key()).collect::<Vec<_>>(),
+                before.iter().map(|d| d.key()).collect::<Vec<_>>(),
+                "a saved version is never written on",
+            );
         });
     }
 
@@ -1729,7 +1706,7 @@ mod tests {
             )
             .expect("point the step at it");
             let run = a_run(tx, &p.automation);
-            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             assert_eq!(opening.folder.as_deref(), Some("/work/here"));
         });
     }
@@ -1741,7 +1718,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             assert_eq!(opening.folder, None);
         });
     }
@@ -1785,10 +1762,10 @@ mod tests {
         super::super::task::finish_creating(tx, task, ActorKind::Ai).expect("finish creating the task");
 
         let run = a_run(tx, &p.automation);
-        let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+        let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
         crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
         reported(tx, &first.run_step, "found", "Found one thing.", "the note");
-        (ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open")), second_dir)
+        (ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open")), second_dir)
     }
 
     /// **A step that names no folder opens in the working folder of the task its run is on**, not in
@@ -1818,14 +1795,14 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, false);
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             assert!(!first.text.contains("working on now"), "{}", first.text);
 
             let task = crate::ops::test_support::mk_task(tx, "直すもの");
             crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open"));
             let preamble = crate::agents::preamble("amenbo");
             let expected = format!("{preamble}\n\nThe task this run is working on now is AMB-T-{task}.\n\n");
             assert!(second.text.starts_with(&expected), "{}", second.text);
@@ -1837,7 +1814,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             let text = opening.text;
 
             assert!(text.starts_with("You are one step of an automation run"), "{text}");
@@ -1866,10 +1843,10 @@ mod tests {
                 .expect("make the step interactive");
             let run = a_run(tx, &p.automation);
 
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             assert!(first.text.contains(UNWATCHED), "{}", first.text);
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open")).text;
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open")).text;
             assert!(!second.contains(UNWATCHED), "{second}");
         });
     }
@@ -1891,7 +1868,7 @@ mod tests {
             automation::cfg_set(tx, p.first.id, "受信箱", Some(filter)).expect("answer the filter");
             automation::cfg_set(tx, p.first.id, "観点", Some("\"速さ\"")).expect("answer the text");
             let run = a_run(tx, &p.automation);
-            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
+            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open")).text;
 
             let cli = crate::config::Paths::command_name();
             assert!(text.contains("## Your settings"), "{text}");
@@ -1914,7 +1891,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
+            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open")).text;
             assert!(!text.contains("## Your settings"), "{text}");
         });
     }
@@ -1976,7 +1953,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
+            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open")).text;
 
             assert!(text.starts_with(&crate::agents::preamble("amenbo")), "{text}");
             assert!(text.contains("`amenbo automation run-show <run>`"), "{text}");
@@ -1996,7 +1973,7 @@ mod tests {
             let p = picture(tx, false, true);
             mk_out(tx, &p.first_action, Some("found"), "raised", AutomationPortKind::TaskMake, false);
             let run = a_run(tx, &p.automation);
-            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open")).text;
+            let text = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open")).text;
 
             assert!(text.contains("- a value — `amenbo automation step-out <id>=<value> --actor ai`"), "{text}");
             assert!(
@@ -2021,10 +1998,10 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, true, true);
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             reported(tx, &first.run_step, "found", "Found one thing.\nAnd more below.", "the note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open"));
             assert_eq!(second.run_step.seq, 2);
             assert_eq!(
                 second.run_step.run_task_id, first.run_step.run_task_id,
@@ -2050,10 +2027,10 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, false);
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open"));
             assert!(
                 read::automation_run_values_of(tx.conn(), second.run_step.id)
                     .expect("values")
@@ -2069,31 +2046,36 @@ mod tests {
             let p = picture(tx, true, true);
             let run = a_run(tx, &p.automation);
             let def = def_of(tx, &run, &p.first);
-            let once = ready(open(tx, run.id, def.id, None).expect("open"));
+            let once = ready(open(tx, run.id, def.key(), None).expect("open"));
             reported(tx, &once.run_step, "found", "First time.", "the first note");
-            let twice = ready(open(tx, run.id, def.id, None).expect("open again"));
+            let twice = ready(open(tx, run.id, def.key(), None).expect("open again"));
             reported(tx, &twice.run_step, "found", "Second time.", "the second note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open"));
             let handed =
                 read::automation_run_values_of(tx.conn(), second.run_step.id).expect("values");
             assert_eq!(handed[0].value.as_deref(), Some("the second note"));
         });
     }
 
-    /// **A value travels along the wires the run launched with** (`AMB-D-961`). The copy holds them, so a
-    /// picture that has since lost its wire — written straight to the table here — still hands the note
-    /// on.
+    /// **A value travels along the wires the run launched with** (`AMB-D-961`). The saved versions hold
+    /// them — the automation's, and those of the two actions its placements stand on — so a picture that
+    /// has since lost every wire, written straight to the table here, still hands the note on. An action
+    /// nobody has saved is read as it stands, so both are saved before the launch.
     #[test]
     fn a_value_travels_along_the_wire_the_run_launched_with_after_the_picture_loses_it() {
         with_tx(|tx| {
             let p = picture(tx, true, true);
+            for (action, placement) in [(&p.first_action, &p.first), (&p.second_action, &p.second)] {
+                let saved = automation::action_save(tx, action.id).expect("save the action");
+                automation::placement_version_set(tx, placement.id, saved.version).expect("stand on that version");
+            }
             let run = a_run(tx, &p.automation);
             tx.conn().execute("DELETE FROM automation_wire", []).expect("the picture moves on");
 
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open"));
             let handed =
                 read::automation_run_values_of(tx.conn(), second.run_step.id).expect("values");
             assert_eq!(handed.len(), 1);
@@ -2102,21 +2084,23 @@ mod tests {
     }
 
     /// **A value travels after the step that produced it is deleted** (`AMB-D-1015`). The definition can
-    /// be rewritten while a run goes, and the copy still names the step it was copied from, which is
-    /// what the wire it launched with is matched by.
+    /// be rewritten while a run goes, and the saved version of the action the placement stands on still
+    /// names the step, which is what the wire it launched with is matched by.
     #[test]
     fn a_value_travels_along_the_wire_after_the_producing_step_is_deleted() {
         with_tx(|tx| {
             let p = picture(tx, true, true);
+            let saved = automation::action_save(tx, p.first_action.id).expect("save the action");
+            automation::placement_version_set(tx, p.first.id, saved.version).expect("stand on that version");
             let run = a_run(tx, &p.automation);
             let def = def_of(tx, &run, &p.first);
-            let first = ready(open(tx, run.id, def.id, None).expect("open"));
+            let first = ready(open(tx, run.id, def.key(), None).expect("open"));
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
-            let step = def.step_id.expect("the copy names its step");
+            let step = def.step_id.expect("the version names its step");
             automation::step_delete(tx, step).expect("the definition moves on");
 
-            assert_eq!(def_of(tx, &run, &p.first).step_id, Some(step), "the copy keeps the id");
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            assert_eq!(def_of(tx, &run, &p.first).step_id, Some(step), "the version keeps the id");
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open"));
             let handed =
                 read::automation_run_values_of(tx.conn(), second.run_step.id).expect("values");
             assert_eq!(handed.len(), 1);
@@ -2132,14 +2116,14 @@ mod tests {
             let p = picture(tx, true, true);
             let run = a_run(tx, &p.automation);
             let def = def_of(tx, &run, &p.first);
-            let first = ready(open(tx, run.id, def.id, None).expect("open"));
+            let first = ready(open(tx, run.id, def.key(), None).expect("open"));
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
             crate::ops::test_support::start_at(tx, p.automation.id, p.second.id);
             automation::placement_delete(tx, p.first.id).expect("the definition moves on");
 
-            let copy = read::automation_run_def(tx.conn(), def.id).expect("read").expect("the copy");
-            assert_eq!(copy.placement_id, Some(p.first.id), "the copy keeps the id");
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            let kept = crate::ops::automation_run::def_at(tx.conn(), run.id, def.key()).expect("read").expect("the step");
+            assert_eq!(kept.placement_id, Some(p.first.id), "the version keeps the id");
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open"));
             let handed =
                 read::automation_run_values_of(tx.conn(), second.run_step.id).expect("values");
             assert_eq!(handed.len(), 1);
@@ -2154,7 +2138,7 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let before = read::automation_run_steps_of(tx.conn(), run.id).expect("read").len();
 
-            match open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open") {
+            match open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open") {
                 Opened::Ready(_) => panic!("nothing has produced the note"),
                 Opened::Stopped { run: stopped, missing, .. } => {
                     assert_eq!(missing, vec!["note".to_string()]);
@@ -2193,7 +2177,7 @@ mod tests {
 
             // Everything this machine can start, and "claude" — what both steps ask for — is not in it.
             let here = ["codex".to_string()];
-            match open(tx, run.id, def_of(tx, &run, &p.first).id, Some(&here)).expect("open") {
+            match open(tx, run.id, def_of(tx, &run, &p.first).key(), Some(&here)).expect("open") {
                 Opened::Ready(_) => panic!("nothing here can start claude"),
                 Opened::Carried { .. } | Opened::Waiting { .. } | Opened::LeftToWait { .. } | Opened::LetGo { .. } | Opened::Holding { .. } => panic!("not a built-in"),
                 Opened::LeftTaskOpen { .. } => panic!("left a task open"),
@@ -2227,7 +2211,7 @@ mod tests {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
 
-            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             assert_eq!(opening.run_def.agent, "claude");
         });
     }
@@ -2237,7 +2221,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            let opening = ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open"));
             assert!(!opening.text.contains("## What you have been handed"), "{}", opening.text);
         });
     }
@@ -2247,10 +2231,10 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, true, true);
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             reported(tx, &first.run_step, "found", "Found one thing.\nAnd more below.", "the note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open"));
             assert!(
                 second.text.contains("1. 調べる — left through \"found\": Found one thing."),
                 "{}",
@@ -2267,10 +2251,10 @@ mod tests {
             automation::step_update(tx, p.second.id, None, None, None, None, None, Some(false), None, None, None, None, None)
             .expect("history off");
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open"));
             assert!(!second.text.contains("## What has happened so far"), "{}", second.text);
             assert!(second.text.contains("- note: the note"), "the values still go: {}", second.text);
         });
@@ -2320,13 +2304,13 @@ mod tests {
             let p = picture(tx, false, true);
             let (task, decision, comment, file) = a_task_with_its_context(tx, &p);
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             assert!(!first.text.contains("## The task this run is on"), "{}", first.text);
 
             crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open"));
             let text = second.text;
             assert!(text.contains(&format!("## The task this run is on\n\n**AMB-T-{task}** — 直すもの")), "{text}");
             assert!(text.contains("### Its notes\n\n## やること\n壊れた所を直す"), "{text}");
@@ -2367,11 +2351,11 @@ mod tests {
             .expect("task off");
             let (task, _, _, _) = a_task_with_its_context(tx, &p);
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
 
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open"));
             assert!(!second.text.contains("## The task this run is on"), "{}", second.text);
             assert!(second.text.contains("working on now is AMB-T-"), "the preamble still names it: {}", second.text);
         });
@@ -2402,11 +2386,11 @@ mod tests {
             .expect("decisions and comments off");
             let (task, _, _, _) = a_task_with_its_context(tx, &p);
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
 
-            let text = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open")).text;
+            let text = ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open")).text;
             assert!(text.contains(&format!("## The task this run is on\n\n**AMB-T-{task}** — 直すもの")), "{text}");
             assert!(text.contains("### Its notes\n\n## やること\n壊れた所を直す"), "{text}");
             assert!(!text.contains("### The decisions linked to it"), "{text}");
@@ -2425,21 +2409,21 @@ mod tests {
             let p = picture(tx, false, true);
             let task = crate::ops::test_support::mk_task_in(tx, "添付の無いもの", Some(p.automation.project_id));
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
 
-            let text = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open")).text;
+            let text = ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open")).text;
             assert!(text.contains(&format!("## The task this run is on\n\n**AMB-T-{task}** — 添付の無いもの")), "{text}");
             assert!(!text.contains("### Its attachments"), "{text}");
         });
     }
 
-    /// Mark every run's copy of one spot as taking one run at a time, as a version saved with it on
-    /// would have been copied.
+    /// Mark the action one spot stands on as taking one run at a time. The action is not saved, so the
+    /// spot reads it as it stands, and so does every run.
     fn one_at_a_time(tx: &WriteTx<'_>, placement: &AutomationPlacement) {
         tx.conn()
-            .execute("UPDATE automation_run_def SET one_at_a_time = 1 WHERE placement_id = ?1", [placement.id])
+            .execute("UPDATE automation_action SET one_at_a_time = 1 WHERE id = ?1", [placement.action_id])
             .expect("one run at a time");
     }
 
@@ -2453,7 +2437,7 @@ mod tests {
     /// A run that has done the first spot and stands before the second.
     fn at_the_second(tx: &WriteTx<'_>, p: &Picture) -> AutomationRun {
         let run = a_run(tx, &p.automation);
-        let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open the first"));
+        let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open the first"));
         reported(tx, &first.run_step, "found", "見つけた", "the note");
         run
     }
@@ -2467,9 +2451,9 @@ mod tests {
             let bob = at_the_second(tx, &p);
             one_at_a_time(tx, &p.second);
 
-            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).id, None).expect("alice goes in"));
+            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).key(), None).expect("alice goes in"));
             let steps_before = read::automation_run_steps_of(tx.conn(), bob.id).expect("steps").len();
-            let (run, behind) = kept_out(open(tx, bob.id, def_of(tx, &bob, &p.second).id, None).expect("open"));
+            let (run, behind) = kept_out(open(tx, bob.id, def_of(tx, &bob, &p.second).key(), None).expect("open"));
 
             assert_eq!(behind, alice.id);
             assert_eq!(run.status, AutomationRunStatus::Running, "waiting is not a state of its own");
@@ -2494,8 +2478,8 @@ mod tests {
             let alice = at_the_second(tx, &p);
             let bob = at_the_second(tx, &p);
 
-            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).id, None).expect("alice goes in"));
-            ready(open(tx, bob.id, def_of(tx, &bob, &p.second).id, None).expect("bob goes in beside her"));
+            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).key(), None).expect("alice goes in"));
+            ready(open(tx, bob.id, def_of(tx, &bob, &p.second).key(), None).expect("bob goes in beside her"));
         });
     }
 
@@ -2508,12 +2492,12 @@ mod tests {
             let bob = a_run(tx, &p.automation);
             one_at_a_time(tx, &p.first);
 
-            let inside = ready(open(tx, alice.id, def_of(tx, &alice, &p.first).id, None).expect("alice goes in"));
-            let (_, behind) = kept_out(open(tx, bob.id, def_of(tx, &bob, &p.first).id, None).expect("open"));
+            let inside = ready(open(tx, alice.id, def_of(tx, &alice, &p.first).key(), None).expect("alice goes in"));
+            let (_, behind) = kept_out(open(tx, bob.id, def_of(tx, &bob, &p.first).key(), None).expect("open"));
             assert_eq!(behind, alice.id);
 
             reported(tx, &inside.run_step, "found", "見つけた", "the note");
-            ready(open(tx, bob.id, def_of(tx, &bob, &p.first).id, None).expect("bob goes in now"));
+            ready(open(tx, bob.id, def_of(tx, &bob, &p.first).key(), None).expect("bob goes in now"));
         });
     }
 
@@ -2526,12 +2510,12 @@ mod tests {
             let bob = at_the_second(tx, &p);
             one_at_a_time(tx, &p.second);
 
-            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).id, None).expect("alice goes in"));
-            kept_out(open(tx, bob.id, def_of(tx, &bob, &p.second).id, None).expect("open"));
+            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).key(), None).expect("alice goes in"));
+            kept_out(open(tx, bob.id, def_of(tx, &bob, &p.second).key(), None).expect("open"));
             super::super::automation_stop::stop(tx, alice.id, super::super::automation_stop::Ending::Canceled)
                 .expect("force-cancel alice");
 
-            ready(open(tx, bob.id, def_of(tx, &bob, &p.second).id, None).expect("bob goes in now"));
+            ready(open(tx, bob.id, def_of(tx, &bob, &p.second).key(), None).expect("bob goes in now"));
         });
     }
 
@@ -2545,16 +2529,16 @@ mod tests {
             let carol = at_the_second(tx, &p);
             one_at_a_time(tx, &p.second);
 
-            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).id, None).expect("alice goes in"));
-            kept_out(open(tx, bob.id, def_of(tx, &bob, &p.second).id, None).expect("open"));
-            kept_out(open(tx, carol.id, def_of(tx, &carol, &p.second).id, None).expect("open"));
+            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).key(), None).expect("alice goes in"));
+            kept_out(open(tx, bob.id, def_of(tx, &bob, &p.second).key(), None).expect("open"));
+            kept_out(open(tx, carol.id, def_of(tx, &carol, &p.second).key(), None).expect("open"));
             super::super::automation_stop::stop(tx, alice.id, super::super::automation_stop::Ending::Canceled)
                 .expect("force-cancel alice");
 
-            let (_, behind) = kept_out(open(tx, carol.id, def_of(tx, &carol, &p.second).id, None).expect("open"));
+            let (_, behind) = kept_out(open(tx, carol.id, def_of(tx, &carol, &p.second).key(), None).expect("open"));
             assert_eq!(behind, bob.id, "bob came first, so carol waits behind him with nobody inside");
-            ready(open(tx, bob.id, def_of(tx, &bob, &p.second).id, None).expect("bob goes in"));
-            let (_, behind) = kept_out(open(tx, carol.id, def_of(tx, &carol, &p.second).id, None).expect("open"));
+            ready(open(tx, bob.id, def_of(tx, &bob, &p.second).key(), None).expect("bob goes in"));
+            let (_, behind) = kept_out(open(tx, carol.id, def_of(tx, &carol, &p.second).key(), None).expect("open"));
             assert_eq!(behind, bob.id, "and then behind him inside");
         });
     }
@@ -2569,7 +2553,7 @@ mod tests {
             let carol = at_the_second(tx, &p);
             one_at_a_time(tx, &p.second);
 
-            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).id, None).expect("alice goes in"));
+            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).key(), None).expect("alice goes in"));
             let paused = match super::super::automation_stop::pause(tx, bob.id).expect("pause bob") {
                 super::super::automation_stop::Paused::Now(ended) => ended.run,
                 other => panic!("expected bob to pause at once, got {other:?}"),
@@ -2579,18 +2563,18 @@ mod tests {
 
             super::super::automation_stop::stop(tx, alice.id, super::super::automation_stop::Ending::Canceled)
                 .expect("force-cancel alice");
-            ready(open(tx, carol.id, def_of(tx, &carol, &p.second).id, None).expect("a paused run is out of the line"));
+            ready(open(tx, carol.id, def_of(tx, &carol, &p.second).key(), None).expect("a paused run is out of the line"));
 
             // A latecomer comes to the action before bob is picked up again.
             let latecomer = at_the_second(tx, &p);
             one_at_a_time(tx, &p.second);
             super::super::automation_stop::resume(tx, bob.id, None, super::super::automation_run::nothing_asked(), None)
                 .expect("resume bob");
-            let (_, behind) = kept_out(open(tx, bob.id, def_of(tx, &bob, &p.second).id, None).expect("open"));
+            let (_, behind) = kept_out(open(tx, bob.id, def_of(tx, &bob, &p.second).key(), None).expect("open"));
             assert_eq!(behind, carol.id, "carol is inside now");
             super::super::automation_stop::stop(tx, carol.id, super::super::automation_stop::Ending::Canceled)
                 .expect("force-cancel carol");
-            let (_, behind) = kept_out(open(tx, latecomer.id, def_of(tx, &latecomer, &p.second).id, None).expect("open"));
+            let (_, behind) = kept_out(open(tx, latecomer.id, def_of(tx, &latecomer, &p.second).key(), None).expect("open"));
             assert_eq!(behind, bob.id, "bob came to it before the latecomer, and keeps that place");
         });
     }
@@ -2603,12 +2587,12 @@ mod tests {
             let alice = at_the_second(tx, &p);
             let bob = at_the_second(tx, &p);
             one_at_a_time(tx, &p.second);
-            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).id, None).expect("alice goes in"));
+            ready(open(tx, alice.id, def_of(tx, &alice, &p.second).key(), None).expect("alice goes in"));
             tx.conn()
                 .execute("UPDATE automation_run SET pause_requested = 1 WHERE id = ?1", [bob.id])
                 .expect("asked before it was kept out");
 
-            let (run, _) = kept_out(open(tx, bob.id, def_of(tx, &bob, &p.second).id, None).expect("open"));
+            let (run, _) = kept_out(open(tx, bob.id, def_of(tx, &bob, &p.second).key(), None).expect("open"));
             assert_eq!(run.status, AutomationRunStatus::Paused);
             assert_eq!(run.pause_kind, Some(AutomationPauseKind::EndOfAction));
         });
@@ -2619,7 +2603,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            let def = def_of(tx, &run, &p.first).id;
+            let def = def_of(tx, &run, &p.first).key();
             let stopped = stop(tx, run.clone()).expect("stop");
             let refused = open(tx, stopped.run.id, def, None).expect_err("a failed run opens nothing");
             assert!(refused.to_string().contains("failed"), "{refused}");
@@ -2646,7 +2630,7 @@ mod tests {
             .expect("red calls a person");
         let task = crate::ops::test_support::mk_task_in(tx, "スクリプトで見る", Some(p.automation.project_id));
         let run = a_run(tx, &p.automation);
-        let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+        let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
         crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
         reported(tx, &first.run_step, "found", "Found one thing.", "the note");
         (p, run)
@@ -2656,7 +2640,7 @@ mod tests {
     /// starts its program, so it is not judged on one.
     fn open_the_script(tx: &WriteTx<'_>, p: &Picture, run: &AutomationRun) -> ScriptOpening {
         let none: Vec<String> = Vec::new();
-        match open(tx, run.id, def_of(tx, run, &p.second).id, Some(&none)).expect("open") {
+        match open(tx, run.id, def_of(tx, run, &p.second).key(), Some(&none)).expect("open") {
             Opened::Script(opening) => *opening,
             other => panic!("a script step opens no terminal, not {other:?}"),
         }
@@ -2674,7 +2658,7 @@ mod tests {
 
     /// The outputs a step execution put down, by their port's name.
     fn put_down(tx: &WriteTx<'_>, run_step: &AutomationRunStep) -> Vec<(String, AutomationRunValue)> {
-        let def = read::automation_run_def(tx.conn(), run_step.run_def_id).expect("read").expect("def");
+        let def = crate::ops::automation_run::def_of(tx.conn(), run_step).expect("read").expect("def");
         read::automation_run_values_of(tx.conn(), run_step.id)
             .expect("values")
             .into_iter()
@@ -2717,7 +2701,7 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let file = handed_by_a_trigger(tx, &run);
 
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             let expected = format!(
                 "## What the trigger that started this run handed on\n\n\
                  ### Title\n\nissue #123\n\n\
@@ -2731,7 +2715,7 @@ mod tests {
             let task = crate::ops::test_support::mk_task(tx, "直すもの");
             crate::ops::automation_report::take(tx, first.run_step.id, task).expect("take");
             reported(tx, &first.run_step, "found", "Found one thing.", "the note");
-            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).id, None).expect("open"));
+            let second = ready(open(tx, run.id, def_of(tx, &run, &p.second).key(), None).expect("open"));
             assert!(!second.text.contains(START_HEADING), "{}", second.text);
         });
     }
@@ -2743,7 +2727,7 @@ mod tests {
         with_tx(|tx| {
             let p = picture(tx, false, true);
             let run = a_run(tx, &p.automation);
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             assert!(!first.text.contains(START_HEADING), "{}", first.text);
         });
         with_tx(|tx| {
@@ -2752,7 +2736,7 @@ mod tests {
             let bare = AutomationRun { start_trigger: Some(String::new()), ..run.clone() };
             crate::ops::emit_update(tx, record::automation_run(&run), record::automation_run(&bare))
                 .expect("started by a trigger");
-            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).id, None).expect("open"));
+            let first = ready(open(tx, run.id, def_of(tx, &run, &p.first).key(), None).expect("open"));
             assert!(!first.text.contains(START_HEADING), "{}", first.text);
         });
     }
@@ -2771,7 +2755,7 @@ mod tests {
             let run = a_run(tx, &p.automation);
             let file = handed_by_a_trigger(tx, &run);
             let none: Vec<String> = Vec::new();
-            let opening = match open(tx, run.id, def_of(tx, &run, &p.first).id, Some(&none)).expect("open") {
+            let opening = match open(tx, run.id, def_of(tx, &run, &p.first).key(), Some(&none)).expect("open") {
                 Opened::Script(opening) => *opening,
                 other => panic!("a script step opens no terminal, not {other:?}"),
             };

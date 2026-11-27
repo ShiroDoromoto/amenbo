@@ -1270,6 +1270,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             let room = store.automation_run_waits_for_room(id).map_err(CliError::from)?;
             if flags.json {
                 let defs = &detail.defs;
+                let moves: Vec<AutomationRunStep> = detail.steps.iter().map(|s| s.step.clone()).collect();
                 let walked: Vec<Value> = detail
                     .steps
                     .iter()
@@ -1277,7 +1278,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                         json!({
                             "step": serde_json::to_value(&s.step).unwrap(),
                             "name": named_step(defs, &s.step),
-                            "automation_version": version_of(defs, &s.step),
+                            "automation_version": s.step.automation_version,
                             "values": serde_json::to_value(&s.values).unwrap(),
                         })
                     })
@@ -1285,7 +1286,7 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 print_json(&json!({
                     "run": serde_json::to_value(&run).unwrap(),
                     "waits_for_room": serde_json::to_value(room).unwrap(),
-                    "versions": taken_up(defs)
+                    "versions": taken_up(&run, &moves)
                         .iter()
                         .map(|(version, at)| json!({ "version": version, "taken_at": at.to_rfc3339_z() }))
                         .collect::<Vec<_>>(),
@@ -2483,9 +2484,9 @@ fn render_run(flags: &Flags, run: &AutomationRun, room: Option<ForRoom>, detail:
             human(flags, format!("  | {line}"));
         }
     }
-    // Each version the run took its copy from, in turn: a run taken up at its entry, or picked up after
-    // a pause before its next task, goes on from a newer one (`AMB-D-1015`).
-    let versions = taken_up(defs);
+    // Each version the run went by, in turn: a run taken up at its entry, or picked up after a pause
+    // before its next task, goes on from a newer one (`AMB-D-1015`).
+    let versions = taken_up(run, &moves);
     if let Some(((first, _), rest)) = versions.split_first() {
         let mut line = format!("copied from: {}", version_label(*first));
         for (version, at) in rest {
@@ -2512,7 +2513,7 @@ fn render_run(flags: &Flags, run: &AutomationRun, room: Option<ForRoom>, detail:
             ),
         );
     }
-    let switched = switches(defs, &moves);
+    let switched = switches(&moves);
     for stretch in &detail.rounds {
         let about = match stretch.task_id {
             Some(task_id) => task_label(task_id),
@@ -2559,7 +2560,7 @@ fn render_move(flags: &Flags, defs: &[AutomationRunDef], switched: &[(i64, Optio
             m.status.as_str(),
         ),
     );
-    let def = defs.iter().find(|d| d.id == m.run_def_id);
+    let def = defs.iter().find(|d| d.key() == m.def_key());
     for v in &one.values {
         human(flags, format!("      {}", one_run_value(def, v)));
     }
@@ -2597,39 +2598,42 @@ fn named(exit: Option<&str>) -> String {
     }
 }
 
-/// The name the step was launched under, or that the step it ran is gone.
+/// The name of the step it ran, or that the step it ran is gone.
 fn named_step(defs: &[AutomationRunDef], m: &AutomationRunStep) -> String {
     defs.iter()
-        .find(|d| d.id == m.run_def_id)
+        .find(|d| d.key() == m.def_key())
         .map(|d| d.name.clone())
         .unwrap_or_else(|| "a step".to_string())
 }
 
-/// The saved version of the automation the step's copy was taken from — `None` where it had none saved
-/// then, or the copy is gone.
-fn version_of(defs: &[AutomationRunDef], m: &AutomationRunStep) -> Option<i64> {
-    defs.iter().find(|d| d.id == m.run_def_id).and_then(|d| d.automation_version)
-}
-
-/// The versions the run's copies were taken from, in the order they were taken, each with when — a
-/// copy taken again from the version before it is no change, and is not listed.
-fn taken_up(defs: &[AutomationRunDef]) -> Vec<(Option<i64>, Timestamp)> {
+/// The versions the run went by, in turn, each with when it took it up: the version each step ran on —
+/// a step on the version of the one before it is no change, and is not listed — and the version the run
+/// points at now, where no step has run on it yet. A version the run was pointed at and moved on from
+/// before running a step on it left no record.
+fn taken_up(run: &AutomationRun, moves: &[AutomationRunStep]) -> Vec<(Option<i64>, Timestamp)> {
     let mut versions: Vec<(Option<i64>, Timestamp)> = Vec::new();
-    for d in defs {
-        if versions.last().map(|(v, _)| *v) != Some(d.automation_version) {
-            versions.push((d.automation_version, d.created_at));
+    for m in moves {
+        if versions.last().map(|(v, _)| *v) != Some(m.automation_version) {
+            versions.push((m.automation_version, m.started_at.unwrap_or(m.created_at)));
         }
+    }
+    if run.automation_version.is_some() && versions.last().map(|(v, _)| *v) != Some(run.automation_version) {
+        let at = match versions.is_empty() {
+            true => run.started_at.unwrap_or(run.created_at),
+            false => run.updated_at,
+        };
+        versions.push((run.automation_version, at));
     }
     versions
 }
 
 /// The step executions that ran on another version than the one before them, by the order they
 /// happened in: each with the version before and its own.
-fn switches(defs: &[AutomationRunDef], moves: &[AutomationRunStep]) -> Vec<(i64, Option<i64>, Option<i64>)> {
+fn switches(moves: &[AutomationRunStep]) -> Vec<(i64, Option<i64>, Option<i64>)> {
     let mut found = Vec::new();
     let mut before = None;
     for m in moves {
-        let now = version_of(defs, m);
+        let now = m.automation_version;
         if let Some(from) = before {
             if from != now {
                 found.push((m.id, from, now));
@@ -2640,7 +2644,7 @@ fn switches(defs: &[AutomationRunDef], moves: &[AutomationRunStep]) -> Vec<(i64,
     found
 }
 
-/// A saved version by its number, and a copy taken while nothing was saved as that.
+/// A saved version by its number, and a step a build before v153 copied from a draft as that.
 fn version_label(version: Option<i64>) -> String {
     match version {
         Some(n) => format!("version {n}"),
@@ -2648,11 +2652,11 @@ fn version_label(version: Option<i64>) -> String {
     }
 }
 
-/// The name of the way out an execution left by, read from the run's copy of the step — the live row
-/// may have been renamed or deleted since. `None` where it has left by none, or by one the copy does not
-/// hold.
+/// The name of the way out an execution left by, read from the step it ran as its version holds it — the
+/// live row may have been renamed or deleted since. `None` where it has left by none, or by one the step
+/// does not hold.
 fn left_by(defs: &[AutomationRunDef], m: &AutomationRunStep) -> Option<String> {
-    let def = defs.iter().find(|d| d.id == m.run_def_id)?;
+    let def = defs.iter().find(|d| d.key() == m.def_key())?;
     let exits: Vec<amenbo_core::model::RunDefExit> = serde_json::from_str(&def.exits).ok()?;
     exits.into_iter().find(|e| Some(e.id) == m.exit_id).map(|e| e.name)
 }

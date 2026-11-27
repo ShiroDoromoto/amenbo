@@ -13,7 +13,7 @@
 //! code never takes.
 //!
 //! **Its rows are still rows.** The pictures key a way out and a port by the row that declares it
-//! (`AMB-D-961`), and a run copies those ids at launch. So a built-in placed on a picture is written out
+//! (`AMB-D-961`), and a run reads those ids off its version. So a built-in placed on a picture is written out
 //! as the rows any step has — from the definition, the first time its action is asked for ([`action`])
 //! — and carries its key so that nothing edits them afterwards
 //! ([`super::automation`]'s `rewritable`). The library's built-in action is written once per store
@@ -41,7 +41,7 @@ use crate::error::{Error, Result};
 use crate::model::{
     AutomationAction, AutomationCfgKind, AutomationOwner, AutomationPictureOwner,
     AutomationPortDirection, AutomationPortKind, AutomationPortOwner, AutomationRun, AutomationRunDef,
-    AutomationRunStatus, AutomationRunStep, RunDefCfg, RunDefExit, ACTION_BOUNDARY, DONE_EXIT,
+    AutomationRunStatus, AutomationRunStep, RunDefCfg, RunDefExit, RunDefKey, ACTION_BOUNDARY, DONE_EXIT,
     ERROR_EXIT,
 };
 use crate::ops::automation::{self, EdgeTarget, NewStep};
@@ -64,13 +64,13 @@ use crate::time::Timestamp;
 /// written out as rows wherever one is placed.
 #[derive(Serialize)]
 pub struct Builtin {
-    /// What names it — on a step's row, on the library's action, and on a run's copy.
+    /// What names it — on a step's row, on the library's action, and on the step a run reads.
     pub key: &'static str,
     /// **Which version of it this build defines** (`AMB-D-1000`). Changing its ways out, their outputs,
     /// its inputs or its settings takes the next number: the library then writes a new action for it
     /// beside the old one, and a placement keeps the version it was placed with. Its code reads the
-    /// version a run's copy was made from ([`Outside::version`], [`Carry::version`]), so it can still
-    /// behave as an older one where that copy is older.
+    /// version a run's step was read from ([`Outside::version`], [`Carry::version`]), so it can still
+    /// behave as an older one where that step is older.
     pub version: i64,
     /// The name its step and its library action are written with.
     pub name: &'static str,
@@ -156,7 +156,7 @@ pub struct Outside<'a> {
     /// The language the report is written in ([`crate::run_wording::builtin`], `AMB-D-976`) — there is
     /// no transaction to read it off yet.
     pub language: &'a str,
-    /// The version of the built-in the run's copy was made from ([`Builtin::version`]).
+    /// The version of the built-in the run's step was read from ([`Builtin::version`]).
     pub version: i64,
 }
 
@@ -173,8 +173,8 @@ pub struct Worked {
 /// **The work a built-in did outside the store**, done before the transaction that opens its step and
 /// handed to it ([`super::automation_step::open`]).
 pub struct DoneOutside {
-    /// The copy of the step it was done for — a result is not written down on another.
-    run_def_id: i64,
+    /// The step it was done for — a result is not written down on another.
+    at: RunDefKey,
     worked: Result<Worked>,
 }
 
@@ -187,8 +187,8 @@ pub struct DoneOutside {
 /// **The store may move before the step is opened**, since no transaction holds it. Where the run was
 /// stopped in between, the opening refuses and what the work did stays done without a record — a
 /// worktree cut and not written anywhere, which the next cut for that task is refused on.
-/// The version of the built-in a run's copy was made from. A copy that names none was made before
-/// built-ins had versions, from the first one.
+/// The version of the built-in a step was read from. A step that names none was written before built-ins
+/// had versions, from the first one.
 fn version_of(def: &AutomationRunDef) -> i64 {
     def.builtin_version.unwrap_or(1)
 }
@@ -197,16 +197,15 @@ pub fn work_outside(
     conn: &Connection,
     language: &str,
     run_id: i64,
-    run_def_id: i64,
+    at: RunDefKey,
 ) -> Result<Option<DoneOutside>> {
-    let Some(def) = read::automation_run_def(conn, run_def_id)? else {
+    let Some(def) = crate::ops::automation_run::def_at(conn, run_id, at)? else {
         return Ok(None);
     };
     let Some(Work::Outside(work)) = def.builtin.as_deref().and_then(find).map(|b| &b.work) else {
         return Ok(None);
     };
-    let Some(run) = read::automation_run(conn, run_id)?
-        .filter(|run| run.id == def.run_id && run.status == AutomationRunStatus::Running)
+    let Some(run) = read::automation_run(conn, run_id)?.filter(|run| run.status == AutomationRunStatus::Running)
     else {
         return Ok(None);
     };
@@ -216,7 +215,7 @@ pub fn work_outside(
     let cfg: Vec<RunDefCfg> = serde_json::from_str(&def.cfg).map_err(Error::from)?;
     let version = version_of(&def);
     let worked = work(&Outside { conn, run: &run, task_id, cfg: &cfg, language, version });
-    Ok(Some(DoneOutside { run_def_id, worked }))
+    Ok(Some(DoneOutside { at, worked }))
 }
 
 /// A setting a built-in reads.
@@ -360,7 +359,7 @@ pub fn answer<'c>(cfg: &'c [RunDefCfg], name: &str) -> Option<&'c str> {
     cfg.iter().find(|c| c.name == name).and_then(|c| c.value.as_deref())
 }
 
-/// **Whether this copy of a step waits** rather than be opened now: the built-in that takes a task,
+/// **Whether this step of a run waits** rather than be opened now: the built-in that takes a task,
 /// with no task yet for it to take ([`waits`]). Anything else — an agent's step, a built-in that never
 /// waits, a key this build does not know — is opened as it always is.
 pub fn waiting(conn: &Connection, run: &AutomationRun, def: &AutomationRunDef) -> Result<bool> {
@@ -450,7 +449,7 @@ pub fn never_leaves_by<'a>(key: &str, answer: impl Fn(&str) -> Option<&'a str>) 
     })
 }
 
-/// [`never_leaves_by`], for a run's copy of a step, read from the answers copied with it. `None` for an
+/// [`never_leaves_by`], for a step as a run reads it, read from the answers written with it. `None` for an
 /// agent's step.
 pub fn never_leaves_by_def(def: &AutomationRunDef) -> Result<Option<&'static str>> {
     let Some(key) = def.builtin.as_deref() else {
@@ -471,7 +470,7 @@ pub struct Carry<'a, 't> {
     pub exits: &'a [RunDefExit],
     ins: &'a [(String, Option<String>)],
     cfg: &'a [RunDefCfg],
-    /// The version of the built-in the run's copy was made from ([`Builtin::version`]).
+    /// The version of the built-in the run's step was read from ([`Builtin::version`]).
     pub version: i64,
 }
 
@@ -755,9 +754,9 @@ fn unborn_unless_declared(
 /// same way out, by the same door.
 ///
 /// **A built-in that could not finish leaves by the error way out**, with what went wrong as its report,
-/// and the picture decides what follows (left alone, a person is called). So does a copy whose key this
+/// and the picture decides what follows (left alone, a person is called). So does a step whose key this
 /// build does not know — a store carried back to an older Amenbo — and a way out the code named that
-/// the copy does not declare.
+/// the step does not declare.
 ///
 /// **A built-in working outside the store is not worked here** ([`Work::Outside`]): what it did is
 /// `outside`, done before this transaction, and only written down. Handed nothing, it leaves by the
@@ -781,7 +780,7 @@ pub(crate) fn carry_out(
         match &builtin.work {
             Work::InStore(work) => work(&carry).map(|c| (Cow::Borrowed(c.exit), c.report)),
             Work::Named(work) => work(&carry).map(|n| (Cow::Owned(n.exit), n.report)),
-            Work::Outside(_) => match outside.filter(|done| done.run_def_id == def.id) {
+            Work::Outside(_) => match outside.filter(|done| done.at == def.key()) {
                 Some(done) => done.worked.and_then(|worked| {
                     for (port, value) in &worked.hands {
                         carry.put(worked.exit, port, Produced::Value(value))?;
@@ -823,7 +822,7 @@ pub(crate) enum Held {
     FellOver(Box<Next>),
 }
 
-/// How long this copy of a step is held open, or `None` for one that is not ([`Work::Holds`]).
+/// How long this step is held open, or `None` for one that is not ([`Work::Holds`]).
 fn holds_for(def: &AutomationRunDef) -> Option<Result<chrono::Duration>> {
     let Work::Holds(how_long) = def.builtin.as_deref().and_then(find)?.work else {
         return None;
@@ -854,7 +853,7 @@ pub(crate) fn hold(
 /// was placed say. Both are written once and never change, so this is read rather than kept. `None` for
 /// a step that is not held.
 pub fn held_until(conn: &Connection, run_step: &AutomationRunStep) -> Result<Option<Timestamp>> {
-    let Some(def) = read::automation_run_def(conn, run_step.run_def_id)? else {
+    let Some(def) = crate::ops::automation_run::def_of(conn, run_step)? else {
         return Ok(None);
     };
     let Some(how_long) = holds_for(&def) else {
@@ -899,8 +898,8 @@ pub(crate) fn time_up_at(tx: &WriteTx<'_>, run_step_id: i64, now: Timestamp) -> 
             "step execution '{run_step_id}' is not a wait whose time has come"
         )));
     }
-    let def = read::automation_run_def(tx.conn(), run_step.run_def_id)?
-        .ok_or_else(|| Error::not_found(format!("step of a run '{}' not found", run_step.run_def_id)))?;
+    let def = crate::ops::automation_run::def_of(tx.conn(), &run_step)?
+        .ok_or_else(|| Error::not_found(format!("the step execution '{run_step_id}' ran is not found")))?;
     let how_long = holds_for(&def).ok_or_else(|| Error::invalid("the step is not held"))??;
     let exits: Vec<RunDefExit> = serde_json::from_str(&def.exits).map_err(Error::from)?;
     let done = exits
@@ -1041,7 +1040,7 @@ mod tests {
     }
 
     fn def_of(tx: &WriteTx<'_>, run: &AutomationRun, placement: &AutomationPlacement) -> AutomationRunDef {
-        read::automation_run_defs_of(tx.conn(), run.id)
+        crate::ops::automation_run::current_defs(tx.conn(), run.id)
             .expect("defs")
             .into_iter()
             .find(|d| d.placement_id == Some(placement.id))
@@ -1049,10 +1048,10 @@ mod tests {
     }
 
     /// Walk the first step: take a task, hand on the note, leave by "found". What comes back is the
-    /// copy the run opens next.
+    /// step the run opens next.
     fn past_the_first(tx: &WriteTx<'_>, p: &Picture, run: &AutomationRun) -> AutomationRunDef {
         let startable = vec!["claude".to_string()];
-        let opening = match open(tx, run.id, def_of(tx, run, &p.first).id, Some(&startable)).expect("open") {
+        let opening = match open(tx, run.id, def_of(tx, run, &p.first).key(), Some(&startable)).expect("open") {
             Opened::Ready(opening) => *opening,
             other => panic!("the agent's step opens a terminal, not {other:?}"),
         };
@@ -1128,8 +1127,8 @@ mod tests {
     }
 
     /// **One action per version** (`AMB-D-1000`): an action written from an older definition is left to
-    /// the placements that point at it, a new placement gets the one written from this build's, and a
-    /// run's copy says which of the two it was made from.
+    /// the placements that point at it, a new placement gets the one written from this build's, and the
+    /// step a run reads says which of the two it was made from.
     #[test]
     fn a_newer_version_is_written_beside_the_older_and_a_placement_keeps_its_own() {
         with_tx(|tx| {
@@ -1235,7 +1234,7 @@ mod tests {
             crate::ops::task::set_status(tx, task, crate::model::TaskStatus::Done, crate::model::ActorKind::Ai).expect("close");
 
             // Only "claude" can be started here, and the built-in is opened all the same.
-            let (run_step_id, next) = match open(tx, run.id, next.id, Some(&startable)).expect("open") {
+            let (run_step_id, next) = match open(tx, run.id, next.key(), Some(&startable)).expect("open") {
                 Opened::Carried { run_step_id, next } => (run_step_id, next),
                 other => panic!("a built-in is carried out, not {other:?}"),
             };
@@ -1265,7 +1264,7 @@ mod tests {
             let p = picture(tx, "test_falls");
             let run = launched(tx, &p.automation);
             let next = past_the_first(tx, &p, &run);
-            let (run_step_id, next) = match open(tx, run.id, next.id, None).expect("open") {
+            let (run_step_id, next) = match open(tx, run.id, next.key(), None).expect("open") {
                 Opened::Carried { run_step_id, next } => (run_step_id, next),
                 other => panic!("a built-in is carried out, not {other:?}"),
             };

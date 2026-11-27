@@ -22,7 +22,7 @@ use rusqlite::types::Value;
 use crate::model::{
     ActorKind, Attachment, Automation, AutomationAction, AutomationActionVersion, AutomationCfg,
     AutomationEdge, AutomationExit, AutomationPlacement, AutomationPlacementStep, AutomationPort,
-    AutomationLaunch, AutomationLaunchRole, AutomationRole, AutomationRun, AutomationRunDef,
+    AutomationLaunch, AutomationLaunchRole, AutomationRole, AutomationRun,
     AutomationRunPass, AutomationRunStep, AutomationRunTask, AutomationRunValue,
     AutomationFailureValue, AutomationStep, AutomationTrigger, AutomationTriggerValue, AutomationVersion,
     TriggerTask, TriggerWhen,
@@ -906,6 +906,8 @@ pub fn automation_run(r: &AutomationRun) -> Record {
                 ("trigger_id", kv_opt(&r.trigger_id)),
                 ("incident_task_id", kv_opt(&r.incident_task_id)),
                 ("start_key", ov(&r.start_key)),
+                ("automation_version", r.automation_version.map(iv).unwrap_or(Value::Null)),
+                ("default_agent", ov(&r.default_agent)),
             ],
             &r.created_at,
             &r.updated_at,
@@ -994,47 +996,6 @@ pub fn automation_version(v: &AutomationVersion) -> Record {
     )
 }
 
-pub fn automation_run_def(d: &AutomationRunDef) -> Record {
-    let [script_program, script_args, script_timeout_minutes] = script_values(&d.script);
-    Record::new(
-        "automation_run_def",
-        d.id,
-        with_audit(
-            vec![
-                ("run_id", kv(d.run_id)),
-                ("placement_id", kv_opt(&d.placement_id)),
-                ("action_id", kv_opt(&d.action_id)),
-                ("one_at_a_time", bv(d.one_at_a_time)),
-                ("step_id", kv_opt(&d.step_id)),
-                ("name", tv(&d.name)),
-                ("prompt", ov(&d.prompt)),
-                ("builtin", ov(&d.builtin)),
-                ("builtin_version", d.builtin_version.map(iv).unwrap_or(Value::Null)),
-                ("automation_version", d.automation_version.map(iv).unwrap_or(Value::Null)),
-                ("script_program", script_program),
-                ("script_args", script_args),
-                ("script_timeout_minutes", script_timeout_minutes),
-                ("agent", tv(&d.agent)),
-                ("model", ov(&d.model)),
-                ("interactive", bv(d.interactive)),
-                ("work_dir_ref", ov(&d.work_dir_ref)),
-                ("report_to_task", bv(d.report_to_task)),
-                ("show_history", bv(d.show_history)),
-                ("show_notes", bv(d.show_notes)),
-                ("show_decisions", bv(d.show_decisions)),
-                ("show_comments", bv(d.show_comments)),
-                ("expected_minutes", d.expected_minutes.map(iv).unwrap_or(Value::Null)),
-                ("exits", tv(&d.exits)),
-                ("ins", tv(&d.ins)),
-                ("cfg", tv(&d.cfg)),
-                ("roles", tv(&d.roles)),
-            ],
-            &d.created_at,
-            &d.updated_at,
-        ),
-    )
-}
-
 pub fn automation_run_task(t: &AutomationRunTask) -> Record {
     Record::new(
         "automation_run_task",
@@ -1081,7 +1042,6 @@ pub fn automation_run_step(s: &AutomationRunStep) -> Record {
         with_audit(
             vec![
                 ("run_id", kv(s.run_id)),
-                ("run_def_id", kv(s.run_def_id)),
                 ("run_task_id", kv_opt(&s.run_task_id)),
                 ("seq", iv(s.seq)),
                 ("exit_id", kv_opt(&s.exit_id)),
@@ -1092,6 +1052,9 @@ pub fn automation_run_step(s: &AutomationRunStep) -> Record {
                 ("started_at", tsov(&s.started_at)),
                 ("ended_at", tsov(&s.ended_at)),
                 ("exit_code", s.exit_code.map(iv).unwrap_or(Value::Null)),
+                ("automation_version", s.automation_version.map(iv).unwrap_or(Value::Null)),
+                ("placement_id", kv_opt(&s.placement_id)),
+                ("step_id", kv_opt(&s.step_id)),
             ],
             &s.created_at,
             &s.updated_at,

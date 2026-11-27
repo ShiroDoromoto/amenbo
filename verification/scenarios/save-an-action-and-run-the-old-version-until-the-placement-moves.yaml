@@ -5,8 +5,8 @@
 # so a move nobody has saved yet is already what it walks.
 #
 # A run started from the terminal opens no step — the host that opens them is the app's — so the run
-# itself never shows which steps it copied down. What a start copies is the automation's newest saved
-# version, so the road reads that version (`saved: true`) where it reads what the start stands on.
+# itself never shows which steps it reads. What a start points the run at is the automation's newest
+# saved version, so the road reads that version (`saved: true`) where it reads what the start stands on.
 id: save-an-action-and-run-the-old-version-until-the-placement-moves
 title: A saved action runs only once its placement is moved and the automation saved, and a test run tries the draft
 description: >

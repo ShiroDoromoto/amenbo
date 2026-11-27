@@ -101,7 +101,7 @@ mod tests {
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
     use crate::ops::test_support::{give_to, mk_project, mk_task_in, start_at, with_tx};
-    use crate::store_engine::{read, record, WriteTx};
+    use crate::store_engine::{read, WriteTx};
     use crate::time::Timestamp;
 
     fn cfg(answers: &[(&str, &str)]) -> Vec<RunDefCfg> {
@@ -162,16 +162,16 @@ mod tests {
         give_to(tx, task, role);
         automation::cfg_set(tx, wait, SECONDS, Some(seconds)).expect("answer");
         let run = launched(tx, &automation);
-        let entry = read::automation_run_defs_of(tx.conn(), run.id)
+        let entry = crate::ops::automation_run::current_defs(tx.conn(), run.id)
             .expect("defs")
             .into_iter()
             .find(|d| d.builtin.as_deref() == Some("take_task"))
             .expect("the entry");
-        let Opened::Carried { next: Next::Step(wait_def), .. } = open(tx, run.id, entry.id, None).expect("take")
+        let Opened::Carried { next: Next::Step(wait_def), .. } = open(tx, run.id, entry.key(), None).expect("take")
         else {
             panic!("the take goes on to the wait");
         };
-        let Opened::Holding { run_step_id } = open(tx, run.id, wait_def.id, None).expect("wait") else {
+        let Opened::Holding { run_step_id } = open(tx, run.id, wait_def.key(), None).expect("wait") else {
             panic!("the wait holds its step open");
         };
         (run, run_step_id)
@@ -203,11 +203,11 @@ mod tests {
             assert_eq!(step.report, "waited 0h 1m 30s");
             assert_eq!(step.exit_id, crate::ops::test_support::way_out(tx, run_step_id, DONE_EXIT));
             // The close ends the round, and the run goes round to its entry, which finds nothing left.
-            let Opened::Carried { next: Next::Step(again), .. } = open(tx, run.id, close.id, None).expect("close")
+            let Opened::Carried { next: Next::Step(again), .. } = open(tx, run.id, close.key(), None).expect("close")
             else {
                 panic!("the round is over, and the run goes round to its entry");
             };
-            assert!(matches!(open(tx, run.id, again.id, None).expect("take again"), Opened::LeftToWait { .. }));
+            assert!(matches!(open(tx, run.id, again.key(), None).expect("take again"), Opened::LeftToWait { .. }));
             let run = read::automation_run(tx.conn(), run.id).expect("read").expect("run");
             assert_eq!(run.status, AutomationRunStatus::Completed);
         });
@@ -256,28 +256,29 @@ mod tests {
                 let refused = automation::cfg_set(tx, wait, SECONDS, Some(wrong));
                 assert!(refused.is_err(), "{wrong} is not a number of seconds to wait");
             }
+            automation::cfg_set(tx, wait, SECONDS, Some("90")).expect("an answer that passes");
             let run = launched(tx, &automation);
-            let entry = read::automation_run_defs_of(tx.conn(), run.id)
+            let entry = crate::ops::automation_run::current_defs(tx.conn(), run.id)
                 .expect("defs")
                 .into_iter()
                 .find(|d| d.builtin.as_deref() == Some("take_task"))
                 .expect("the entry");
-            let Opened::Carried { next: Next::Step(wait_def), .. } = open(tx, run.id, entry.id, None).expect("take")
+            let Opened::Carried { next: Next::Step(wait_def), .. } = open(tx, run.id, entry.key(), None).expect("take")
             else {
                 panic!("the take goes on to the wait");
             };
-            let mut written = wait_def.clone();
-            written.cfg = serde_json::to_string(&[RunDefCfg {
-                name: SECONDS.to_string(),
-                kind: AutomationCfgKind::Number,
-                required: false,
-                options: None,
-                value: Some("\"soon\"".to_string()),
-            }])
-            .expect("json");
-            crate::ops::emit_update(tx, record::automation_run_def(&wait_def), record::automation_run_def(&written))
+            // The saved version the run reads is written on past the checks, as only a store carried in
+            // from elsewhere could be.
+            let written = tx
+                .conn()
+                .execute(
+                    r#"UPDATE automation_version SET cfgs = REPLACE(cfgs, '"value":"90"', '"value":"\"soon\""')
+                        WHERE automation_id = ?1 AND version = ?2"#,
+                    rusqlite::params![automation.id, run.automation_version],
+                )
                 .expect("an answer past the checks");
-            let Opened::Carried { run_step_id, next } = open(tx, run.id, wait_def.id, None).expect("wait") else {
+            assert_eq!(written, 1, "the version holds the answer");
+            let Opened::Carried { run_step_id, next } = open(tx, run.id, wait_def.key(), None).expect("wait") else {
                 panic!("a wait set wrong is not held");
             };
             assert!(matches!(next, Next::Halted(_)), "the error way out halts: {next:?}");

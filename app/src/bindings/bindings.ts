@@ -4369,8 +4369,9 @@ dateLocale: string | null,
  */
 roster: Array<ActorDto>, projects: Array<ProjectDto>, activity: Array<ActivityItemDto>, 
 /**
- * Findings of the read-only integrity check run at startup. If anything is wrong, the GUI
- * raises a warning banner (it never repairs anything by itself). A store with
+ * Findings of the read-only integrity check run at startup — computed by the first snapshot of
+ * the process and carried unchanged by every later one. If anything is wrong, the GUI raises a
+ * warning banner (it never repairs anything by itself). A store with
  * `config.startup_integrity_check` off adds nothing here.
  */
 startupHealth: StartupHealthDto, 

@@ -338,7 +338,7 @@ fn schedule_text(on: Option<String>, at: Option<String>) -> String {
 ///
 /// **Not part of [`doctor`], deliberately** — [`crate::doctor::report`] chains it in alongside the
 /// environment checks instead. `doctor` is the cheap always-on half: it runs at the CLI's startup and,
-/// in the GUI, on every store-changed tick (`compute_startup_health`, which no open calls —
+/// in the GUI, on the first snapshot of the process (`compute_startup_health`, which no open calls —
 /// `AMB-D-857`). This check reads the bodies of
 /// every outstanding task and every decision but the rejected ones on the device and parses each as
 /// Markdown, which is the same reason the environment's filesystem walk is kept out of that path. It also

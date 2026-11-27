@@ -688,8 +688,9 @@ pub struct Snapshot {
     // `decision_page`, and single records from `tasks_by_ids` / `decisions_by_ids` — each fetching
     // only the window it needs (bounded memory).
     pub(crate) activity: Vec<ActivityItemDto>,
-    /// Findings of the read-only integrity check run at startup. If anything is wrong, the GUI
-    /// raises a warning banner (it never repairs anything by itself). A store with
+    /// Findings of the read-only integrity check run at startup — computed by the first snapshot of
+    /// the process and carried unchanged by every later one. If anything is wrong, the GUI raises a
+    /// warning banner (it never repairs anything by itself). A store with
     /// `config.startup_integrity_check` off adds nothing here.
     pub(crate) startup_health: StartupHealthDto,
     /// Whether an update exists. If the published `latest.json` names a version newer than the one
@@ -1512,7 +1513,7 @@ pub struct ResyncedDto {
 /// The GUI's message table, and the affordances for how to fix each issue, live in
 /// `src/core/i18n/locales/`, and they point at affordances that really exist in the GUI (the repair button
 /// under Settings > Integrity, the folder list in project settings).
-#[derive(Serialize, TS)]
+#[derive(Serialize, Clone, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct DoctorIssueDto {

@@ -424,8 +424,8 @@ impl Store {
         // is a full-table aggregate, O(total) — so **no open computes it**, this one or the writing
         // one (`AMB-D-857`): paying that per open would blow the read budget, and a write open only
         // two surfaces ever display the result of has nothing to gain from it either. Whoever needs
-        // it asks for it — `build_snapshot`, which is itself a whole-store aggregate and therefore
-        // outside the budget, and the CLI at startup.
+        // it asks for it, once per process — `build_snapshot` on the first snapshot, and the CLI at
+        // startup.
         Ok(Store {
             config,
             paths,
@@ -459,14 +459,12 @@ impl Store {
     /// repair — with every kind queried through the read model's indexed SQL (`doctor`). **No open
     /// calls it** (`AMB-D-857`): a full-table aggregate on every IPC read would blow the budget, and
     /// an open has no way of knowing whether its caller is one of the two that display the result.
-    /// Those two ask here — `build_snapshot`, which is itself a whole-store aggregate and therefore
-    /// outside the budget, and the CLI at startup, before it narrows its reach.
+    /// Those two ask here, each once per process — `build_snapshot` on the first snapshot (later ones
+    /// reuse its result), and the CLI at startup, before it narrows its reach.
     /// What it looks at is **the inside of the store only**: environment issues (the `.amenbo`
     /// pointer and the managed block in bound folders, which [`crate::doctor::report`] gathers) are
-    /// deliberately not included, because this runs on every snapshot — in the GUI, on every
-    /// store-changed tick — and a filesystem walk per bound folder has no business there (the
-    /// environment changes independently of the store, so there is nothing to gain from re-checking
-    /// it every tick; the GUI surfaces it from a dedicated check run once at app startup).
+    /// deliberately not included: the GUI keeps this to the store, and surfaces the environment
+    /// from a dedicated check of its own, also run once at app startup.
     pub fn compute_startup_health(&self) -> Result<StartupHealth> {
         let doctor = self.doctor()?;
         Ok(StartupHealth { doctor })

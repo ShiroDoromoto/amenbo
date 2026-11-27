@@ -1729,6 +1729,15 @@ pub const STEPS: &[Step] = &[
         // without the layout the pages it leaves free never leave the file.
         apply: Apply::Sql(""),
     },
+    Step {
+        to: 153,
+        name: "read the server for leftover automation rows again, now that an automation's launch rows are among them",
+        // **Sent back to "not read yet".** A device that read its server, or deleted what it found, did
+        // so while only `automation_run*` keys counted, so the launch rows an older build placed are still
+        // there; reading again from the beginning finds and deletes them. What the day spent and where the
+        // sending stands stay as they are. No task is touched.
+        apply: Apply::Custom(read_the_server_again_for_leftover_launches),
+    },
 ];
 
 /// v129: `automation_role.take_order`, the order a role takes its tasks in, `priority` on every row
@@ -2476,6 +2485,24 @@ fn let_the_carrier_count_what_the_reread_would_cost(ctx: &Ctx<'_>) -> Result<()>
     }
     tx.execute_batch(
         "UPDATE viewer_send SET strays_read_to = NULL WHERE strays = 1 AND strays_gone_at IS NULL;",
+    )?;
+    Ok(())
+}
+
+/// v153: what `viewer_send` knows of the server's leftover automation rows goes back to "not read yet",
+/// "not deleted yet", "none counted" and "not held back", so the next turn reads the server again.
+///
+/// **What was read before counted only `automation_run*` keys.** `automation_launch*` joined the rows the
+/// Viewer is not sent afterwards, and a server read once — whether it held run rows or not — is never
+/// read again, so the launch rows an older build placed would stay there for good.
+///
+/// `spent`, `spent_on`, `placed`, `seq`, `version` and `build` are left as they are: what the day spent
+/// and where the sending stands do not change. The table is this device's alone, so the change feed is
+/// not written.
+fn read_the_server_again_for_leftover_launches(ctx: &Ctx<'_>) -> Result<()> {
+    ctx.tx.execute_batch(
+        "UPDATE viewer_send SET strays = NULL, strays_read_to = NULL, strays_gone_at = NULL, \
+         keys_kept = NULL, reread_waits = NULL;",
     )?;
     Ok(())
 }
@@ -16664,6 +16691,62 @@ mod tests {
         assert_eq!(count("automation_run_step"), 1);
         assert_eq!(count("automation_run_value"), 1);
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// v153: a carrier that read its server for leftover rows, or finished deleting them, reads it again
+    /// from the beginning, and what the day spent and where the sending stands stay as they are.
+    #[test]
+    fn a_carrier_left_before_v153_reads_the_server_again_for_leftover_launches() {
+        // (strays, strays_read_to, strays_gone_at, keys_kept, reread_waits) as v152 left them
+        type Case = (Option<i64>, Option<&'static str>, Option<&'static str>, Option<i64>, Option<i64>);
+        type Left = (Option<i64>, Option<String>, Option<String>, Option<i64>, Option<i64>);
+        let cases: [Case; 4] = [
+            (Some(1), None, Some("2026-11-16T00:00:00Z"), Some(0), Some(0)),
+            (Some(0), None, None, None, None),
+            (Some(1), Some("40"), None, Some(2000), Some(1)),
+            (None, Some("40"), None, None, None),
+        ];
+        for (at, (strays, read_to, gone_at, kept, waits)) in cases.into_iter().enumerate() {
+            let dir = scratch(&format!("viewer-strays-again-{at}"));
+            let engine = store_at(&dir, 152);
+            engine
+                .conn()
+                .execute(
+                    "INSERT INTO viewer_send (id, version, placed, seq, spent, spent_on, build, strays, \
+                     strays_read_to, strays_gone_at, keys_kept, reread_waits)
+                     VALUES (1, 12, 12, 41, 300, '2026-11-27', 4, ?1, ?2, ?3, ?4, ?5)",
+                    rusqlite::params![strays, read_to, gone_at, kept, waits],
+                )
+                .unwrap();
+
+            run(&engine, &dir, steps_through(153), &mut crate::progress::ignore).unwrap();
+
+            assert_eq!(engine.format_version().unwrap(), 153);
+            let row: Left = engine
+                .conn()
+                .query_row(
+                    "SELECT strays, strays_read_to, strays_gone_at, keys_kept, reread_waits \
+                     FROM viewer_send WHERE id = 1",
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+                )
+                .unwrap();
+            assert_eq!(row, (None, None, None, None, None), "case {at}: the server is read again");
+            let kept: (i64, i64, i64, i64, Option<String>, i64) = engine
+                .conn()
+                .query_row(
+                    "SELECT version, placed, seq, spent, spent_on, build FROM viewer_send WHERE id = 1",
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+                )
+                .unwrap();
+            assert_eq!(
+                kept,
+                (12, 12, 41, 300, Some("2026-11-27".into()), 4),
+                "case {at}: the sending stands where it was"
+            );
+            std::fs::remove_dir_all(&dir).ok();
+        }
     }
 
     /// v151: where the carrier was left at v150 reads as "none counted" and "not held back", a deleting

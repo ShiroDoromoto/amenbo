@@ -2140,7 +2140,8 @@ plain_tables! {
     /// `automation_run*` keys an older build placed there, and nothing reads any more. `strays` is whether
     /// any are there: `NULL` is "not read yet", `0` "none", `1` "some". It is read once per server, which
     /// is why it lives here: pointing the store at a server it has not sent to throws this row away, and
-    /// the next server is read anew.
+    /// the next server is read anew. v153 sent every device back to "not read yet" once, when
+    /// `automation_launch*` joined the keys looked for.
     /// `strays_read_to` is the `seq` a reading that stopped part way got to, in decimal (`NULL` is "from
     /// the beginning"), and `strays_gone_at` is the moment the last of those rows was deleted from the server
     /// (`NULL` is "not yet"), so deleting a few a day can go on across days and stop once it is done.

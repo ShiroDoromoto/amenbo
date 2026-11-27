@@ -1527,7 +1527,6 @@ export const hi: Translation = {
     "auto.held.by": "रन {run} द्वारा उपयोग में",
     "auto.held.openPane": "पेन खोलें",
     "auto.held.version": "संस्करण {version} पर चल रहा है",
-    "auto.held.unsaved": "बिना सहेजे बदलावों पर चल रहा है",
     "auto.held.next": "शुरुआत पर लौटने पर संस्करण {version} पर बदल जाएगा",
     "auto.act.stepsPlace": "चरण",
     "auto.step.nextExit": "निकास “{name}” पर ख़त्म करें",

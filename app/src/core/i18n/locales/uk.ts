@@ -1544,7 +1544,6 @@ export const uk: Translation = {
     "auto.held.by": "Використовується запуском {run}",
     "auto.held.openPane": "Відкрити панель",
     "auto.held.version": "На версії {version}",
-    "auto.held.unsaved": "На незбережених змінах",
     "auto.held.next": "Після повернення до старту перейде на версію {version}",
     "auto.act.stepsPlace": "Кроки",
     "auto.step.nextExit": "Завершити на виході «{name}»",

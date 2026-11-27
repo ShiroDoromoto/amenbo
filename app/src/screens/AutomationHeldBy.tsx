@@ -1,9 +1,9 @@
 // **The runs going on a definition**, drawn over a build screen while there is one.
 //
-// A definition is written while a run of it is running or paused, and the run goes on from the copy
-// it took (`AMB-D-1015`). What is saved here reaches it when it comes back to its entry: there it
-// reads the newest saved version afresh, and unsaved changes never reach it — so the runs are named
-// where the writing is done (`./AutomationBuildScreen`, `./AutomationActionBuildScreen`).
+// A definition is written while a run of it is running or paused, and the run goes on from the saved
+// version it points at (`AMB-D-1015`, `AMB-D-1219`). What is saved here reaches it when it comes back to
+// its entry: there it moves to the newest saved version, and unsaved changes never reach it — so the
+// runs are named where the writing is done (`./AutomationBuildScreen`, `./AutomationActionBuildScreen`).
 //
 // Each run is one band: which run — of which automation, over an action — on which step and which
 // version, the version it switches to back at its entry where a newer one is saved, the way to the
@@ -64,11 +64,9 @@ export function AutomationHeldBy({
                 {run.stepName !== undefined && (
                   <span className="autoheld__step">{builtinWord(run.builtin, run.stepName)}</span>
                 )}
-                <span className="autoheld__version">
-                  {run.version !== undefined
-                    ? tf("auto.held.version", { version: run.version })
-                    : t("auto.held.unsaved")}
-                </span>
+                {run.version !== undefined && (
+                  <span className="autoheld__version">{tf("auto.held.version", { version: run.version })}</span>
+                )}
                 {next !== undefined && (
                   <span className="autoheld__next">{tf("auto.held.next", { version: next })}</span>
                 )}
@@ -87,9 +85,9 @@ export function AutomationHeldBy({
   );
 }
 
-/** The saved version a run on `copied` takes up back at its entry, if any — the rule the run itself
- *  goes by (`take_up_newer`): a copy from unsaved changes is older than any saved version. */
-function switchesTo(copied: number | undefined, saved: number | undefined): number | undefined {
-  if (saved === undefined) return undefined;
-  return copied === undefined || copied < saved ? saved : undefined;
+/** The saved version a run on version `current` moves to back at its entry, if any — the rule the run
+ *  itself goes by (`take_up_newer`): a newer saved version than the one it points at. */
+function switchesTo(current: number | undefined, saved: number | undefined): number | undefined {
+  if (current === undefined || saved === undefined) return undefined;
+  return current < saved ? saved : undefined;
 }

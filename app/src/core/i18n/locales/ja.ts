@@ -1533,7 +1533,6 @@ export const ja: Translation = {
     "auto.held.by": "実行 {run} が使用中",
     "auto.held.openPane": "ペインを開く",
     "auto.held.version": "バージョン {version} で実行中",
-    "auto.held.unsaved": "保存していない変更で実行中",
     "auto.held.next": "起点に戻るとバージョン {version} に切り替わる",
     "auto.act.stepsPlace": "ステップ",
     "auto.step.nextExit": "出口「{name}」で終える",

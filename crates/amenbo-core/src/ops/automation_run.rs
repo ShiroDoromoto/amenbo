@@ -3207,7 +3207,7 @@ pub fn top_up(tx: &WriteTx<'_>, launch_id: i64, by: &Launcher<'_>) -> Result<Opt
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct RoleHeadcount {
     pub role_id: i64,
-    /// The headcount the newest saved version gives it — what the next launch copies.
+    /// The headcount the newest saved version gives it — what the next launch starts with.
     pub defined: u32,
     /// The headcount this launch holds for it. `defined` once the launch has ended.
     pub headcount: u32,
@@ -3275,7 +3275,7 @@ pub fn launch_headcounts(conn: &Connection, launch_id: i64) -> Result<Vec<RoleHe
 /// beside [`launch_headcounts`]. `None` is no limit, where as many go as the headcounts come to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct LaunchLimit {
-    /// The run limit the newest saved version gives — what the next launch copies.
+    /// The run limit the newest saved version gives — what the next launch starts with.
     pub defined: Option<u32>,
     /// The run limit this launch holds. `defined` once the launch has ended.
     pub limit: Option<u32>,

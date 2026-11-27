@@ -4980,7 +4980,7 @@ pub struct AutomationLaunchStateDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) run_limit: Option<u32>,
-    /// The run limit the newest saved version gives — what the next launch copies. Absent for no limit.
+    /// The run limit the newest saved version gives — what the next launch starts with. Absent for no limit.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) defined_run_limit: Option<u32>,
@@ -5064,7 +5064,7 @@ pub struct AutomationLaunchRoleStateDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) icon: Option<String>,
-    /// The headcount the newest saved version gives it — what the next launch copies.
+    /// The headcount the newest saved version gives it — what the next launch starts with.
     pub(crate) defined: u32,
     /// The headcount this launch holds for it. `defined` once the launch has ended.
     pub(crate) headcount: u32,
@@ -5300,8 +5300,7 @@ pub struct AutomationRunCardDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub(crate) launch: Option<i64>,
-    /// What the automation was called at launch. Read from the run's own copy of the entry step's
-    /// automation where the definition has since been deleted, and empty where neither is left.
+    /// What the automation is called now. Empty where the automation has since been deleted.
     pub(crate) automation_name: String,
     /// Where the run stands (`AMB-D-955`). The "running" tab draws the first three — what is going,
     /// and a failure nobody has acknowledged — and the "history" tab the last three.
@@ -5338,9 +5337,9 @@ pub struct AutomationRunCardDto {
     #[ts(optional)]
     pub(crate) stopped_reason: Option<&'static str>,
     /// **The saved version of the automation the run points at** (`AMB-D-1219`) — what it goes on
-    /// from, and what it last moved to at its entry (`AMB-D-1015`). Absent on a run that points at
-    /// none — one that had ended before runs pointed at a version (v154) — and on a run whose seat has
-    /// no entry on that version.
+    /// from, and what it last moved to at its entry (`AMB-D-1015`); for an ended run, the one it ended
+    /// on. The step it is on may still be on an earlier one, where the run has just moved on at its
+    /// entry. Absent only on a run that had ended before runs pointed at a version (v154).
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub(crate) version: Option<i64>,

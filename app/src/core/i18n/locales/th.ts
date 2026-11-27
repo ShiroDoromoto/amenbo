@@ -1528,7 +1528,6 @@ export const th: Translation = {
     "auto.held.by": "กำลังใช้โดยการรัน {run}",
     "auto.held.openPane": "เปิดบานหน้าต่าง",
     "auto.held.version": "ทำงานบนเวอร์ชัน {version}",
-    "auto.held.unsaved": "ทำงานบนการเปลี่ยนแปลงที่ยังไม่บันทึก",
     "auto.held.next": "เมื่อกลับไปที่จุดเริ่มจะเปลี่ยนเป็นเวอร์ชัน {version}",
     "auto.act.stepsPlace": "ขั้นตอน",
     "auto.step.nextExit": "จบที่ทางออก “{name}”",

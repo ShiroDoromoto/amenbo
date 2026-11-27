@@ -914,7 +914,7 @@ export type AutomationLaunchRoleStateDto = { role: number, name: string,
  */
 icon?: string, 
 /**
- * The headcount the newest saved version gives it — what the next launch copies.
+ * The headcount the newest saved version gives it — what the next launch starts with.
  */
 defined: number, 
 /**
@@ -991,7 +991,7 @@ maxHeadcount: number,
  */
 runLimit?: number, 
 /**
- * The run limit the newest saved version gives — what the next launch copies. Absent for no limit.
+ * The run limit the newest saved version gives — what the next launch starts with. Absent for no limit.
  */
 definedRunLimit?: number, 
 /**
@@ -1246,8 +1246,7 @@ project: number, projectName: string, automation: number,
  */
 launch?: number, 
 /**
- * What the automation was called at launch. Read from the run's own copy of the entry step's
- * automation where the definition has since been deleted, and empty where neither is left.
+ * What the automation is called now. Empty where the automation has since been deleted.
  */
 automationName: string, 
 /**
@@ -1293,9 +1292,9 @@ waiting: boolean,
 waitsForRoom: boolean, stoppedReason?: "crashed" | "max_times" | "no_agent" | "no_input" | "no_way_on" | "halted" | "left_task_open" | "failed_check" | null, 
 /**
  * **The saved version of the automation the run points at** (`AMB-D-1219`) — what it goes on
- * from, and what it last moved to at its entry (`AMB-D-1015`). Absent on a run that points at
- * none — one that had ended before runs pointed at a version (v154) — and on a run whose seat has
- * no entry on that version.
+ * from, and what it last moved to at its entry (`AMB-D-1015`); for an ended run, the one it ended
+ * on. The step it is on may still be on an earlier one, where the run has just moved on at its
+ * entry. Absent only on a run that had ended before runs pointed at a version (v154).
  */
 version?: number, 
 /**

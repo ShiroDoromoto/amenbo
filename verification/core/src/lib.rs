@@ -4267,8 +4267,8 @@ const REGISTRY: &[OpSpec] = &[
     // binds nothing (there is no run to bind), and its launch's pane is read with `launch-pane`.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start", required: &[], refs: &["target"], strings: &[], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pause", required: &[], refs: &["target"], strings: &[], binds: false },
-    // A run paused at the end of an action goes on from the copy it has. One paused before its next
-    // task is copied down afresh from the automation's newest saved version and starts at that copy's
+    // A run paused at the end of an action goes on from the saved version it points at. One paused
+    // before its next task moves to the automation's newest saved version and starts at that version's
     // entry — checked first as a launch is, and refused (`not_ready_automation`) with the run left
     // paused when the check finds anything unmet.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "resume", required: &[], refs: &["target"], strings: &[], binds: false },
@@ -4307,7 +4307,7 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "launch-role-hold", required: &["role"], refs: &["target"], strings: &["role"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "launch-role-release", required: &["role"], refs: &["target"], strings: &["role"], binds: false },
     // What the launch holds for that role, read beside its definition: `headcount` (this launch's),
-    // `defined` (what the next launch copies), `under_way` (its runs running or paused), `to_let_go`
+    // `defined` (what the next launch starts with), `under_way` (its runs running or paused), `to_let_go`
     // (the seats still to go after the headcount was lowered) and `held` (stopped once its task is
     // done). The terminal reads them off `launch-show`; the screen off the role's desk — the count of
     // seats working out of the headcount, the default headcount said in the desk's "⋯" menu, the note
@@ -4823,9 +4823,9 @@ const REGISTRY: &[OpSpec] = &[
     //
     // **A definition a run is going on, on its build screen** — an automation's or a library
     // action's, whichever is open. A run of it that is running or paused is named in a band over the
-    // picture, and the definition under it still takes writes: the run goes on from the copy it took,
-    // and what is written reaches it at the next start or at a resume from the pause before its next
-    // task. A screen road alone: the terminal's half is the write going through.
+    // picture, and the definition under it still takes writes: the run goes on from the saved version
+    // it points at, and what is written reaches it at the next start or at a resume from the pause
+    // before its next task. A screen road alone: the terminal's half is the write going through.
     //
     // `target` is the run the band names. `present: false` is the band gone once the run is over, and
     // names no run.

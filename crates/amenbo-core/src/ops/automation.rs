@@ -140,9 +140,9 @@ fn live_wire(tx: &WriteTx<'_>, id: i64) -> Result<AutomationWire> {
 /// The definition an op is about to rewrite: an automation's picture, a library action's insides, or
 /// what one step of an action declares.
 ///
-/// A run going on it does not stop the rewrite (`AMB-D-1015`): the run works from the copy it took at
-/// launch, and the new definition is read at the next launch, or when a run paused before its next
-/// task is resumed and copies it down afresh.
+/// A run going on it does not stop the rewrite (`AMB-D-1015`): the run works from the saved version it
+/// points at (`AMB-D-1219`), and a newly saved version is read at the next launch, or when a run paused
+/// before its next task is resumed and moves to it.
 #[derive(Clone, Copy, Debug)]
 enum Def {
     Automation(i64),

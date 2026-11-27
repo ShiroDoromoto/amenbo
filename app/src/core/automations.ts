@@ -431,7 +431,8 @@ export async function setAutomationActionScope(id: number, projectId: number | n
 
 /**
  * **Delete a library action** and everything inside it. Core refuses it while a placement stands on
- * it, saying how many; the refusal reaches the caller as core's own sentence
+ * it, saying how many, and while a running or paused run goes by a version that uses it (`AMB-D-1219`);
+ * the refusal reaches the caller as core's own sentence
  * (`amenbo_core::ops::automation::action_delete`).
  */
 export async function removeAutomationAction(id: number): Promise<void> {

@@ -2213,7 +2213,7 @@ fn all_commands() -> Value {
                    { "name": "--global", "help": "move it to the device's library (human only)" },
                    { "name": "--project <id|name>", "help": "which project's library (defaults to the bound one)" }]),
             json!(["amenbo automation action-scope-set 7 --global", "amenbo automation action-scope-set 7 --project amenbo"])),
-        cmd("automation action-rm", "Deletes a library action with the steps inside it, the picture they are drawn into, and the ways out, ports and settings it declared. Refused while it is placed on a picture — the placement would be left standing on nothing. Confirms unless --yes.",
+        cmd("automation action-rm", "Deletes a library action with the steps inside it, the picture they are drawn into, and the ways out, ports and settings it declared. Refused while it is placed on a picture — the placement would be left standing on nothing — and while a running or paused run goes by a version that uses it. Confirms unless --yes.",
             json!([{ "name": "<id>", "help": "action id", "required": true },
                    { "name": "--yes/-y", "help": "skip the confirmation" }]),
             json!(["amenbo automation action-rm 7 --yes"])),

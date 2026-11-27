@@ -7339,6 +7339,25 @@ pub fn automation_version_latest(
     .next())
 }
 
+/// **One saved version of one automation** — `version` counted within `automation_id`, or `None` where
+/// no such version is kept. What a run reads to say which actions the version it goes by stands on.
+pub fn automation_version_at(
+    conn: &Connection,
+    automation_id: i64,
+    version: i64,
+) -> Result<Option<crate::model::AutomationVersion>> {
+    const V: col::automation_version::Cols = col::automation_version::ALL;
+    Ok(automation_rows(
+        conn,
+        V.table,
+        &Pred::eq(V.automation_id, automation_id).and(Pred::eq(V.version, version)),
+        &[Sort::by(V.id)],
+        super::hydrate::automation_version_row,
+    )?
+    .into_iter()
+    .next())
+}
+
 /// The saved versions of one automation — what goes when the automation does.
 pub fn automation_version_ids(conn: &Connection, automation_id: i64) -> Result<Vec<i64>> {
     const V: col::automation_version::Cols = col::automation_version::ALL;
@@ -7472,6 +7491,16 @@ pub fn automation_run_ids_under_way(conn: &Connection, automation_id: i64) -> Re
     const R: col::automation_run::Cols = col::automation_run::ALL;
     let pred = Pred::eq(R.automation_id, automation_id)
         .and(Pred::is_in(R.status, [S::Running.as_str(), S::Paused.as_str()]));
+    select_ids(conn, R.id, Some(&pred))
+}
+
+/// **The runs still going in every automation** — `running` or `paused`, across every project. What a
+/// delete of a library action reads: an action can be placed in another project's automation, and a
+/// run still going reads the version it goes by (`AMB-D-1219`).
+pub fn automation_run_ids_under_way_everywhere(conn: &Connection) -> Result<Vec<i64>> {
+    use crate::model::AutomationRunStatus as S;
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    let pred = Pred::is_in(R.status, [S::Running.as_str(), S::Paused.as_str()]);
     select_ids(conn, R.id, Some(&pred))
 }
 

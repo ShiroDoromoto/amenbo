@@ -6,10 +6,11 @@ import { fetchPointerIssues, repairPointers } from "../core/mutations";
 import type { DoctorIssueDto } from "../bindings/bindings";
 import { DismissButton } from "./DismissButton";
 
-// The banner speaks for two layers. What is inside the store (`startupHealth`) is carried by the snapshot on every
-// tick, but issues with a bound folder's `.amenbo` (legacy format, or gone) are asked of core exactly once at startup
-// (`pointer_issues`) — probing the environment costs an FS walk per folder, which is not a price to pay on every tick
-// that tracks store changes. Broken pointers can be fixed from this banner (`repair_pointers`).
+// The banner speaks for two layers. What is inside the store (`startupHealth`) rides on the snapshot — checked once,
+// by the first snapshot of the process, and carried unchanged after that. Issues with a bound folder's `.amenbo`
+// (legacy format, or gone) are asked of core exactly once at startup (`pointer_issues`): probing the environment
+// costs an FS walk per folder, which is not a price to pay on every tick that tracks store changes. Broken pointers
+// can be fixed from this banner (`repair_pointers`).
 export function HealthBanner() {
   const health = useSyncExternalStore(subscribe, () => getSnapshot().startupHealth);
   const [pointers, setPointers] = useState<DoctorIssueDto[]>([]);

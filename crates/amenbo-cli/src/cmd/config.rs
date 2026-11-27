@@ -90,7 +90,7 @@ pub(crate) fn config(store: &mut Store, flags: &Flags, sub: Option<ConfigCmd>) -
             None => "not set (the colours this build ships with)".to_string(),
         }));
         human(flags, format!("AI may archive and delete projects (ai_allow_project_ops): {}", if store.config.ai_allow_project_ops { "on" } else { "off (the AI is refused; the reversible project operations are not gated)" }));
-        human(flags, format!("startup integrity check (startup_integrity_check): {} (read-only doctor at open; warnings only)", if store.config.startup_integrity_check { "on" } else { "off" }));
+        human(flags, format!("startup integrity check (startup_integrity_check): {} (read-only doctor, run once at startup; warnings only)", if store.config.startup_integrity_check { "on" } else { "off" }));
         human(flags, format!("update check (update_check): {} (asks Amenbo's update endpoint whether a newer release is out; infra-side only, no user data; timeout + silent-fail + cached; AMENBO_UPDATE_CHECK=0 overrides)", if store.config.update_check { "on" } else { "off" }));
     }
     Ok(0)

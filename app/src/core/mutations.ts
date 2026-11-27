@@ -820,8 +820,8 @@ export async function fetchOrphanBindings(): Promise<string[]> {
 /**
  * List the bound folders whose `.amenbo` is broken — an old format, or gone (same core detection path
  * as CLI `doctor`, `doctor::pointer_issues`; read-only). The startup health banner calls this **exactly
- * once, at startup**: the snapshot (`startupHealth`) is refetched on every store-changed tick, and a
- * filesystem walk proportional to the number of bound folders must not ride along on that path.
+ * once, at startup**: the snapshot is refetched on every store-changed tick, and a filesystem walk
+ * proportional to the number of bound folders must not ride along on that path.
  * Outside Tauri this is an empty array.
  */
 export async function fetchPointerIssues(): Promise<DoctorIssueDto[]> {

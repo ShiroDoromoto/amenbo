@@ -93,19 +93,32 @@ fn find_in_store<T>(
     Ok(None)
 }
 
+/// The store-internal doctor's findings, computed by the first snapshot of this process and reused by
+/// every snapshot after it. See [`StartupHealthDto::absorb`].
+static STARTUP_DOCTOR: std::sync::OnceLock<Vec<DoctorIssueDto>> = std::sync::OnceLock::new();
+
 impl StartupHealthDto {
     /// Absorb the startup integrity check of an opened store. **No open computes it** — neither the
     /// read open (`open_read_at`) nor the write one (`AMB-D-857`) — because the doctor pass is
-    /// O(total) and per-click reads have to stay inside their budget. The snapshot is a whole-store
-    /// aggregate already, so it is the place that can afford to ask, and it asks here. Does nothing
-    /// when the startup integrity check is disabled.
+    /// O(total) and per-click reads have to stay inside their budget. Nor does every snapshot: the
+    /// snapshot is rebuilt on every store-changed tick, and a cold page cache makes one doctor pass
+    /// cost about a second. So it runs **once per process**, on the first snapshot that finds a store,
+    /// and every later snapshot carries those same issues, keeping the health banner as it was.
+    /// A failed pass is not remembered, so the next snapshot tries again. Does nothing when the
+    /// startup integrity check is disabled.
     fn absorb(&mut self, store: &Store) {
         if !store.config.startup_integrity_check {
             return;
         }
-        let Ok(health) = store.compute_startup_health() else { return };
-        self.issues
-            .extend(health.doctor.issues.iter().map(DoctorIssueDto::from));
+        let issues = match STARTUP_DOCTOR.get() {
+            Some(issues) => issues,
+            None => {
+                let Ok(health) = store.compute_startup_health() else { return };
+                STARTUP_DOCTOR
+                    .get_or_init(|| health.doctor.issues.iter().map(DoctorIssueDto::from).collect())
+            }
+        };
+        self.issues.extend(issues.iter().cloned());
     }
 }
 
@@ -4476,7 +4489,7 @@ impl From<&amenbo_core::validate::DoctorIssue> for DoctorIssueDto {
 /// A read-only command listing the issues where a bound folder's `.amenbo` is broken (old format, or
 /// gone). The GUI calls it **once, at app startup**, and adds the rows to the startup health banner
 /// (the fix, [`repair_pointers`], can be pressed right there in the banner). It is deliberately not
-/// folded into the snapshot ([`StartupHealthDto`]), because that is recomputed on every
+/// folded into the snapshot ([`StartupHealthDto`]), because the snapshot is rebuilt on every
 /// store-changed tick, and inspecting the environment — an FS walk per bound folder — has no
 /// business on that path. Detection goes through core's
 /// [`amenbo_core::doctor::pointer_issues`] alone, so what surfaces here and what surfaces on the

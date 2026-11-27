@@ -2542,7 +2542,7 @@ pub enum AutomationCmd {
     },
     /// One run in full: every step it ran, the way out each took, how long it stood, what it handed on,
     /// the whole of what it reported, and the end of what a script step printed — with the saved version
-    /// it was copied from, where a run picked up a newer one as it went on, what a run that failed a
+    /// the run goes by, where a run picked up a newer one as it went on, what a run that failed a
     /// check did not pass, and the action and the run ahead of it for a run waiting for room before an
     /// action that takes one run at a time
     RunShow {

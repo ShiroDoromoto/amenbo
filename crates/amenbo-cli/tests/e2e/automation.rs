@@ -2053,7 +2053,7 @@ fn run_show_names_the_version_a_run_goes_by() {
         shown["versions"].as_array().unwrap().iter().map(|v| v["version"].as_i64()).collect();
     assert_eq!(versions, vec![Some(1)], "{shown}");
     let (text, _) = cli.run(&["automation", "run-show", &run]);
-    assert!(text.contains("copied from: version 1"), "{text}");
+    assert!(text.contains("goes by: version 1"), "{text}");
     assert!(!text.contains("taken up at"), "{text}");
 
     cli.json(&["automation", "pause", &run, "--before-next-task", "--json"]);
@@ -2067,7 +2067,73 @@ fn run_show_names_the_version_a_run_goes_by() {
     assert_eq!(versions, vec![Some(2)], "{shown}");
     assert_eq!(shown["run"]["automation_version"], 2, "{shown}");
     let (text, _) = cli.run(&["automation", "run-show", &run]);
-    assert!(text.contains("copied from: version 2"), "{text}");
+    assert!(text.contains("goes by: version 2"), "{text}");
+
+    cli.json(&["automation", "cancel", &run, "--force", "--json"]);
+}
+
+/// **A run folder an older build wrote still reads in `run-show`**: that build kept the run's copies of
+/// its steps under their row ids (`defs/<id>.json`), and its round files name a step's copy by that id
+/// (`run_def_id`) rather than by version and step. The step is shown by the name its copy holds, with the
+/// way out it left through and what it reported.
+#[test]
+fn run_show_reads_a_run_folder_an_older_build_wrote() {
+    let cli = Cli::new();
+    let _app = cli.the_app_up();
+    let (a, _, _, _) = a_picture(&cli, false);
+    saved(&cli, &a);
+    let project = cli.json(&["automation", "show", &a, "--json"])["automation"]["project_id"].to_string();
+    let born = born_role(&cli, &a);
+    let t = id_str(&cli.json(&["task", "add", "--title", "one", "--project", &project, "--role", &born, "--json"])["task"]["id"]);
+    cli.finish_creating(&t);
+    let run = id_of(&cli.json(&["automation", "start", &a, "--json"]), "automation_run");
+    cli.json(&["task", "status", &t, "in_progress", "--json"]);
+    let shown = cli.json(&["automation", "run-show", &run, "--json"]);
+    let created_at = shown["run"]["created_at"].as_str().unwrap().to_string();
+
+    // A finished round the store holds the row of, and whose steps only the run log holds.
+    let seq: i64 = {
+        let conn = rusqlite::Connection::open(cli.home.join("store.sqlite")).unwrap();
+        conn.query_row(
+            "INSERT INTO automation_run_task (run_id, seq, started_at, ended_at, created_at, updated_at)
+             SELECT ?1, COALESCE(MAX(seq), 0) + 1, ?2, ?2, ?2, ?2 FROM automation_run_task WHERE run_id = ?1
+             RETURNING seq",
+            rusqlite::params![run.parse::<i64>().unwrap(), created_at],
+            |r| r.get(0),
+        )
+        .unwrap()
+    };
+    let stamp: String = created_at.chars().filter(char::is_ascii_alphanumeric).collect();
+    let folder = cli.home.join("runs").join(format!("{run}-{stamp}"));
+    std::fs::create_dir_all(folder.join("defs")).unwrap();
+    let copy = serde_json::json!({ "v": 1, "def": {
+        "id": 5, "run_id": run.parse::<i64>().unwrap(), "placement_id": 9002, "step_id": 9003,
+        "automation_version": 1, "name": "Alice", "agent": "claude", "interactive": false,
+        "report_to_task": false, "show_history": false,
+        "exits": serde_json::json!([{ "id": 9077, "name": "やった", "outs": [] }]).to_string(),
+        "ins": "[]", "cfg": "[]", "roles": "[]",
+        "created_at": created_at, "updated_at": created_at
+    } });
+    std::fs::write(folder.join("defs/5.json"), serde_json::to_vec(&copy).unwrap()).unwrap();
+    let step = serde_json::json!({ "v": 1, "kind": "step", "values": [], "step": {
+        "id": 9010, "run_id": run.parse::<i64>().unwrap(), "run_def_id": 5, "seq": 1, "exit_id": 9077,
+        "report": "山田", "status": "done", "started_at": created_at, "ended_at": created_at,
+        "created_at": created_at, "updated_at": created_at
+    } });
+    std::fs::write(folder.join(format!("round-{seq}.jsonl")), format!("{step}\n")).unwrap();
+
+    let shown = cli.json(&["automation", "run-show", &run, "--json"]);
+    let read = shown["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["step"]["id"] == 9010)
+        .expect("the older step reads");
+    assert_eq!(read["name"], "Alice", "{shown}");
+    assert_eq!(read["automation_version"], 1, "{shown}");
+    let (text, _) = cli.run(&["automation", "run-show", &run]);
+    assert!(text.contains("Alice  left through \"やった\""), "{text}");
+    assert!(text.contains("| 山田"), "{text}");
 
     cli.json(&["automation", "cancel", &run, "--force", "--json"]);
 }

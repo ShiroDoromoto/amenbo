@@ -1582,6 +1582,92 @@ mod tests {
         });
     }
 
+    /// Whether the launch and how many were in each role for it have gone from the store.
+    fn launch_gone(tx: &WriteTx<'_>, launch_id: i64) -> bool {
+        let launch = read::automation_launch(tx.conn(), launch_id).expect("read");
+        if launch.is_none() {
+            assert!(
+                read::automation_launch_roles(tx.conn(), launch_id).expect("roles").is_empty(),
+                "a launch's roles go with it"
+            );
+        }
+        launch.is_none()
+    }
+
+    /// **An ended launch goes with its last run**, its roles with it — and stays while a run of it is left.
+    #[test]
+    fn an_ended_launch_goes_with_its_last_run() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let runs: Vec<AutomationRun> = (0..2).map(|_| over(tx, &p, Ending::Canceled)).collect();
+            let ended_one = runs[0].launch_id.expect("launched");
+            assert_eq!(runs[1].launch_id, Some(ended_one), "both in one launch");
+            assert!(!read::automation_launch_roles(tx.conn(), ended_one).expect("roles").is_empty());
+            stop_launch(tx, ended_one).expect("stop the launch");
+            let going = a_run(tx, &p.automation);
+            assert_ne!(going.launch_id, Some(ended_one), "a fresh launch");
+
+            assert_eq!(automation::let_old_runs_go_past(tx, &going, 2, ROOM).expect("let go"), 1);
+            assert!(gone(tx, runs[0].id) && !gone(tx, runs[1].id));
+            assert!(!launch_gone(tx, ended_one), "a run of it is left");
+
+            assert_eq!(automation::let_old_runs_go_past(tx, &going, 1, ROOM).expect("let go"), 1);
+            assert!(gone(tx, runs[1].id));
+            assert!(launch_gone(tx, ended_one), "its last run went, and it with it");
+            assert!(!launch_gone(tx, going.launch_id.expect("launched")), "the launch still going stays");
+        });
+    }
+
+    /// **A launch running or paused stays with no run left**, and goes once a person has ended it — the
+    /// let-go after the next run ends picks it up.
+    #[test]
+    fn a_launch_with_no_run_left_goes_only_once_it_has_ended() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let old = over(tx, &p, Ending::Canceled);
+            let launch = old.launch_id.expect("launched");
+            // The run that asks stays whatever happens, so it is put outside the launch.
+            let asking = over(tx, &p, Ending::Canceled);
+            let asking = rewrite(tx, asking.id, |r| r.launch_id = None);
+
+            assert_eq!(automation::let_old_runs_go_past(tx, &asking, 0, ROOM).expect("let go"), 1);
+            assert!(gone(tx, old.id));
+            assert!(!launch_gone(tx, launch), "running, it stays");
+
+            pause_launch(tx, launch).expect("pause");
+            assert_eq!(automation::let_old_runs_go_past(tx, &asking, 0, ROOM).expect("let go"), 0);
+            assert!(!launch_gone(tx, launch), "paused, it stays");
+
+            stop_launch(tx, launch).expect("stop");
+            assert_eq!(automation::let_old_runs_go_past(tx, &asking, 0, ROOM).expect("let go"), 0);
+            assert!(launch_gone(tx, launch), "ended with no run, it goes");
+        });
+    }
+
+    /// **The launch waits for room in the feed, as the runs do** — one whose last run took the room goes
+    /// the next time.
+    #[test]
+    fn letting_a_launch_go_stops_before_the_feed_outruns_a_reader_it_waits_for() {
+        with_tx_on_a_store_of(12_000, |tx| {
+            let p = picture(tx, false);
+            let old = over(tx, &p, Ending::Canceled);
+            let ended_one = old.launch_id.expect("launched");
+            stop_launch(tx, ended_one).expect("stop the launch");
+            let going = a_run(tx, &p.automation);
+            let head = feed_on(tx, 9_000);
+            let edge = edge(tx, head);
+
+            reader_at(tx, "viewer", head + tx.feed_rows_pending() + 1 - edge, true);
+            assert_eq!(automation::let_old_runs_go_past(tx, &going, 0, ROOM).expect("let go"), 1);
+            assert!(gone(tx, old.id));
+            assert!(!launch_gone(tx, ended_one), "the run took the room");
+
+            reader_at(tx, "viewer", head, true);
+            assert_eq!(automation::let_old_runs_go_past(tx, &going, 0, ROOM).expect("let go"), 0);
+            assert!(launch_gone(tx, ended_one), "it went the next time");
+        });
+    }
+
     /// [`with_tx`], on a store already holding `tasks` tasks — written before the transaction opens, so
     /// they count in what re-reading the whole store hands a reader and not in what this write adds to
     /// the feed.

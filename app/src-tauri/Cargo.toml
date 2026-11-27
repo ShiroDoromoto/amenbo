@@ -49,7 +49,7 @@ tracing-appender = "0.2"
 # file watcher does the waking (macOS: FSEvents / Linux: inotify / Windows: ReadDirectoryChangesW), and
 # where that does not work (containers, NFS) the same API falls back to `PollWatcher`. Unrelated to the
 # similarly named `notify-rust` (OS notifications), which is a different crate.
-notify = "8"
+notify = "9"
 
 # What a folder holds, pruned the way the folder itself says (`crate::folder`). ripgrep's walker,
 # taken for its answer rather than its speed: it reads `.gitignore`, the global one and the parents'

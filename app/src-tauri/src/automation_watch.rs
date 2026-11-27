@@ -49,8 +49,9 @@
 //! they may run for hours; the look that finds their answer fires it.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, TryRecvError};
-use std::sync::{Condvar, Mutex};
+use std::sync::{Condvar, Mutex, OnceLock, TryLockError};
 use std::time::{Duration, Instant};
 
 use amenbo_core::ops::automation_run::{ScriptsSaid, TriggerScripts, Waiting};
@@ -102,6 +103,101 @@ pub(crate) fn wake() {
         *nudged = true;
         NUDGE.1.notify_all();
     }
+}
+
+/// **The read connection the look keeps** (`AMB-D-945`), and the identity of the file it was opened
+/// on. A look is a handful of small reads every second, and opening the store for each of them cost
+/// more than the reads did, so the thread opens one connection and goes on reading through it. Writes
+/// still open their own (`crate::commands::open_store`): the store is in WAL, so a connection that is
+/// not inside a read takes nothing from them, and each read here sees what was committed before it.
+///
+/// **It is dropped and opened again** where a connection kept across looks would read a dead store —
+/// the same three cases as the change-detection connection (`crate::commands::store_signature_parts`):
+/// a swap about to replace the file ([`release_for_swap`], `AMB-D-704`), the `-shm` it is attached to
+/// gone from disk ([`release_orphaned`]), and the file not being the one it was opened on ([`read`]).
+/// A read that fails drops it too, so a store mid-swap or mid-migration is not held on to; the next
+/// read opens it again.
+///
+/// In a static rather than on the thread's stack, because a swap asks for it from another thread.
+struct Held {
+    store: Option<amenbo_core::Store>,
+    path: PathBuf,
+    file: (u64, u64),
+}
+
+static HELD: OnceLock<Mutex<Held>> = OnceLock::new();
+
+fn held() -> std::sync::MutexGuard<'static, Held> {
+    let held = HELD.get_or_init(|| {
+        // Registered where the connection is born, as the change-detection one is: Windows refuses to
+        // replace a file anybody still has open, and core asks before it swaps.
+        amenbo_core::swap_lock::release_before_swap(release_for_swap);
+        Mutex::new(Held { store: None, path: PathBuf::new(), file: (0, 0) })
+    });
+    // A read that panicked left nothing half-done here worth refusing over: the connection is opened
+    // again where it is in doubt.
+    held.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Let go of the look's connection so a `restore` or a migration can replace the store file under it.
+/// Reads the static directly rather than through [`held`]: this runs from core, mid-swap, and nothing
+/// open yet means nothing to let go of.
+fn release_for_swap() {
+    let Some(held) = HELD.get() else { return };
+    let mut held = held.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    held.store = None;
+}
+
+/// **Let go of the look's connection where the `-shm` it is attached to is gone** — called before a
+/// write opens the store (`crate::commands::open_store`). An orphaned index is shared with every
+/// connection this process opens afterwards, and their writes fail with `disk I/O error` until it is
+/// let go of (`crate::commands::store_signature_parts` says why).
+///
+/// A look reading at that moment is left alone rather than waited for — the write may be its own —
+/// and it finds the same thing on its next read.
+pub(crate) fn release_orphaned() {
+    let Some(held) = HELD.get() else { return };
+    let mut held = match held.try_lock() {
+        Ok(held) => held,
+        Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+        Err(TryLockError::WouldBlock) => return,
+    };
+    if held.store.is_some() && !crate::commands::shm_file(&held.path).exists() {
+        log::warn!("the store's -shm was deleted under the automation watch's connection; reopening it");
+        held.store = None;
+    }
+}
+
+/// **Read the store through the look's connection**, opening it first where there is none, the `-shm`
+/// it is attached to is gone, or the store file is not the one it was opened on. The one it had is let
+/// go of before the new one is opened, so the new one does not inherit an orphaned index. The migration
+/// is asked about on every read, as every open in the app asks (`crate::commands::open_store_read`).
+///
+/// The lock is held through `f`, so a swap waits for the read to end before it lets go of the
+/// connection.
+fn read<T>(
+    f: impl FnOnce(&amenbo_core::Store) -> Result<T, crate::error::CmdError>,
+) -> Result<T, crate::error::CmdError> {
+    crate::migrate::gate()?;
+    let paths = amenbo_core::config::Paths::resolve()?;
+    let mut held = held();
+    let file = crate::commands::file_identity(&paths.store_file);
+    let alive = crate::commands::shm_file(&paths.store_file).exists()
+        && held.file == file
+        && held.path == paths.store_file;
+    let store = match held.store.take().filter(|_| alive) {
+        Some(store) => store,
+        None => {
+            held.path = paths.store_file.clone();
+            held.file = file;
+            amenbo_core::Store::open_read_at(paths)?
+        }
+    };
+    let out = f(&store);
+    if out.is_ok() {
+        held.store = Some(store);
+    }
+    out
 }
 
 /// The thread itself. It never returns: the app ending is what ends it.
@@ -200,20 +296,16 @@ fn advance(
     let (mut starts, next_trigger) = triggers_to_fire(held, asking)?;
     starts.extend(launches_to_top_up(refused)?);
     start_in_turn(starts, held, refused);
-    let running = {
-        let store = crate::commands::open_store_read()?;
-        amenbo_core::store_engine::read::automation_run_ids_running(store.read_model().conn())?
-    };
+    let running =
+        read(|store| Ok(amenbo_core::store_engine::read::automation_run_ids_running(store.read_model().conn())?))?;
     if let Err(e) = end_what_is_over(app, &running) {
         log::warn!("the terminals of runs that are over could not be ended: {}", e.message_en);
     }
     for run in &running {
         // Asked run by run rather than in one sweep, because opening one writes — and the answer for
         // the run after it is read after that write rather than from a list taken before it.
-        let waiting = {
-            let store = crate::commands::open_store_read()?;
-            amenbo_core::ops::automation_run::next_def(store.read_model().conn(), *run)?
-        };
+        let waiting =
+            read(|store| Ok(amenbo_core::ops::automation_run::next_def(store.read_model().conn(), *run)?))?;
         match waiting {
             // Before the entry is opened, what has been saved since the run's copy was taken is taken
             // up (`AMB-D-1015`): a run that came back to its entry starts from the newest saved
@@ -242,8 +334,7 @@ fn advance(
                     Ok(false) => {}
                     Err(e) => log::warn!("run {run} could not end the wait it holds: {}", e.message_en),
                 }
-                let store = crate::commands::open_store_read()?;
-                if let Err(e) = crate::automation::retell_task(app, &store, *run) {
+                if let Err(e) = read(|store| crate::automation::retell_task(app, store, *run)) {
                     log::warn!("run {run} could not say which task its step holds: {}", e.message_en);
                 }
             }
@@ -304,10 +395,7 @@ fn triggers_to_fire(
     asking: &mut HashMap<i64, Asking>,
 ) -> Result<(Vec<Start>, Option<Instant>), crate::error::CmdError> {
     let now = amenbo_core::time::Timestamp::now();
-    let found = {
-        let store = crate::commands::open_store_read()?;
-        amenbo_core::ops::automation_run::triggers_due(store.read_model().conn(), now)?
-    };
+    let found = read(|store| Ok(amenbo_core::ops::automation_run::triggers_due(store.read_model().conn(), now)?))?;
     keep_waiting(&found.waiting, &found.waiting_no_more);
     let since = |trigger: &i64| found.since.get(trigger).copied().unwrap_or(now);
     let to_ask = |trigger: &i64| found.ask.iter().any(|(asked, _)| asked == trigger);
@@ -464,14 +552,15 @@ fn ask(trigger: i64, scripts: TriggerScripts) -> Asking {
 fn launches_to_top_up(refused: &mut HashMap<i64, Instant>) -> Result<Vec<Start>, crate::error::CmdError> {
     let now = Instant::now();
     refused.retain(|_, due| now < *due);
-    let store = crate::commands::open_store_read()?;
-    let conn = store.read_model().conn();
-    let running: Vec<i64> = amenbo_core::store_engine::read::automation_launches_running(conn)?
-        .into_iter()
-        .map(|launch| launch.id)
-        .filter(|launch| !refused.contains_key(launch))
-        .collect();
-    let due = amenbo_core::ops::automation_run::top_ups_due(conn, &running)?;
+    let due = read(|store| {
+        let conn = store.read_model().conn();
+        let running: Vec<i64> = amenbo_core::store_engine::read::automation_launches_running(conn)?
+            .into_iter()
+            .map(|launch| launch.id)
+            .filter(|launch| !refused.contains_key(launch))
+            .collect();
+        Ok(amenbo_core::ops::automation_run::top_ups_due(conn, &running)?)
+    })?;
     Ok(due.into_iter().map(|due| Start { since: due.since, what: Starting::TopUp(due.launch_id) }).collect())
 }
 
@@ -504,13 +593,12 @@ fn end_what_is_over(app: &tauri::AppHandle, running: &[i64]) -> Result<(), crate
     if terminals.is_empty() && kept.is_empty() {
         return Ok(());
     }
-    let store = crate::commands::open_store_read()?;
-    let conn = store.read_model().conn();
-    let live = crate::automation::runs_still_standing(
-        terminals.iter().chain(kept.iter()).copied(),
-        |run| Ok(amenbo_core::store_engine::read::automation_run(conn, run)?.map(|it| it.status)),
-    )?;
-    drop(store);
+    let live = read(|store| {
+        let conn = store.read_model().conn();
+        crate::automation::runs_still_standing(terminals.iter().chain(kept.iter()).copied(), |run| {
+            Ok(amenbo_core::store_engine::read::automation_run(conn, run)?.map(|it| it.status))
+        })
+    })?;
     for run in terminals.into_iter().filter(|run| !live.contains(run)) {
         // An agent's step that failed the run by its own error way out is still on its terminal, and
         // the screen it stood at is kept before the terminal goes (`crate::automation::keep_failed_screen`).
@@ -525,7 +613,7 @@ fn end_what_is_over(app: &tauri::AppHandle, running: &[i64]) -> Result<(), crate
     Ok(())
 }
 
-/// **End a run that cannot go on**/// **End a run that cannot go on**, with the reason that says so
+/// **End a run that cannot go on**, with the reason that says so
 /// ([`amenbo_core::model::AutomationStoppedReason::NoWayOn`]).
 fn give_up(run: i64) -> Result<(), crate::error::CmdError> {
     let mut store = crate::commands::open_store()?;

@@ -24,11 +24,14 @@ fn ensure_migrated() -> Result<(), CmdError> {
 /// Open the store for writing. There is exactly one store, so the target is always `resolve()`
 /// (**directory-independent** — the GUI process has no `.amenbo` of its own).
 ///
-/// The one long-lived connection this process holds is let go of first when it has been orphaned
-/// ([`release_orphaned_watch`]) — held on to, it would fail this write and every write after it.
+/// The long-lived connections this process holds — this one's and the automation watch's — are let go
+/// of first when they have been orphaned ([`release_orphaned_watch`],
+/// [`crate::automation_watch::release_orphaned`]) — held on to, one would fail this write and every
+/// write after it.
 pub(crate) fn open_store() -> Result<Store, CmdError> {
     ensure_migrated()?;
     release_orphaned_watch();
+    crate::automation_watch::release_orphaned();
     Store::open_at(amenbo_core::config::Paths::resolve()?).map_err(CmdError::from)
 }
 
@@ -551,7 +554,7 @@ fn config_file() -> Option<std::path::PathBuf> {
 /// `(0, 0)` when the path cannot be asked — the same value whatever went wrong, so a file that comes
 /// back after it reads as moved, and the connection is reopened.
 #[cfg(unix)]
-fn file_identity(p: &std::path::Path) -> (u64, u64) {
+pub(crate) fn file_identity(p: &std::path::Path) -> (u64, u64) {
     use std::os::unix::fs::MetadataExt as _;
     std::fs::metadata(p).map(|m| (m.dev(), m.ino())).unwrap_or((0, 0))
 }
@@ -561,7 +564,7 @@ fn file_identity(p: &std::path::Path) -> (u64, u64) {
 /// as [`crate::folder_save::shares_its_bytes`] does. The handle is std's default open, which shares
 /// delete, so it never stands in the way of a swap (`AMB-D-704`), and it is closed before this returns.
 #[cfg(windows)]
-fn file_identity(p: &std::path::Path) -> (u64, u64) {
+pub(crate) fn file_identity(p: &std::path::Path) -> (u64, u64) {
     use std::os::windows::io::AsRawHandle as _;
     use windows_sys::Win32::Storage::FileSystem::{
         BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
@@ -632,7 +635,7 @@ fn release_watch_for_swap() {
 }
 
 /// The WAL's shared-memory index beside the store file (`store.sqlite-shm`).
-fn shm_file(store: &std::path::Path) -> std::path::PathBuf {
+pub(crate) fn shm_file(store: &std::path::Path) -> std::path::PathBuf {
     let mut p = store.as_os_str().to_os_string();
     p.push("-shm");
     std::path::PathBuf::from(p)

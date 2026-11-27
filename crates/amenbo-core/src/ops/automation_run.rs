@@ -5144,7 +5144,32 @@ fn snapshot(
     carried: Option<Carrier>,
     now: Timestamp,
 ) -> Result<Option<AutomationRunDef>> {
-    let conn = tx.conn();
+    let Some(def) = step_def(tx.conn(), automation_version, pic, placement, defs, step, carried)? else {
+        return Ok(None);
+    };
+    Ok(Some(AutomationRunDef {
+        id: read::next_id(tx.conn(), "automation_run_def")?,
+        run_id,
+        created_at: now,
+        updated_at: now,
+        ..def
+    }))
+}
+
+/// **One step of one placement as a run reads it** — what [`snapshot`] writes down and [`assembled`]
+/// builds, made in one place so the two cannot drift apart. It belongs to no run and was never written,
+/// so `id` and `run_id` are 0 and `created_at` / `updated_at` the epoch ([`Timestamp::default`]); the
+/// caller that writes it puts its own in. `None` where an agent would carry the step out and nobody was
+/// chosen for it.
+fn step_def(
+    conn: &Connection,
+    automation_version: Option<i64>,
+    pic: &Picture,
+    placement: &AutomationPlacement,
+    defs: &Defs,
+    step: &AutomationStep,
+    carried: Option<Carrier>,
+) -> Result<Option<AutomationRunDef>> {
     let def = &defs[&placement.id];
     // A built-in is carried out by Amenbo and a script by its program, so nobody was chosen for either
     // and its copy names nobody.
@@ -5185,8 +5210,8 @@ fn snapshot(
         false => Vec::new(),
     };
     Ok(Some(AutomationRunDef {
-        id: read::next_id(conn, "automation_run_def")?,
-        run_id,
+        id: 0,
+        run_id: 0,
         placement_id: Some(placement.id),
         action_id: Some(def.action_id),
         one_at_a_time: def.one_at_a_time,
@@ -5213,9 +5238,191 @@ fn snapshot(
         ins: serde_json::to_string(&ins).map_err(Error::from)?,
         cfg: serde_json::to_string(&cfg).map_err(Error::from)?,
         roles: serde_json::to_string(&roles).map_err(Error::from)?,
-        created_at: now,
-        updated_at: now,
+        created_at: Timestamp::default(),
+        updated_at: Timestamp::default(),
     }))
+}
+
+/// **The definition a run reads, assembled from the saved version it points at** (`AMB-D-1219`) — every
+/// step of every placement of version `version` of the automation, each as [`snapshot`] would copy it
+/// for a run launched on it with `default_agent` as Amenbo's own default ([`carrier`]). Only saved rows
+/// are read: the version's picture ([`Picture::saved`]) and the version of the action each placement
+/// stands on ([`ActionDef::placed`]), never the draft.
+///
+/// **The steps come in the order of the placements, and of each placement's steps**
+/// ([`steps_opened_by`]). Where the run starts is not moved to the front as [`copy_down`] does: that
+/// depends on the role the run is a seat of, which is not part of what is assembled, so it is for the
+/// caller to find ([`AutomationRunDef::roles`]).
+///
+/// Each step belongs to no run and was never written ([`step_def`]): `id` and `run_id` are 0, and
+/// `created_at` / `updated_at` the epoch. Read through [`run_defs`] to have it kept in memory.
+pub fn assemble(
+    conn: &Connection,
+    automation_id: i64,
+    version: i64,
+    default_agent: Option<&str>,
+) -> Result<Vec<AutomationRunDef>> {
+    Ok(assembled(conn, automation_id, version, default_agent)?.0)
+}
+
+/// [`assemble`], and whether what it read can never change — so may be kept ([`stands_still`]).
+fn assembled(
+    conn: &Connection,
+    automation_id: i64,
+    version: i64,
+    default_agent: Option<&str>,
+) -> Result<(Vec<AutomationRunDef>, bool)> {
+    let saved = read::automation_version_at(conn, automation_id, version)?.ok_or_else(|| {
+        Error::not_found(format!("version {version} of automation '{automation_id}' not found"))
+    })?;
+    let pic = Picture::saved(&saved)?;
+    let defs = defs_of(conn, &pic.placements)?;
+    let by_id: BTreeMap<i64, &AutomationPlacement> = pic.placements.iter().map(|p| (p.id, p)).collect();
+    let roles = roles_by_placement(&pic, &by_id, &defs);
+    let mut steps = Vec::new();
+    for placement in &pic.placements {
+        for step in steps_opened_by(&defs[&placement.id]) {
+            let carried = carrier(&pic, &roles, placement.id, step.id, default_agent);
+            if let Some(def) = step_def(conn, Some(version), &pic, placement, &defs, &step, carried)? {
+                steps.push(def);
+            }
+        }
+    }
+    Ok((steps, stands_still(conn, &pic.placements)?))
+}
+
+/// **Whether every action these placements stand on can never change** — each placement points at a
+/// saved version of its action, or stands on a built-in that follows no axis's values: a built-in's
+/// `action_id` already names one version of it (`AMB-D-1000`). The rows of an action nobody has saved,
+/// and those of a built-in that splits by an axis ([`crate::model::AutomationAction::builtin_dimension_id`]), are
+/// read as they stand now ([`ActionDef::placed`]) and may be written on afterwards.
+fn stands_still(conn: &Connection, placements: &[AutomationPlacement]) -> Result<bool> {
+    for placement in placements.iter().filter(|p| p.version.is_none()) {
+        let action =
+            read::automation_action(conn, placement.action_id)?.ok_or_else(|| not_found("action", placement.action_id))?;
+        if action.builtin.is_none() || action.builtin_dimension_id.is_some() {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+/// How many assembled definitions [`run_defs`] keeps at once. A run points at one version, and the runs
+/// going at once point at a handful between them; the one used longest ago goes first.
+const RUN_DEFS_KEPT: usize = 16;
+
+/// **The definitions assembled so far** ([`assemble`]), for [`run_defs`] — one for each database file
+/// the process reads, kept for as long as the process lives.
+static RUN_DEFS: RunDefCache = RunDefCache::new();
+
+/// **The definition a run reads** — [`assemble`], kept in memory under the automation, the version and
+/// `default_agent`, so the runs pointing at one version read it without assembling it again.
+///
+/// **Only what can never change is kept**, so nothing kept ever has to be put right:
+/// - A saved version is never written on, and neither is a saved version of an action. One that leans
+///   on rows that may still change ([`stands_still`]) is assembled every time.
+/// - It is kept only when it is read with no transaction open. A version saved inside one that is then
+///   rolled back — a test run's (`AMB-D-1219`) — leaves its number free for the next save, which may
+///   hold something else. Inside a transaction what was kept is still read: anything kept was read
+///   outside one, so it was committed, and a number once committed is never given out again.
+/// - It is kept per database file, under its path. A database held only in memory has none, and is
+///   assembled every time.
+pub fn run_defs(
+    conn: &Connection,
+    automation_id: i64,
+    version: i64,
+    default_agent: Option<&str>,
+) -> Result<std::sync::Arc<[AutomationRunDef]>> {
+    let store = conn.path().filter(|path| !path.is_empty());
+    RUN_DEFS.defs(store, conn.is_autocommit(), conn, automation_id, version, default_agent)
+}
+
+/// What one assembled definition is kept under ([`run_defs`]).
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct RunDefKey {
+    /// The path of the database file it was read from.
+    store: String,
+    automation_id: i64,
+    version: i64,
+    default_agent: Option<String>,
+}
+
+/// **Assembled definitions kept in memory** ([`run_defs`]), at most [`RUN_DEFS_KEPT`] of them.
+struct RunDefCache {
+    held: std::sync::Mutex<RunDefsHeld>,
+}
+
+struct RunDefsHeld {
+    /// Counts up on every read, so the one read longest ago can be told.
+    tick: u64,
+    /// Each definition, with the tick it was last read at.
+    defs: BTreeMap<RunDefKey, (u64, std::sync::Arc<[AutomationRunDef]>)>,
+}
+
+impl RunDefCache {
+    const fn new() -> Self {
+        RunDefCache { held: std::sync::Mutex::new(RunDefsHeld { tick: 0, defs: BTreeMap::new() }) }
+    }
+
+    /// The definition kept for `store` and the rest, or else [`assembled`] — and kept, where `keep` says
+    /// it may be and it [`stands_still`]. `store` is `None` for a database with no file: nothing is
+    /// looked up or kept for it. It is assembled with no lock held, so two reads that miss at once
+    /// both assemble it, and the second one kept stays.
+    fn defs(
+        &self,
+        store: Option<&str>,
+        keep: bool,
+        conn: &Connection,
+        automation_id: i64,
+        version: i64,
+        default_agent: Option<&str>,
+    ) -> Result<std::sync::Arc<[AutomationRunDef]>> {
+        let Some(store) = store else { return Ok(assemble(conn, automation_id, version, default_agent)?.into()) };
+        let key = RunDefKey {
+            store: store.to_string(),
+            automation_id,
+            version,
+            default_agent: default_agent.map(str::to_string),
+        };
+        if let Some(kept) = self.held().read(&key) {
+            return Ok(kept);
+        }
+        let (defs, still) = assembled(conn, automation_id, version, default_agent)?;
+        let defs: std::sync::Arc<[AutomationRunDef]> = defs.into();
+        if keep && still {
+            self.held().keep(key, defs.clone());
+        }
+        Ok(defs)
+    }
+
+    /// What is kept. A thread that panicked holding it left nothing half-written — each change is one
+    /// insert or one remove — so a poisoned lock is read through.
+    fn held(&self) -> std::sync::MutexGuard<'_, RunDefsHeld> {
+        self.held.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+impl RunDefsHeld {
+    fn read(&mut self, key: &RunDefKey) -> Option<std::sync::Arc<[AutomationRunDef]>> {
+        self.tick += 1;
+        let tick = self.tick;
+        self.defs.get_mut(key).map(|(read_at, defs)| {
+            *read_at = tick;
+            defs.clone()
+        })
+    }
+
+    fn keep(&mut self, key: RunDefKey, defs: std::sync::Arc<[AutomationRunDef]>) {
+        self.tick += 1;
+        self.defs.insert(key, (self.tick, defs));
+        while self.defs.len() > RUN_DEFS_KEPT {
+            let Some(oldest) = self.defs.iter().min_by_key(|(_, (read_at, _))| *read_at).map(|(k, _)| k.clone())
+            else {
+                break;
+            };
+            self.defs.remove(&oldest);
+        }
+    }
 }
 
 /// **What follows one way out of one step of one placement**, read off the two pictures at launch —
@@ -9979,6 +10186,238 @@ mod tests {
                 }
                 other => panic!("it pauses where its round starts, not {other:?}"),
             }
+        });
+    }
+
+    /// Steps as [`assemble`] gives them, whoever wrote them: no id, no run, written at the epoch, in the
+    /// order of their placement and step — and as JSON, which is how two of them are compared.
+    fn as_assembled(defs: &[AutomationRunDef]) -> Vec<serde_json::Value> {
+        let mut defs: Vec<AutomationRunDef> = defs
+            .iter()
+            .cloned()
+            .map(|def| AutomationRunDef {
+                id: 0,
+                run_id: 0,
+                created_at: Timestamp::default(),
+                updated_at: Timestamp::default(),
+                ..def
+            })
+            .collect();
+        defs.sort_by_key(|def| (def.placement_id, def.step_id));
+        defs.iter().map(|def| serde_json::to_value(def).expect("a step reads as JSON")).collect()
+    }
+
+    /// **What is assembled from a saved version is what a launch on it copies down** (`AMB-D-1219`) —
+    /// step for step, the agent a step falls back to on Amenbo's default included, but for the id, the
+    /// run, when it was written, and where the run starts being put first.
+    #[test]
+    fn assembling_a_version_gives_what_a_launch_copies_down() {
+        with_tx(|tx| {
+            let (automation, action, placement) = launchable(tx);
+            let step = only_step(tx, &action);
+            automation::placement_step_clear(tx, placement.id, step.id).expect("take the choice back");
+            automation::save(tx, automation.id, Some("claude")).expect("save");
+            let startable = claude();
+            let by = Launcher { default_agent: Some("claude"), ..here(&startable) };
+            let run = launch(tx, automation.id, &by).expect("launch");
+            let copied = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
+            let version = copied[0].automation_version.expect("a launch reads a saved version");
+
+            let assembled = assemble(tx.conn(), automation.id, version, Some("claude")).expect("assemble");
+            assert!(copied.len() >= 3, "the built-in that takes the task, the action, and the close");
+            assert_eq!(as_assembled(&assembled), as_assembled(&copied));
+            assert_eq!(
+                serde_json::to_value(run_defs(tx.conn(), automation.id, version, Some("claude")).expect("read").to_vec())
+                    .expect("as JSON"),
+                serde_json::to_value(&assembled).expect("as JSON"),
+                "read through what is kept, it is the same",
+            );
+
+            let other = assemble(tx.conn(), automation.id, version, Some("codex")).expect("assemble");
+            let fallen = other.iter().find(|def| def.step_id == Some(step.id)).expect("the step");
+            assert_eq!(fallen.agent, "codex", "Amenbo's default is part of what is assembled");
+        });
+    }
+
+    /// A version nobody saved is not there to assemble: the draft is never read in its place.
+    #[test]
+    fn a_version_nobody_saved_is_not_assembled() {
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            assert!(read::automation_version_latest(tx.conn(), automation.id).expect("read").is_none());
+            let refused = assemble(tx.conn(), automation.id, 1, Some("claude")).expect_err("no version 1");
+            assert!(matches!(refused, Error::NotFound(_)), "{refused:?}");
+        });
+    }
+
+    /// **An automation of `n` saved actions, one step each, saved as a version** — every placement on a
+    /// saved version of its action after the built-in that takes a task, each step's prompt `prompt_len`
+    /// bytes long, and each joined on to the next. Its newest version's number comes back with it.
+    fn saved_in_full(tx: &WriteTx<'_>, n: usize, prompt_len: usize) -> (Automation, i64) {
+        let automation = mk_automation(tx, "大きい定義");
+        let mut from = takes_first(tx, &automation);
+        let mut exit = Some(TAKEN.to_string());
+        start_at(tx, automation.id, from.id);
+        for i in 0..n {
+            let prompt = format!("{i}: {}", "直す。".repeat(prompt_len / "直す。".len()));
+            let action = automation::action_from_prompt(
+                tx,
+                Some(automation.project_id),
+                NewStep::new(&format!("手順{i}"), &prompt),
+                &[],
+                &[],
+            )
+            .expect("write the action");
+            mk_exit(tx, &action, "直した");
+            automation::action_version_add(tx, action.id).expect("save the action");
+            let placement = automation::placement_add(tx, automation.id, action.id).expect("place it");
+            assert!(placement.version.is_some(), "it stands on the version just saved");
+            let step = action.entry_step_id.expect("an entry step");
+            automation::placement_step_set(tx, placement.id, step, "claude", None).expect("choose");
+            automation::edge_add(
+                tx,
+                AutomationPictureOwner::Automation,
+                from.id,
+                exit.as_deref(),
+                EdgeTarget::Go(placement.id),
+                None,
+            )
+            .expect("on to the next");
+            from = placement;
+            exit = Some("直した".to_string());
+        }
+        let saved = automation::version_add(tx, automation.id).expect("save the automation");
+        (automation, saved.version)
+    }
+
+    /// **A version that leans on nothing that can change is kept, and read back without assembling it
+    /// again** — under the automation, the version and Amenbo's default, each its own.
+    #[test]
+    fn a_version_read_twice_is_assembled_once() {
+        with_tx(|tx| {
+            let (automation, version) = saved_in_full(tx, 2, 10);
+            let cache = RunDefCache::new();
+            let fetch = |keep: bool, default_agent: Option<&str>| {
+                cache.defs(Some("store"), keep, tx.conn(), automation.id, version, default_agent).expect("read")
+            };
+            let first = fetch(true, None);
+            assert!(!first.is_empty());
+            assert!(std::sync::Arc::ptr_eq(&first, &fetch(true, None)), "the second read is the one kept");
+            assert!(std::sync::Arc::ptr_eq(&first, &fetch(false, None)), "what is kept is read inside a transaction");
+
+            let other = fetch(true, Some("codex"));
+            assert!(!std::sync::Arc::ptr_eq(&first, &other), "another default is kept apart");
+            assert!(std::sync::Arc::ptr_eq(&other, &fetch(true, Some("codex"))));
+        });
+    }
+
+    /// **What is read inside a transaction, and what has no file to be kept under, is not kept** — a
+    /// version saved inside a transaction that is rolled back leaves its number to the next save.
+    #[test]
+    fn a_version_read_inside_a_transaction_is_not_kept() {
+        with_tx(|tx| {
+            let (automation, version) = saved_in_full(tx, 1, 10);
+            let cache = RunDefCache::new();
+            let first = cache.defs(Some("store"), false, tx.conn(), automation.id, version, None).expect("read");
+            let again = cache.defs(Some("store"), false, tx.conn(), automation.id, version, None).expect("read");
+            assert!(!std::sync::Arc::ptr_eq(&first, &again));
+            let first = cache.defs(None, true, tx.conn(), automation.id, version, None).expect("read");
+            let again = cache.defs(None, true, tx.conn(), automation.id, version, None).expect("read");
+            assert!(!std::sync::Arc::ptr_eq(&first, &again));
+        });
+    }
+
+    /// **A version whose placement stands on an action nobody has saved is assembled every time** — those
+    /// rows are read as they stand now ([`ActionDef::placed`]), and may be written on afterwards.
+    #[test]
+    fn a_version_on_an_action_nobody_saved_is_not_kept() {
+        with_tx(|tx| {
+            let (automation, _, placement) = launchable(tx);
+            assert!(placement.version.is_none());
+            let version = automation::save(tx, automation.id, None).expect("save").version;
+            let cache = RunDefCache::new();
+            let first = cache.defs(Some("store"), true, tx.conn(), automation.id, version, None).expect("read");
+            let again = cache.defs(Some("store"), true, tx.conn(), automation.id, version, None).expect("read");
+            assert!(!std::sync::Arc::ptr_eq(&first, &again));
+        });
+    }
+
+    /// **Past [`RUN_DEFS_KEPT`], the one read longest ago goes.**
+    #[test]
+    fn past_the_most_kept_the_one_read_longest_ago_goes() {
+        with_tx(|tx| {
+            let (automation, version) = saved_in_full(tx, 1, 10);
+            let cache = RunDefCache::new();
+            let fetch = |agent: &str| {
+                cache.defs(Some("store"), true, tx.conn(), automation.id, version, Some(agent)).expect("read")
+            };
+            let first = fetch("agent-0");
+            let second = fetch("agent-1");
+            for i in 2..RUN_DEFS_KEPT {
+                fetch(&format!("agent-{i}"));
+            }
+            assert!(std::sync::Arc::ptr_eq(&first, &fetch("agent-0")), "read again, it is the newest read");
+            fetch("agent-past");
+            assert!(std::sync::Arc::ptr_eq(&first, &fetch("agent-0")));
+            assert!(!std::sync::Arc::ptr_eq(&second, &fetch("agent-1")), "the one read longest ago went");
+        });
+    }
+
+    /// **How long a large version takes to assemble, and to read once kept** — one the size of the
+    /// largest seen in use: 92 actions, each saved, placed and joined on to the next, with a 4.5KB prompt
+    /// on each step. The times are printed, and held to a bound far above what they cost, so this fails
+    /// only where assembling goes wrong by an order of magnitude.
+    #[test]
+    fn a_large_version_is_assembled_and_read_back_in_time() {
+        with_tx(|tx| {
+            let (automation, version) = saved_in_full(tx, 92, 4_500);
+            let saved = read::automation_version_at(tx.conn(), automation.id, version).expect("read").expect("saved");
+            let pic = Picture::saved(&saved).expect("the picture");
+            let mut action_bytes = 0;
+            for placement in &pic.placements {
+                let Some(v) = placement.version else { continue };
+                let action = read::automation_action_version(tx.conn(), placement.action_id, v)
+                    .expect("read")
+                    .expect("the action's version");
+                action_bytes += action.steps.len()
+                    + action.exits.len()
+                    + action.ports.len()
+                    + action.cfgs.len()
+                    + action.edges.len()
+                    + action.wires.len();
+            }
+            let version_bytes = saved.placements.len()
+                + saved.cfgs.len()
+                + saved.placement_steps.len()
+                + saved.edges.len()
+                + saved.wires.len()
+                + saved.roles.len();
+
+            let rounds = 5;
+            let began = std::time::Instant::now();
+            for _ in 0..rounds {
+                let defs = assemble(tx.conn(), automation.id, version, Some("claude")).expect("assemble");
+                assert!(defs.len() > 92, "every action's step, and the built-in's");
+            }
+            let assembling = began.elapsed() / rounds;
+
+            let cache = RunDefCache::new();
+            let kept = cache.defs(Some("store"), true, tx.conn(), automation.id, version, Some("claude")).expect("read");
+            let began = std::time::Instant::now();
+            for _ in 0..rounds {
+                let again =
+                    cache.defs(Some("store"), true, tx.conn(), automation.id, version, Some("claude")).expect("read");
+                assert!(std::sync::Arc::ptr_eq(&kept, &again));
+            }
+            let reading_kept = began.elapsed() / rounds;
+
+            eprintln!(
+                "assembled a version of {version_bytes} bytes on {} placements ({action_bytes} bytes of saved \
+                 actions) in {assembling:?}; read back once kept in {reading_kept:?}",
+                pic.placements.len()
+            );
+            assert!(assembling < std::time::Duration::from_secs(2), "assembling took {assembling:?}");
+            assert!(reading_kept < assembling, "reading what is kept took {reading_kept:?}");
         });
     }
 }

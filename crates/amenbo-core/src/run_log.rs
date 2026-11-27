@@ -12,6 +12,10 @@
 //! - **One JSONL file per round**, `round-<seq>.jsonl` ([`Round`]): the run as it stood when the round
 //!   was written, the round itself, then one line per step execution carrying its values, then one line
 //!   per file handed between its steps. Reports and values have no size cap, so neither does a line.
+//! - **One more file for the steps no round holds**, `loose.jsonl` ([`LOOSE_FILE_NAME`]): the step
+//!   executions of the run whose `run_task_id` is NULL — every step of a run a trigger started that takes
+//!   no task, and the steps a run ran before its first round. The same lines as a round file, less the
+//!   round's. Written once, as the run ends: no step joins them after that.
 //! - **The step definitions once per run**, `defs/v<version>-p<placement>-s<step>.json` ([`def_path`]):
 //!   each step a round ran, as the run read it off the saved version it ran on (`AMB-D-1219`), written
 //!   the first time a round uses it. A run picked up on a newer version (`AMB-D-1015`) writes that
@@ -22,12 +26,14 @@
 //! - **The files handed between steps**, `files/<attachment id>`: the bytes of each blob attachment,
 //!   copied out of the blob store. The line for it in the round file carries its name and type.
 //! - **Written after the commit** succeeds, as the activity ledger is — gathered inside the transaction
-//!   ([`crate::store_engine::WriteTx::record_round`]) and written by
-//!   [`crate::store_engine::WriteTx::commit`]. A crash before the commit leaves no file; a crash after it
-//!   loses the round. The round is not lost from the store by that: the store lets a round's detail go
-//!   only once its file is here — an old round of a run under way (`ops::automation_step`'s
-//!   `let_go_of_a_round`), and every round of a finished run of any automation and role, a little as
-//!   each run ends (`ops::automation`'s `let_finished_rounds_go`).
+//!   ([`crate::store_engine::WriteTx::record_round`], [`crate::store_engine::WriteTx::record_loose`]) and
+//!   written by [`crate::store_engine::WriteTx::commit`]. A crash before the commit leaves no file; a
+//!   crash after it loses the round. The round is not lost from the store by that: the store lets a
+//!   round's detail go only once its file is here — an old round of a run under way
+//!   (`ops::automation_step`'s `let_go_of_a_round`), and every round and the steps no round holds of a
+//!   finished run of any automation and role, a little as each run ends (`ops::automation`'s
+//!   `let_finished_rounds_go`). A finished run whose steps no round holds have no file — lost to a crash,
+//!   or ended before this file was kept — has them gathered there, and they go the time after.
 //! - **When a round is over** is when the next one begins or the run ends — not when the round row is
 //!   given its `ended_at`. A step that hands its task back closes the round there, and the steps after it
 //!   still belong to it.
@@ -36,8 +42,9 @@
 //!   file to interleave in. A definition file and a copied blob are written the same way, and one that is
 //!   already there is left alone: neither changes once written.
 //!
-//! - **Read back with the store** ([`detail`]): a finished round from its file, the round under way and
-//!   a round no file holds from the store, joined into one account of the run.
+//! - **Read back with the store** ([`detail`]): a finished round from its file, the steps no round holds
+//!   from theirs, and the round under way and what no file holds from the store, joined into one account
+//!   of the run.
 //! - **Removed with its run.** Whoever deletes a run row says so ([`crate::store_engine::WriteTx::forget_run`]),
 //!   and the commit removes the run's folder after it succeeds ([`forget`]) — the run of a deleted
 //!   automation or project, and an old run let go once its role holds more than it keeps
@@ -86,6 +93,9 @@ pub fn round_file_name(seq: i64) -> String {
     format!("round-{seq}.jsonl")
 }
 
+/// The file the step executions no round holds are written to, in their run's folder ([`Round::gather_loose`]).
+pub const LOOSE_FILE_NAME: &str = "loose.jsonl";
+
 /// **The file one step is written to**, in its run's folder `dir` — named by the version it was read off,
 /// the placement and the step ([`RunDefKey`]), so each step of each version a run ran on has one. A part
 /// a step does not name reads `x`.
@@ -96,11 +106,13 @@ pub fn def_path(dir: &Path, at: RunDefKey) -> PathBuf {
 }
 
 /// One finished round, read out of the store inside the transaction that ended it, ready to write once
-/// that transaction commits.
+/// that transaction commits — or the steps of a finished run that no round holds, which are written the
+/// same way.
 #[derive(Clone, Debug)]
 pub struct Round {
     pub run: AutomationRun,
-    pub round: AutomationRunTask,
+    /// The round, or `None` for the steps no round holds ([`Round::gather_loose`]).
+    pub round: Option<AutomationRunTask>,
     /// The step executions of the round, in the order they happened, each with its values.
     pub steps: Vec<Value>,
     /// The steps the round's executions ran, as the run read them.
@@ -117,7 +129,29 @@ impl Round {
         else {
             return Ok(None);
         };
-        let executions: Vec<AutomationRunStep> = read::automation_run_steps_of_task(conn, round.id)?;
+        let executions = read::automation_run_steps_of_task(conn, round.id)?;
+        Self::of(conn, run, Some(round), executions).map(Some)
+    }
+
+    /// **Read the steps no round holds out of the store** — the step executions of run `run_id` whose
+    /// `run_task_id` is NULL, as the connection sees them now. `None` when the run is gone or has none.
+    pub fn gather_loose(conn: &rusqlite::Connection, run_id: i64) -> crate::error::Result<Option<Round>> {
+        let Some(run) = read::automation_run(conn, run_id)? else { return Ok(None) };
+        let executions: Vec<AutomationRunStep> =
+            read::automation_run_steps_of(conn, run_id)?.into_iter().filter(|s| s.run_task_id.is_none()).collect();
+        if executions.is_empty() {
+            return Ok(None);
+        }
+        Self::of(conn, run, None, executions).map(Some)
+    }
+
+    /// The executions `executions` of `run` with their values, files and the steps they ran.
+    fn of(
+        conn: &rusqlite::Connection,
+        run: AutomationRun,
+        round: Option<AutomationRunTask>,
+        executions: Vec<AutomationRunStep>,
+    ) -> crate::error::Result<Round> {
         let mut steps = Vec::with_capacity(executions.len());
         let mut files = Vec::new();
         for step in &executions {
@@ -128,15 +162,18 @@ impl Round {
             }
         }
         let defs = crate::ops::automation_run::defs_named(conn, &run, &executions)?.into_values().collect();
-        Ok(Some(Round { run, round, steps, defs, files }))
+        Ok(Round { run, round, steps, defs, files })
+    }
+
+    /// The file it is written to, in its run's folder.
+    pub fn file_name(&self) -> String {
+        self.round.as_ref().map_or_else(|| LOOSE_FILE_NAME.to_string(), |r| round_file_name(r.seq))
     }
 
     /// The round file's lines, each LF-terminated.
     fn to_lines(&self) -> Vec<u8> {
-        let mut lines = vec![
-            json!({ "v": LINE_VERSION, "kind": "run", "run": self.run }),
-            json!({ "v": LINE_VERSION, "kind": "round", "round": self.round }),
-        ];
+        let mut lines = vec![json!({ "v": LINE_VERSION, "kind": "run", "run": self.run })];
+        lines.extend(self.round.iter().map(|r| json!({ "v": LINE_VERSION, "kind": "round", "round": r })));
         lines.extend(self.steps.iter().map(|s| json!({ "v": LINE_VERSION, "kind": "step", "step": s["step"], "values": s["values"] })));
         lines.extend(self.files.iter().map(|f| {
             let path = f.blob_hash.as_ref().map(|_| file_path(f.id));
@@ -156,8 +193,8 @@ fn file_path(attachment_id: i64) -> String {
     format!("files/{attachment_id}")
 }
 
-/// **Write one finished round** into its run's folder. Never fails the caller: what cannot be written is
-/// a `warn`, and the rest of the round is still written where it can be.
+/// **Write one finished round** — or the steps no round holds — into its run's folder. Never fails the
+/// caller: what cannot be written is a `warn`, and the rest of the round is still written where it can be.
 pub fn write(place: &Place, round: &Round) {
     let dir = dir_of(&place.runs, &round.run);
     if let Err(e) = std::fs::create_dir_all(&dir) {
@@ -181,8 +218,8 @@ pub fn write(place: &Place, round: &Round) {
         }
     }
     let lines = round.to_lines();
-    if let Err(e) = write_whole(&dir.join(round_file_name(round.round.seq)), |f| f.write_all(&lines)) {
-        tracing::warn!(run = round.run.id, round = round.round.seq, error = %e, "run log: round not written");
+    if let Err(e) = write_whole(&dir.join(round.file_name()), |f| f.write_all(&lines)) {
+        tracing::warn!(run = round.run.id, file = %round.file_name(), error = %e, "run log: round not written");
     }
 }
 
@@ -217,11 +254,11 @@ pub struct StepDetail {
     pub values: Vec<AutomationRunValue>,
 }
 
-/// **Read one run back whole**: each round whose file the run log holds from that file, and the rest
-/// from the store — the round under way, a round written before the run log was kept or lost to a
-/// crash, and the steps no round holds. A round in both is read from its file once, as the store may
-/// already be letting its detail go. `None` where the store has no such run: a folder no run names is
-/// not read.
+/// **Read one run back whole**: each round whose file the run log holds from that file, the steps no
+/// round holds from theirs ([`LOOSE_FILE_NAME`]), and the rest from the store — the round under way, a
+/// round written before the run log was kept or lost to a crash, and the steps no round holds of a run
+/// with no such file. What is in both is read from its file once, as the store may already be letting
+/// its detail go. `None` where the store has no such run: a folder no run names is not read.
 ///
 /// **The steps the executions ran** are read from the run's folder where it holds them, and off the saved
 /// versions they name otherwise ([`crate::ops::automation_run::defs_named`]). A round file a build before
@@ -235,23 +272,32 @@ pub fn detail(conn: &rusqlite::Connection, runs: Option<&Path>, run_id: i64) -> 
     let mut defs: std::collections::BTreeMap<RunDefKey, AutomationRunDef> = std::collections::BTreeMap::new();
     let mut steps = Vec::new();
     let mut from_file = std::collections::BTreeSet::new();
+    let mut loose_from_file = false;
     if let Some(runs) = runs {
         let dir = dir_of(runs, &run);
         let written = read_defs(&dir);
         let copies: std::collections::BTreeMap<i64, RunDefKey> =
             written.iter().filter(|def| def.id != 0).map(|def| (def.id, def.key())).collect();
         for round in &rounds {
-            if let Some(read) = read_round(&dir, round.seq, &copies) {
+            if let Some(read) = read_steps(&dir, &round_file_name(round.seq), &copies) {
                 from_file.insert(round.id);
                 steps.extend(read);
             }
+        }
+        if let Some(read) = read_steps(&dir, LOOSE_FILE_NAME, &copies) {
+            loose_from_file = true;
+            steps.extend(read);
         }
         for def in written {
             defs.entry(def.key()).or_insert(def);
         }
     }
     for step in read::automation_run_steps_of(conn, run_id)? {
-        if step.run_task_id.is_some_and(|id| from_file.contains(&id)) {
+        let read = match step.run_task_id {
+            Some(id) => from_file.contains(&id),
+            None => loose_from_file,
+        };
+        if read {
             continue;
         }
         let values = read::automation_run_values_of(conn, step.id)?;
@@ -266,13 +312,14 @@ pub fn detail(conn: &rusqlite::Connection, runs: Option<&Path>, run_id: i64) -> 
     Ok(Some(Detail { defs: defs.into_values().collect(), rounds, steps }))
 }
 
-/// The step executions of one round, read from its file in the run's folder `dir`. `None` where there
-/// is no file, or it cannot be read whole — a `warn`, and the caller reads the store instead.
+/// The step executions in the file `name` of the run's folder `dir` — a round's, or the steps no round
+/// holds. `None` where there is no file, or it cannot be read whole — a `warn`, and the caller reads the
+/// store instead.
 ///
 /// An execution a build before v154 wrote names the copy of its step by row id (`run_def_id`) rather
 /// than by version and step: it is given the key `copies` holds for that id ([`RunDefKey`]).
-fn read_round(dir: &Path, seq: i64, copies: &std::collections::BTreeMap<i64, RunDefKey>) -> Option<Vec<StepDetail>> {
-    let path = dir.join(round_file_name(seq));
+fn read_steps(dir: &Path, name: &str, copies: &std::collections::BTreeMap<i64, RunDefKey>) -> Option<Vec<StepDetail>> {
+    let path = dir.join(name);
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
@@ -396,7 +443,7 @@ mod tests {
         };
         Round {
             run: run.clone(),
-            round: AutomationRunTask { id: seq, run_id: run.id, seq, ..Default::default() },
+            round: Some(AutomationRunTask { id: seq, run_id: run.id, seq, ..Default::default() }),
             steps: vec![json!({ "step": step, "values": [] })],
             defs: vec![def],
             files: vec![],
@@ -547,7 +594,7 @@ mod tests {
         let folder = dir_of(&place.runs, &run);
 
         let none = std::collections::BTreeMap::new();
-        let steps = read_round(&folder, 1, &none).expect("the round reads back");
+        let steps = read_steps(&folder, &round_file_name(1), &none).expect("the round reads back");
         assert_eq!(steps.len(), 1);
         assert_eq!(steps[0].step.report, long);
         assert_eq!(steps[0].step.def_key(), AT);
@@ -557,9 +604,9 @@ mod tests {
         assert_eq!(defs[0].name, "Alice");
         assert_eq!(defs[0].key(), AT);
 
-        assert!(read_round(&folder, 2, &none).is_none(), "no file, nothing read");
+        assert!(read_steps(&folder, &round_file_name(2), &none).is_none(), "no file, nothing read");
         std::fs::write(folder.join(round_file_name(3)), b"{\"v\":1,\"kind\":\"step\",\"step\":{}}\n").unwrap();
-        assert!(read_round(&folder, 3, &none).is_none(), "a round that does not read whole is not read");
+        assert!(read_steps(&folder, &round_file_name(3), &none).is_none(), "a round that does not read whole is not read");
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -592,10 +639,33 @@ mod tests {
         let copies: std::collections::BTreeMap<i64, RunDefKey> =
             defs.iter().filter(|d| d.id != 0).map(|d| (d.id, d.key())).collect();
         assert_eq!(copies.get(&5), Some(&AT));
-        let steps = read_round(&folder, 1, &copies).expect("the older round reads back");
+        let steps = read_steps(&folder, &round_file_name(1), &copies).expect("the older round reads back");
         assert_eq!(steps.len(), 1);
         assert_eq!(steps[0].step.def_key(), AT, "the step is given what its copy names");
         assert_eq!(steps[0].step.report, "山田");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// **The steps no round holds** are written to a file of their own, with no round line, and read
+    /// back like a round's.
+    #[test]
+    fn the_steps_no_round_holds_are_written_and_read_back() {
+        let (dir, place) = place("loose");
+        let run = run(13, "2026-11-13T10:00:00Z");
+        let mut loose = round(&run, 1, "佐藤");
+        loose.round = None;
+
+        write(&place, &loose);
+
+        let folder = dir_of(&place.runs, &run);
+        assert_eq!(loose.file_name(), LOOSE_FILE_NAME);
+        let kinds: Vec<String> =
+            lines(&folder.join(LOOSE_FILE_NAME)).iter().map(|l| l["kind"].as_str().unwrap().to_string()).collect();
+        assert_eq!(kinds, vec!["run", "step"]);
+        assert!(def_path(&folder, AT).exists(), "the step they ran is written beside them");
+        let steps = read_steps(&folder, LOOSE_FILE_NAME, &std::collections::BTreeMap::new()).expect("they read back");
+        assert_eq!(steps.len(), 1);
+        assert_eq!(steps[0].step.report, "佐藤");
         std::fs::remove_dir_all(&dir).ok();
     }
 

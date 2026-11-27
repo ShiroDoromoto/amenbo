@@ -1042,8 +1042,8 @@ impl Store {
 
     /// **One run read back whole** — every round, every step execution with its values and every step
     /// it ran, joined from the run log and the store ([`crate::run_log::detail`]): a
-    /// finished round from its file, the round under way from the store. `None` where there is no such
-    /// run.
+    /// finished round and a finished run's steps no round holds from their files, the round under way
+    /// from the store. `None` where there is no such run.
     pub fn automation_run_detail(&self, run_id: i64) -> Result<Option<crate::run_log::Detail>> {
         self.reachable(&format!("automation run #{run_id}"), |c| {
             super::owner::automation_run(c, run_id)

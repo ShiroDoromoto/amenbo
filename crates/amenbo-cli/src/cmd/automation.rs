@@ -1264,8 +1264,9 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
                 .ok_or_else(|| {
                     CliError::from(amenbo_core::Error::not_found(format!("run '{id}' not found")))
                 })?;
-            // A finished round is read from the run log, the round under way from the store, joined into
-            // one account: the store lets an old round's detail go once the run log holds it.
+            // A finished round and a finished run's steps no round holds are read from the run log, the
+            // round under way from the store, joined into one account: the store lets that detail go once
+            // the run log holds it.
             let detail = store.automation_run_detail(id).map_err(CliError::from)?.unwrap_or_default();
             let room = store.automation_run_waits_for_room(id).map_err(CliError::from)?;
             if flags.json {
@@ -1595,9 +1596,9 @@ fn speaking_for() -> Result<i64, CliError> {
     })
 }
 
-/// **How many steps one run walked**, its finished rounds read from the run log and the round under way
-/// from the store ([`amenbo_core::run_log::detail`]): the store lets a round's detail go once the run log
-/// holds it, so counting the store's rows alone would undercount.
+/// **How many steps one run walked**, its finished rounds and a finished run's steps no round holds read
+/// from the run log, the round under way from the store ([`amenbo_core::run_log::detail`]): the store lets
+/// that detail go once the run log holds it, so counting the store's rows alone would undercount.
 fn steps_walked(store: &Store, run: i64) -> Result<usize, CliError> {
     Ok(store.automation_run_detail(run).map_err(CliError::from)?.map_or(0, |d| d.steps.len()))
 }

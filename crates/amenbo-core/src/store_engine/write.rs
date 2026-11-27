@@ -69,8 +69,9 @@ pub struct WriteTx<'a> {
     /// by [`commit`](Self::commit), only after the SQLite commit succeeds
     /// ([`record_activity`](Self::record_activity)). `RefCell` for the same reason as `projects`.
     activity: std::cell::RefCell<Vec<crate::activity_log::Entry>>,
-    /// The finished rounds this operation gathered ([`record_round`](Self::record_round)) — written to
-    /// the run log by [`commit`](Self::commit), only after the SQLite commit succeeds.
+    /// The finished rounds this operation gathered ([`record_round`](Self::record_round)), and the steps
+    /// of finished runs no round holds ([`record_loose`](Self::record_loose)) — written to the run log
+    /// by [`commit`](Self::commit), only after the SQLite commit succeeds.
     rounds: std::cell::RefCell<Vec<crate::run_log::Round>>,
     /// The runs this operation deleted ([`forget_run`](Self::forget_run)) — whose folders in the run log
     /// [`commit`](Self::commit) removes, only after the SQLite commit succeeds.
@@ -189,6 +190,24 @@ impl<'a> WriteTx<'a> {
         }
     }
 
+    /// **Gather the steps of a finished run that no round holds** (`run_task_id` NULL) for the run log
+    /// ([`crate::run_log::Round::gather_loose`]), written by [`commit`](Self::commit) as a round is.
+    /// Called where the run ends, and where a finished run's are found with no file to let them go by.
+    /// A run gathered once already in this operation is not gathered again, a run with none gathers
+    /// nothing, and the rest is as [`record_round`](Self::record_round).
+    pub fn record_loose(&self, run_id: i64) {
+        if self.engine.run_logs().is_none()
+            || self.rounds.borrow().iter().any(|r| r.round.is_none() && r.run.id == run_id)
+        {
+            return;
+        }
+        match crate::run_log::Round::gather_loose(self.conn(), run_id) {
+            Ok(Some(loose)) => self.rounds.borrow_mut().push(loose),
+            Ok(None) => {}
+            Err(e) => tracing::warn!(run = run_id, error = %e, "run log: the steps no round holds not read; not written"),
+        }
+    }
+
     /// **Say a run is being deleted**, so [`commit`](Self::commit) removes its folder from the run log
     /// ([`crate::run_log::forget`]) **after** the SQLite commit succeeds — on an earlier `?` it goes with
     /// the guard and the folder stays with the run. Pass the run row as it stood: the folder is named by
@@ -288,7 +307,8 @@ impl<'a> WriteTx<'a> {
     /// no ledger has nowhere to put them, so a batch that queued any is refused before it commits — in
     /// every build — rather than committed with its lines lost.
     ///
-    /// **The rounds it gathered are written after the commit too** ([`record_round`](Self::record_round)),
+    /// **The rounds it gathered are written after the commit too** ([`record_round`](Self::record_round),
+    /// [`record_loose`](Self::record_loose)),
     /// to the run log the engine was opened with ([`StoreEngine::keep_run_logs_in`]). Like the ledger, it
     /// cannot fail the operation ([`crate::run_log::write`]). **Then the folders of the runs it deleted
     /// are removed** ([`forget_run`](Self::forget_run)): a round of a run deleted in the same operation is
@@ -540,7 +560,7 @@ mod tests {
     fn a_round(run_id: i64) -> crate::run_log::Round {
         crate::run_log::Round {
             run: crate::model::AutomationRun { id: run_id, ..Default::default() },
-            round: crate::model::AutomationRunTask { id: 1, run_id, seq: 1, ..Default::default() },
+            round: Some(crate::model::AutomationRunTask { id: 1, run_id, seq: 1, ..Default::default() }),
             steps: vec![],
             defs: vec![],
             files: vec![],

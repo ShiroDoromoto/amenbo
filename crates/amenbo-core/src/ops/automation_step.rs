@@ -729,7 +729,8 @@ fn new_stretch(
 /// - **What stays** is every round row (`automation_run_task`), which the run's list by task and the
 ///   count of rounds stopped in a row read; every task a round passed on (`automation_run_pass`); and
 ///   the round under way and the one just closed, whose detail the next steps still read
-///   (`latest_for`). The steps no round holds (`run_task_id` NULL) stay too: no round file has them.
+///   (`latest_for`). The steps no round holds (`run_task_id` NULL) stay too: they are written and let go
+///   once the run is over (`ops::automation`'s `let_rounds_of_a_finished_run_go`).
 /// - **Only a round the run log holds goes.** An engine with no run log lets none go, and nor is a
 ///   round let go whose file is not there — one written before the run log was kept, or lost to a crash
 ///   after its commit. Those stay, and the next round asks of the one after them.
@@ -1449,8 +1450,9 @@ mod tests {
             assert_eq!(rounds.len(), 1);
             let round = &rounds[0];
             assert_eq!(round.run.id, run.id);
-            assert_eq!(round.round.seq, 1);
-            assert!(round.round.ended_at.is_some(), "written as it stood once closed");
+            let closed = round.round.as_ref().expect("a round");
+            assert_eq!(closed.seq, 1);
+            assert!(closed.ended_at.is_some(), "written as it stood once closed");
             let reports: Vec<&str> = round.steps.iter().map(|s| s["step"]["report"].as_str().unwrap()).collect();
             assert_eq!(reports, vec!["Alice looked", ""]);
             assert_eq!(round.steps[0]["values"][0]["value"], serde_json::json!("the note"));

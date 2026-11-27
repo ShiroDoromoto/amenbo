@@ -2576,8 +2576,9 @@ impl FeedRoom {
 }
 
 /// **Let the detail of finished runs go from the store, once the run log holds it** — of the runs that
-/// are over, the step executions of each round whose file the run log holds, with their values and the
-/// files attached to them ([`let_rounds_of_a_finished_run_go`]). The runs of `run`'s role go first, then
+/// are over, the step executions of each round whose file the run log holds, and those no round holds
+/// once their file is there, with their values and the files attached to them
+/// ([`let_rounds_of_a_finished_run_go`]). The runs of `run`'s role go first, then
 /// those of every other automation and role, oldest run first within each. Answers how many rounds let
 /// their detail go.
 /// Asked as each run ends (`ops::automation_stop`'s `ended`), after the runs past what the role keeps have
@@ -2589,11 +2590,10 @@ impl FeedRoom {
 ///   write, which would take the feed past its reader (`AMB-D-1165`).
 /// - **A run's last round goes the next time a run ends**, not as the run ends: its file is written
 ///   after the commit that ends it ([`WriteTx::record_round`]), and a round goes only once its file is
-///   there.
+///   there. So do the steps no round holds (`run_task_id` NULL, [`WriteTx::record_loose`]).
 /// - **What stays**: the run row, every round row (`automation_run_task`), every task a round passed on
-///   (`automation_run_pass`), the files on the run itself (`AMB-D-1133`), the steps no round holds
-///   (`run_task_id` NULL), and the detail of a round whose file is not there. An engine with no run log
-///   lets nothing go.
+///   (`automation_run_pass`), the files on the run itself (`AMB-D-1133`), and the detail whose file is
+///   not there. An engine with no run log lets nothing go.
 /// - **It stops before the change feed outruns a reader the feed waits for**, as [`let_old_runs_go`]
 ///   does ([`FeedRoom`]), between one round and the next. What is left goes the next time.
 pub(crate) fn let_finished_rounds_go(tx: &WriteTx<'_>, run: &crate::model::AutomationRun) -> Result<usize> {
@@ -2662,11 +2662,16 @@ pub(crate) fn let_copies_go_past(tx: &WriteTx<'_>, limit: usize, room: i64) -> R
 }
 
 /// **Let the detail of one finished run's rounds go**, each round whose file the run log holds, oldest
-/// first, until the feed is full ([`FeedRoom::is_full`]). Answers how many rounds went.
+/// first, then the steps no round holds once their file is there ([`crate::run_log::LOOSE_FILE_NAME`]),
+/// until the feed is full ([`FeedRoom::is_full`]). Answers how many rounds went, the steps no round
+/// holds counting as one.
 ///
 /// - **Only a run that is over** — completed, failed or canceled — and **a failure only once somebody has
 ///   seen it** (`AMB-D-989`): until then its last step's screen is what the person looks at. Any other
-///   run lets nothing go, and so does an engine with no run log or a run with no folder in it.
+///   run lets nothing go, and so does an engine with no run log.
+/// - **Steps no round holds with no file yet are gathered for one** ([`WriteTx::record_loose`]) — a run
+///   that ended before the file was kept, or whose file a crash lost — and go the next time, once it is
+///   there, as a round does.
 /// - **The order** is a round's let-go's ([`super::automation_step::let_steps_go`]).
 /// - **The blobs** of the files that go are reclaimed once the commit succeeds ([`WriteTx::let_blobs_go`]).
 pub(crate) fn let_rounds_of_a_finished_run_go(tx: &WriteTx<'_>, run: &crate::model::AutomationRun, feed: &FeedRoom) -> Result<usize> {
@@ -2678,11 +2683,15 @@ pub(crate) fn let_rounds_of_a_finished_run_go(tx: &WriteTx<'_>, run: &crate::mod
     }
     let conn = tx.conn();
     let dir = crate::run_log::dir_of(&place.runs, run);
+    let loose_written = dir.join(crate::run_log::LOOSE_FILE_NAME).exists();
+    let mut steps = read::automation_run_steps_of(conn, run.id)?;
+    if !loose_written && steps.iter().any(|s| s.run_task_id.is_none()) {
+        tx.record_loose(run.id);
+    }
     if !dir.exists() {
         return Ok(0);
     }
     let now = Timestamp::now();
-    let mut steps = read::automation_run_steps_of(conn, run.id)?;
     let mut gone = 0;
     for round in read::automation_run_tasks_of(conn, run.id)? {
         if !steps.iter().any(|s| s.run_task_id == Some(round.id))
@@ -2697,6 +2706,11 @@ pub(crate) fn let_rounds_of_a_finished_run_go(tx: &WriteTx<'_>, run: &crate::mod
         let going: Vec<i64> = going.iter().map(|s| s.id).collect();
         super::automation_step::let_steps_go(tx, &going, now)?;
         steps = staying;
+        gone += 1;
+    }
+    let loose: Vec<i64> = steps.iter().filter(|s| s.run_task_id.is_none()).map(|s| s.id).collect();
+    if loose_written && !loose.is_empty() && !feed.is_full(tx) {
+        super::automation_step::let_steps_go(tx, &loose, now)?;
         gone += 1;
     }
     Ok(gone)

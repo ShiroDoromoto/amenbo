@@ -180,8 +180,9 @@ fn under_way(status: AutomationRunStatus) -> bool {
 /// **Its role's oldest runs may go with it** (`ops::automation`'s `let_old_runs_go`), where the role
 /// holds more than it keeps, and **the detail of finished runs** that the run log already holds — its
 /// role's first, then any other automation's and role's (`ops::automation`'s `let_finished_rounds_go`);
-/// its own last round's the next time a run ends. **Some of the copies of the steps a build before v154
-/// took go too**, up to a cap each time (`ops::automation`'s `let_copies_go`).
+/// its own last round's and the steps no round holds the next time a run ends. **Some of the copies of
+/// the steps a build before v154 took go too**, up to a cap each time (`ops::automation`'s
+/// `let_copies_go`).
 pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<Ended> {
     // Read before the stretch is closed below: whether it was already ended is what says the run
     // handed its task back on the way.
@@ -211,10 +212,12 @@ pub fn ended(tx: &WriteTx<'_>, before: AutomationRun, ending: Ending) -> Result<
     };
     close_stretch(tx, stretch.as_ref(), now, incident, incident.and(seat))?;
     let after = file_for_the_trigger(tx, after, incident, ending)?;
-    // The run's last stretch is over with it: it goes to the run log (`WriteTx::record_round`).
+    // The run's last stretch is over with it: it goes to the run log (`WriteTx::record_round`), and so
+    // do the steps no stretch holds (`WriteTx::record_loose`).
     if let Some(stretch) = &stretch {
         tx.record_round(after.id, stretch.id);
     }
+    tx.record_loose(after.id);
     // Over now, it may be what takes its role past the runs it keeps.
     crate::ops::automation::let_old_runs_go(tx, &after)?;
     // And the rounds of finished runs that the run log holds let their detail go, its role's first.
@@ -1462,7 +1465,7 @@ mod tests {
             let rounds = tx.queued_rounds();
             assert_eq!(rounds.len(), 1);
             assert!(rounds[0].run.ended_at.is_some(), "the run as it ended");
-            assert!(rounds[0].round.ended_at.is_some(), "the round as it was closed");
+            assert!(rounds[0].round.as_ref().is_some_and(|r| r.ended_at.is_some()), "the round as it was closed");
             assert_eq!(rounds[0].steps.len(), 1);
             assert_eq!(rounds[0].steps[0]["step"]["id"], serde_json::json!(opening.run_step.id));
         });
@@ -2020,6 +2023,124 @@ mod tests {
             assert!(steps_left(&tx, done.id).is_empty(), "another automation's finished round lets its detail go");
             assert_eq!(steps_left(&tx, unwritten.id).len(), 1, "a round whose file is not there keeps it");
             assert_eq!(steps_left(&tx, going.id).len(), 1, "a run under way keeps it");
+        });
+    }
+
+    /// A run of the picture that walked one step no round holds — the shape of a run a trigger started
+    /// that takes no task — ended as `ending`. Answers the run and that step.
+    fn loose_over(tx: &WriteTx<'_>, p: &Picture, ending: Ending) -> (AutomationRun, crate::model::AutomationRunStep) {
+        let run = a_run(tx, &p.automation);
+        let opening = opened(tx, &run, &p.second);
+        assert_eq!(opening.run_step.run_task_id, None, "no round holds it");
+        let now = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
+        (ended(tx, now, ending).expect("end").run, opening.run_step)
+    }
+
+    /// **The steps no round holds go to the run log when the run ends** — into `loose.jsonl` beside the
+    /// steps they ran — and stay in the store until the next run ends.
+    #[test]
+    fn the_steps_no_round_holds_are_written_when_the_run_ends() {
+        on_a_run_log("loose-written", |engine, place| {
+            let tx = engine.write().expect("write");
+            let p = picture(&tx, false);
+            let (run, step) = loose_over(&tx, &p, Ending::Completed);
+            let queued = tx.queued_rounds();
+            assert_eq!(queued.len(), 1, "gathered once, though the let-go saw it too");
+            assert!(queued[0].round.is_none());
+            assert_eq!(queued[0].steps[0]["step"]["id"], serde_json::json!(step.id));
+            assert_eq!(steps_left(&tx, run.id), vec![step.id], "its file is not there yet, so it stays");
+            tx.commit().expect("commit");
+
+            let dir = crate::run_log::dir_of(&place.runs, &run);
+            assert!(dir.join(crate::run_log::LOOSE_FILE_NAME).exists(), "its steps were written");
+            assert!(
+                dir.join("defs").read_dir().expect("the steps' folder").count() > 0,
+                "the step it ran is written beside them",
+            );
+        });
+    }
+
+    /// **The steps no round holds let their detail go the next time a run ends**, once their file is
+    /// there, and the run reads back the same from the run log, with the step each execution ran.
+    #[test]
+    fn the_steps_no_round_holds_go_once_the_run_log_holds_them() {
+        on_a_run_log("loose-let-go", |engine, place| {
+            let (p, first, step) = {
+                let tx = engine.write().expect("write");
+                let p = picture(&tx, false);
+                let (first, step) = loose_over(&tx, &p, Ending::Completed);
+                tx.commit().expect("commit");
+                (p, first, step)
+            };
+
+            let tx = engine.write().expect("write");
+            let (second, _) = loose_over(&tx, &p, Ending::Completed);
+
+            assert!(steps_left(&tx, first.id).is_empty(), "the steps the run log holds let their detail go");
+            assert!(read::automation_run(tx.conn(), first.id).expect("read").is_some(), "the run row stays");
+            assert_eq!(steps_left(&tx, second.id).len(), 1, "the run just ended keeps its steps");
+            let detail = crate::run_log::detail(tx.conn(), Some(&place.runs), first.id).expect("read").expect("the run");
+            assert_eq!(detail.steps.iter().map(|s| s.step.id).collect::<Vec<_>>(), vec![step.id], "read back from the run log");
+            assert_eq!(detail.steps[0].step.report, step.report);
+            assert!(detail.defs.iter().any(|d| d.key() == step.def_key()), "with the step it ran");
+        });
+    }
+
+    /// **A failure nobody has seen keeps the steps no round holds** (`AMB-D-989`), though they are
+    /// written as it ends, and lets them go once it is seen.
+    #[test]
+    fn a_failure_keeps_the_steps_no_round_holds_until_somebody_has_seen_it() {
+        on_a_run_log("loose-unseen", |engine, place| {
+            let (p, failed) = {
+                let tx = engine.write().expect("write");
+                let p = picture(&tx, false);
+                let (failed, _) = loose_over(&tx, &p, Ending::Failed(AutomationStoppedReason::Crashed));
+                tx.commit().expect("commit");
+                (p, failed)
+            };
+            let file = crate::run_log::dir_of(&place.runs, &failed).join(crate::run_log::LOOSE_FILE_NAME);
+            assert!(file.exists(), "written as it ended");
+
+            let tx = engine.write().expect("write");
+            let (next, _) = loose_over(&tx, &p, Ending::Canceled);
+            assert_eq!(steps_left(&tx, failed.id).len(), 1, "unseen, it keeps its steps");
+
+            acknowledge(&tx, failed.id, ActorKind::Human).expect("seen");
+            automation::let_finished_rounds_go_past(&tx, &next, ROOM).expect("let go");
+            assert!(steps_left(&tx, failed.id).is_empty(), "seen, it lets them go");
+        });
+    }
+
+    /// **Steps no round holds with no file stay**, and are gathered for one where the let-go finds them
+    /// — a run that ended before the file was kept, or whose file was lost — to go the time after.
+    #[test]
+    fn the_steps_no_round_holds_with_no_file_are_written_then_go() {
+        on_a_run_log("loose-unwritten", |engine, place| {
+            let (p, first) = {
+                let tx = engine.write().expect("write");
+                let p = picture(&tx, false);
+                let (first, _) = loose_over(&tx, &p, Ending::Completed);
+                tx.commit().expect("commit");
+                (p, first)
+            };
+            let dir = crate::run_log::dir_of(&place.runs, &first);
+            std::fs::remove_dir_all(&dir).expect("lose the run's folder");
+
+            {
+                let tx = engine.write().expect("write");
+                loose_over(&tx, &p, Ending::Completed);
+                assert_eq!(steps_left(&tx, first.id).len(), 1, "with no file, its steps stay");
+                assert!(
+                    tx.queued_rounds().iter().any(|r| r.round.is_none() && r.run.id == first.id),
+                    "and are gathered for the run log",
+                );
+                tx.commit().expect("commit");
+            }
+            assert!(dir.join(crate::run_log::LOOSE_FILE_NAME).exists(), "written again");
+
+            let tx = engine.write().expect("write");
+            loose_over(&tx, &p, Ending::Completed);
+            assert!(steps_left(&tx, first.id).is_empty(), "and go the time after");
         });
     }
 

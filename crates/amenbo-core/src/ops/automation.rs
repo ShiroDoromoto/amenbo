@@ -1165,6 +1165,11 @@ pub fn action_version_add(tx: &WriteTx<'_>, action_id: i64) -> Result<Automation
 ///
 /// **Refused while it is placed**, naming how many placements: the placement would be left standing on
 /// nothing, and what should stand there instead is not this op's to guess.
+///
+/// **Refused, too, while a run still going reads it** — a `running` or `paused` run whose version uses
+/// the action, even once the action is taken off every picture ([`runs_reading_action`]). The run goes
+/// by the version it was launched with (`AMB-D-1219`), and that version would stand on nothing. A run
+/// that is over is not asked.
 pub fn action_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let action = live_action(tx, id)?;
     rewritable(tx, Def::Action(id))?;
@@ -1179,6 +1184,16 @@ pub fn action_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
             .coded(ErrorCode::InvalidActionStillPlaced)
             .with("count", users.len()),
         ));
+    }
+    let runs = runs_reading_action(tx.conn(), id)?;
+    if !runs.is_empty() {
+        let ids: Vec<String> = runs.iter().map(i64::to_string).collect();
+        return Err(Error::invalid(format!(
+            "{} run(s) still going read this action (run {}) — let them finish or cancel them before \
+             deleting it",
+            runs.len(),
+            ids.join(", ")
+        )));
     }
     for wire in read::automation_wire_ids(tx.conn(), AutomationPictureOwner::Action, id)? {
         tx.delete_record("automation_wire", wire)?;
@@ -1200,6 +1215,36 @@ pub fn action_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     }
     tx.delete_record("automation_action", id)?;
     Ok(())
+}
+
+/// **The runs still going that read one action** — each `running` or `paused` run, in every project,
+/// whose version uses it. The version is the one the run reads now ([`automation_run::current_defs`]):
+/// a run picked up again goes by the newer version, and the copy of an earlier round is not asked.
+///
+/// The version says which actions its placements stand on. A copy that names no version, or a version
+/// no longer kept, is read by the actions the copy itself names.
+fn runs_reading_action(conn: &Connection, action_id: i64) -> Result<Vec<i64>> {
+    let mut out = Vec::new();
+    for run_id in read::automation_run_ids_under_way_everywhere(conn)? {
+        let Some(run) = read::automation_run(conn, run_id)? else { continue };
+        let defs = automation_run::current_defs(conn, run_id)?;
+        // Every row of one copy holds the same version.
+        let saved = match defs.first().and_then(|def| def.automation_version) {
+            Some(version) => read::automation_version_at(conn, run.automation_id, version)?,
+            None => None,
+        };
+        let reads = match saved {
+            Some(saved) => serde_json::from_str::<Vec<AutomationPlacement>>(&saved.placements)
+                .map_err(Error::from)?
+                .iter()
+                .any(|placement| placement.action_id == action_id),
+            None => defs.iter().any(|def| def.action_id == Some(action_id)),
+        };
+        if reads {
+            out.push(run_id);
+        }
+    }
+    Ok(out)
 }
 
 /// **Give up an action made on the spot** (`AMB-D-1005`) — the other way out of being still written.
@@ -8904,7 +8949,8 @@ mod tests {
 
 /// **A definition a run is going on is rewritten all the same** (`AMB-D-1015`): no op that rewrites one
 /// refuses because a run launched from it is `running` or `paused`, and the run goes on with the copy it
-/// took at launch.
+/// took at launch. Deleting an action such a run reads is the one refused (`AMB-D-1219`,
+/// [`action_delete`]).
 #[cfg(test)]
 mod rewritten_under_a_run {
     use super::*;
@@ -9152,5 +9198,132 @@ mod rewritten_under_a_run {
                 assert_eq!(copied(tx, &run), before);
             });
         }
+    }
+
+    /// The placement the second action stands on in [`picture`], taken off — and the first action's way
+    /// out that led to it led to the end instead, so the picture still launches.
+    fn take_the_second_off(tx: &WriteTx<'_>, p: &Picture) {
+        let second = read::automation_placement_ids_using_action(tx.conn(), p.second_action.id).expect("read");
+        for placement in second {
+            placement_delete(tx, placement).expect("take it off");
+        }
+        edge_add(tx, AutomationPictureOwner::Automation, p.first.id, Some("found"), EdgeTarget::Done, None)
+            .expect("lead the way out to the end");
+    }
+
+    fn refused_for_the_run(tx: &WriteTx<'_>, action_id: i64, run: &AutomationRun) {
+        let refused = action_delete(tx, action_id).expect_err("a run still going reads it");
+        assert_eq!(refused.code(), "invalid_value");
+        assert!(refused.to_string().contains(&format!("run {}", run.id)), "{refused}");
+    }
+
+    /// **An action a running or paused run reads is not deleted**, though nothing stands on it any more
+    /// (`AMB-D-1219`): the version the run goes by still uses it.
+    #[test]
+    fn an_action_a_run_still_going_reads_is_not_deleted() {
+        for pause in [false, true] {
+            with_tx(|tx| {
+                let p = picture(tx);
+                version_add(tx, p.automation.id).expect("save");
+                let run = launched(tx, &p.automation);
+                let run = if pause { paused(tx, &run) } else { run };
+                take_the_second_off(tx, &p);
+                version_add(tx, p.automation.id).expect("save without it");
+                refused_for_the_run(tx, p.second_action.id, &run);
+                assert!(read::automation_action(tx.conn(), p.second_action.id).expect("read").is_some());
+            });
+        }
+    }
+
+    /// A run launched from an automation nobody saved names no version, and is read by the actions its
+    /// copy names.
+    #[test]
+    fn an_action_a_run_of_the_draft_reads_is_not_deleted() {
+        with_tx(|tx| {
+            let p = picture(tx);
+            let run = launched(tx, &p.automation);
+            take_the_second_off(tx, &p);
+            refused_for_the_run(tx, p.second_action.id, &run);
+        });
+    }
+
+    /// **A run that is over is not asked**: once it is completed, failed or canceled, the action it read
+    /// goes.
+    #[test]
+    fn an_action_a_run_that_is_over_read_is_deleted() {
+        use crate::ops::automation_stop::{ended, Ending};
+        let endings = [
+            Ending::Completed,
+            Ending::Failed(crate::model::AutomationStoppedReason::NoWayOn),
+            Ending::Canceled,
+        ];
+        for ending in endings {
+            with_tx(|tx| {
+                let p = picture(tx);
+                version_add(tx, p.automation.id).expect("save");
+                let run = launched(tx, &p.automation);
+                take_the_second_off(tx, &p);
+                refused_for_the_run(tx, p.second_action.id, &run);
+                let going = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
+                ended(tx, going, ending).expect("end the run");
+                action_delete(tx, p.second_action.id).expect("nothing going reads it");
+            });
+        }
+    }
+
+    /// **A run picked up before its next task goes by the newer version** (`AMB-D-1015`): an action that
+    /// version does not use goes, though the copy of the round before still names it.
+    ///
+    /// Picking a run up checks the picture as a launch does, the task checks and all, so this one takes
+    /// its task with the built-in and closes it at the end, unlike [`picture`].
+    #[test]
+    fn an_action_only_the_round_before_read_is_deleted() {
+        use crate::ops::automation_builtin::action as builtin;
+        use crate::ops::automation_builtin_take::TAKEN;
+        use crate::ops::automation_run::launch as launch_checked;
+        with_tx(|tx| {
+            let project = mk_project(tx, "amenbo");
+            let automation = add(tx, project, NewAutomation { name: "1件やりきる".into(), failures_to: Some(crate::model::FailuresTo::Human), ..Default::default() })
+                .expect("add automation");
+            let on = AutomationPictureOwner::Automation;
+            let take = placement_add(tx, automation.id, builtin(tx, "take_task").expect("take").id).expect("place take");
+            let (_, first) = mk_placed(tx, &automation, "調べる", "look at it", "claude");
+            let (second_action, second) = mk_placed(tx, &automation, "直す", "fix it", "claude");
+            let close = placement_add(tx, automation.id, builtin(tx, "close_task").expect("close").id)
+                .expect("place close");
+            edge_add(tx, on, take.id, Some(TAKEN), EdgeTarget::Go(first.id), None).expect("take → look");
+            edge_add(tx, on, first.id, None, EdgeTarget::Go(second.id), None).expect("look → fix");
+            edge_add(tx, on, second.id, None, EdgeTarget::Go(close.id), None).expect("fix → close");
+            edge_add(tx, on, close.id, None, EdgeTarget::Done, None).expect("close → done");
+            crate::ops::test_support::start_at(tx, automation.id, take.id);
+            version_add(tx, automation.id).expect("save");
+
+            let startable = vec!["claude".to_string()];
+            let launcher = Launcher {
+                default_agent: None,
+                startable: Some(&startable),
+                models: nothing_asked(),
+                workspace_open: Some(true),
+                by: Some(crate::model::ActorKind::Ai),
+            };
+            let run = launch_checked(tx, automation.id, &launcher).expect("launch");
+            automation_stop::pause(tx, run.id).expect("pause");
+            let pausing = read::automation_run(tx.conn(), run.id).expect("read").expect("the run");
+            automation_stop::settle(tx, pausing, crate::model::AutomationPauseKind::BeforeNextTask)
+                .expect("settle");
+
+            placement_delete(tx, second.id).expect("take the fix off");
+            edge_add(tx, on, first.id, None, EdgeTarget::Go(close.id), None).expect("look → close");
+            version_add(tx, automation.id).expect("save without it");
+            refused_for_the_run(tx, second_action.id, &run);
+
+            automation_stop::resume(tx, run.id, Some(&startable), nothing_asked(), None).expect("pick it up");
+            let defs = read::automation_run_defs_of(tx.conn(), run.id).expect("read");
+            assert!(
+                defs.iter().any(|def| def.action_id == Some(second_action.id)),
+                "the copy of the round before still names it",
+            );
+            action_delete(tx, second_action.id).expect("the version the run goes by does not use it");
+        });
     }
 }

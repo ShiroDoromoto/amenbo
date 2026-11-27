@@ -5272,7 +5272,7 @@ fn assembled(
     version: i64,
     default_agent: Option<&str>,
 ) -> Result<(Vec<AutomationRunDef>, bool)> {
-    let saved = read::automation_version(conn, automation_id, version)?.ok_or_else(|| {
+    let saved = read::automation_version_at(conn, automation_id, version)?.ok_or_else(|| {
         Error::not_found(format!("version {version} of automation '{automation_id}' not found"))
     })?;
     let pic = Picture::saved(&saved)?;
@@ -10371,7 +10371,7 @@ mod tests {
     fn a_large_version_is_assembled_and_read_back_in_time() {
         with_tx(|tx| {
             let (automation, version) = saved_in_full(tx, 92, 4_500);
-            let saved = read::automation_version(tx.conn(), automation.id, version).expect("read").expect("saved");
+            let saved = read::automation_version_at(tx.conn(), automation.id, version).expect("read").expect("saved");
             let pic = Picture::saved(&saved).expect("the picture");
             let mut action_bytes = 0;
             for placement in &pic.placements {

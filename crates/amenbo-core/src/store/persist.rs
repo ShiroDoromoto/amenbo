@@ -77,7 +77,8 @@ impl Store {
     /// and a re-homing still names both ends; stamped at the commit, and only if the batch wrote anything.
     ///
     /// The activity lines `op` queued ([`WriteTx::record_activity`]) are appended to the ledger by
-    /// [`WriteTx::commit`], **after** the commit succeeds — a batch that fails leaves none.
+    /// [`WriteTx::commit`], **after** the commit succeeds — a batch that fails leaves none. So are the
+    /// blobs `op` let go of ([`WriteTx::let_blobs_go`]) reclaimed ([`Self::reclaim_after_delete`]).
     fn write_one<T>(
         &mut self,
         targets: &[WriteTarget],
@@ -91,7 +92,9 @@ impl Store {
             tx.touches_project(project);
         }
         let out = op(&tx)?;
+        let orphaned = tx.take_blobs_let_go();
         tx.commit()?;
+        self.reclaim_after_delete(&orphaned);
         Ok(out)
     }
 
@@ -2806,6 +2809,42 @@ mod tests {
 
         let next = s.write_one(&[], |tx| Ok(tx.mint_activity_id()?)).unwrap();
         assert_eq!(Some(next), minted, "the id minted inside the rolled-back batch is not spent");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The blobs an operation let go of ([`WriteTx::let_blobs_go`]) are reclaimed once it commits — those
+    /// no attachment points at any more. Bytes another attachment still points at stay, and so does
+    /// anything the full sweep would find left over afterwards.
+    #[test]
+    fn the_blobs_an_operation_let_go_of_are_reclaimed_once_it_commits() {
+        use crate::model::{ActorKind, AttachmentTarget};
+        let dir = amenbo_scratch::scratch("write-one-blobs");
+        let mut s = Store::open_at(Paths::at(dir.clone())).unwrap();
+        let dropped = s.blobs().ingest_bytes(b"Alice's notes").unwrap().hash;
+        let shared = s.blobs().ingest_bytes(b"Bob's notes").unwrap().hash;
+        s.write_one(&[], |tx| {
+            for (run, hash) in [(1, &dropped), (1, &shared), (2, &shared)] {
+                crate::ops::attachment::add_blob(tx, AttachmentTarget::AutomationRun, run, hash, "notes.txt", None, 1, ActorKind::Ai)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+        // The reclaim spares bytes younger than GC_MIN_AGE, so age them past it.
+        let old = std::time::SystemTime::now() - (crate::blob::GC_MIN_AGE + std::time::Duration::from_secs(60));
+        for hash in [&dropped, &shared] {
+            let f = std::fs::File::options().write(true).open(dir.join(crate::blob::BLOBS_SUBDIR).join(hash)).unwrap();
+            f.set_modified(old).unwrap();
+        }
+
+        s.write_one(&[], |tx| {
+            tx.let_blobs_go(crate::ops::sweep_polymorphic(tx, AttachmentTarget::AutomationRun, 1)?);
+            Ok(())
+        })
+        .unwrap();
+
+        assert!(!s.blobs().has(&dropped), "the bytes nothing points at any more are gone");
+        assert!(s.blobs().has(&shared), "the bytes another attachment points at stay");
+        assert_eq!(s.gc_blobs(std::time::Duration::ZERO).unwrap().removed, 0, "the sweep finds nothing left over");
         std::fs::remove_dir_all(&dir).ok();
     }
 }

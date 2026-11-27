@@ -1226,7 +1226,7 @@ pub fn sweep(tx: &WriteTx<'_>) -> Result<Vec<AutomationRun>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Automation, AutomationPortKind, ERROR_EXIT};
+    use crate::model::{AttachmentTarget, Automation, AutomationPortKind, ERROR_EXIT};
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_report::{done, Next};
     use crate::ops::automation_run::{launch_past_the_task_checks as launch, Launcher};
@@ -1508,6 +1508,17 @@ mod tests {
             let runs: Vec<AutomationRun> = (0..4).map(|_| over(tx, &p, Ending::Canceled)).collect();
             assert!(runs.iter().all(|r| !read::automation_run_task_ids(tx.conn(), r.id).expect("rounds").is_empty()));
             assert!(tx.forgotten_runs().is_empty(), "a role well within what it keeps lets nothing go");
+            let on_step = "1111111111111111111111111111111111111111111111111111111111111111";
+            let on_run = "2222222222222222222222222222222222222222222222222222222222222222";
+            let on_kept = "3333333333333333333333333333333333333333333333333333333333333333";
+            let file = |target, id, hash| {
+                crate::ops::attachment::add_blob(tx, target, id, hash, "notes.txt", None, 1, ActorKind::Ai).expect("a file");
+            };
+            let step_of = |run: &AutomationRun| read::automation_run_step_ids(tx.conn(), run.id).expect("steps")[0];
+            file(AttachmentTarget::AutomationRunStep, step_of(&runs[0]), on_step);
+            file(AttachmentTarget::AutomationRun, runs[0].id, on_run);
+            file(AttachmentTarget::AutomationRunStep, step_of(&runs[2]), on_kept);
+            assert!(tx.take_blobs_let_go().is_empty());
 
             let went = automation::let_old_runs_go_past(tx, &runs[3], 2, ROOM).expect("let go");
 
@@ -1515,6 +1526,11 @@ mod tests {
             assert!(gone(tx, runs[0].id) && gone(tx, runs[1].id));
             assert!(!gone(tx, runs[2].id) && !gone(tx, runs[3].id));
             assert_eq!(forgotten(tx), vec![runs[0].id, runs[1].id], "their folders go once it commits");
+            assert_eq!(
+                tx.take_blobs_let_go(),
+                vec![on_step.to_string(), on_run.to_string()],
+                "the blobs of their files are reclaimed once it commits, and the kept run's are not",
+            );
         });
     }
 
@@ -1905,11 +1921,15 @@ mod tests {
             };
 
             let tx = engine.write().expect("write");
+            let blob = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+            crate::ops::attachment::add_blob(&tx, AttachmentTarget::AutomationRunStep, step, blob, "notes.txt", None, 1, ActorKind::Ai)
+                .expect("a file on its last round");
             let used = read::automation_run_step(tx.conn(), step).expect("read").expect("the step").run_def_id;
             let defs = read::automation_run_def_ids(tx.conn(), first.id).expect("defs");
             let second = over(&tx, &p, Ending::Completed);
 
             assert!(steps_left(&tx, first.id).is_empty(), "the round the run log holds lets its detail go");
+            assert_eq!(tx.take_blobs_let_go(), vec![blob.to_string()], "its blob is reclaimed once this commits");
             assert!(read::automation_run_values_of(tx.conn(), step).expect("values").is_empty());
             let left: Vec<i64> = defs.into_iter().filter(|d| *d != used).collect();
             assert_eq!(read::automation_run_def_ids(tx.conn(), first.id).expect("defs"), left, "the copy the run log holds goes");

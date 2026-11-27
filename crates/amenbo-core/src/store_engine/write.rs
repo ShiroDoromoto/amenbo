@@ -75,6 +75,9 @@ pub struct WriteTx<'a> {
     /// The runs this operation deleted ([`forget_run`](Self::forget_run)) — whose folders in the run log
     /// [`commit`](Self::commit) removes, only after the SQLite commit succeeds.
     forgotten: std::cell::RefCell<Vec<crate::model::AutomationRun>>,
+    /// The blob hashes the attachments this operation deleted pointed at ([`let_blobs_go`](Self::let_blobs_go))
+    /// — what the store's write door hands to the reclaim once the commit succeeds.
+    blobs_let_go: std::cell::RefCell<Vec<String>>,
 }
 
 impl<'a> WriteTx<'a> {
@@ -93,6 +96,7 @@ impl<'a> WriteTx<'a> {
             activity: Default::default(),
             rounds: Default::default(),
             forgotten: Default::default(),
+            blobs_let_go: Default::default(),
         })
     }
 
@@ -193,6 +197,23 @@ impl<'a> WriteTx<'a> {
         if self.engine.run_logs().is_some() {
             self.forgotten.borrow_mut().push(run.clone());
         }
+    }
+
+    /// **Say the attachments this operation deleted pointed at `hashes`** — what
+    /// [`crate::ops::sweep_polymorphic`] hands back — for an operation deep inside another that has no
+    /// return value to carry them up in (a run's old rounds and old runs let go as it ends). The store's
+    /// write door takes them ([`take_blobs_let_go`](Self::take_blobs_let_go)) and reclaims the bytes
+    /// nothing references any more **after** the commit; on an earlier `?` they go with the guard, and the
+    /// rows they came from stay.
+    pub(crate) fn let_blobs_go(&self, hashes: Vec<String>) {
+        self.blobs_let_go.borrow_mut().extend(hashes);
+    }
+
+    /// The blob hashes this operation has let go of so far ([`let_blobs_go`](Self::let_blobs_go)), taken
+    /// out of the guard — for the store's write door to reclaim once the commit succeeds. A transaction
+    /// opened elsewhere drops them with the guard, and the full sweep (`Store::gc_blobs`) picks the bytes up.
+    pub(crate) fn take_blobs_let_go(&self) -> Vec<String> {
+        self.blobs_let_go.take()
     }
 
     /// The runs this operation has said it deleted so far, in order — for a test to read before the

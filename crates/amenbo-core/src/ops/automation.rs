@@ -2518,8 +2518,8 @@ pub const RUNS_KEPT_PER_ROLE: usize = 1_000;
 ///   automation, not only `run`'s, so a launch a person stopped after its last run had gone goes too. A
 ///   launch still running or paused stays, however few runs it has: a person ends it
 ///   (`ops::automation_stop`'s `stop_launch`, `cancel_launch`). Not counted in the answer.
-/// - **The blobs** of the files that go are left to the store's sweep ([`crate::store::Store::gc_blobs`]),
-///   as a round's are: reclaiming them belongs after the commit.
+/// - **The blobs** of the files that go are reclaimed once the commit succeeds, those no other attachment
+///   points at ([`WriteTx::let_blobs_go`]), as a round's are.
 pub(crate) fn let_old_runs_go(tx: &WriteTx<'_>, run: &crate::model::AutomationRun) -> Result<usize> {
     let_old_runs_go_past(tx, run, RUNS_KEPT_PER_ROLE, crate::store_engine::CHANGE_FEED_RETAIN / 2)
 }
@@ -2538,7 +2538,7 @@ pub(crate) fn let_old_runs_go_past(tx: &WriteTx<'_>, run: &crate::model::Automat
         if feed.is_full(tx) {
             break;
         }
-        run_delete(tx, old.id)?;
+        tx.let_blobs_go(run_delete(tx, old.id)?);
         gone += 1;
     }
     // A launch whose last run has just gone, and one that ended with no run left in it before, goes
@@ -2635,7 +2635,7 @@ pub(crate) fn let_finished_rounds_go_past(tx: &WriteTx<'_>, run: &crate::model::
 ///   run lets nothing go, and so does an engine with no run log or a run with no folder in it.
 /// - **The order** is a round's let-go's ([`super::automation_step::let_steps_go`]); a copy goes after
 ///   every step naming it has.
-/// - **The blobs** of the files that go are left to the store's sweep ([`crate::store::Store::gc_blobs`]).
+/// - **The blobs** of the files that go are reclaimed once the commit succeeds ([`WriteTx::let_blobs_go`]).
 pub(crate) fn let_rounds_of_a_finished_run_go(tx: &WriteTx<'_>, run: &crate::model::AutomationRun, feed: &FeedRoom) -> Result<usize> {
     use crate::model::AutomationRunStatus as S;
     let Some(place) = tx.run_logs() else { return Ok(0) };

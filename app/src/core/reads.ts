@@ -744,7 +744,7 @@ function mockDueMatches(due: Schedule | null, value: string): boolean {
 /**
  * The browser-mock fallback (outside Tauri, i.e. iterating on the frontend alone). Filters the fixtures with a
  * subset of `task_page`'s grammar, evaluating only the tokens the views actually emit
- * (status/done/assignee/priority/due). Words are not among them: the search is its own door now
+ * (status/done/assignee/priority/due/dim). Words are not among them: the search is its own door now
  * ({@link useTaskSearchIds}), not a `text:` written into this expression.
  */
 function mockMatches(t: TaskCard, q: TaskPageQuery): boolean {
@@ -761,8 +761,11 @@ function mockMatches(t: TaskCard, q: TaskPageQuery): boolean {
       case "due": if (!mockDueMatches(t.due, value)) return false; break;
       case "priority": if (!anyOf(value, (v) => (t.priority ?? "none") === v)) return false; break;
       case "assignee": if (!anyOf(value, (v) => assigneeIs(t, v))) return false; break;
-      // Unsupported tokens are ignored — the mock is an approximation for iterating. `dim:` is one of them:
-      // the fixtures carry no dimension assignments, so there is nothing here to read a value against.
+      // The fixtures carry no dimension assignments, so every task sits on no value of any axis: only
+      // `dim:<axis>=none` lets one through. The board writes its classification chips into the closed
+      // column's query, and this is what that query answers here.
+      case "dim": if (!token.endsWith("=none")) return false; break;
+      // Unsupported tokens are ignored — the mock is an approximation for iterating.
       default: break;
     }
   }

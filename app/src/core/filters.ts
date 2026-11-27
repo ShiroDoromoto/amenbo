@@ -199,6 +199,24 @@ export function passesFilters<T>(item: T, dims: FilterDimension<T>[], sel: Filte
 }
 
 /**
+ * The selection written as core's filter expression (query.rs), for a read that core narrows instead of
+ * the client — so what it counts agrees with {@link passesFilters}. Values that name no option are
+ * dropped exactly as there, and so is every axis in `skip`, which the caller narrows by itself. A
+ * `dim:` token carries one value, so an axis holding several is written once per value — the same axis
+ * twice ORs, as the comma does on the other keys.
+ */
+export function selectionFilter<T>(dims: FilterDimension<T>[], sel: FilterSelection, skip: string[] = []): string {
+  return dims
+    .filter((d) => !skip.includes(d.id))
+    .flatMap((d) => {
+      const chosen = d.options.filter((o) => sel[d.id]?.includes(o.value)).map((o) => o.value);
+      if (chosen.length === 0) return [];
+      return d.cliKey.endsWith("=") ? chosen.map((v) => `${d.cliKey}${v}`) : [`${d.cliKey}${chosen.join(",")}`];
+    })
+    .join(" ");
+}
+
+/**
  * Read a number out of the search box: when the query is a reference, take it as an intent to pin that
  * record. The grammar lives in `core/idref.ts` rather than here, so the box and body-text links cannot
  * drift apart. Anything unrecognised returns null.

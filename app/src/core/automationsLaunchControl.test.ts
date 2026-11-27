@@ -3,9 +3,15 @@ import { beforeEach, describe, it, expect, vi } from "vitest";
 const invoke = vi.fn();
 const says = vi.fn();
 vi.mock("./ipc", () => ({ invoke: (cmd: string, args?: unknown) => invoke(cmd, args) }));
+const invalidated = vi.fn();
 vi.mock("./snapshot", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./snapshot")>()),
   inTauri: () => true,
+  loadSnapshot: () => Promise.resolve(),
+}));
+vi.mock("./query", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./query")>()),
+  invalidateQueries: (stale: (key: QueryKey) => boolean) => invalidated(stale),
 }));
 vi.mock("./dialog", () => ({ confirmDialog: (message: string, labels?: unknown) => says(message, labels) }));
 
@@ -20,11 +26,25 @@ import {
   setLaunchLimit,
   stopLaunch,
 } from "./automations";
+import type { QueryKey } from "./query";
+
+/** What core answers a press on a run or a launch with: no ids, just the scopes it leaves stale. */
+const ack = (scopes: string[]) => ({ tasks: [], decisions: [], automations: [], actions: [], placements: [], scopes });
+
+/** Which of these keys the last ack sent stale — the screen redraws them the moment the press lands. */
+function staleOf(keys: QueryKey[]): string[] {
+  const calls = invalidated.mock.calls;
+  const stale = calls[calls.length - 1]?.[0] as ((key: QueryKey) => boolean) | undefined;
+  return stale === undefined ? [] : keys.filter((key) => stale(key)).map((key) => String(key[0]));
+}
+
+const drawn: QueryKey[] = [["automationRuns"], ["launchState", 4], ["heldBack", 7], ["taskPage", "x"], ["automations", 1]];
 
 beforeEach(() => {
   invoke.mockReset();
-  invoke.mockResolvedValue(undefined);
+  invoke.mockResolvedValue(ack(["automationRuns"]));
   says.mockReset();
+  invalidated.mockReset();
 });
 
 // A role's menu in a launch's pane acts on that one launch and that one role; the definition is not
@@ -80,9 +100,18 @@ describe("acting on a whole launch", () => {
     expect(invoke).toHaveBeenCalledWith("automation_launch_resume", { launchId: 4 });
   });
 
+  // The pane's header is redrawn on the press's ack, not on the change feed, which can come tens of
+  // seconds after it (`AMB-T-16706`).
+  it("redraws the launch's pane the moment a press lands", async () => {
+    await pauseLaunchBeforeNextTask(4);
+    expect(staleOf(drawn)).toEqual(["automationRuns", "launchState", "heldBack"]);
+  });
+
   it("stops it without asking here", async () => {
+    invoke.mockResolvedValue(ack(["automationRuns", "tasks"]));
     await stopLaunch(4);
     expect(says).not.toHaveBeenCalled();
     expect(invoke).toHaveBeenCalledWith("automation_launch_stop", { launchId: 4 });
+    expect(staleOf(drawn)).toEqual(["automationRuns", "launchState", "heldBack", "taskPage"]);
   });
 });

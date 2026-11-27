@@ -785,7 +785,9 @@ pub struct TaskPageDto {
 /// What a write command returns: the ids it touched and the scopes to invalidate, and nothing else
 /// (the output contract for writes — affected ids only, never bodies or secrets). The GUI takes this
 /// and invalidates exactly those query keys (there is no optimistic update). `scopes` are the
-/// coarse-grained key namespaces: "tasks" (lists and boards) and "decisions" (decision records).
+/// coarse-grained key namespaces: "tasks" (lists and boards), "decisions" (decision records),
+/// "automationRuns" (runs and launches) and the like — `ACK_WATCHERS` in `core/mutations` maps each to
+/// the query keys it sends stale.
 /// **There is deliberately no escape hatch that invalidates everything** — a write command knows
 /// what it touched, and any coarse hammer within reach would get used. The surfaces that swap the
 /// data wholesale (a full restore) return no ack at all; the front end explicitly refetches every
@@ -813,6 +815,17 @@ pub struct WriteAck {
     /// invalidate — as with a roster write, where refetching the snapshot in `loadSnapshot` is
     /// enough to show the change.
     pub(crate) scopes: Vec<&'static str>,
+}
+
+/// What a force-cancel of a run answers: whether this press was the one that stopped it, and the ack
+/// the pressing screen redraws on — flattened, so the front end reads it as a [`WriteAck`] with one
+/// more field (`forceCancelRun`).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunStopAck {
+    pub(crate) stopped: bool,
+    #[serde(flatten)]
+    pub(crate) ack: WriteAck,
 }
 
 /// For the "location" line under Settings > Data. Returns the real, OS-independent path (the

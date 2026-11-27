@@ -32,7 +32,7 @@ export interface WriteAck {
   actions: number[];
   /** Placements the write put on beside the one asked for — the built-in that closes a filed task. */
   placements: number[];
-  scopes: string[]; // "tasks" / "decisions" (empty = nothing to invalidate)
+  scopes: string[]; // "tasks" / "decisions" / "automationRuns" … (empty = nothing to invalidate)
 }
 
 function me() {
@@ -62,12 +62,15 @@ export async function invokeAck(cmd: string, args: Record<string, unknown>): Pro
  * `invokeAck` applies it and **awaited**, then handed back so the caller can lift the new id out of
  * it. What this exists instead of is a second call that goes looking for the row that was not there
  * before, which is a guess wherever two writes can land between the two calls.
+ *
+ * A command that answers more than the ack names the wider shape as `A` — the force-cancel of a run
+ * says beside its ack whether this press was the one that stopped it (`forceCancelRun`).
  */
-export async function invokeForAck(
+export async function invokeForAck<A extends WriteAck = WriteAck>(
   cmd: string,
   args: Record<string, unknown>,
-): Promise<WriteAck> {
-  const ack = await invoke<WriteAck>(cmd, args);
+): Promise<A> {
+  const ack = await invoke<A>(cmd, args);
   await applyAck(ack);
   return ack;
 }
@@ -163,6 +166,13 @@ export const ACK_WATCHERS: Readonly<Record<string, AckWatcher>> = {
   // The roles the task editor offers: a role added, removed or reordered on the build screen acks
   // with "automations".
   projectRoles: (_k, scopes) => scopes.has("automations"),
+  // The run's rows, what keeps a waiting run waiting, and one launch as its pane draws it. A press on
+  // a run or a launch acks with "automationRuns", and one that ends a run with "tasks" as well — the
+  // task it had reserved goes back to `todo` (`core/automations`). Without these the pane that was
+  // pressed would wait for the change feed, which can arrive tens of seconds late.
+  automationRuns: (_k, scopes) => scopes.has("automationRuns"),
+  heldBack: (_k, scopes) => scopes.has("tasks") || scopes.has("automationRuns"),
+  launchState: (_k, scopes) => scopes.has("automationRuns") || scopes.has("tasks") || scopes.has("automations"),
   // A project's folders: binding one, unbinding one, and raising a project in a folder ack with
   // "projects".
   boundFolders: (_k, scopes) => scopes.has("projects"),

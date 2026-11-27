@@ -15,8 +15,9 @@
 // **The writes here sit beside their reads** rather than in `core/mutations`, because what they are
 // about is this screen and nothing else. What the screen's own write does not do for itself is the
 // invalidation — the ack goes through `mutations.invokeAck`, the same road every other write takes.
-// The run's moves are pressed from a pane rather than from this screen, and are no ack at all
-// (`forceCancelRun`).
+// The run's moves are pressed from a pane rather than from this screen, and ack all the same: the
+// pane pressed redraws on the ack rather than on the change feed, which can arrive tens of seconds
+// late (`forceCancelRun`).
 //
 // **The launch check is read, not worked out here.** The rules live in core, where the launch itself
 // reads them (`amenbo_core::ops::automation_run::check`), so what a screen says is in the way and
@@ -27,7 +28,7 @@ import { inTauri } from "./snapshot";
 import { invoke } from "./ipc";
 import { confirmDialog } from "./dialog";
 import { isErr, t } from "./i18n";
-import { invokeAck, invokeForAck } from "./mutations";
+import { invokeAck, invokeForAck, type WriteAck } from "./mutations";
 import { told } from "./automationSave";
 import type {
   AutomationActionCardDto,
@@ -1549,12 +1550,12 @@ export function useRunHistory(
 
 /**
  * **Say a failed run has been seen** — pressed on its row of the "running" tab, which it then leaves
- * for the "history" tab (`amenbo_core::ops::automation_stop::acknowledge`). Not a `WriteAck` write,
- * for `forceCancelRun`'s reason.
+ * for the "history" tab (`amenbo_core::ops::automation_stop::acknowledge`). It acks, for
+ * `forceCancelRun`'s reason.
  */
 export async function acknowledgeRun(run: number): Promise<void> {
   if (!inTauri()) return;
-  return invoke<void>("automation_run_acknowledge", { runId: run });
+  return invokeAck("automation_run_acknowledge", { runId: run });
 }
 
 /**
@@ -1566,29 +1567,30 @@ export async function acknowledgeRun(run: number): Promise<void> {
  * goes to `todo`, and a line on that task says the run is not coming back
  * (`amenbo_core::ops::automation_stop`).
  *
- * **It is not a `WriteAck` write.** What it moves is a run, a task and a comment, and every screen
- * that draws one of those is already following the change feed — which is how a run started in
- * another project reaches this window in the first place (`./changes`).
+ * **It acks**, with the runs and the tasks: what it moves is a run, a task and a comment, and the
+ * change feed every screen follows can reach this window tens of seconds after the press (it rides on
+ * the file watcher). The pane pressed is redrawn on the ack instead, the moment the press lands.
  *
  * Answers whether this press was the one that stopped it: a run that had already finished, or a
- * person who said no, is `false` and not a refusal.
+ * person who said no, is `false` and not a refusal. A press that stopped nothing acks all the same.
  */
 export async function forceCancelRun(run: number): Promise<boolean> {
   if (!inTauri()) return false;
   const labels = { ok: t("auto.run.forceCancel"), cancel: t("auto.run.keepRunning") };
   if (!(await confirmDialog(t("auto.run.forceCancelConfirm"), labels))) return false;
-  return invoke<boolean>("automation_run_stop", { runId: run });
+  const answer = await invokeForAck<WriteAck & { stopped: boolean }>("automation_run_stop", { runId: run });
+  return answer.stopped;
 }
 
 /**
  * **Cancel a paused run** (`AMB-D-1002`). Nothing is under way in it, so it ends on the spot and
  * asks nothing (`amenbo_core::ops::automation_stop::cancel`). Refused for a run that is not paused —
- * the row pressed was drawn from a picture that has since moved. Not a `WriteAck` write, for
- * `forceCancelRun`'s reason.
+ * the row pressed was drawn from a picture that has since moved. It acks, for `forceCancelRun`'s
+ * reason.
  */
 export async function cancelRun(run: number): Promise<void> {
   if (!inTauri()) return;
-  return invoke<void>("automation_run_cancel", { runId: run });
+  return invokeAck("automation_run_cancel", { runId: run });
 }
 
 /**
@@ -1596,23 +1598,23 @@ export async function cancelRun(run: number): Promise<void> {
  *
  * An action under way is not cut in half, so the run goes on until the action it is in ends and
  * settles there (`AMB-D-1002`); a run with nothing under way pauses on the spot
- * (`amenbo_core::ops::automation_stop::pause`). Not a `WriteAck` write, for `forceCancelRun`'s reason.
+ * (`amenbo_core::ops::automation_stop::pause`). It acks, for `forceCancelRun`'s reason.
  */
 export async function pauseRun(run: number): Promise<void> {
   if (!inTauri()) return;
-  return invoke<void>("automation_run_pause", { runId: run });
+  return invokeAck("automation_run_pause", { runId: run });
 }
 
 /**
  * **Ask a run to pause before it takes its next task** (`AMB-D-1019`). A run whose round takes no
  * task is asked all the same and pauses where it comes back to where its round starts, and a run
  * waiting for one pauses on the spot
- * (`amenbo_core::ops::automation_stop::pause_run_before_next_task`). Not a `WriteAck` write, for
+ * (`amenbo_core::ops::automation_stop::pause_run_before_next_task`). It acks, for
  * `forceCancelRun`'s reason.
  */
 export async function pauseBeforeNextTask(run: number): Promise<void> {
   if (!inTauri()) return;
-  return invoke<void>("automation_pause_before_next_task", { runId: run });
+  return invokeAck("automation_pause_before_next_task", { runId: run });
 }
 
 /**
@@ -1627,18 +1629,18 @@ export async function pauseBeforeNextTask(run: number): Promise<void> {
  */
 export async function resumeRun(run: number): Promise<void> {
   if (!inTauri()) return;
-  return invoke<void>("automation_run_resume", { runId: run });
+  return invokeAck("automation_run_resume", { runId: run });
 }
 
 /**
  * **Pause a launch before each of its runs takes its next task** — the pane header's press
  * (`AMB-D-1019`). Every role stops alike; a task under way is finished first
- * (`amenbo_core::ops::automation_stop::pause_launch_before_next_task`). Not a `WriteAck` write, for
+ * (`amenbo_core::ops::automation_stop::pause_launch_before_next_task`). It acks, for
  * `forceCancelRun`'s reason.
  */
 export async function pauseLaunchBeforeNextTask(launch: number): Promise<void> {
   if (!inTauri()) return;
-  return invoke<void>("automation_launch_pause_before_next_task", { launchId: launch });
+  return invokeAck("automation_launch_pause_before_next_task", { launchId: launch });
 }
 
 /**
@@ -1647,7 +1649,7 @@ export async function pauseLaunchBeforeNextTask(launch: number): Promise<void> {
  */
 export async function resumeLaunch(launch: number): Promise<void> {
   if (!inTauri()) return;
-  return invoke<void>("automation_launch_resume", { launchId: launch });
+  return invokeAck("automation_launch_resume", { launchId: launch });
 }
 
 /**
@@ -1657,7 +1659,7 @@ export async function resumeLaunch(launch: number): Promise<void> {
  */
 export async function stopLaunch(launch: number): Promise<void> {
   if (!inTauri()) return;
-  return invoke<void>("automation_launch_stop", { launchId: launch });
+  return invokeAck("automation_launch_stop", { launchId: launch });
 }
 
 /**
@@ -1669,7 +1671,7 @@ export async function stopLaunch(launch: number): Promise<void> {
  */
 export async function setLaunchHeadcount(launch: number, role: number, headcount: number): Promise<void> {
   if (!inTauri()) return;
-  return invoke<void>("automation_launch_headcount_set", { launchId: launch, roleId: role, headcount });
+  return invokeAck("automation_launch_headcount_set", { launchId: launch, roleId: role, headcount });
 }
 
 /**
@@ -1679,7 +1681,7 @@ export async function setLaunchHeadcount(launch: number, role: number, headcount
  */
 export async function resetLaunchHeadcount(launch: number, role: number): Promise<void> {
   if (!inTauri()) return;
-  return invoke<void>("automation_launch_headcount_reset", { launchId: launch, roleId: role });
+  return invokeAck("automation_launch_headcount_reset", { launchId: launch, roleId: role });
 }
 
 /**
@@ -1691,7 +1693,7 @@ export async function resetLaunchHeadcount(launch: number, role: number): Promis
  */
 export async function setLaunchLimit(launch: number, limit: number | null): Promise<void> {
   if (!inTauri()) return;
-  return invoke<void>("automation_launch_limit_set", { launchId: launch, limit });
+  return invokeAck("automation_launch_limit_set", { launchId: launch, limit });
 }
 
 /**
@@ -1700,7 +1702,7 @@ export async function setLaunchLimit(launch: number, limit: number | null): Prom
  */
 export async function resetLaunchLimit(launch: number): Promise<void> {
   if (!inTauri()) return;
-  return invoke<void>("automation_launch_limit_reset", { launchId: launch });
+  return invokeAck("automation_launch_limit_reset", { launchId: launch });
 }
 
 /**
@@ -1711,7 +1713,7 @@ export async function resetLaunchLimit(launch: number): Promise<void> {
  */
 export async function holdLaunchRole(launch: number, role: number): Promise<void> {
   if (!inTauri()) return;
-  return invoke<void>("automation_launch_role_hold", { launchId: launch, roleId: role });
+  return invokeAck("automation_launch_role_hold", { launchId: launch, roleId: role });
 }
 
 /**
@@ -1720,5 +1722,5 @@ export async function holdLaunchRole(launch: number, role: number): Promise<void
  */
 export async function releaseLaunchRole(launch: number, role: number): Promise<void> {
   if (!inTauri()) return;
-  return invoke<void>("automation_launch_role_release", { launchId: launch, roleId: role });
+  return invokeAck("automation_launch_role_release", { launchId: launch, roleId: role });
 }

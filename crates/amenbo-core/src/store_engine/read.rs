@@ -1195,19 +1195,11 @@ fn order_by_key(key: &str) -> Result<Vec<String>> {
     })
 }
 
-/// The subset of decision `ids` that exist in this read-model, by an indexed primary-key lookup — the
-/// decision counterpart of [`present_task_ids`]. Order is unspecified: the caller re-orders by its input.
+/// The subset of decision `ids` that exist in this read-model, by an indexed primary-key lookup. Order
+/// is unspecified: the caller re-orders by its input.
 pub fn present_decision_ids(conn: &Connection, ids: &[i64]) -> Result<Vec<i64>> {
     const D: col::decision::Cols = col::decision::ALL;
     select_ids(conn, D.id, Some(&Pred::is_in(D.id, ids.iter().copied())))
-}
-
-/// The subset of `ids` that exist in this read-model, by an indexed primary-key lookup. The card itself
-/// is still hydrated by the caller from its source. Order is unspecified — the caller re-orders by its
-/// input.
-pub fn present_task_ids(conn: &Connection, ids: &[i64]) -> Result<Vec<i64>> {
-    const TA: col::task::Cols = col::task::ALL;
-    select_ids(conn, TA.id, Some(&Pred::is_in(TA.id, ids.iter().copied())))
 }
 
 /// One row of the change feed, as a reader sees it: the cursor value, and the instruction.
@@ -3520,31 +3512,40 @@ pub struct PlacementRow {
 /// The task's placement, with the live-only project name. Placement is task-held, so this yields nothing
 /// for an unplaced (inbox) task and one row otherwise — the shape a detail row and a card both carry.
 fn placement_of(conn: &Connection, task_id: i64) -> Result<Option<PlacementRow>> {
+    Ok(placements_of(conn, &[task_id])?.remove(&task_id))
+}
+
+/// [`placement_of`] for a set of tasks in one query, keyed by task id. An unplaced task has no entry.
+fn placements_of(conn: &Connection, task_ids: &[i64]) -> Result<HashMap<i64, PlacementRow>> {
     const T: col::task::Cols = col::task::of("t");
     const P: col::project::Cols = col::project::of("p");
     let mut sel = Select::new();
+    let task_id = sel.col(T.id);
     // Neither optionality here is the column's own: `project_id` is nullable in the registry and the
     // `WHERE` below is what makes it present, while `p.name` is `NOT NULL` there and the `LEFT JOIN` is
     // what can leave it absent. Both are the registry's columns, restated by the query that knows.
     let project_id = sel.col(T.project_id.required());
     let project_name = sel.col(P.name.nullable());
     let order_key = sel.col(T.order_key);
-    let pred = Pred::eq(T.id, task_id).and(Pred::is_not_null(T.project_id));
+    let pred = Pred::is_in(T.id, task_ids.iter().copied()).and(Pred::is_not_null(T.project_id));
     let mut sql = Sql::from(&sel, T.table);
     sql.left_join(P.table, same(P.id, T.project_id)).push_where(Some(&pred));
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
     let rows = stmt
         .query_map(rusqlite::params_from_iter(sql.params()), |r| {
-            Ok(PlacementRow {
-                project_id: project_id.get(r)?,
-                project_name: project_name.get(r)?,
-                order_key: order_key.get(r)?.unwrap_or_default(),
-            })
+            Ok((
+                task_id.get(r)?,
+                PlacementRow {
+                    project_id: project_id.get(r)?,
+                    project_name: project_name.get(r)?,
+                    order_key: order_key.get(r)?.unwrap_or_default(),
+                },
+            ))
         })
         .map_err(StoreEngineError::from)?
-        .collect::<rusqlite::Result<Vec<PlacementRow>>>()
+        .collect::<rusqlite::Result<HashMap<i64, PlacementRow>>>()
         .map_err(StoreEngineError::from)?;
-    Ok(rows.into_iter().next())
+    Ok(rows)
 }
 
 /// The tasks of one project that name a **folder that is not there any more** (`AMB-D-648`): their
@@ -3579,22 +3580,28 @@ pub fn tasks_with_a_gone_folder(conn: &Connection, project_id: i64) -> Result<Ve
 /// Open blockers: live dependency → a blocker that has not ended, in dependency-`id` order, with title. `ready` is
 /// this being empty (and no unsettled premise) — the same predicate the `ready:` filter applies.
 fn open_blockers(conn: &Connection, task_id: i64) -> Result<Vec<(i64, String)>> {
+    Ok(open_blockers_of(conn, &[task_id])?.remove(&task_id).unwrap_or_default())
+}
+
+/// [`open_blockers`] for a set of tasks in one query, keyed by task id; each list keeps dependency-`id`
+/// order. A task with no open blocker has no entry.
+fn open_blockers_of(conn: &Connection, task_ids: &[i64]) -> Result<HashMap<i64, Vec<(i64, String)>>> {
     const D: col::task_dependency::Cols = col::task_dependency::of("d");
     const B: col::task::Cols = col::task::of("b");
     let mut sel = Select::new();
-    let (bid, btitle) = (sel.col(B.id), sel.col(B.title));
-    let pred = Pred::eq(D.task_id, task_id).and(still_open(B.status));
+    let (holder, bid, btitle) = (sel.col(D.task_id), sel.col(B.id), sel.col(B.title));
+    let pred = Pred::is_in(D.task_id, task_ids.iter().copied()).and(still_open(B.status));
     let mut sql = Sql::from(&sel, D.table);
     sql.join(B.table, same(B.id, D.blocked_by_id))
         .push_where(Some(&pred))
         .order_by([Sort::by(D.id)]);
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
-    let rows = stmt
-        .query_map(rusqlite::params_from_iter(sql.params()), |r| Ok((bid.get(r)?, btitle.get(r)?)))
-        .map_err(StoreEngineError::from)?
-        .collect::<rusqlite::Result<Vec<(i64, String)>>>()
-        .map_err(StoreEngineError::from)?;
-    Ok(rows)
+    let mut rows = stmt.query(rusqlite::params_from_iter(sql.params())).map_err(StoreEngineError::from)?;
+    let mut out: HashMap<i64, Vec<(i64, String)>> = HashMap::new();
+    while let Some(r) = rows.next().map_err(StoreEngineError::from)? {
+        out.entry(holder.get(r)?).or_default().push((bid.get(r)?, btitle.get(r)?));
+    }
+    Ok(out)
 }
 
 /// What premises a task acquired **after its current status began** — the read behind `AMB-D-366`'s
@@ -3825,15 +3832,26 @@ pub fn comments_since(conn: &Connection, task_id: i64) -> Result<Option<Vec<Comm
 
 /// How many comments the task carries — the count a detail row and a card both show.
 fn comment_count(conn: &Connection, task_id: i64) -> Result<usize> {
+    Ok(comment_counts(conn, &[task_id])?.remove(&task_id).unwrap_or(0))
+}
+
+/// [`comment_count`] for a set of tasks in one `GROUP BY` query, keyed by task id. A task with no
+/// comment has no entry.
+fn comment_counts(conn: &Connection, task_ids: &[i64]) -> Result<HashMap<i64, usize>> {
     const C: col::task_comment::Cols = col::task_comment::ALL;
     let mut sel = Select::new();
+    let task_id = sel.col(C.task_id);
     let count = sel.count_all();
     let mut sql = Sql::from(&sel, C.table);
-    sql.push_where(Some(&Pred::eq(C.task_id, task_id)));
-    let n: i64 = conn
-        .query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| count.get(r))
+    sql.push_where(Some(&Pred::is_in(C.task_id, task_ids.iter().copied())))
+        .group_by([C.task_id.to_sql()]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| Ok((task_id.get(r)?, count.get(r)? as usize)))
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<HashMap<i64, usize>>>()
         .map_err(StoreEngineError::from)?;
-    Ok(n as usize)
+    Ok(rows)
 }
 
 /// Full detail for one task (`task show`), served from the read-model with one indexed query per part
@@ -3999,12 +4017,12 @@ fn facet_display(kind: Option<&str>) -> String {
     }
 }
 
-/// Everything a GUI task card (`TaskCardDto`) needs, read per id off the indexed read-model so a page
-/// of cards costs O(result) instead of a full-store pass per tick. What one row carries: the task's
-/// placement (absent when it is unplaced), open blockers (id + title), the live comment count, and the
-/// actors with fallback-to-id names. The command layer derives the top-level project
-/// id, `is_mine`/`is_my_other_session`, and `ready` (= `blocked_by` and `blocked_by_decisions` both
-/// empty).
+/// Everything a GUI task card (`TaskCardDto`) needs, read for a page of ids at once off the indexed
+/// read-model ([`task_card_rows`]) so a page of cards costs O(result) instead of a full-store pass per
+/// tick. What one row carries: the task's placement (absent when it is unplaced), open blockers (id +
+/// title), the live comment count, and the actors with fallback-to-id names. The command layer derives
+/// the top-level project id, `is_mine`/`is_my_other_session`, and `ready` (= `blocked_by` and
+/// `blocked_by_decisions` both empty).
 pub struct TaskCardRow {
     pub id: i64,
     pub title: String,
@@ -4047,8 +4065,17 @@ pub struct TaskCardRow {
 }
 
 /// Hydrate one GUI task card from the read-model (see [`TaskCardRow`]); `None` when no row carries
-/// this id. Indexed SQL per id, so hydrating a page costs O(result) — nothing walks the whole store.
+/// this id. The one-id case of [`task_card_rows`].
 pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardRow>> {
+    Ok(task_card_rows(conn, &[task_id])?.remove(&task_id))
+}
+
+/// Hydrate a set of GUI task cards from the read-model (see [`TaskCardRow`]), keyed by task id; an id
+/// no row carries has no entry. Each part of a card is one indexed query over the whole set, so a page
+/// of cards costs a fixed handful of queries however many cards it holds — not a handful per card.
+/// What a card carries in order (blockers by dependency id, decisions by link id) is the order a single
+/// card read gives.
+pub fn task_card_rows(conn: &Connection, task_ids: &[i64]) -> Result<HashMap<i64, TaskCardRow>> {
     let started = std::time::Instant::now();
     const T: col::task::Cols = col::task::of("t");
     let mut sel = Select::new();
@@ -4060,12 +4087,13 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
     let (created_at, updated_at) = (sel.col(T.created_at), sel.col(T.updated_at));
     let role_id = sel.col(T.role_id);
     let mut sql = Sql::from(&sel, T.table);
-    sql.push_where(Some(&Pred::eq(T.id, task_id)));
-    let row = conn
-        .query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| {
+    sql.push_where(Some(&Pred::is_in(T.id, task_ids.iter().copied())));
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let mut rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
             let assignee_kind = assignee.get(r)?;
             let created_by_kind = creator.get(r)?;
-            Ok(TaskCardRow {
+            let row = TaskCardRow {
                 id: id.get(r)?,
                 title: title.get(r)?,
                 notes: notes.get(r)?,
@@ -4088,18 +4116,22 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
                 linked_decisions: Vec::new(),
                 blocked_by_decisions: Vec::new(),
                 waiting_on_values: Vec::new(),
-            })
+            };
+            Ok((row.id, row))
         })
-        .optional()
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<HashMap<i64, TaskCardRow>>>()
         .map_err(StoreEngineError::from)?;
-    let mut row = match row {
-        Some(r) => r,
-        None => return Ok(None),
-    };
+    if rows.is_empty() {
+        return Ok(rows);
+    }
+    // Only the ids a row came back for: the parts below need not be asked about ids that are not there.
+    let found: Vec<i64> = rows.keys().copied().collect();
 
-    row.placement = placement_of(conn, task_id)?;
-    row.blocked_by = open_blockers(conn, task_id)?;
-    row.num_comments = comment_count(conn, task_id)?;
+    let mut placements = placements_of(conn, &found)?;
+    let mut blockers = open_blockers_of(conn, &found)?;
+    let mut comments = comment_counts(conn, &found)?;
+    let mut waiting = waiting_on_values(conn, found.iter().copied())?;
 
     // Live links → live decisions, in link-`id` order, each with its `D-n` ref (the reverse of
     // `decision_card_row`'s linked_tasks).
@@ -4110,29 +4142,23 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
         const L: col::decision_task_link::Cols = col::decision_task_link::of("l");
         const DC: col::decision::Cols = col::decision::of("dc");
         let mut sel = Select::new();
-        let (did, dtitle) = (sel.col(DC.id), sel.col(DC.title));
+        let (holder, did, dtitle) = (sel.col(L.task_id), sel.col(DC.id), sel.col(DC.title));
         // The shared predicate rides along as a selected column, carrying whatever binds it has
         // (`Select::pred`) — the card splits its links into blocked/linked in one pass.
         let unsettled_col = sel.pred(unsettled_premise(DC));
         let mut sql = Sql::from(&sel, L.table);
         sql.join(DC.table, same(DC.id, L.decision_id))
-            .push_where(Some(&Pred::eq(L.task_id, task_id)))
+            .push_where(Some(&Pred::is_in(L.task_id, found.iter().copied())))
             .order_by([Sort::by(L.id)]);
         let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
-        let linked = stmt
-            .query_map(rusqlite::params_from_iter(sql.params()), |r| {
-                let id = did.get(r)?;
-                let name = dtitle.get(r)?;
-                let unsettled = unsettled_col.get(r)?;
-                let display_ref = Some(crate::idref::decision(id));
-                // Live decision (`DC.title` off the join), so the title is always there.
-                Ok((DecisionCardRef { id, name: Some(name), display_ref }, unsettled))
-            })
-            .map_err(StoreEngineError::from)?
-            .collect::<rusqlite::Result<Vec<(DecisionCardRef, bool)>>>()
-            .map_err(StoreEngineError::from)?;
-        for (d, unsettled) in linked {
-            if unsettled {
+        let mut links = stmt.query(rusqlite::params_from_iter(sql.params())).map_err(StoreEngineError::from)?;
+        while let Some(r) = links.next().map_err(StoreEngineError::from)? {
+            let task_id: i64 = holder.get(r)?;
+            let Some(row) = rows.get_mut(&task_id) else { continue };
+            let id = did.get(r)?;
+            // Live decision (`DC.title` off the join), so the title is always there.
+            let d = DecisionCardRef { id, name: Some(dtitle.get(r)?), display_ref: Some(crate::idref::decision(id)) };
+            if unsettled_col.get(r)? {
                 row.blocked_by_decisions.push(DecisionCardRef {
                     id: d.id,
                     name: d.name.clone(),
@@ -4143,9 +4169,14 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
         }
     }
 
-    row.waiting_on_values = waiting_on_values(conn, [task_id])?.remove(&task_id).unwrap_or_default();
-    crate::perf::record_query("engine.task_card_row", 1, usize::from(row.placement.is_some()), started.elapsed());
-    Ok(Some(row))
+    for (task_id, row) in rows.iter_mut() {
+        row.placement = placements.remove(task_id);
+        row.blocked_by = blockers.remove(task_id).unwrap_or_default();
+        row.num_comments = comments.remove(task_id).unwrap_or(0);
+        row.waiting_on_values = waiting.remove(task_id).unwrap_or_default();
+    }
+    crate::perf::record_query("engine.task_card_rows", task_ids.len(), rows.len(), started.elapsed());
+    Ok(rows)
 }
 
 /// A cross-entity reference on a GUI decision card: the target's id, display name, and conversational
@@ -8721,6 +8752,116 @@ mod tests {
         // A store predating the column (no stamp) has no instant to compare against → no change, not an error.
         tx.set_field("task", held, "status_changed_at", Value::Null).unwrap();
         assert!(!premise_change_since(tx.conn(), held).unwrap().unwrap().any());
+    }
+
+    /// `task_card_rows` reads a page of cards in one query per part, and each card it gives back is the
+    /// card `task_card_row` gives for that id alone — placement, blockers in dependency order, decisions in
+    /// link order split by settlement, the comment count and the values waited on. An id no row carries
+    /// has no entry, and an empty set reads nothing.
+    #[test]
+    fn task_card_rows_reads_each_card_the_way_a_single_read_does() {
+        use crate::model::{ActorKind, DimensionRole, TaskStatus};
+        use crate::ops::{comment, decision, dependency, dimension, task};
+        use crate::ops::test_support::{mk_project, mk_task_in};
+
+        let engine = StoreEngine::open_in_memory().unwrap();
+        let tx = engine.write().unwrap();
+        let pid = mk_project(&tx, "amenbo 開発");
+
+        let held = mk_task_in(&tx, "依存も決定もコメントもある", Some(pid));
+        let plain = mk_task_in(&tx, "何もない", Some(pid));
+        let inbox = mk_task_in(&tx, "未配置", None);
+
+        // Two open blockers drawn in reverse id order, and one that has ended.
+        let late = mk_task_in(&tx, "後の依存先", Some(pid));
+        let early = mk_task_in(&tx, "先の依存先", Some(pid));
+        let ended = mk_task_in(&tx, "終わった依存先", Some(pid));
+        dependency::add(&tx, held, late, None).unwrap();
+        dependency::add(&tx, held, early, None).unwrap();
+        dependency::add(&tx, held, ended, None).unwrap();
+        task::set_status(&tx, ended, TaskStatus::Done, ActorKind::Ai).unwrap();
+
+        // A settled decision linked first, an unsettled one after.
+        let new_decision = |title: &str| {
+            decision::add(
+                &tx,
+                decision::NewDecision { title: title.into(), body: String::new(), project_id: pid, made_in: None, proposed_by: None },
+            )
+            .unwrap()
+            .id
+        };
+        let settled = new_decision("採択済み");
+        decision::finish_writing(&tx, settled, None, ActorKind::Ai).unwrap();
+        let open = new_decision("未採択");
+        decision::link(&tx, settled, held).unwrap();
+        decision::link(&tx, open, held).unwrap();
+        decision::link(&tx, open, plain).unwrap();
+
+        comment::add_comment(&tx, held, ActorKind::Human, "一つ目").unwrap();
+        comment::add_comment(&tx, held, ActorKind::Ai, "二つ目").unwrap();
+        comment::add_comment(&tx, inbox, ActorKind::Human, "未配置へ").unwrap();
+
+        // `held` sits on the second stage of an axis whose stages are waited on.
+        let axis = dimension::add(
+            &tx,
+            pid,
+            dimension::NewDimension {
+                name: "リリース".into(),
+                ordered: true,
+                role: DimensionRole::Closable,
+                ..dimension::NewDimension::default()
+            },
+        )
+        .unwrap();
+        let first = dimension::value_add(&tx, axis.id, "v1", None).unwrap();
+        let second = dimension::value_add(&tx, axis.id, "v2", None).unwrap();
+        dimension::set(&tx, plain, first.id).unwrap();
+        dimension::set(&tx, held, second.id).unwrap();
+        dimension::update(&tx, axis.id, None, None, None, None, None, None, None, None, None, Some(true)).unwrap();
+
+        type Face = (
+            Option<(i64, Option<String>, String)>,
+            Vec<(i64, String)>,
+            Vec<(i64, Option<String>, Option<String>)>,
+            Vec<i64>,
+            usize,
+            Vec<crate::view::WaitingOnValue>,
+            String,
+        );
+        let face = |r: &TaskCardRow| -> Face {
+            let refs = |ds: &[DecisionCardRef]| ds.iter().map(|d| (d.id, d.name.clone(), d.display_ref.clone())).collect();
+            (
+                r.placement.as_ref().map(|p| (p.project_id, p.project_name.clone(), p.order_key.clone())),
+                r.blocked_by.clone(),
+                refs(&r.linked_decisions),
+                r.blocked_by_decisions.iter().map(|d| d.id).collect(),
+                r.num_comments,
+                r.waiting_on_values.clone(),
+                r.title.clone(),
+            )
+        };
+
+        let ids = [held, plain, inbox, 9999];
+        let many = task_card_rows(tx.conn(), &ids).unwrap();
+        assert_eq!(many.len(), 3, "the missing id has no entry");
+        assert!(!many.contains_key(&9999));
+        for id in [held, plain, inbox] {
+            let one = task_card_row(tx.conn(), id).unwrap().unwrap();
+            assert_eq!(face(&many[&id]), face(&one), "card {id} reads the same one at a time");
+        }
+
+        let card = &many[&held];
+        assert_eq!(card.blocked_by.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![late, early], "dependency order");
+        assert_eq!(card.linked_decisions.iter().map(|d| d.id).collect::<Vec<_>>(), vec![settled, open], "link order");
+        assert_eq!(card.blocked_by_decisions.iter().map(|d| d.id).collect::<Vec<_>>(), vec![open]);
+        assert_eq!(card.num_comments, 2);
+        assert_eq!(card.waiting_on_values.iter().map(|w| w.value.as_str()).collect::<Vec<_>>(), vec!["v1"]);
+        assert!(many[&inbox].placement.is_none(), "an unplaced task has no placement");
+        assert_eq!(many[&inbox].num_comments, 1);
+        assert_eq!(many[&plain].num_comments, 0);
+        assert!(many[&plain].waiting_on_values.is_empty(), "nothing is open before the first stage");
+
+        assert!(task_card_rows(tx.conn(), &[]).unwrap().is_empty());
     }
 
     /// `comments_since` (`AMB-D-963`): a missing task is `None`; a comment posted after the status clock is

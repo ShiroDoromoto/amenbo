@@ -41,7 +41,7 @@ import { NoticeToast } from "./components/NoticeToast";
 import { currentLang, errText, t, tf } from "./core/i18n";
 import { invoke } from "./core/ipc";
 import { RefNavProvider, type RefNav } from "./core/refNav";
-import { loadSnapshot, subscribe, watchStore } from "./core/snapshot";
+import { followStore, loadSnapshot, subscribe } from "./core/snapshot";
 import { writesOn, writeUnwritten } from "./core/unwritten";
 import { initTheme } from "./core/theme";
 import { initSkin } from "./core/skin";
@@ -197,8 +197,9 @@ function TalkPage() {
       .catch((e: unknown) => { if (alive) setError(errText(e)); });
     // The store moves under this window all the time — the board writes it, and so does this face
     // binding a project's first folder. Held from the first read, the projects on the rail would be
-    // the ones there were when the window opened.
-    void watchStore().then((un) => { if (alive) unlisten = un; else un(); });
+    // the ones there were when the window opened. The board reads each change and hands it over here;
+    // only while the board is closed does this window read for itself.
+    void followStore().then((un) => { if (alive) unlisten = un; else un(); });
     return () => { alive = false; unlisten?.(); };
   }, []);
 

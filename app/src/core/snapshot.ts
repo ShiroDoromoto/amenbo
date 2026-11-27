@@ -91,9 +91,9 @@ const reflectionListeners = new Set<(r: StoreChangeReflected) => void>();
 
 /**
  * Subscribes to the moment an outside write (AI or CLI) lands in the GUI — the substrate every
- * visual effect builds on. It fires **only for outside writes**: `watchStore` has already filtered
+ * visual effect builds on. It fires **only for outside writes**: the store subscription has already filtered
  * our own (every leg of the signature unchanged) and the commits that touch nothing this screen draws.
- * Outside Tauri `watchStore` is a no-op, so nothing ever fires. The returned function unsubscribes.
+ * Outside Tauri the subscription is a no-op, so nothing ever fires. The returned function unsubscribes.
  */
 export function subscribeStoreChangeReflected(fn: (r: StoreChangeReflected) => void): () => void {
   reflectionListeners.add(fn);
@@ -101,9 +101,10 @@ export function subscribeStoreChangeReflected(fn: (r: StoreChangeReflected) => v
 }
 
 /**
- * Notifies subscribers that an outside write landed. **`watchStore` is the only caller** (both the
- * gap and the normal path), and it calls this only after filtering out our own writes — which is
- * what makes the signal mean "outside". No other module may call it, or that meaning is lost.
+ * Notifies subscribers that an outside write landed. **The store subscription is the only caller** (both
+ * the gap and the normal path, in the window that read, and in the other one as it takes what was read),
+ * and it calls this only after filtering out our own writes — which is what makes the signal mean
+ * "outside". No other module may call it, or that meaning is lost.
  */
 export function notifyStoreChangeReflected(r: StoreChangeReflected): void {
   for (const l of reflectionListeners) l(r);
@@ -191,7 +192,7 @@ export function notifyInboxChanged(): void {
 // itself carries (read by core before the rows, so it is never newer than what is on screen). When a
 // store-changed arrives and all three legs still match, the file moved because *we* wrote — the result
 // is already on screen — and the snapshot is not read again. This is the watcher's dedup of our own writes;
-// the rows still unread on the feed are refetched all the same. Which leg moved is the other half: see `watchStore`.
+// the rows still unread on the feed are refetched all the same. Which leg moved is the other half: see `readStoreChange`.
 let lastSignature: StoreSignatureDto | null = null;
 
 /** Whether two signatures say the same thing. All three legs, since any one of them moving is a change. */
@@ -210,15 +211,93 @@ async function readSignature(): Promise<StoreSignatureDto | null> {
 }
 
 /**
- * Store subscription: when core emits `store-changed` — another process (AI, CLI) wrote — decide what to
- * re-read from **which leg of the signature moved** (`AMB-D-856`), because `store-changed` is nothing but
- * a wake-up saying *something* did, and the payload never says what:
+ * The window that reads the store when an outside write wakes the app, as long as it is open: the board. The talk
+ * window reads only while the board is gone (`app/src-tauri/src/quit.rs`: the board can be closed with the talk
+ * window still up). Spelled as `crate::windows::BOARD` spells it.
+ */
+const BOARD = "main";
+
+/**
+ * Carries what the reading window found on one wake to the window that did not read (`followStore`), so a write
+ * lands in both windows for one read of the snapshot rather than one per window.
+ */
+const STORE_REFLECTED = "store-reflected";
+
+/** What the reading window found on one wake, as the other window needs it. See {@link STORE_REFLECTED}. */
+interface StoreReflection {
+  /** The snapshot as the reader holds it after this wake, or `null` when this wake left it alone. */
+  snapshot: Snapshot | null;
+  /** The scopes whose queries to refetch, or `"all"` for every live query. */
+  scopes: string[] | "all";
+  /** Whether inbox membership may have moved. */
+  inbox: boolean;
+  /** Whether to ask again whether to ask for setup (`recheckSetupAgain`). */
+  recheckSetup: boolean;
+  /** The outside write that landed, or `null` when none did. */
+  reflected: StoreChangeReflected | null;
+}
+
+/**
+ * Store subscription for the board: when core emits `store-changed` — another process (AI, CLI) wrote — decide what
+ * to re-read, and hand what it found to the talk window (`followStore`), which reads nothing of its own while the
+ * board is open. That is what keeps one outside write to one read of the snapshot however many windows are up.
+ * The returned function unsubscribes.
+ */
+export async function watchStore(): Promise<() => void> {
+  if (!inTauri()) return () => {};
+  const { listen, emit } = await import("@tauri-apps/api/event");
+  return listen("store-changed", async () => {
+    const found = await readStoreChange();
+    void emit(STORE_REFLECTED, found).catch(() => {});
+  });
+}
+
+/**
+ * Store subscription for the talk window. While the board is open, take what it read (`watchStore`) and read
+ * nothing here. Once the board is gone, read each wake here instead, the way the board would have — or this window
+ * would hold the store as it was when the board went. The returned function unsubscribes.
+ */
+export async function followStore(): Promise<() => void> {
+  if (!inTauri()) return () => {};
+  const { listen } = await import("@tauri-apps/api/event");
+  const { Window } = await import("@tauri-apps/api/window");
+  const stopTaking = await listen<StoreReflection>(STORE_REFLECTED, (e) => takeStoreReflection(e.payload));
+  const stopReading = await listen("store-changed", async () => {
+    const board = await Window.getByLabel(BOARD).catch(() => null);
+    if (board !== null) return; // the board reads this one, and hands it over.
+    await readStoreChange();
+  });
+  return () => { stopTaking(); stopReading(); };
+}
+
+/** Lay what the board read onto this window, as if this window had read it. */
+function takeStoreReflection(r: StoreReflection): void {
+  if (r.snapshot !== null) {
+    cache = r.snapshot;
+    applyPerfConfig(cache.perfLog);
+    // So that, should the board go, this window compares the next wake against the store it is drawing.
+    lastSignature = r.snapshot.signature;
+    if (r.inbox) inboxDataGeneration++;
+    for (const l of listeners) l();
+  } else if (r.inbox) {
+    notifyInboxChanged();
+  }
+  if (r.scopes === "all") invalidateAllQueries();
+  else if (r.scopes.length > 0) invalidateScopes(new Set(r.scopes));
+  if (r.recheckSetup) recheckSetupAgain();
+  if (r.reflected !== null) notifyStoreChangeReflected(r.reflected);
+}
+
+/**
+ * One wake of `store-changed`: decide what to re-read from **which leg of the signature moved** (`AMB-D-856`),
+ * because `store-changed` is nothing but a wake-up saying *something* did, and the payload never says what:
  *
  * - **nothing moved** … our own write, or an outside one the last `loadSnapshot` already read. The
  *   snapshot region is current, so it is not read again — but the rows past the cursor are still read off
  *   the feed and their scopes refetched: a narrow `loadSnapshot` does not move the cursor, so an outside
  *   write that landed while it read is still there to be found. Rows of our own write come back here too;
- *   refetching what the ack already refetched is the harmless direction.
+ *   refetching what the ack already refetched is the harmless direction. The snapshot this window holds still
+ *   goes to the other window: the write may have been this window's, which the other one has not read.
  * - **the store file's identity moved** … it was swapped out from under us (`fold`, `stage_and_swap`, a
  *   restore). Nothing the feed held survives that, so re-read everything. A migration runs in place and
  *   puts what it rewrote on the feed (`AMB-D-1166`), so it comes in as `data_version` alone.
@@ -236,46 +315,48 @@ async function readSignature(): Promise<StoreSignatureDto | null> {
  *
  * Inbox membership only ever moves on the task side, so the generation is bumped only when `tasks` is
  * among the scopes — an outside write touching decisions or attachments alone must not trigger a mailbox
- * recompute. Outside Tauri this does nothing. The returned function unsubscribes.
+ * recompute. Returns what was done, for the window that did not read.
  */
-export async function watchStore(): Promise<() => void> {
-  if (!inTauri()) return () => {};
-  const { listen } = await import("@tauri-apps/api/event");
-  return listen("store-changed", async () => {
-    const sig = await readSignature();
-    const full = async () => {
-      await reconcile("gap");
-      notifyStoreChangeReflected({ reason: "gap", at: Date.now() });
-    };
-    // No signature at all, or nothing to compare against: we cannot say which leg moved, so re-read.
-    if (sig === null || lastSignature === null) return await full();
-    const unmoved = sameSignature(sig, lastSignature);
-    // The two legs the feed structurally cannot speak for.
-    if (!unmoved && (sig.file !== lastSignature.file || sig.config !== lastSignature.config)) return await full();
-    const { scopes, gap } = await drainChanges();
-    if (gap) return await full();
-    if (unmoved) {
-      // The snapshot on screen already counts every commit up to now, so only the queries the unread rows
-      // touched are owed — and the mailbox, when they reach the task side.
-      if (scopes.size === 0) return;
+async function readStoreChange(): Promise<StoreReflection> {
+  const sig = await readSignature();
+  const full = async (): Promise<StoreReflection> => {
+    await reconcile("gap");
+    const reflected: StoreChangeReflected = { reason: "gap", at: Date.now() };
+    notifyStoreChangeReflected(reflected);
+    return { snapshot: cache, scopes: "all", inbox: true, recheckSetup: false, reflected };
+  };
+  // No signature at all, or nothing to compare against: we cannot say which leg moved, so re-read.
+  if (sig === null || lastSignature === null) return await full();
+  const unmoved = sameSignature(sig, lastSignature);
+  // The two legs the feed structurally cannot speak for.
+  if (!unmoved && (sig.file !== lastSignature.file || sig.config !== lastSignature.config)) return await full();
+  const { scopes, gap } = await drainChanges();
+  if (gap) return await full();
+  const inbox = scopes.has("tasks");
+  if (unmoved) {
+    // The snapshot on screen already counts every commit up to now, so only the queries the unread rows
+    // touched are owed — and the mailbox, when they reach the task side.
+    if (scopes.size > 0) {
       invalidateScopes(scopes);
-      if (scopes.has("tasks")) notifyInboxChanged();
-      return;
+      if (inbox) notifyInboxChanged();
     }
-    if (scopes.size === 0) {
-      // The feed answered, and it named nothing: a commit of the store's own bookkeeping. Nothing
-      // lands, so nothing is announced — but the signature is carried forward, or the next wake would
-      // be compared against a store two commits old and re-read everything for it.
-      lastSignature = sig;
-      // A setup, and a send, write the server's build off the feed, so this is the only wake that
-      // can carry it — ask again whether to ask for setup, band up or not.
-      recheckSetupAgain();
-      return;
-    }
-    await loadSnapshot({ inboxAffected: scopes.has("tasks") });
-    invalidateScopes(scopes);
-    notifyStoreChangeReflected({ reason: "live", at: Date.now() });
-  });
+    return { snapshot: cache, scopes: [...scopes], inbox, recheckSetup: false, reflected: null };
+  }
+  if (scopes.size === 0) {
+    // The feed answered, and it named nothing: a commit of the store's own bookkeeping. Nothing
+    // lands, so nothing is announced — but the signature is carried forward, or the next wake would
+    // be compared against a store two commits old and re-read everything for it.
+    lastSignature = sig;
+    // A setup, and a send, write the server's build off the feed, so this is the only wake that
+    // can carry it — ask again whether to ask for setup, band up or not.
+    recheckSetupAgain();
+    return { snapshot: null, scopes: [], inbox: false, recheckSetup: true, reflected: null };
+  }
+  await loadSnapshot({ inboxAffected: inbox });
+  invalidateScopes(scopes);
+  const reflected: StoreChangeReflected = { reason: "live", at: Date.now() };
+  notifyStoreChangeReflected(reflected);
+  return { snapshot: cache, scopes: [...scopes], inbox, recheckSetup: false, reflected };
 }
 
 /**
@@ -283,7 +364,7 @@ export async function watchStore(): Promise<() => void> {
  * invalidation can miss, by re-reading from the source of truth (SQLite), and there are exactly
  * three triggers: focus (the window came back — catch up on `store-changed` events that never
  * arrived while backgrounded), manual (the refresh button in the TopBar), and gap (the watcher
- * could not narrow to scopes; raised by `watchStore`). Pinned as a type so observability and
+ * could not narrow to scopes; raised by `readStoreChange`). Pinned as a type so observability and
  * fault-injection tests can name the last reason.
  */
 export type ReconcileReason = "focus" | "manual" | "gap";
@@ -421,7 +502,7 @@ let lastFocusReconcileAt = 0;
 /**
  * Wires up the one reconcile trigger the DOM can give us: the window regaining focus. The other two
  * call `reconcile` directly and from elsewhere — manual from the TopBar's refresh button, gap from
- * `watchStore`. Focus is caught both via visibilitychange→visible and via window focus, and a burst
+ * `readStoreChange`. Focus is caught both via visibilitychange→visible and via window focus, and a burst
  * of them is throttled. The DOM path works outside Tauri too. The returned function removes every
  * listener.
  */
@@ -457,7 +538,7 @@ export interface LoadOptions {
    * Whether every live query is re-read right after this (default false) — `reconcile`'s full re-read. Only
    * then may the change feed's cursor be moved to its head before the read: what the feed held up to there is
    * covered by re-reading everything. A narrower read leaves the cursor where it is, so a row nobody has read
-   * yet is still read off the feed (see `watchStore`).
+   * yet is still read off the feed (see `readStoreChange`).
    */
   whole?: boolean;
 }

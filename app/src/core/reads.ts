@@ -8,7 +8,7 @@
 // Refetching is invalidation-driven, and invalidation is explicit. Our own writes touch only the keys the
 // WriteAck names via its scope/affected ids (mutations.applyAck); an external write (`store-changed`) touches
 // only the keys reached by folding the rows the **change feed** names into scopes
-// (snapshot.watchStore→changes.drainChanges→query.invalidateScopes); read-receipt changes refetch coarsely
+// (snapshot.readStoreChange→changes.drainChanges→query.invalidateScopes); read-receipt changes refetch coarsely
 // (store.markSeen). That keeps "another process's write shows up in the view" without ever copying the whole
 // store, and stops every write from refetching every view.
 import { useRef } from "react";

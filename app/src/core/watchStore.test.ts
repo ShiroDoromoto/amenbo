@@ -29,18 +29,32 @@ vi.mock("./query", () => ({
   recheckSetupAgain: () => recheckSetupAgain(),
 }));
 
-// Intercept the `store-changed` subscription so a test can fire a wake-up whenever it likes.
+// Intercept the subscriptions so a test can fire a wake-up whenever it likes. `wake` is the last
+// `store-changed` handler subscribed; `handed` is the talk window's handler for what the board hands over.
 let wake: (() => Promise<void>) | null = null;
+let handed: ((payload: unknown) => void) | null = null;
+const emit = vi.fn();
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: async (_name: string, handler: (e: unknown) => Promise<void>) => {
-    wake = () => handler({ payload: null });
+  listen: async (name: string, handler: (e: { payload: unknown }) => unknown) => {
+    if (name === "store-changed") wake = async () => { await handler({ payload: null }); };
+    else handed = (payload) => { handler({ payload }); };
     return () => {};
   },
+  emit: (name: string, payload: unknown) => { emit(name, payload); return Promise.resolve(); },
+}));
+
+// Whether the board window is open, as the talk window asks it.
+let boardOpen = true;
+vi.mock("@tauri-apps/api/window", () => ({
+  Window: { getByLabel: async (label: string) => (label === "main" && boardOpen ? {} : null) },
 }));
 
 import {
+  followStore,
   getLastReconcile,
+  getSnapshot,
   loadSnapshot,
+  subscribe,
   reconcile,
   subscribeStoreChangeReflected,
   watchStore,
@@ -94,6 +108,8 @@ beforeEach(() => {
   invalidateScopes.mockReset();
   invalidateAllQueries.mockReset();
   recheckSetupAgain.mockReset();
+  emit.mockReset();
+  boardOpen = true;
   signature = { file: "file-0", config: "config-0", version: "1" };
   head = 0;
   pages = [];
@@ -350,5 +366,68 @@ describe("watchStore — the signature it compares against comes with the snapsh
     await fire();
 
     expect(invalidateScopes).toHaveBeenCalledWith(new Set(["tasks"]));
+  });
+});
+
+describe("one outside write is one read of the snapshot, however many windows are open", () => {
+  it("the board reads, and hands what it read to the talk window", async () => {
+    head = 10;
+    const fire = await boot();
+    committed();
+    pages = [feed([row("task")], 11)];
+
+    await fire();
+
+    expect(reloaded()).toBe(1);
+    expect(emit).toHaveBeenCalledTimes(1);
+    const [name, payload] = emit.mock.calls[0];
+    expect(name).toBe("store-reflected");
+    expect(payload).toMatchObject({
+      snapshot: { signature },
+      scopes: ["tasks"],
+      inbox: true,
+      recheckSetup: false,
+      reflected: { reason: "live" },
+    });
+  });
+
+  it("the talk window reads nothing while the board is open, and lays down what the board handed over", async () => {
+    await boot();
+    await followStore();
+    invoke.mockClear();
+    const { seen, stop } = captureReflected();
+    let redrawn = 0;
+    const unsub = subscribe(() => redrawn++);
+
+    await wake!(); // The talk window's own wake: the board is open, so it is the board's to read.
+
+    expect(invoke).not.toHaveBeenCalled();
+
+    const snapshot = { ...SNAPSHOT, tasks: [], decisions: [], projects: [{ id: 1 }], signature };
+    handed!({ snapshot, scopes: ["projects"], inbox: false, recheckSetup: false, reflected: { reason: "live", at: 1 } });
+
+    expect(getSnapshot()).toBe(snapshot);
+    expect(redrawn).toBe(1);
+    expect(invalidateScopes).toHaveBeenCalledWith(new Set(["projects"]));
+    expect(seen).toEqual([{ reason: "live", at: 1 }]);
+    expect(invoke).not.toHaveBeenCalled();
+    unsub();
+    stop();
+  });
+
+  it("with the board closed, the talk window reads for itself", async () => {
+    head = 10;
+    await boot();
+    await followStore();
+    invoke.mockClear();
+    boardOpen = false;
+    committed();
+    pages = [feed([row("project")], 11)];
+
+    await wake!();
+
+    expect(reloaded()).toBe(1);
+    expect(invalidateScopes).toHaveBeenCalledWith(new Set(["projects"]));
+    expect(emit).not.toHaveBeenCalled(); // Nobody to hand it to.
   });
 });

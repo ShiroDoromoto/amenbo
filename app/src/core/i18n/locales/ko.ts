@@ -2015,6 +2015,7 @@ export const ko: Translation = {
     not_ready_automation_no_steps: "액션이 하나도 놓여 있지 않습니다",
     not_ready_automation_role_starts_nowhere: "역할 「{role}」의 시작이 정해지지 않았다",
     not_ready_automation_export_only: "예전 정의라서 내보내기만 할 수 있다",
+    not_ready_automation_never_saved: "아직 한 번도 저장하지 않았다 (시작하기 전에 저장한다)",
     not_ready_automation_no_failures_to: "실패한 회차를 등록할 곳이 정해지지 않았다",
     not_ready_automation_failure_axis_empty: "실패 작업의 분류: 필수 축 「{axis}」에 값이 없다",
     not_ready_automation_action_draft: "배치한 액션 「{action}」이 아직 작성 중이다",

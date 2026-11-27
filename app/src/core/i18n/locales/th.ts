@@ -2019,6 +2019,7 @@ export const th: Translation = {
     not_ready_automation_no_steps: "ยังไม่ได้วางแอ็กชันใดเลย",
     not_ready_automation_role_starts_nowhere: "บทบาท “{role}” ยังไม่มีจุดเริ่ม",
     not_ready_automation_export_only: "เป็นคำนิยามแบบเก่า จึงทำได้เพียงส่งออก",
+    not_ready_automation_never_saved: "ยังไม่เคยบันทึกเลย ต้องบันทึกก่อนเริ่ม",
     not_ready_automation_no_failures_to: "ยังไม่ได้กำหนดว่าจะแจ้งรอบที่ล้มเหลวไปที่ใคร",
     not_ready_automation_failure_axis_empty: "การจัดประเภทของงานความล้มเหลว: แกนที่จำเป็น “{axis}” ยังไม่มีค่า",
     not_ready_automation_action_draft: "แอ็กชัน “{action}” ที่วางไว้ยังกำลังสร้างอยู่",

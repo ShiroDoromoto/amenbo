@@ -2034,6 +2034,7 @@ export const ja: Translation = {
     not_ready_automation_no_steps: "アクションが1つも置かれていない",
     not_ready_automation_role_starts_nowhere: "役割「{role}」の開始が決まっていない",
     not_ready_automation_export_only: "古い定義なので、書き出し（export）しかできない",
+    not_ready_automation_never_saved: "まだ一度も保存していない（起動する前に保存する）",
     not_ready_automation_no_failures_to: "失敗の起票先が決まっていない",
     not_ready_automation_failure_axis_empty: "失敗のタスクの分類：必須の軸「{axis}」に値が無い",
     not_ready_automation_action_draft: "置いたアクション「{action}」が、まだ作成中",

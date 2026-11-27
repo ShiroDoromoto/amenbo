@@ -2019,6 +2019,7 @@ export const tr: Translation = {
     not_ready_automation_no_steps: "Üzerine hiçbir eylem yerleştirilmemiş",
     not_ready_automation_role_starts_nowhere: "“{role}” rolünün başlangıcı yok",
     not_ready_automation_export_only: "eski bir tanım olduğu için yalnızca dışa aktarılabilir",
+    not_ready_automation_never_saved: "henüz hiç kaydedilmedi; başlatmadan önce kaydedin",
     not_ready_automation_no_failures_to: "başarısız bir turun kime bildirileceği seçilmedi",
     not_ready_automation_failure_axis_empty: "hata görevinin sınıflandırması: zorunlu “{axis}” ekseninin değeri yok",
     not_ready_automation_action_draft: "yerleştirilen “{action}” eylemi hâlâ oluşturuluyor",

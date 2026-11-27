@@ -2026,6 +2026,7 @@ export const de: Translation = {
     not_ready_automation_no_steps: "Es ist keine Aktion darauf platziert",
     not_ready_automation_role_starts_nowhere: "Die Rolle „{role}“ hat keinen Start",
     not_ready_automation_export_only: "es ist eine alte Definition und kann nur noch exportiert werden",
+    not_ready_automation_never_saved: "es wurde noch nie gespeichert – speichere es vor dem Start",
     not_ready_automation_no_failures_to: "Niemand ist festgelegt, an den ein fehlgeschlagener Durchlauf gemeldet wird",
     not_ready_automation_failure_axis_empty: "Klassifizierung der Aufgabe zu einem Fehlschlag: Die Pflichtachse „{axis}“ hat keinen Wert",
     not_ready_automation_action_draft: "Die platzierte Aktion „{action}“ wird noch erstellt",

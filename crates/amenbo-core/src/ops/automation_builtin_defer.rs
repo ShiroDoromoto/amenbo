@@ -75,7 +75,8 @@ mod tests {
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_builtin_take::TAKEN;
     use crate::ops::automation_report::{self, Next};
-    use crate::ops::automation_run::{launch, nothing_asked, Launcher};
+    use crate::ops::automation_run::{nothing_asked, Launcher};
+    use crate::ops::test_support::launch_saved as launch;
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
     use crate::lifecycle::name::{COMMENT_ADDED, TASK_STATUS_CHANGED};

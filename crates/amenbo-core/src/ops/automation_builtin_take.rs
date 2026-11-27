@@ -411,11 +411,12 @@ mod tests {
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{
-        check, is_waiting, launch, launch_past_the_task_checks, next_def, nothing_asked, start, take_up_newer,
-        Launcher, Started, TakenUp, Unmet, Waiting,
+        check, is_waiting, launch_past_the_task_checks, next_def, nothing_asked, take_up_newer, Launcher, Started,
+        TakenUp, Unmet, Waiting,
     };
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
+    use crate::ops::test_support::{launch_saved as launch, start_saved as start};
     use crate::ops::automation_stop;
     use crate::ops::task::{self, TaskPatch};
     use crate::ops::test_support::{give_to, mk_out, mk_placed, mk_project, mk_task_in, start_at, way_out, with_tx};
@@ -1021,8 +1022,8 @@ mod tests {
             )
             .expect("rewrite the work");
             assert!(
-                launched_with.iter().all(|d| d.automation_version.is_none()),
-                "launched before anybody saved the automation"
+                launched_with.iter().all(|d| d.automation_version == Some(1)),
+                "launched from the version saved before the work was rewritten"
             );
             automation::version_add(tx, automation.id).expect("save the automation");
 
@@ -1037,7 +1038,7 @@ mod tests {
             let kept = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
             assert_eq!(kept.len(), launched_with.len() * 2, "the copy it launched with is kept");
             assert!(
-                kept.iter().filter(|d| d.id > last_copied).all(|d| d.automation_version == Some(1)),
+                kept.iter().filter(|d| d.id > last_copied).all(|d| d.automation_version == Some(2)),
                 "the new copy records the version it was taken from"
             );
             for step in read::automation_run_steps_of(tx.conn(), run.id).expect("steps") {
@@ -1066,6 +1067,7 @@ mod tests {
             let (run, _, _) = paused_after_the_first(tx, &automation);
             let copies = read::automation_run_defs_of(tx.conn(), run.id).expect("defs").len();
             start_at(tx, automation.id, placed(tx, run.id, "work"));
+            automation::version_add(tx, automation.id).expect("save past the check");
 
             let refused = automation_stop::resume(tx, run.id, None, nothing_asked(), None).expect_err("refused");
             assert!(matches!(refused, crate::error::Error::NotReady(_)), "{refused:?}");
@@ -1185,7 +1187,7 @@ mod tests {
             assert!(matches!(take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look"), TakenUp::Same));
             let launched_with = read::automation_run_defs_of(tx.conn(), run.id).expect("defs");
             let last_copied = launched_with.last().expect("a copy").id;
-            assert!(launched_with.iter().all(|d| d.automation_version.is_none()), "taken from the draft");
+            assert!(launched_with.iter().all(|d| d.automation_version == Some(1)), "taken from the first version");
 
             automation::version_add(tx, automation.id).expect("save the automation");
             let TakenUp::Copied(entry) = take_up_newer(tx, run.id, None, nothing_asked(), None).expect("look") else {
@@ -1193,7 +1195,7 @@ mod tests {
             };
             assert!(entry.id > last_copied, "on the new copy");
             assert_eq!(entry.builtin.as_deref(), Some("take_task"));
-            assert_eq!(entry.automation_version, Some(1));
+            assert_eq!(entry.automation_version, Some(2));
             let Waiting::Step(waiting) = next_def(tx.conn(), run.id).expect("next") else {
                 panic!("the run stands before a step");
             };

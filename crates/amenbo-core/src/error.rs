@@ -416,6 +416,8 @@ pub enum ErrorCode {
     NotReadyAutomationNoSteps,
     NotReadyAutomationRoleStartsNowhere,
     NotReadyAutomationExportOnly,
+    // An automation nobody has saved, which has no version a run could stand on. The save mends it.
+    NotReadyAutomationNeverSaved,
     NotReadyAutomationNoFailuresTo,
     // An axis the project requires that the classification a failed round's task is filed with gives no
     // value. Carries the axis's name.
@@ -582,6 +584,7 @@ impl ErrorCode {
             ErrorCode::NotReadyAutomationNoSteps => "not_ready_automation_no_steps",
             ErrorCode::NotReadyAutomationRoleStartsNowhere => "not_ready_automation_role_starts_nowhere",
             ErrorCode::NotReadyAutomationExportOnly => "not_ready_automation_export_only",
+            ErrorCode::NotReadyAutomationNeverSaved => "not_ready_automation_never_saved",
             ErrorCode::NotReadyAutomationNoFailuresTo => "not_ready_automation_no_failures_to",
             ErrorCode::NotReadyAutomationFailureAxisEmpty => "not_ready_automation_failure_axis_empty",
             ErrorCode::NotReadyAutomationActionEmpty => "not_ready_automation_action_empty",
@@ -724,6 +727,7 @@ impl ErrorCode {
         ErrorCode::NotReadyAutomationNoSteps,
         ErrorCode::NotReadyAutomationRoleStartsNowhere,
         ErrorCode::NotReadyAutomationExportOnly,
+        ErrorCode::NotReadyAutomationNeverSaved,
         ErrorCode::NotReadyAutomationNoFailuresTo,
         ErrorCode::NotReadyAutomationFailureAxisEmpty,
         ErrorCode::NotReadyAutomationActionEmpty,
@@ -997,6 +1001,7 @@ mod tests {
             "not_ready_automation_no_steps",
             "not_ready_automation_role_starts_nowhere",
             "not_ready_automation_export_only",
+            "not_ready_automation_never_saved",
             "not_ready_automation_no_failures_to",
             "not_ready_automation_failure_axis_empty",
             "not_ready_automation_action_empty",

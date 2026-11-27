@@ -2019,6 +2019,7 @@ export const vi: Translation = {
     not_ready_automation_no_steps: "Chưa đặt hành động nào lên nó",
     not_ready_automation_role_starts_nowhere: "vai trò “{role}” chưa có điểm bắt đầu",
     not_ready_automation_export_only: "đây là định nghĩa cũ, chỉ có thể xuất ra",
+    not_ready_automation_never_saved: "chưa từng được lưu — hãy lưu trước khi khởi chạy",
     not_ready_automation_no_failures_to: "chưa chọn nơi ghi nhận vòng chạy bị lỗi",
     not_ready_automation_failure_axis_empty: "phân loại của tác vụ lỗi: trục bắt buộc “{axis}” chưa có giá trị",
     not_ready_automation_action_draft: "hành động “{action}” đã đặt vẫn đang được tạo",

@@ -270,6 +270,8 @@ fn sweeping_the_runs_a_launch_left_moves_the_version_of_the_project_they_were_in
     // A start with nothing to take makes no run, so there is one for the AI of the role to take.
     let ours = filed(&mut store, amenbo_core::ops::task::NewTask { role_id: Some(born), ..new_task("取る1件", mine) });
     store.set_task_assignee(ours, Some(ActorKind::Ai), ActorKind::Ai).unwrap();
+    // A launch reads only a saved version.
+    store.automation_save(automation.id).unwrap();
 
     let startable = ["claude".to_string()];
     let by = Launcher {

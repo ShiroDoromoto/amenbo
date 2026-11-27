@@ -4501,7 +4501,7 @@ pub struct AutomationWireDto {
 /// **Whether this automation can be started, and what is in the way** — whether the build screen's
 /// start press can be pressed, and what it lists under its head while it cannot.
 ///
-/// It is core's own launch check ([`amenbo_core::ops::automation_run::check`]) and not a second
+/// It is core's own launch check ([`amenbo_core::ops::automation_run::check_launch`]) and not a second
 /// reading of it. A definition that passes here can still be refused at the press, by a machine that
 /// changed in between or by a workspace that is closed — that one is not about the definition, so it
 /// is raised by the launch rather than listed here.

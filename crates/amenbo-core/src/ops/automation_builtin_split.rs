@@ -231,7 +231,8 @@ mod tests {
     use crate::ops::automation::{EdgeTarget, NewAutomation, NewRole};
     use crate::ops::automation_builtin_take::TAKEN;
     use crate::ops::automation_report::Next;
-    use crate::ops::automation_run::{check, launch, nothing_asked, Launcher, Unmet};
+    use crate::ops::automation_run::{check, nothing_asked, Launcher, Unmet};
+    use crate::ops::test_support::launch_saved as launch;
     use crate::ops::automation_step::Opened;
     use crate::ops::dimension::{self, NewDimension};
     use crate::ops::test_support::{give_to, mk_project, mk_task_in, open, start_at, with_tx};

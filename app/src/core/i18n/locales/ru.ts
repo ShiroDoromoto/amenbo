@@ -2045,6 +2045,7 @@ export const ru: Translation = {
     not_ready_automation_no_steps: "На ней не размещено ни одного действия",
     not_ready_automation_role_starts_nowhere: "у роли «{role}» нет старта",
     not_ready_automation_export_only: "это старое определение, его можно только экспортировать",
+    not_ready_automation_never_saved: "она ещё ни разу не сохранена — сохраните её перед запуском",
     not_ready_automation_no_failures_to: "не выбрано, кому передавать неудавшийся проход",
     not_ready_automation_failure_axis_empty: "классификация задачи о сбое: у обязательной оси «{axis}» нет значения",
     not_ready_automation_action_draft: "размещённое действие «{action}» ещё создаётся",

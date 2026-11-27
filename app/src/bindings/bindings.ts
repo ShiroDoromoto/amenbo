@@ -4467,27 +4467,30 @@ root: string, };
  * once, and one string can only answer "did anything move"; the screen's question is narrower — *what*
  * moved decides whether every query is re-read or one scope is.
  *
- * - `file` is the main file's identity (mtime and size). It moves when the file is **swapped out from
- *   under the app** — `fold`, `stage_and_swap`, a `backup` restore — and nothing the feed holds
- *   survives that, so a reader that sees this move re-reads everything. A migration is not one: it
- *   runs in place and puts the records it rewrote on the feed (`AMB-D-1166`).
- * - `config` is `config.json`'s identity. That file is not in the database at all, so no row in the feed
- *   will ever speak for it: a language, a theme or a default view set from the CLI moves this and nothing
- *   else. A reader that sees it move re-reads everything too.
+ * - `file` is which file sits at the store's path (device and inode; on Windows the volume serial and
+ *   file index). A checkpoint rewrites the file in place and leaves it alone. It moves when the file is
+ *   **swapped out from under the app** — `fold`, `stage_and_swap`, a `backup` restore — and nothing the
+ *   feed holds survives that, so a reader that sees this move re-reads everything. A migration is not
+ *   one: it runs in place and puts the records it rewrote on the feed (`AMB-D-1166`).
+ * - `config` is `config.json`'s mtime and size. That file is not in the database at all, so no row in
+ *   the feed will ever speak for it: a language, a theme or a default view set from the CLI moves this and
+ *   nothing else. A reader that sees it move re-reads everything too.
  * - `version` is `PRAGMA data_version` — the value SQLite guarantees answers "has another connection
  *   committed?". It moves on every commit, ours included, and says nothing about **what** was committed;
  *   that is the change feed's word.
  *
- * All three are strings so the front end can compare them without knowing what is inside: a `u128` mtime
- * does not survive a JSON number, and nothing here is ever done arithmetic on.
+ * All three are strings so the front end can compare them without knowing what is inside: a `u64` inode
+ * or a `u128` mtime does not survive a JSON number, and nothing here is ever done arithmetic on.
  */
 export type StoreSignatureDto = { 
 /**
- * The main store file's identity — `"<mtime nanos>:<size>"`.
+ * Which file the main store file is — `"<device>:<inode>"` (`"<volume serial>:<file index>"` on
+ * Windows).
  */
 file: string, 
 /**
- * `config.json`'s identity, in the same shape.
+ * `config.json`'s mtime and size — `"<mtime nanos>:<size>"`. Its contents are what this leg is
+ * for, and a hand edit made in place moves them without moving the file's identity.
  */
 config: string, 
 /**

@@ -1,4 +1,4 @@
-// Division of labour: the watcher lives on the Tauri host (the mtime signature in
+// Division of labour: the watcher lives on the Tauri host (the store signature in
 // `app/src-tauri/src/commands.rs`) and emits nothing but a payload-free wake-up. What changed is the
 // change feed's word, and the frontend folds that into scopes to invalidate in a targeted way
 // (`core/changes`; a fold that fails becomes a gap). This file exercises the receiving end — the

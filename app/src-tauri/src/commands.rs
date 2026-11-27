@@ -542,9 +542,45 @@ fn config_file() -> Option<std::path::PathBuf> {
     amenbo_core::config::Paths::resolve().ok().map(|p| p.config_file)
 }
 
-/// A file's identity (mtime, size). **Not for detecting changes** — its only job is to tell whether
-/// the file itself was swapped out from under us (see [`store_signature_parts`] below).
-fn file_identity(p: &std::path::Path) -> (u128, u64) {
+/// Which file sits at this path — the device and inode on Unix, the volume serial and file index on
+/// Windows. **Not for detecting changes**: a checkpoint rewrites the store file in place and leaves this
+/// where it was. Its only job is to tell whether the file itself was swapped out from under us (see
+/// [`store_signature_parts`] below), and every swap is a rename of a staging file that sat beside the
+/// live one until that moment (`AMB-D-164`), so the two can never share a number.
+///
+/// `(0, 0)` when the path cannot be asked — the same value whatever went wrong, so a file that comes
+/// back after it reads as moved, and the connection is reopened.
+#[cfg(unix)]
+fn file_identity(p: &std::path::Path) -> (u64, u64) {
+    use std::os::unix::fs::MetadataExt as _;
+    std::fs::metadata(p).map(|m| (m.dev(), m.ino())).unwrap_or((0, 0))
+}
+
+/// The same question where the standard library has no settled way to ask it: `MetadataExt`'s
+/// `volume_serial_number` and `file_index` are still unstable, so a handle is opened and asked directly,
+/// as [`crate::folder_save::shares_its_bytes`] does. The handle is std's default open, which shares
+/// delete, so it never stands in the way of a swap (`AMB-D-704`), and it is closed before this returns.
+#[cfg(windows)]
+fn file_identity(p: &std::path::Path) -> (u64, u64) {
+    use std::os::windows::io::AsRawHandle as _;
+    use windows_sys::Win32::Storage::FileSystem::{
+        BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
+    };
+    let Ok(file) = std::fs::File::open(p) else { return (0, 0) };
+    let mut about: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+    // SAFETY: the handle is a file this process holds open for the length of the call, and the
+    // structure is one the call fills in rather than reads.
+    let answered = unsafe { GetFileInformationByHandle(file.as_raw_handle() as _, &mut about) };
+    if answered == 0 {
+        return (0, 0);
+    }
+    let index = (u64::from(about.nFileIndexHigh) << 32) | u64::from(about.nFileIndexLow);
+    (u64::from(about.dwVolumeSerialNumber), index)
+}
+
+/// A file's mtime and size — what the `config.json` leg compares. That leg is there to notice the
+/// **contents** changing, and a hand edit made in place moves these without moving [`file_identity`].
+fn file_stamp(p: &std::path::Path) -> (u128, u64) {
     let Ok(m) = std::fs::metadata(p) else { return (0, 0) };
     let mtime = m
         .modified()
@@ -565,7 +601,7 @@ fn file_identity(p: &std::path::Path) -> (u128, u64) {
 struct Watch {
     store: Option<Store>,
     path: std::path::PathBuf,
-    file: (u128, u64),
+    file: (u64, u64),
 }
 
 static WATCH: std::sync::OnceLock<std::sync::Mutex<Watch>> = std::sync::OnceLock::new();
@@ -638,12 +674,14 @@ fn release_orphaned_watch() {
 /// separately). The GUI's own writes commit on another connection and move this value too, and
 /// filtering those out is the front end's job: after a write, `loadSnapshot` records this signature,
 /// and when `store-changed` arrives with a matching one, it does not refetch. We watch the file's
-/// identity alongside it because `fold`, `restore` and migration **swap the file out wholesale** —
-/// the connection we are holding would go on reading a dead inode where nobody will ever commit
-/// again, so when mtime/size moves we reopen it. That degrades cleanly into "the whole file changed
-/// → gap → refetch everything". The same reopen covers a sidecar cleared without the main file
-/// moving ([`watch_is_orphaned`]), where the connection is just as dead but nothing about the main
-/// file says so.
+/// identity alongside it because `fold`, `stage_and_swap` and `restore` **swap the file out
+/// wholesale** — the connection we are holding would go on reading a dead inode where nobody will ever
+/// commit again, so when the file at the path is another file we reopen it. Which file it is, not its
+/// mtime/size: a checkpoint folds the WAL into the main file and moves both, and reading that as a
+/// swap would re-read every query on the screen for a write the feed had already spoken for. That
+/// degrades cleanly into "the whole file changed → gap → refetch everything". The same reopen covers
+/// a sidecar cleared without the main file moving ([`watch_is_orphaned`]), where the connection is
+/// just as dead but nothing about the main file says so.
 ///
 /// The third leg is `config.json`, which is not in the database at all: it is written straight to
 /// disk (`Store::save_config`) and so moves neither `data_version` nor the store file. It needs a leg
@@ -668,7 +706,7 @@ fn store_signature_parts() -> StoreSignatureDto {
         .as_ref()
         .and_then(|s| amenbo_core::store_engine::read::data_version(s.read_model().conn()).ok())
         .unwrap_or(0);
-    let config = config_file().map(|p| file_identity(&p)).unwrap_or((0, 0));
+    let config = config_file().map(|p| file_stamp(&p)).unwrap_or((0, 0));
     StoreSignatureDto {
         file: format!("{}:{}", file.0, file.1),
         config: format!("{}:{}", config.0, config.1),
@@ -5760,6 +5798,92 @@ pub(crate) mod tests {
         assert_eq!(after.file, parts_before.file, "a WAL commit leaves the main file where it was");
         assert_eq!(after.config, parts_before.config, "and touches config.json not at all");
         assert_ne!(after.version, parts_before.version, "what moved is the commit counter");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// A checkpoint folds the WAL into the main file, which moves its mtime and usually its size — but
+    /// it is the same file, and everything the checkpoint carried was already on the feed. Reading
+    /// that as a swap sent the screen down the re-read-everything road (`AMB-D-856`) every time
+    /// SQLite tidied up, so the file leg asks which file sits at the path, not how it was last
+    /// touched.
+    #[test]
+    fn store_signature_keeps_the_file_leg_through_a_checkpoint() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("checkpoint-sig");
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let project_id = {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "テストPJ".into(),
+                    view: View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+        let before = store_signature_parts();
+        let path = store_file().expect("the store path resolves");
+        let stamp_before = file_stamp(&path);
+
+        {
+            let mut writer = Store::open().unwrap();
+            writer
+                .add_task(amenbo_core::ops::task::NewTask {
+                    title: "チェックポイントで本体へ移るタスク".into(),
+                    project_id: Some(project_id),
+                    due: None,
+                    start: None,
+                    priority: None,
+                    notes: String::new(),
+                    created_by_kind: Some(ActorKind::Ai),
+                    at_binding_id: None,
+                    role_id: None,
+                    made_in_run_step_id: None,
+                    made_in: None,
+                })
+                .unwrap();
+        }
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+        drop(conn);
+        assert_ne!(file_stamp(&path), stamp_before, "the checkpoint rewrote the main file");
+
+        let after = store_signature_parts();
+        assert_eq!(after.file, before.file, "a checkpoint leaves the file leg where it was");
+        assert_ne!(after.version, before.version, "the commit it carried still moved the counter");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// `fold`, `stage_and_swap` and a `restore` put a new file in place by renaming a staging copy over
+    /// the store (`AMB-D-164`). Nothing on the feed speaks for that, so the file leg has to move — the
+    /// one signal the screen has to re-read everything (`AMB-D-172`). The copy here holds the very
+    /// same bytes, so nothing but the file's identity is left to tell the two apart.
+    #[test]
+    fn store_signature_moves_the_file_leg_when_the_store_is_renamed_over() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("swap-sig");
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        drop(Store::open().unwrap());
+        let before = store_signature_parts();
+        assert!(!before.file.is_empty(), "a signature is produced when a store exists");
+
+        let path = store_file().expect("the store path resolves");
+        let mut staging = path.as_os_str().to_os_string();
+        staging.push(".staging");
+        let staging = std::path::PathBuf::from(staging);
+        std::fs::copy(&path, &staging).unwrap();
+        // Core lets go of this connection before it swaps; Windows refuses the rename otherwise.
+        release_watch_for_swap();
+        std::fs::rename(&staging, &path).unwrap();
+
+        let after = store_signature_parts();
+        assert_ne!(after.file, before.file, "a file renamed over the store moves the file leg");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

@@ -1774,7 +1774,6 @@ const ui = {
   "auto.held.by": "In use by run {run}",
   "auto.held.openPane": "Open pane",
   "auto.held.version": "On version {version}",
-  "auto.held.unsaved": "On unsaved changes",
   "auto.held.next": "Switches to version {version} back at the start",
   "auto.act.stepsPlace": "Steps",
   "auto.step.nextExit": "End at exit “{name}”",

@@ -3,7 +3,7 @@
 # way is cut off — the seat past the headcount goes once its run finishes the task it is on, and the
 # desk counts the seats still to go. Raised again before they have gone, the cut is called off. Put
 # back at the definition, the role's menu offers no way back to the default any more. The definition
-# itself is never touched: what the next launch copies is the same throughout. Raised once more and
+# itself is never touched: what the next launch starts with is the same throughout. Raised once more and
 # the launch then stopped from its header, the role reads back at its definition — the headcount was
 # the launch's alone, and ends with it.
 #

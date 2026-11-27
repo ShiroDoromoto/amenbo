@@ -1527,7 +1527,6 @@ export const tr: Translation = {
     "auto.held.by": "{run} çalıştırması kullanıyor",
     "auto.held.openPane": "Bölmeyi aç",
     "auto.held.version": "Sürüm {version} ile çalışıyor",
-    "auto.held.unsaved": "Kaydedilmemiş değişikliklerle çalışıyor",
     "auto.held.next": "Başlangıca dönünce {version} sürümüne geçer",
     "auto.act.stepsPlace": "Adımlar",
     "auto.step.nextExit": "“{name}” çıkışında bitir",

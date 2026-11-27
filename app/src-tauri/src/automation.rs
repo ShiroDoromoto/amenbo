@@ -2119,19 +2119,15 @@ fn run_card(
         Some(last) => automation_run::def_of(conn, last)?,
         None => None,
     };
-    let action_name =
-        placed_action_name(store, last_def.as_ref().and_then(|def| def.placement_id))?;
+    let action_name = placed_action_name(store, steps.last().and_then(|last| last.placement_id))?;
     let exit_name = last_def.as_ref().and_then(|def| left_by(def, steps.last()?.exit_id));
     let builtin = last_def.as_ref().and_then(|def| def.builtin.clone());
-    let placement = last_def.as_ref().and_then(|def| def.placement_id);
+    // The spot is named by the step itself, so it is said even where its version cannot be read now.
+    let placement = steps.last().and_then(|last| last.placement_id);
     // Whether the step under way may wait for a person: read only of a step still open on a run still
     // going, for a step that has left or a run that has stopped waits for nobody.
     let interactive = amenbo_core::ops::automation_run::waits_for_person(&run, steps.last(), last_def.as_ref());
     let step_name = last_def.map(|def| def.name);
-    // The version it goes on from: the one it points at, which a run back at its entry has moved to
-    // the newest saved one before its first step is opened (`take_up_newer`).
-    let version = amenbo_core::ops::automation_run::entry_def(conn, run.id)?
-        .and_then(|def| def.automation_version);
     // The stretch it is in now. A run walks one per task, and a run between tasks is on none.
     let stretch = read::automation_run_task_last(conn, run.id)?;
     // The steps that owed the task their report and could not leave it, the task being closed.
@@ -2161,7 +2157,10 @@ fn run_card(
         waits_for_room: run.status == amenbo_core::model::AutomationRunStatus::Running
             && amenbo_core::ops::automation_run::waits_for_room(conn, run.id)?.is_some(),
         stopped_reason: run.stopped_reason.map(|one| one.as_str()),
-        version,
+        // The version it goes on from: the one it points at, which a run back at its entry has moved to
+        // the newest saved one before its first step is opened (`take_up_newer`). The step it is on
+        // may still be on the one before, and is named from that (`automation_run::def_of`).
+        version: run.automation_version,
         step_name,
         interactive,
         builtin,
@@ -2183,11 +2182,12 @@ fn run_card(
 }
 
 /// **One ended run as the "history" tab draws it** — read off the run's row and its rounds' rows
-/// alone: what it is, how it ended, who saw it fail, and the task it was on.
+/// alone: what it is, which saved version it ended on, how it ended, who saw it fail, and the task it
+/// was on.
 ///
-/// It reads no step and no copy of the definition. What a run did step by step is let go of from the
-/// store once it has ended, and lives on in its log (`automation run-show`); a card that read the
-/// steps would name them for a run that ended lately and say nothing for one that ended before, so
+/// It reads no step, and assembles no step of that version. What a run did step by step is let go of
+/// from the store once it has ended, and lives on in its log (`automation run-show`); a card that read
+/// the steps would name them for a run that ended lately and say nothing for one that ended before, so
 /// the history says neither. The step, the action, how far in, and the steps that kept their report
 /// off a closed task are left empty here, and stay on the "running" tab's card ([`run_card`]).
 fn history_card(
@@ -2215,7 +2215,7 @@ fn history_card(
         waiting: false,
         waits_for_room: false,
         stopped_reason: run.stopped_reason.map(|one| one.as_str()),
-        version: None,
+        version: run.automation_version,
         step_name: None,
         interactive: false,
         builtin: None,
@@ -2548,7 +2548,7 @@ pub fn automation_pause_before_next_task(run_id: i64) -> Result<WriteAck, CmdErr
 /// arrived at twice.
 ///
 /// The agents and the models are asked here as a launch asks them ([`automation_launch`]): a run
-/// paused before its next task is copied down afresh and checked as a launch is.
+/// paused before its next task moves to the newest saved version and is checked as a launch is.
 #[tauri::command]
 pub fn automation_run_resume(run_id: i64) -> Result<WriteAck, CmdError> {
     let mut store = crate::commands::open_store()?;
@@ -2888,7 +2888,7 @@ pub(crate) fn take_up_newer(
             return Ok(Some(def));
         }
         read::automation_version_latest(conn, run.automation_id)?
-            .is_some_and(|saved| !matches!(def.automation_version, Some(copied) if copied >= saved.version))
+            .is_some_and(|saved| !matches!(run.automation_version, Some(current) if current >= saved.version))
     };
     if !newer {
         return Ok(Some(def));
@@ -4110,10 +4110,12 @@ mod tests {
             ended_at: Some(at("2026-11-08T05:05:00Z")),
             acknowledged_at: Some(at("2026-11-08T06:00:00Z")),
             acknowledged_by_kind: Some(ActorKind::Ai),
+            automation_version: Some(4),
             ..Default::default()
         };
 
         let card = history_card(&store, run).expect("the card");
+        assert_eq!(card.version, Some(4), "the version it ended on, off the run's row");
         assert_eq!(card.run, 404);
         assert_eq!(card.launch, Some(3));
         assert_eq!(card.status, "failed");
@@ -4122,10 +4124,50 @@ mod tests {
         assert!(card.acknowledged);
         assert_eq!(card.acknowledged_by, Some("ai"));
         assert!(card.step_name.is_none() && card.action_name.is_none() && card.builtin.is_none());
-        assert!(card.placement.is_none() && card.exit_name.is_none() && card.version.is_none());
+        assert!(card.placement.is_none() && card.exit_name.is_none());
         assert_eq!(card.steps_done, 0);
         assert!(card.report_withheld.is_empty());
         assert!(!card.interactive && !card.waiting && !card.waits_for_room);
+    }
+
+    /// **A run's card names the version off the run, and its step off the step** (`AMB-D-1219`) —
+    /// the run has moved on to version 3 at its entry while its last step still names version 2. The
+    /// card says 3, which no step of it has run yet, and still numbers the step by the spot the step
+    /// names, though version 2 can no longer be read to name the step.
+    #[test]
+    fn a_run_card_reads_its_version_off_the_run_and_its_spot_off_the_step() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("automation-run-card-version");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        drop(amenbo_core::Store::open().unwrap());
+        let paths = amenbo_core::config::Paths::resolve().unwrap();
+        let conn = rusqlite::Connection::open(&paths.store_file).unwrap();
+        conn.execute_batch(
+            "BEGIN;
+             INSERT INTO project (id, name, default_view) VALUES (911, 'Alice', 'list');
+             INSERT INTO automation (id, project_id, name) VALUES (911, 911, 'Build');
+             INSERT INTO automation_run
+                 (id, automation_id, project_id, status, stopped_reason, started_at, ended_at, automation_version)
+                 VALUES (911, 911, 911, 'failed', 'crashed', '2026-11-08T05:00:00Z', '2026-11-08T05:05:00Z', 3);
+             INSERT INTO automation_run_step
+                 (id, run_id, seq, status, started_at, ended_at, automation_version, placement_id, step_id)
+                 VALUES (9110, 911, 1, 'failed', '2026-11-08T05:01:00Z', '2026-11-08T05:05:00Z', 2, 77, 5);
+             UPDATE project SET created_at = '2026-11-08T04:00:00Z', updated_at = '2026-11-08T04:00:00Z';
+             UPDATE automation SET created_at = '2026-11-08T04:00:00Z', updated_at = '2026-11-08T04:00:00Z';
+             UPDATE automation_run SET created_at = started_at, updated_at = started_at;
+             UPDATE automation_run_step SET created_at = started_at, updated_at = started_at;
+             COMMIT;",
+        )
+        .unwrap();
+        drop(conn);
+
+        let store = amenbo_core::Store::open().unwrap();
+        let card = run_cards(&store, vec![911]).expect("the card").pop().expect("run 911 is read");
+        assert_eq!(card.version, Some(3), "the version the run points at, not the one its step ran");
+        assert_eq!(card.placement, Some(77), "the spot the step names");
+        assert_eq!(card.steps_done, 1);
+        assert!(card.step_name.is_none(), "version 2 is not saved here, so the step has no name to give");
+        assert_eq!(card.automation_name, "Build");
     }
 
     /// **The history tab reads a store whose ended runs have let go of their steps** — the shape v148

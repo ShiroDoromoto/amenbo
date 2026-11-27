@@ -1977,7 +1977,7 @@ export function WorkspaceFace({
                     adopt: false,
                     // Where the step runs, and who carries it out: both are the run's answer for
                     // this step — who carries it out being what was chosen where its action is
-                    // placed, copied at launch — and neither is asked of the reader
+                    // placed, in the saved version the step was read from — and neither is asked of the reader
                     // (`amenbo_core::ops::automation_step`).
                     cwd: step?.folder ?? frame.folder,
                     agent: step?.agent ?? startWith.current.get(frame.id) ?? null,

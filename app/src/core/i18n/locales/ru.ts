@@ -1544,7 +1544,6 @@ export const ru: Translation = {
     "auto.held.by": "Используется запуском {run}",
     "auto.held.openPane": "Открыть панель",
     "auto.held.version": "На версии {version}",
-    "auto.held.unsaved": "На несохранённых изменениях",
     "auto.held.next": "При возврате к старту перейдёт на версию {version}",
     "auto.act.stepsPlace": "Шаги",
     "auto.step.nextExit": "Завершить на выходе «{name}»",

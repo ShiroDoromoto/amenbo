@@ -1527,7 +1527,6 @@ export const nl: Translation = {
     "auto.held.by": "In gebruik door run {run}",
     "auto.held.openPane": "Paneel openen",
     "auto.held.version": "Op versie {version}",
-    "auto.held.unsaved": "Op niet-opgeslagen wijzigingen",
     "auto.held.next": "Schakelt bij terugkeer naar de start over op versie {version}",
     "auto.act.stepsPlace": "Stappen",
     "auto.step.nextExit": "Eindigen bij uitgang ‘{name}’",

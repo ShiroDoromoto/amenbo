@@ -1528,7 +1528,6 @@ export const vi: Translation = {
     "auto.held.by": "Đang được lượt chạy {run} sử dụng",
     "auto.held.openPane": "Mở ngăn",
     "auto.held.version": "Đang chạy phiên bản {version}",
-    "auto.held.unsaved": "Đang chạy với thay đổi chưa lưu",
     "auto.held.next": "Khi quay lại điểm bắt đầu sẽ chuyển sang phiên bản {version}",
     "auto.act.stepsPlace": "Bước",
     "auto.step.nextExit": "Kết thúc ở lối ra “{name}”",

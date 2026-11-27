@@ -1620,10 +1620,10 @@ export async function pauseBeforeNextTask(run: number): Promise<void> {
 
 /**
  * **Pick a paused run up again** — one paused at the end of an action from the way out its last step
- * left through, on the copy it launched with; one paused before its next task from the entry of the
- * automation as it stands now (`AMB-D-1015`). It opens a terminal on the spot rather than waiting
- * (`AMB-D-947`): a paused run already counts toward its automation's roles' headcount, so picking it up is
- * never refused for it.
+ * left through, on the saved version it points at; one paused before its next task from its entry,
+ * moved to the newest saved version (`AMB-D-1015`, `AMB-D-1219`). It opens a terminal on the spot
+ * rather than waiting (`AMB-D-947`): a paused run already counts toward its automation's roles'
+ * headcount, so picking it up is never refused for it.
  *
  * Refused for a run that is not paused, which is the answer a reader gets rather than nothing
  * happening: the row they pressed was drawn from a picture that has since moved.

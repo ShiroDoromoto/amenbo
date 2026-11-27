@@ -1013,11 +1013,11 @@ describe("an automation a run is going on (AMB-D-1015)", () => {
     expect(container.querySelector(".autoheld__next")).toBeNull();
   });
 
-  it("switches a run on unsaved changes to any saved version", async () => {
-    // A copy taken from unsaved changes is older than every saved version, as the run itself counts it.
+  it("names neither a version nor a switch for a run that points at no version", async () => {
+    // Only a run that ended before runs pointed at a saved version has none; nothing is said for it.
     await openHeld([run], { saved: { version: 1, savedAt: "2026-10-05T00:00:00Z" } });
-    expect(container.querySelector(".autoheld__version")?.textContent).toBe(t("auto.held.unsaved"));
-    expect(container.querySelector(".autoheld__next")?.textContent).toBe(tf("auto.held.next", { version: 1 }));
+    expect(container.querySelector(".autoheld__version")).toBeNull();
+    expect(container.querySelector(".autoheld__next")).toBeNull();
   });
 
   it("names no switch while nothing is saved", async () => {

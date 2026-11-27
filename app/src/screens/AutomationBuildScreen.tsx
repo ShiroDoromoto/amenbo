@@ -41,7 +41,8 @@
 // button does: there is no definition left for this screen to be drawn from.
 //
 // **An automation a run is going on is written all the same** (`AMB-D-1015`). The run goes on from
-// the copy it took, and what is saved here is what it reads afresh when it comes back to its entry.
+// the saved version it points at (`AMB-D-1219`), and what is saved here is the version it moves to
+// when it comes back to its entry.
 // The runs going on it are named over the picture with the version each is on, the one it switches
 // to, the way to each one's pane and the presses that pause or end it (`./AutomationHeldBy`).
 //

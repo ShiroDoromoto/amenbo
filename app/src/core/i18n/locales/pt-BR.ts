@@ -1540,7 +1540,6 @@ export const ptBR: Translation = {
     "auto.held.by": "Em uso pela execução {run}",
     "auto.held.openPane": "Abrir painel",
     "auto.held.version": "Na versão {version}",
-    "auto.held.unsaved": "Com alterações não salvas",
     "auto.held.next": "Ao voltar ao início, passa para a versão {version}",
     "auto.act.stepsPlace": "Passos",
     "auto.step.nextExit": "Terminar na saída “{name}”",

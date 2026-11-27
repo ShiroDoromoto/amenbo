@@ -1539,7 +1539,6 @@ export const it: Translation = {
     "auto.held.by": "In uso dall’esecuzione {run}",
     "auto.held.openPane": "Apri il riquadro",
     "auto.held.version": "Sulla versione {version}",
-    "auto.held.unsaved": "Su modifiche non salvate",
     "auto.held.next": "Tornando all’inizio passa alla versione {version}",
     "auto.act.stepsPlace": "Passi",
     "auto.step.nextExit": "Finire all'uscita «{name}»",

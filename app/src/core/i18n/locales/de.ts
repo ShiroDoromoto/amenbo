@@ -1531,7 +1531,6 @@ export const de: Translation = {
     "auto.held.by": "Von Lauf {run} verwendet",
     "auto.held.openPane": "Bereich öffnen",
     "auto.held.version": "Läuft mit Version {version}",
-    "auto.held.unsaved": "Läuft mit ungespeicherten Änderungen",
     "auto.held.next": "Wechselt bei der Rückkehr zum Start zu Version {version}",
     "auto.act.stepsPlace": "Schritte",
     "auto.step.nextExit": "Am Ausgang „{name}“ enden",

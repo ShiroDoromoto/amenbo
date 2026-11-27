@@ -1529,7 +1529,6 @@ export const zhHans: Translation = {
     "auto.held.by": "运行 {run} 正在使用",
     "auto.held.openPane": "打开窗格",
     "auto.held.version": "正在使用版本 {version}",
-    "auto.held.unsaved": "正在使用未保存的更改",
     "auto.held.next": "回到起点时切换到版本 {version}",
     "auto.act.stepsPlace": "步骤",
     "auto.step.nextExit": "在出口“{name}”结束",

@@ -79,7 +79,7 @@ use crate::dto::{
     AutomationTriggerTriedDto,
     AutomationStepOpenDto, AutomationStepRunDto, AutomationTestRunDto, AutomationTestStepDto,
     AutomationWaitingTaskDto, AutomationWireDto, EveryAutomationActionCardDto, EveryAutomationCardDto,
-    ScheduleDto, WriteAck,
+    RunStopAck, ScheduleDto, WriteAck,
 };
 use crate::error::CmdError;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -2068,14 +2068,13 @@ pub fn automation_history_page(
 /// **Say a failed run has been seen** ([`amenbo_core::ops::automation_stop::acknowledge`]) — pressed on
 /// its row of the "running" tab, which it then leaves for the "history" tab (`AMB-D-955`).
 ///
-/// **It is not a `WriteAck` write**, for the reason [`automation_run_stop`] is not: what it moves is a
-/// run, and every screen drawing one is already following the change feed.
+/// Acks [`RUNS_MOVED`], for the reason [`automation_run_stop`] gives.
 #[tauri::command]
-pub fn automation_run_acknowledge(run_id: i64) -> Result<(), CmdError> {
+pub fn automation_run_acknowledge(run_id: i64) -> Result<WriteAck, CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_acknowledge(run_id, ActorKind::Human)?;
     crate::delivery::drive(&store);
-    Ok(())
+    Ok(WriteAck::new(RUNS_MOVED))
 }
 
 /// **The action a spot on the picture stands on**, named — the half a step's own name stopped saying
@@ -2517,27 +2516,26 @@ pub fn automation_step_open(
 /// **Pause a run** — it settles at the end of the action under way
 /// ([`amenbo_core::ops::automation_stop::pause`]). Pressed on a row of the "running" tab.
 ///
-/// **It is not a `WriteAck` write**, for the reason [`automation_run_stop`] is not: what it moves is a
-/// run, and every screen drawing one is already following the change feed.
+/// Acks [`RUNS_MOVED`], for the reason [`automation_run_stop`] gives.
 #[tauri::command]
-pub fn automation_run_pause(run_id: i64) -> Result<(), CmdError> {
+pub fn automation_run_pause(run_id: i64) -> Result<WriteAck, CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_pause(run_id)?;
     crate::delivery::drive(&store);
     crate::automation_watch::wake();
-    Ok(())
+    Ok(WriteAck::new(RUNS_MOVED))
 }
 
 /// **Pause a run before it takes its next task**
-/// ([`amenbo_core::ops::automation_stop::pause_run_before_next_task`], `AMB-D-1019`). Not a
-/// `WriteAck` write, for the reason [`automation_run_pause`] is not.
+/// ([`amenbo_core::ops::automation_stop::pause_run_before_next_task`], `AMB-D-1019`). Acks
+/// [`RUNS_MOVED`], as [`automation_run_pause`] does.
 #[tauri::command]
-pub fn automation_pause_before_next_task(run_id: i64) -> Result<(), CmdError> {
+pub fn automation_pause_before_next_task(run_id: i64) -> Result<WriteAck, CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_pause_run_before_next_task(run_id)?;
     crate::delivery::drive(&store);
     crate::automation_watch::wake();
-    Ok(())
+    Ok(WriteAck::new(RUNS_MOVED))
 }
 
 /// **Pick a paused run up again** ([`amenbo_core::ops::automation_stop::resume`]).
@@ -2551,14 +2549,14 @@ pub fn automation_pause_before_next_task(run_id: i64) -> Result<(), CmdError> {
 /// The agents and the models are asked here as a launch asks them ([`automation_launch`]): a run
 /// paused before its next task is copied down afresh and checked as a launch is.
 #[tauri::command]
-pub fn automation_run_resume(run_id: i64) -> Result<(), CmdError> {
+pub fn automation_run_resume(run_id: i64) -> Result<WriteAck, CmdError> {
     let mut store = crate::commands::open_store()?;
     let startable = amenbo_core::wake::startable_ids(&store.config);
     let offered = crate::agent_models::offered_here();
     store.automation_resume(run_id, startable.as_deref(), &offered)?;
     crate::delivery::drive(&store);
     crate::automation_watch::wake();
-    Ok(())
+    Ok(WriteAck::new(RUNS_MOVED))
 }
 
 /// **The step each run last opened**, as it was told to the window — kept for a workspace that was
@@ -3374,120 +3372,130 @@ fn passes_of(
 /// a refusal then would put a red sentence in front of somebody who did nothing wrong. What comes
 /// back says whether this press was the one that stopped it.
 ///
+/// **It acks [`RUNS_AND_TASKS_MOVED`]**, as every press on a run or a launch does: the screen that
+/// pressed redraws on the ack rather than waiting for the change feed, which can arrive tens of
+/// seconds late (`store-changed` rides on the file watcher). A press that stopped nothing acks all
+/// the same — the picture it was pressed on is the one that is behind.
 #[tauri::command]
-pub fn automation_run_stop(run_id: i64) -> Result<bool, CmdError> {
+pub fn automation_run_stop(run_id: i64) -> Result<RunStopAck, CmdError> {
     let mut store = crate::commands::open_store()?;
-    let stopped = stop_if_going(&mut store, run_id)?;
+    let stopped = stop_if_going(&mut store, run_id)?.is_some();
     crate::delivery::drive(&store);
-    if stopped.is_none() {
-        return Ok(false);
+    if stopped {
+        crate::automation_watch::wake();
     }
-    crate::automation_watch::wake();
-    Ok(true)
+    Ok(RunStopAck { stopped, ack: WriteAck::new(RUNS_AND_TASKS_MOVED) })
 }
+
+/// What a press on a run or a launch leaves stale: the run's rows, and the panes and launch state
+/// drawn from them.
+const RUNS_MOVED: &[&str] = &["automationRuns"];
+
+/// What a press that ends a run leaves stale: [`RUNS_MOVED`], and the tasks — the task the run had
+/// reserved goes back to `todo` and gains a line saying the run is not coming back.
+const RUNS_AND_TASKS_MOVED: &[&str] = &["automationRuns", "tasks"];
 
 /// **Cancel a paused run** ([`amenbo_core::ops::automation_stop::cancel`], `AMB-D-1002`). Nothing is
 /// under way in a paused run, so it is `canceled` on the spot and there is no terminal to end.
 /// Refused for a run that is not paused: a running one is paused first, or force-cancelled
 /// ([`automation_run_stop`]).
 ///
-/// **It is not a `WriteAck` write**, for the reason [`automation_run_stop`] is not.
+/// Acks [`RUNS_AND_TASKS_MOVED`], for the reason [`automation_run_stop`] gives.
 #[tauri::command]
-pub fn automation_run_cancel(run_id: i64) -> Result<(), CmdError> {
+pub fn automation_run_cancel(run_id: i64) -> Result<WriteAck, CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_cancel(run_id)?;
     crate::delivery::drive(&store);
     crate::automation_watch::wake();
-    Ok(())
+    Ok(WriteAck::new(RUNS_AND_TASKS_MOVED))
 }
 
 /// **Pause a launch** — every run of it still going settles at the end of the action under way, and the
 /// watch starts no run in it until it is picked up again
-/// ([`amenbo_core::ops::automation_stop::pause_launch`]). Not a `WriteAck` write, for the reason
-/// [`automation_run_pause`] is not.
+/// ([`amenbo_core::ops::automation_stop::pause_launch`]). Acks [`RUNS_MOVED`], as
+/// [`automation_run_pause`] does.
 #[tauri::command]
-pub fn automation_launch_pause(launch_id: i64) -> Result<(), CmdError> {
+pub fn automation_launch_pause(launch_id: i64) -> Result<WriteAck, CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_pause(launch_id)?;
     crate::delivery::drive(&store);
     crate::automation_watch::wake();
-    Ok(())
+    Ok(WriteAck::new(RUNS_MOVED))
 }
 
 /// **Pause a launch before each of its runs takes its next task**
 /// ([`amenbo_core::ops::automation_stop::pause_launch_before_next_task`], `AMB-D-1019`).
 #[tauri::command]
-pub fn automation_launch_pause_before_next_task(launch_id: i64) -> Result<(), CmdError> {
+pub fn automation_launch_pause_before_next_task(launch_id: i64) -> Result<WriteAck, CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_pause_before_next_task(launch_id)?;
     crate::delivery::drive(&store);
     crate::automation_watch::wake();
-    Ok(())
+    Ok(WriteAck::new(RUNS_MOVED))
 }
 
 /// **Pick a paused launch up again** ([`amenbo_core::ops::automation_stop::resume_launch`]). Each run
 /// is picked up as [`automation_run_resume`] picks one up, and the agents and models are asked the
 /// same way; the steps are opened by the watch.
 #[tauri::command]
-pub fn automation_launch_resume(launch_id: i64) -> Result<(), CmdError> {
+pub fn automation_launch_resume(launch_id: i64) -> Result<WriteAck, CmdError> {
     let mut store = crate::commands::open_store()?;
     let startable = amenbo_core::wake::startable_ids(&store.config);
     let offered = crate::agent_models::offered_here();
     store.automation_launch_resume(launch_id, startable.as_deref(), &offered)?;
     crate::delivery::drive(&store);
     crate::automation_watch::wake();
-    Ok(())
+    Ok(WriteAck::new(RUNS_MOVED))
 }
 
 /// **Cancel a paused launch** ([`amenbo_core::ops::automation_stop::cancel_launch`], `AMB-D-1002`).
 /// Refused while a run of it is running: the launch is paused first, or stopped
 /// ([`automation_launch_stop`]).
 #[tauri::command]
-pub fn automation_launch_cancel(launch_id: i64) -> Result<(), CmdError> {
+pub fn automation_launch_cancel(launch_id: i64) -> Result<WriteAck, CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_cancel(launch_id)?;
     crate::delivery::drive(&store);
     crate::automation_watch::wake();
-    Ok(())
+    Ok(WriteAck::new(RUNS_AND_TASKS_MOVED))
 }
 
 /// **Stop a launch now** — the force-cancel of every run of it still going
 /// ([`amenbo_core::ops::automation_stop::stop_launch`]). The terminals standing in their panes are ended
 /// by the look the press wakes, as [`automation_run_stop`]'s are.
 #[tauri::command]
-pub fn automation_launch_stop(launch_id: i64) -> Result<(), CmdError> {
+pub fn automation_launch_stop(launch_id: i64) -> Result<WriteAck, CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_stop(launch_id)?;
     crate::delivery::drive(&store);
     crate::automation_watch::wake();
-    Ok(())
+    Ok(WriteAck::new(RUNS_AND_TASKS_MOVED))
 }
 
 /// **Change how many are in one role for this launch alone**
 /// ([`amenbo_core::ops::automation_run::launch_headcount_set`], `AMB-D-1123`). The definition is left
 /// as it is. Core refuses a headcount outside 1 to the cap (`AMB-D-1124`) and a role the launch's
 /// definition does not have. A raise is taken up by the watch's top-up, so the press wakes it; a cut
-/// lets seats go as their tasks end. Not a `WriteAck` write, for the reason [`automation_run_pause`]
-/// is not.
+/// lets seats go as their tasks end. Acks [`RUNS_MOVED`], as [`automation_run_pause`] does.
 #[tauri::command]
-pub fn automation_launch_headcount_set(launch_id: i64, role_id: i64, headcount: u32) -> Result<(), CmdError> {
+pub fn automation_launch_headcount_set(launch_id: i64, role_id: i64, headcount: u32) -> Result<WriteAck, CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_headcount_set(launch_id, role_id, headcount)?;
     crate::delivery::drive(&store);
     crate::automation_watch::wake();
-    Ok(())
+    Ok(WriteAck::new(RUNS_MOVED))
 }
 
 /// **Put one role of this launch back at its definition's headcount**
 /// ([`amenbo_core::ops::automation_run::launch_headcount_reset`]). The watch is woken for the seats a
 /// return to a larger headcount opens.
 #[tauri::command]
-pub fn automation_launch_headcount_reset(launch_id: i64, role_id: i64) -> Result<(), CmdError> {
+pub fn automation_launch_headcount_reset(launch_id: i64, role_id: i64) -> Result<WriteAck, CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_headcount_reset(launch_id, role_id)?;
     crate::delivery::drive(&store);
     crate::automation_watch::wake();
-    Ok(())
+    Ok(WriteAck::new(RUNS_MOVED))
 }
 
 /// **Change the most runs that go at once in this launch alone**, across its roles — `None` for no
@@ -3495,24 +3503,24 @@ pub fn automation_launch_headcount_reset(launch_id: i64, role_id: i64) -> Result
 /// as it is. Core refuses a limit outside 1 to the cap and a launch that has ended. A raise is taken up
 /// by the watch's top-up, so the press wakes it; a cut lets runs go as their tasks end.
 #[tauri::command]
-pub fn automation_launch_limit_set(launch_id: i64, limit: Option<u32>) -> Result<(), CmdError> {
+pub fn automation_launch_limit_set(launch_id: i64, limit: Option<u32>) -> Result<WriteAck, CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_limit_set(launch_id, limit)?;
     crate::delivery::drive(&store);
     crate::automation_watch::wake();
-    Ok(())
+    Ok(WriteAck::new(RUNS_MOVED))
 }
 
 /// **Put this launch back at its definition's run limit**
 /// ([`amenbo_core::ops::automation_run::launch_limit_reset`]). The watch is woken for the room a return
 /// to a larger limit opens.
 #[tauri::command]
-pub fn automation_launch_limit_reset(launch_id: i64) -> Result<(), CmdError> {
+pub fn automation_launch_limit_reset(launch_id: i64) -> Result<WriteAck, CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_limit_reset(launch_id)?;
     crate::delivery::drive(&store);
     crate::automation_watch::wake();
-    Ok(())
+    Ok(WriteAck::new(RUNS_MOVED))
 }
 
 /// **Stop one role of a launch taking tasks once the task under way is done**
@@ -3521,24 +3529,24 @@ pub fn automation_launch_limit_reset(launch_id: i64) -> Result<(), CmdError> {
 /// the next task (`AMB-D-1019`), so core refuses it while the whole launch is paused, and for a launch
 /// that has ended.
 #[tauri::command]
-pub fn automation_launch_role_hold(launch_id: i64, role_id: i64) -> Result<(), CmdError> {
+pub fn automation_launch_role_hold(launch_id: i64, role_id: i64) -> Result<WriteAck, CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_role_hold(launch_id, role_id)?;
     crate::delivery::drive(&store);
     crate::automation_watch::wake();
-    Ok(())
+    Ok(WriteAck::new(RUNS_MOVED))
 }
 
 /// **Take one held role of a launch up again** ([`amenbo_core::ops::automation_stop::release_launch_role`]).
 /// Its empty seats are filled by the watch's top-up, so the press wakes it. Refused as
 /// [`automation_launch_role_hold`] is.
 #[tauri::command]
-pub fn automation_launch_role_release(launch_id: i64, role_id: i64) -> Result<(), CmdError> {
+pub fn automation_launch_role_release(launch_id: i64, role_id: i64) -> Result<WriteAck, CmdError> {
     let mut store = crate::commands::open_store()?;
     store.automation_launch_role_release(launch_id, role_id)?;
     crate::delivery::drive(&store);
     crate::automation_watch::wake();
-    Ok(())
+    Ok(WriteAck::new(RUNS_MOVED))
 }
 
 /// The half of the stop that has no window in it: stop the run where it is still going, and answer
@@ -3916,7 +3924,9 @@ mod tests {
         let before = persisted_cursor(store.read_model()).unwrap();
         drop(store);
 
-        assert!(!automation_run_stop(404).expect("a run nobody can find is not an error"));
+        let answer = automation_run_stop(404).expect("a run nobody can find is not an error");
+        assert!(!answer.stopped);
+        assert_eq!(answer.ack.scopes, RUNS_AND_TASKS_MOVED, "the press acks all the same");
 
         let store = crate::commands::open_store().expect("the store");
         assert!(

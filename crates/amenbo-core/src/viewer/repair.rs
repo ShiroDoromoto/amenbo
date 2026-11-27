@@ -225,7 +225,7 @@ struct Holding {
 /// One page of what the server holds. Only the key and what happened to it are read: the envelope is the
 /// phone's business, and this is not reading the backlog, it is counting it.
 ///
-/// The sending reads the same pages when it looks for a run's leftover rows, and again when it
+/// The sending reads the same pages when it looks for an automation's leftover rows, and again when it
 /// deletes them ([`super::send`]).
 #[derive(serde::Deserialize)]
 pub(super) struct KeysHeld {

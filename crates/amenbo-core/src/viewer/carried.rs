@@ -92,7 +92,8 @@ pub struct Carried {
     ///
     /// **It is read once per server.** Pointing the store at a server it has not sent to throws this row
     /// away ([`forget()`]), so the next server is read anew and no other one is ever read twice. Pressing
-    /// setup again at the same server keeps it.
+    /// setup again at the same server keeps it. The v153 migration sent it back to `None` once, when an
+    /// automation's launch rows joined those looked for.
     pub strays: Option<bool>,
     /// Where in the server's ordering a reading of it that stopped part way got to — the `seq` to read on
     /// from, in decimal — so the next turn goes on from there. `None` is "from the beginning".

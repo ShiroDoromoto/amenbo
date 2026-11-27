@@ -399,8 +399,8 @@ pub fn build_in_the_script(script: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
-/// **Whether to ask the user to press setup again**: this device's server holds a run's leftover rows,
-/// and answers as a Worker too old to finish deleting them within a day's allowance (`AMB-D-1160`).
+/// **Whether to ask the user to press setup again**: this device's server holds an automation's leftover
+/// rows, and answers as a Worker too old to finish deleting them within a day's allowance (`AMB-D-1160`).
 ///
 /// The deleting is done from here a few at a time, but only by a Worker of build 4 or later; on an older
 /// one those rows stay until setup is pressed again. A build 4 one deletes them, but the `reread` that

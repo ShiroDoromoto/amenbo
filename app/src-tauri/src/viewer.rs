@@ -49,9 +49,9 @@ pub fn viewer_state() -> Result<ViewerStateDto, CmdError> {
     })
 }
 
-/// **Whether to ask the user to press setup again**, so the server becomes a Worker that can delete a
-/// run's leftover rows (`AMB-D-544`). The condition is core's; the words are the screen's. Read from what
-/// this device holds, so it goes to no network.
+/// **Whether to ask the user to press setup again**, so the server becomes a Worker that can delete an
+/// automation's leftover rows (`AMB-D-544`). The condition is core's; the words are the screen's. Read
+/// from what this device holds, so it goes to no network.
 #[tauri::command]
 pub fn viewer_asks_for_setup_again() -> Result<bool, CmdError> {
     Ok(viewer::asks_for_setup_again(&open_store_read()?)?)

@@ -2021,8 +2021,9 @@ pub fn mailbox_triggered_at(task_ids: Vec<i64>) -> Result<Vec<(i64, String)>, Cm
 /// Tell the front end, via `store-changed`, that the app's data on disk (`store.sqlite` and its WAL
 /// sidecar `-wal`, plus the `config.json` beside them) has moved — this is how writes from another
 /// process (the AI, the CLI, another session) reach the GUI.
-/// **Waking up is left to the kernel**: the OS-specific watching and coalescing live
-/// in [`crate::store_watch`], and all that happens here is "once woken, check whether it really
+/// **Waking up is left to [`crate::store_watch`]**: the kernel's word on a write, plus a look of our
+/// own every few seconds in case that word never comes. The OS-specific watching and coalescing live
+/// there, and all that happens here is "once woken, check whether it really
 /// changed, then emit", with `store_signature_string` answering from `PRAGMA data_version` plus the
 /// file's identity (file watching also fires on things that mean nothing to us, such as SHM updates
 /// from a read, and this gate drops those spurious emits). **There is no payload — it is a wake-up

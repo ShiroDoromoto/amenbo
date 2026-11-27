@@ -2020,6 +2020,7 @@ export const zhHant: Translation = {
     not_ready_automation_no_steps: "上面沒有放置任何動作",
     not_ready_automation_role_starts_nowhere: "角色「{role}」尚未決定開始",
     not_ready_automation_export_only: "這是舊的定義，只能匯出",
+    not_ready_automation_never_saved: "還從未儲存過——啟動前請先儲存",
     not_ready_automation_no_failures_to: "尚未決定失敗的一輪提交給誰",
     not_ready_automation_failure_axis_empty: "失敗任務的分類：必填維度「{axis}」沒有值",
     not_ready_automation_action_draft: "所放置的動作「{action}」仍在建立中",

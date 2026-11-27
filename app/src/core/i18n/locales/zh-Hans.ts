@@ -2020,6 +2020,7 @@ export const zhHans: Translation = {
     not_ready_automation_no_steps: "上面没有放置任何动作",
     not_ready_automation_role_starts_nowhere: "角色“{role}”尚未确定开始",
     not_ready_automation_export_only: "这是旧的定义，只能导出",
+    not_ready_automation_never_saved: "还从未保存过——启动前请先保存",
     not_ready_automation_no_failures_to: "尚未决定失败的一轮提交给谁",
     not_ready_automation_failure_axis_empty: "失败任务的分类：必填维度“{axis}”没有值",
     not_ready_automation_action_draft: "所放置的动作“{action}”仍在创建中",

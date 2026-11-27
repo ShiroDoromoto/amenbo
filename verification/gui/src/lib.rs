@@ -7528,6 +7528,7 @@ fn declared_choices(with: &Args) -> Result<Vec<String>, String> {
 /// sentence the interface owns.
 fn launch_reason(reason: &str) -> Result<&'static str, String> {
     Ok(match reason {
+        "never_saved" => "that it has never been saved",
         "no_steps" => "that no action is placed on it",
         "role_starts_nowhere" => "that one of its roles starts its round nowhere",
         "no_failures_to" => "that nobody is chosen to file a failed round to",

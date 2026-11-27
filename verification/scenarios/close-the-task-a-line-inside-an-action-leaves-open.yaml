@@ -79,6 +79,8 @@ steps_gui:
     domain: automation
     op: action-back
 
+  - { type: action, domain: automation, op: save, with: { target: auto } }
+
   # Back on the automation, nothing is in the way any more.
   - type: assert
     domain: automation

@@ -2019,6 +2019,7 @@ export const hi: Translation = {
     not_ready_automation_no_steps: "इस पर कोई क्रिया नहीं रखी गई है।",
     not_ready_automation_role_starts_nowhere: "भूमिका “{role}” की कोई शुरुआत तय नहीं है",
     not_ready_automation_export_only: "यह पुरानी परिभाषा है, इसे केवल एक्सपोर्ट किया जा सकता है।",
+    not_ready_automation_never_saved: "इसे अभी तक कभी सहेजा नहीं गया है — शुरू करने से पहले इसे सहेजें।",
     not_ready_automation_no_failures_to: "असफल राउंड किसे दर्ज किया जाए, यह तय नहीं है।",
     not_ready_automation_failure_axis_empty: "विफलता के कार्य का वर्गीकरण: अनिवार्य अक्ष “{axis}” का कोई मान नहीं है",
     not_ready_automation_action_draft: "रखी गई क्रिया “{action}” अभी बन रही है।",

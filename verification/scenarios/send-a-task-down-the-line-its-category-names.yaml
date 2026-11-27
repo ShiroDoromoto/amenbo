@@ -71,6 +71,8 @@ steps_gui:
     with:
       target: auto
 
+  - { type: action, domain: automation, op: save, with: { target: auto } }
+
   - type: action
     domain: automation
     op: start

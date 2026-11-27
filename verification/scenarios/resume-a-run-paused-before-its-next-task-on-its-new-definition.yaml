@@ -1,9 +1,9 @@
 # A run paused before its next task holds no task, so it is picked up again as the same run on the
-# definition as it now stands, from that definition's entry. What the road rebuilds is the one thing
-# that tells the two copies apart: how long the built-in that waits holds a task. On the copy taken at
-# the start it holds one for a minute; on the new one, for a second. The resumed run takes the next
-# task filed with its role, so that task is done well inside the minute only if it went on the new
-# copy.
+# automation's newest saved version, from that version's entry. What the road rebuilds and saves is
+# the one thing that tells the two copies apart: how long the built-in that waits holds a task. On the
+# copy taken at the start it holds one for a minute; on the new one, for a second. The resumed run
+# takes the next task filed with its role, so that task is done well inside the minute only if it went
+# on the new copy.
 #
 # The run takes the task filed with its role and holds it in the built-in that waits, so the pause
 # after that task is asked for while it is still being worked; the task going to done says the pause
@@ -53,6 +53,8 @@ steps_gui:
   - { type: action, domain: automation, op: pick-box, with: { builtin: wait } }
   - { type: action, domain: automation, op: answer-text, with: { builtin: wait, setting: 秒, value: "60" } }
 
+  - { type: action, domain: automation, op: save, with: { target: auto } }
+
   - type: action
     domain: automation
     op: start
@@ -97,6 +99,9 @@ steps_gui:
     with: { step: 3, total: 3, builtin: close_task }
   - { type: action, domain: automation, op: test-move, with: { press: next } }
   - { type: assert, domain: automation, op: test-pane-ended, with: { ended: completed } }
+
+  # Saved, since what the resumed run goes on is the automation's newest saved version.
+  - { type: action, domain: automation, op: save, with: { target: auto } }
 
   # Picked up again, the same run starts at the new definition's entry: it takes the next task and
   # holds it for a second rather than the minute the copy it started with would have held it. Then it

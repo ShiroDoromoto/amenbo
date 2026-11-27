@@ -1303,8 +1303,9 @@ pub(crate) fn automation(store: &mut Store, flags: &Flags, sub: AutomationCmd) -
             if !amenbo_core::app_running::is_running(&paths).map_err(CliError::from)? {
                 return Err(CliError::app_not_running());
             }
-            // A launch reads the newest saved version, and core falls back to the draft for an
-            // automation never saved. That fallback is refused here.
+            // A launch reads the newest saved version, and core refuses an automation never saved. It is
+            // asked here first, so the refusal can point at the test run, and the version read is the one
+            // the line below names.
             let saved = store
                 .automation_detail(id)
                 .map_err(CliError::from)?

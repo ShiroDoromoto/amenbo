@@ -56,6 +56,8 @@ given:
   - { type: action, domain: automation, op: edge-add, with: { target: at_second, to: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_close } }
   - { type: action, domain: automation, op: edge-add, with: { target: at_start, exit: 着手した, to: at_first } }
+  # Saved, since a run stands on a saved version and the row's start reads the newest one.
+  - { type: action, domain: automation, op: save, with: { target: auto } }
 
 steps_gui:
   # The other project, on screen, with a plain shell in it — the only pane this road types in.

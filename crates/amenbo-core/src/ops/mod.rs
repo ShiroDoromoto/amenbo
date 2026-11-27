@@ -256,6 +256,80 @@ pub(crate) mod test_support {
         }
     }
 
+    /// **Save an automation's draft as its next version, where the draft holds anything its newest version
+    /// does not** — a launch reads only a saved version
+    /// ([`crate::ops::automation_run::ReadsFrom::Saved`]), and one nobody has saved is refused. Written
+    /// down without asking the launch check ([`crate::ops::automation::version_add`]), so a test of what
+    /// the check refuses still has a version to launch. One that does not exist, or that is kept only to
+    /// be written out — which is not saved — is left as it is: a launch refuses it before reading a
+    /// version.
+    pub(crate) fn save_draft(tx: &WriteTx<'_>, automation_id: i64) {
+        let conn = tx.conn();
+        let Some(automation) = crate::store_engine::read::automation(conn, automation_id).expect("read") else {
+            return;
+        };
+        if automation.export_only {
+            return;
+        }
+        let saved = crate::store_engine::read::automation_version_latest(conn, automation_id).expect("read").is_some();
+        if !saved || crate::ops::automation::unsaved(conn, automation_id).expect("read") {
+            crate::ops::automation::version_add(tx, automation_id).expect("save the draft");
+        }
+    }
+
+    /// [`save_draft`], then [`crate::ops::automation_run::launch`].
+    pub(crate) fn launch_saved(
+        tx: &WriteTx<'_>,
+        automation_id: i64,
+        by: &crate::ops::automation_run::Launcher<'_>,
+    ) -> crate::error::Result<crate::model::AutomationRun> {
+        save_draft(tx, automation_id);
+        crate::ops::automation_run::launch(tx, automation_id, by)
+    }
+
+    /// [`save_draft`], then [`crate::ops::automation_run::launch_handing`] of the saved version.
+    pub(crate) fn launch_handing_saved(
+        tx: &WriteTx<'_>,
+        automation_id: i64,
+        by: &crate::ops::automation_run::Launcher<'_>,
+        handed: &crate::ops::automation_run::HandedAtLaunch,
+    ) -> crate::error::Result<crate::model::AutomationRun> {
+        save_draft(tx, automation_id);
+        crate::ops::automation_run::launch_handing(
+            tx,
+            automation_id,
+            by,
+            handed,
+            crate::ops::automation_run::ReadsFrom::Saved,
+        )
+    }
+
+    /// [`save_draft`], then [`crate::ops::automation_run::start`].
+    pub(crate) fn start_saved(
+        tx: &WriteTx<'_>,
+        automation_id: i64,
+        by: &crate::ops::automation_run::Launcher<'_>,
+    ) -> crate::error::Result<crate::ops::automation_run::Started> {
+        save_draft(tx, automation_id);
+        crate::ops::automation_run::start(tx, automation_id, by)
+    }
+
+    /// [`save_draft`] of the trigger's automation, then [`crate::ops::automation_run::fire`].
+    pub(crate) fn fire_saved(
+        tx: &WriteTx<'_>,
+        trigger_id: i64,
+        by: &crate::ops::automation_run::Launcher<'_>,
+        now: crate::time::Timestamp,
+        said: Option<&crate::ops::automation_run::ScriptsSaid>,
+        from_file: Option<&crate::ops::automation_run::TriggerFileSaid>,
+        files: &[crate::ops::automation_run::TriggerFileRead],
+    ) -> crate::error::Result<Option<crate::model::AutomationRun>> {
+        if let Some(trigger) = crate::store_engine::read::automation_trigger(tx.conn(), trigger_id).expect("read") {
+            save_draft(tx, trigger.automation_id);
+        }
+        crate::ops::automation_run::fire(tx, trigger_id, by, now, said, from_file, files)
+    }
+
     /// **Have the role an automation was born with start its round at `placement`** (`AMB-D-1123`), and
     /// answer that role's id. A test that needs a run to start somewhere names it this way.
     pub(crate) fn start_at(tx: &WriteTx<'_>, automation_id: i64, placement: i64) -> i64 {

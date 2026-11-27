@@ -2037,6 +2037,7 @@ export const es: Translation = {
     not_ready_automation_no_steps: "No tiene ninguna acción colocada",
     not_ready_automation_role_starts_nowhere: "el rol «{role}» no tiene inicio",
     not_ready_automation_export_only: "es una definición antigua y solo se puede exportar",
+    not_ready_automation_never_saved: "nunca se ha guardado; guárdala antes de iniciarla",
     not_ready_automation_no_failures_to: "no se ha elegido a quién se registra una vuelta fallida",
     not_ready_automation_failure_axis_empty: "clasificación de la tarea del fallo: el eje obligatorio «{axis}» no tiene valor",
     not_ready_automation_action_draft: "la acción «{action}» colocada sigue en creación",

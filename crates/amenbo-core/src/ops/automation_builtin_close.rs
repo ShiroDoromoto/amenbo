@@ -135,7 +135,8 @@ mod tests {
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_builtin_take::TAKEN;
     use crate::ops::automation_report::{self, Next, Produced};
-    use crate::ops::automation_run::{launch, next_def, nothing_asked, Launcher, Waiting};
+    use crate::ops::automation_run::{next_def, nothing_asked, Launcher, Waiting};
+    use crate::ops::test_support::launch_saved as launch;
     use crate::ops::automation_step::Opened;
     use crate::ops::test_support::open;
     use crate::lifecycle::name::{COMMENT_ADDED, TASK_DONE, TASK_STATUS_CHANGED};

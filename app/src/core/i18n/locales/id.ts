@@ -2020,6 +2020,7 @@ export const id: Translation = {
     not_ready_automation_no_steps: "Belum ada aksi yang ditempatkan",
     not_ready_automation_role_starts_nowhere: "peran “{role}” tidak punya awal",
     not_ready_automation_export_only: "ini definisi lama dan hanya bisa diekspor",
+    not_ready_automation_never_saved: "belum pernah disimpan — simpan dulu sebelum menjalankannya",
     not_ready_automation_no_failures_to: "belum ditentukan ke mana putaran yang gagal dicatat",
     not_ready_automation_failure_axis_empty: "klasifikasi tugas kegagalan: sumbu wajib “{axis}” tidak punya nilai",
     not_ready_automation_action_draft: "aksi “{action}” yang ditempatkan masih sedang dibuat",

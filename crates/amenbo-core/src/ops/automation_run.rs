@@ -92,8 +92,8 @@ use crate::time::Timestamp;
 /// where the gap is, or holding the action whose picture has it. A name alone cannot say which: the same
 /// action placed twice is two boxes with one name, and a screen that opens the box a reason is about has
 /// to know which of the two. So the same gap in an action placed twice is two reasons, one per placement.
-/// The reasons about the automation as a whole ([`Unmet::ExportOnly`], [`Unmet::NoSteps`],
-/// [`Unmet::NoFailuresTo`], [`Unmet::FailureAxisEmpty`]) and about a role starting nowhere
+/// The reasons about the automation as a whole ([`Unmet::ExportOnly`], [`Unmet::NeverSaved`],
+/// [`Unmet::NoSteps`], [`Unmet::NoFailuresTo`], [`Unmet::FailureAxisEmpty`]) and about a role starting nowhere
 /// ([`Unmet::RoleStartsNowhere`]) name none, and nor do the ones the action's own check finds
 /// ([`check_action`]): it is asked with the action on no picture.
 ///
@@ -107,6 +107,10 @@ pub enum Unmet {
     /// ([`crate::model::Automation::export_only`]). It is not mended in place: it is exported, rebuilt by
     /// hand and imported as a new automation. Nothing else is worth saying about it.
     ExportOnly,
+    /// Nobody has saved the automation yet, so it has no version a run could stand on (`AMB-D-1219`). Its
+    /// draft is not launched in its place. Asked by the launch alone ([`check_launch`]): the save is what
+    /// mends it, and is not refused for it.
+    NeverSaved,
     /// Nothing is placed on the automation at all. Nothing else is worth saying about it.
     NoSteps,
     /// A role that names no placement on the picture as where its round starts (`AMB-D-1123`): its seats
@@ -259,6 +263,10 @@ impl Unmet {
             Unmet::ExportOnly => {
                 "it was written before automations had roles and is kept only to be written out — export it \
                  with `automation export`, rebuild it and import it as a new automation"
+                    .to_string()
+            }
+            Unmet::NeverSaved => {
+                "it has never been saved — a run stands on a saved version, so save it with `automation save`"
                     .to_string()
             }
             Unmet::NoSteps => "no action is placed on it".to_string(),
@@ -418,6 +426,7 @@ impl Unmet {
     pub fn code(&self) -> ErrorCode {
         match self {
             Unmet::ExportOnly => ErrorCode::NotReadyAutomationExportOnly,
+            Unmet::NeverSaved => ErrorCode::NotReadyAutomationNeverSaved,
             Unmet::NoSteps => ErrorCode::NotReadyAutomationNoSteps,
             Unmet::RoleStartsNowhere { .. } => ErrorCode::NotReadyAutomationRoleStartsNowhere,
             Unmet::NoFailuresTo => ErrorCode::NotReadyAutomationNoFailuresTo,
@@ -470,7 +479,7 @@ impl Unmet {
             None => msg,
         };
         match self {
-            Unmet::ExportOnly | Unmet::NoSteps | Unmet::NoFailuresTo => msg,
+            Unmet::ExportOnly | Unmet::NeverSaved | Unmet::NoSteps | Unmet::NoFailuresTo => msg,
             Unmet::RoleStartsNowhere { role } => msg.with("role", role),
             Unmet::FailureAxisEmpty { axis } => msg.with("axis", axis),
             Unmet::ActionEmpty { action, .. } | Unmet::ActionDraft { action, .. } => msg.with("action", action),
@@ -519,6 +528,7 @@ impl Unmet {
     pub fn placement(&self) -> Option<i64> {
         match self {
             Unmet::ExportOnly
+            | Unmet::NeverSaved
             | Unmet::NoSteps
             | Unmet::NoFailuresTo
             | Unmet::FailureAxisEmpty { .. }
@@ -756,7 +766,8 @@ fn not_found(what: &str, id: i64) -> Error {
 /// `default_agent` is [`Launcher::default_agent`], Amenbo's own default.
 ///
 /// Asked of the draft — the automation's picture as it is written now. A launch asks it of the
-/// picture it is about to copy down ([`check_picture`]).
+/// picture it is about to copy down ([`check_picture`]). It is what the save asks, so it does not ask
+/// whether the automation was ever saved; [`check_launch`] does.
 pub fn check(
     conn: &Connection,
     automation_id: i64,
@@ -767,6 +778,23 @@ pub fn check(
     let automation = read::automation(conn, automation_id)?
         .ok_or_else(|| not_found("automation", automation_id))?;
     check_picture(conn, &automation, &Picture::read(conn, &automation)?, startable, models, default_agent)
+}
+
+/// **Can this automation be launched?** — [`check`], led by [`Unmet::NeverSaved`] where nobody has saved
+/// it (`AMB-D-1219`). The other reasons are still said beside it, since the save refuses them too. An
+/// automation kept only to be written out keeps its one reason: it is not saved either.
+pub fn check_launch(
+    conn: &Connection,
+    automation_id: i64,
+    startable: Option<&[String]>,
+    models: &ModelsHere,
+    default_agent: Option<&str>,
+) -> Result<Vec<Unmet>> {
+    let mut unmet = check(conn, automation_id, startable, models, default_agent)?;
+    if unmet != [Unmet::ExportOnly] && read::automation_version_latest(conn, automation_id)?.is_none() {
+        unmet.insert(0, Unmet::NeverSaved);
+    }
+    Ok(unmet)
 }
 
 /// **Where the agent carrying a step out was chosen** — the first of three that names one: the step at
@@ -2209,12 +2237,15 @@ fn answers(pic: &Picture, placement: &AutomationPlacement, def: &ActionDef) -> V
 
 /// **Launch an automation**: check it, copy what is placed on it into a run, and start it.
 ///
-/// Five things refuse, in this order.
+/// Six things refuse, in this order.
 ///
 /// - **Archived.** Archiving is what keeps an automation nobody launches any more out of the lists, and
 ///   launching one straight past that would make the word mean nothing.
 /// - **Stopped.** A person stopped it so that it starts no new round ([`Automation::stopped`]); a launch
 ///   is one.
+/// - **Never saved.** A run stands on a saved version, and an automation nobody has saved has none; its
+///   draft is not launched ([`definition`]). One kept only to be written out is refused before this, as
+///   the check refuses it ([`Unmet::ExportOnly`]): it cannot be saved.
 /// - **The check** ([`check`]), as one `not_ready` refusal carrying a part per reason.
 /// - **The workspace being closed**, last on purpose. What the check found is wrong with the automation
 ///   and stays wrong after a window is opened, so saying "open a window" first would send somebody to do
@@ -2286,8 +2317,8 @@ pub fn start(
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReadsFrom {
     /// Its newest saved version, so what is being written on the automation is not what runs. An
-    /// automation nobody has saved has only its draft, and that is read. A launch and a run picked up
-    /// before its next task read this.
+    /// automation nobody has saved has none, and is refused ([`definition`]). A launch and a run picked
+    /// up before its next task read this.
     Saved,
     /// The draft — its picture as it is written now, saved or not. A test run reads this, to try what is
     /// being written before it is saved.
@@ -2511,16 +2542,30 @@ fn with_a_task<'s>(
     Ok(longest)
 }
 
-/// **The picture `reads` names, and the saved version it is** — `None` for the draft.
+/// **The picture `reads` names, and the saved version it is** — `None` for the draft. An automation
+/// nobody has saved has no version to read, and [`ReadsFrom::Saved`] is refused for it: it is not
+/// launched from its draft.
 fn definition(conn: &Connection, automation: &Automation, reads: ReadsFrom) -> Result<(Picture, Option<i64>)> {
-    let saved = match reads {
-        ReadsFrom::Saved => read::automation_version_latest(conn, automation.id)?,
-        ReadsFrom::Draft => None,
-    };
-    match saved {
-        Some(saved) => Ok((Picture::saved(&saved)?, Some(saved.version))),
-        None => Ok((Picture::read(conn, automation)?, None)),
+    match reads {
+        ReadsFrom::Saved => match newest_saved(conn, automation)? {
+            Some((pic, version)) => Ok((pic, Some(version))),
+            None => Err(never_saved(automation)),
+        },
+        ReadsFrom::Draft => Ok((Picture::read(conn, automation)?, None)),
     }
+}
+
+/// **The picture of an automation's newest saved version, and its number** — `None` where nobody has
+/// saved it.
+fn newest_saved(conn: &Connection, automation: &Automation) -> Result<Option<(Picture, i64)>> {
+    let Some(saved) = read::automation_version_latest(conn, automation.id)? else { return Ok(None) };
+    Ok(Some((Picture::saved(&saved)?, saved.version)))
+}
+
+/// The refusal of an automation nobody has saved, where its saved version is asked for ([`definition`]):
+/// the launch's own, with that one reason, so a screen says it in its reader's language.
+fn never_saved(automation: &Automation) -> Error {
+    not_ready("launch", &automation.name, &[Unmet::NeverSaved])
 }
 
 /// [`launch`], with what a trigger or a test run handed over along with it ([`HandedAtLaunch`]),
@@ -2594,7 +2639,8 @@ pub struct TriggersDue {
 
 /// **Which triggers are due at `now`** — the first part of each, asked of every enabled trigger of an
 /// automation that may be started by one ([`read::automations_triggered`]), which leaves out a stopped
-/// one. One held back ([`TriggerHeld`]) — by its role stopped, by a failure it filed still open, by the runs
+/// one. One nobody has saved starts no run, so the triggers of it that are due are passed over. One held
+/// back ([`TriggerHeld`]) — by its role stopped, by a failure it filed still open, by the runs
 /// under way in its role's seats or in the whole automation, or by its condition — is not due: it would
 /// decide not to start, so a look need not open a write to hear it say so. One with a script — one that asks
 /// whether to start, or one that writes what it says — is put in `ask` rather than `due`: its program may run
@@ -2611,7 +2657,8 @@ pub fn triggers_due(conn: &Connection, now: Timestamp) -> Result<TriggersDue> {
     for automation in read::automations_triggered(conn)? {
         let enabled = || automation.triggers.iter().filter(|t| t.enabled);
         let (seats, paused) = if enabled().any(|t| t.next_at <= now) {
-            let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+            // One nobody has saved starts no run, so it is passed over rather than stopping the look.
+            let Some((pic, _)) = newest_saved(conn, &automation)? else { continue };
             let total = run_total(conn, automation.id, &pic)?;
             (Some((seats_of(conn, automation.id, &pic)?, total, pic)), launch_paused(conn, automation.id)?)
         } else {
@@ -3941,6 +3988,9 @@ pub struct TriggerDraft {
 /// writing it would be, and its condition counted now. It reads the store and writes nothing; the
 /// trying itself ([`TriggerDraft::try_now`]) runs its programs and so is left to the caller, outside
 /// any read or write.
+///
+/// Whether it files a task is read off the newest saved version, and off the draft of an automation
+/// nobody has saved: trying starts no run, so it is not refused as a launch is ([`definition`]).
 pub fn trigger_draft(
     conn: &Connection,
     automation_id: i64,
@@ -3949,7 +3999,10 @@ pub fn trigger_draft(
     let trigger = crate::ops::automation::trigger_drafted(conn, automation_id, new)?;
     let automation = read::automation(conn, automation_id)?.ok_or_else(|| not_found("automation", automation_id))?;
     let condition = condition_count(conn, automation.project_id, &trigger)?;
-    let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
+    let pic = match newest_saved(conn, &automation)? {
+        Some((pic, _)) => pic,
+        None => Picture::read(conn, &automation)?,
+    };
     let files_a_task = files_a_task(&pic, &trigger);
     Ok(TriggerDraft { trigger, condition, files_a_task })
 }
@@ -4532,12 +4585,16 @@ fn files_a_task(pic: &Picture, trigger: &crate::model::AutomationTrigger) -> boo
 /// A step of a person's own that hands on the task, standing where the run starts, is how those tests
 /// draw a run coming to hold one without a built-in in front of it; the refusals of such a picture are
 /// asked in this module's tests.
+///
+/// The draft is saved first ([`crate::ops::test_support::save_draft`]): a launch reads only a saved
+/// version.
 #[cfg(test)]
 pub(crate) fn launch_past_the_task_checks(
     tx: &WriteTx<'_>,
     automation_id: i64,
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
+    crate::ops::test_support::save_draft(tx, automation_id);
     launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, Sit::Free, false, |unmet| {
         !past_the_task_checks(unmet)
     })?
@@ -4569,6 +4626,7 @@ pub(crate) fn launch_past_the_setting_checks(
     automation_id: i64,
     by: &Launcher<'_>,
 ) -> Result<AutomationRun> {
+    crate::ops::test_support::save_draft(tx, automation_id);
     launch_asking(tx, automation_id, by, &HandedAtLaunch::default(), ReadsFrom::Saved, Sit::Free, false, |unmet| {
         !past_the_task_checks(unmet)
             && !matches!(
@@ -4637,6 +4695,11 @@ fn launch_asking(
             "automation '{}' is stopped — start it again (`automation stop {} --off`) before launching it",
             automation.name, automation.id
         )));
+    }
+    // Refused as the check refuses it, before its version is read: it is not saved either, so one that
+    // never was is not sent to save it.
+    if automation.export_only {
+        return Err(not_ready("launch", &automation.name, &[Unmet::ExportOnly]));
     }
     let (pic, version) = definition(tx.conn(), &automation, reads)?;
     let unmet: Vec<Unmet> = check_picture(tx.conn(), &automation, &pic, by.startable, by.models, by.default_agent)?
@@ -5571,9 +5634,9 @@ pub(crate) fn roles_started(conn: &Connection, run_id: i64) -> Result<Vec<i64>> 
 }
 
 /// **The order a run takes its tasks in** — that of the one role it takes tasks of ([`roles_started`]), as
-/// the automation's newest saved version holds the role, and the draft's where nothing is saved yet or the
-/// version does not hold it. Read as it stands each time it is asked, as [`seats`] are, so an order
-/// saved while a run goes on takes hold from its next task.
+/// the automation's newest saved version holds the role, and the role as it stands where no version holds
+/// it — nothing saved, for a test run of an automation nobody has saved. Read as it stands each time it is
+/// asked, as [`seats`] are, so an order saved while a run goes on takes hold from its next task.
 ///
 /// `None` where the run takes tasks of no role, or of more than one — a run launched before runs were
 /// given a role — which then lists them as the setting of the built-in that takes a task asks.
@@ -5581,9 +5644,10 @@ pub(crate) fn take_order(conn: &Connection, run: &AutomationRun) -> Result<Optio
     let roles = roles_started(conn, run.id)?;
     let &[role_id] = roles.as_slice() else { return Ok(None) };
     let Some(automation) = read::automation(conn, run.automation_id)? else { return Ok(None) };
-    let (pic, _) = definition(conn, &automation, ReadsFrom::Saved)?;
-    if let Some(role) = pic.roles().iter().find(|role| role.id == role_id) {
-        return Ok(Some(role.take_order));
+    let saved = newest_saved(conn, &automation)?
+        .and_then(|(pic, _)| pic.roles().iter().find(|role| role.id == role_id).map(|role| role.take_order));
+    if let Some(order) = saved {
+        return Ok(Some(order));
     }
     Ok(read::automation_role(conn, role_id)?.map(|role| role.take_order))
 }
@@ -5978,6 +6042,9 @@ mod tests {
     use crate::ops::test_support::{
         exit_id, give_to, mk_exit, mk_in, mk_out, mk_placed, mk_project, only_step, start_at, with_tx,
     };
+    // A launch reads only a saved version, so the tests here launch what they have drawn by saving it
+    // first. A test of what a launch reads names `super::launch` itself.
+    use crate::ops::test_support::{fire_saved as fire, launch_saved as launch, start_saved as start};
 
     fn mk_automation(tx: &WriteTx<'_>, name: &str) -> Automation {
         let project = mk_project(tx, "amenbo");
@@ -7532,7 +7599,7 @@ mod tests {
             );
             automation::placement_move(tx, placement.id, crate::ops::Position::Top).expect("move");
             assert!(automation::unsaved(tx.conn(), automation.id).expect("unsaved"));
-            launch(tx, automation.id, &here(&claude())).expect("launch");
+            super::launch(tx, automation.id, &here(&claude())).expect("launch");
             let second = automation::save(tx, automation.id, None).expect("saved while a run goes on");
             assert_eq!(second.version, 2);
             assert!(!automation::unsaved(tx.conn(), automation.id).expect("unsaved"));
@@ -7578,7 +7645,7 @@ mod tests {
                     "needs a title",
                 ),
             ] {
-                let err = launch_handing(tx, automation.id, &by, &handed, ReadsFrom::Saved).expect_err(why);
+                let err = crate::ops::test_support::launch_handing_saved(tx, automation.id, &by, &handed).expect_err(why);
                 assert!(err.to_string().contains(why), "{err}");
             }
             assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty());
@@ -7589,7 +7656,7 @@ mod tests {
                 notes: Some("what to do".into()),
                 ..Default::default()
             };
-            let run = launch_handing(tx, automation.id, &here(&startable), &handed, ReadsFrom::Saved).expect("launch");
+            let run = crate::ops::test_support::launch_handing_saved(tx, automation.id, &here(&startable), &handed).expect("launch");
             assert_eq!(run.handed_task, None, "nothing is kept on the run");
             let filed = tasks(tx);
             assert_eq!(filed.len(), 1, "{filed:?}");
@@ -7757,7 +7824,8 @@ mod tests {
     }
 
     /// **A launch reads the saved definition and a test run the draft** — checked and copied alike. Before
-    /// anybody saves, a launch has only the draft to read, and its copy records no version.
+    /// anybody saves, a launch has no version to read and is refused, with no run made; a test run reads
+    /// the draft all the same.
     #[test]
     fn a_launch_reads_the_saved_definition_and_a_test_run_the_draft() {
         with_tx(|tx| {
@@ -7773,22 +7841,60 @@ mod tests {
                     .expect("the placement's copy");
                 (copy.agent, copy.automation_version)
             };
-            let unsaved = launch(tx, automation.id, &here(&startable)).expect("launch");
+            let refused = super::launch(tx, automation.id, &here(&startable)).expect_err("never saved");
+            let Error::NotReady(msg) = &refused else { panic!("{refused:?}") };
+            assert_eq!(msg.code(), Some(ErrorCode::NotReadyAutomation));
+            assert_eq!(
+                msg.parts().iter().map(|part| part.code()).collect::<Vec<_>>(),
+                vec![Some(ErrorCode::NotReadyAutomationNeverSaved)],
+                "{refused}"
+            );
+            assert!(refused.to_string().contains("has never been saved"), "{refused}");
+            assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty(), "no run made");
+            let unsaved =
+                launch_handing(tx, automation.id, &here(&startable), &HandedAtLaunch::default(), ReadsFrom::Draft)
+                    .expect("a test run of what was never saved");
             assert_eq!(copied(tx, &unsaved), ("claude".to_string(), None), "never saved: the draft");
 
             automation::save(tx, automation.id, None).expect("save");
             automation::placement_step_set(tx, placement.id, step.id, "codex", None).expect("choose another");
-            let saved = launch(tx, automation.id, &here(&startable)).expect("launch");
+            let saved = super::launch(tx, automation.id, &here(&startable)).expect("launch");
             assert_eq!(copied(tx, &saved), ("claude".to_string(), Some(1)), "the saved version");
             let tried = launch_handing(tx, automation.id, &here(&startable), &HandedAtLaunch::default(), ReadsFrom::Draft)
                 .expect("test run");
             assert_eq!(copied(tx, &tried), ("codex".to_string(), None), "the draft");
 
             start_at(tx, automation.id, placement.id);
-            launch(tx, automation.id, &here(&startable)).expect("the saved version still starts by taking a task");
+            super::launch(tx, automation.id, &here(&startable)).expect("the saved version still starts by taking a task");
             let err = launch_handing(tx, automation.id, &here(&startable), &HandedAtLaunch::default(), ReadsFrom::Draft)
                 .expect_err("the draft starts where no task is taken");
             assert!(matches!(err, Error::NotReady(_)), "{err:?}");
+        });
+    }
+
+    /// **The launch check names an automation nobody has saved**, ahead of what the draft lacks, and the
+    /// save's own check does not: the save is what mends it. Saved, the reason goes.
+    #[test]
+    fn the_launch_check_names_an_automation_never_saved_and_the_save_check_does_not() {
+        with_tx(|tx| {
+            let (automation, _, _) = launchable(tx);
+            let asked =
+                |tx: &WriteTx<'_>| check_launch(tx.conn(), automation.id, None, nothing_asked(), None).expect("check");
+            assert_eq!(asked(tx), vec![Unmet::NeverSaved]);
+            assert_eq!(check(tx.conn(), automation.id, None, nothing_asked(), None).expect("check"), Vec::new());
+            assert_eq!(Unmet::NeverSaved.placement(), None);
+            assert_eq!(Unmet::NeverSaved.code(), ErrorCode::NotReadyAutomationNeverSaved);
+
+            automation::save(tx, automation.id, None).expect("save");
+            assert_eq!(asked(tx), Vec::new(), "saved");
+
+            // One that lacks more is told all of it, saving first.
+            let empty = mk_automation(tx, "空のまま");
+            let lacks = check(tx.conn(), empty.id, None, nothing_asked(), None).expect("check");
+            assert!(!lacks.is_empty() && !lacks.contains(&Unmet::NeverSaved), "{lacks:?}");
+            let mut told = vec![Unmet::NeverSaved];
+            told.extend(lacks);
+            assert_eq!(check_launch(tx.conn(), empty.id, None, nothing_asked(), None).expect("check"), told);
         });
     }
 
@@ -8452,7 +8558,7 @@ mod tests {
             let startable = claude();
             launch(tx, automation.id, &here(&startable)).expect("the first reaches the most");
             let untitled = HandedAtLaunch { notes: Some("what to do".into()), ..Default::default() };
-            let err = launch_handing(tx, automation.id, &here(&startable), &untitled, ReadsFrom::Saved)
+            let err = crate::ops::test_support::launch_handing_saved(tx, automation.id, &here(&startable), &untitled)
                 .expect_err("handed a task with no title");
             assert!(err.to_string().contains("needs a title"), "{err}");
         });
@@ -9210,6 +9316,27 @@ mod tests {
         automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers.remove(0)
     }
 
+    /// **A trigger of an automation nobody has saved is passed over, and starts no run**: the look does
+    /// not stop on it, and a fire is refused as a launch is. Saved, the same trigger is due.
+    #[test]
+    fn a_trigger_of_an_automation_never_saved_is_passed_over() {
+        with_tx(|tx| {
+            let (automation, role, _) = with_a_role_started_by_a_trigger(tx);
+            let trigger = aimed_at(tx, &automation, role.id);
+            let due = trigger.next_at;
+            let startable = claude();
+
+            let found = triggers_due(tx.conn(), due).expect("the look goes on");
+            assert!(found.due.is_empty() && found.ask.is_empty(), "{found:?}");
+            let refused = super::fire(tx, trigger.id, &here(&startable), due, None, None, &[]).expect_err("never saved");
+            assert!(refused.to_string().contains("has never been saved"), "{refused}");
+            assert!(read::automation_run_ids(tx.conn(), automation.id).expect("runs").is_empty(), "no run made");
+
+            automation::save(tx, automation.id, None).expect("save");
+            assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![trigger.id]);
+        });
+    }
+
     /// **A trigger aimed at a role started by a trigger starts a run in its seat with no task filed**
     /// (`AMB-D-1127`) — from where the role's round starts, moving the trigger on as a task filed would.
     /// While the role's one seat is taken it starts none, and none while the role is stopped taking tasks
@@ -9225,6 +9352,7 @@ mod tests {
             let startable = claude();
             let by = here(&startable);
 
+            crate::ops::test_support::save_draft(tx, automation.id);
             assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![trigger.id]);
             let run = fire(tx, trigger.id, &by, due, None, None, &[]).expect("fire").expect("a run");
             assert_eq!(run.role_id, Some(role.id), "in a seat of the role it is aimed at");

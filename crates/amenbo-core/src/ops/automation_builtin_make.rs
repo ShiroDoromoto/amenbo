@@ -848,8 +848,8 @@ mod tests {
     use crate::ops::automation_builtin::action;
     use crate::ops::automation_report::Next;
     use crate::ops::automation_run::{
-        check, launch_handing, launch_past_the_setting_checks as launch, nothing_asked, HandedAtLaunch,
-        Launcher, ReadsFrom, Unmet,
+        check, launch_past_the_setting_checks as launch, nothing_asked, HandedAtLaunch, Launcher, ReadsFrom,
+        Unmet,
     };
     use crate::ops::automation_step::Opened;
     use crate::lifecycle::name::{TASK_ASSIGNED, TASK_CREATED, TASK_DONE, TASK_STATUS_CHANGED};
@@ -1665,7 +1665,7 @@ mod tests {
             workspace_open: Some(true),
             by: Some(ActorKind::Human),
         };
-        launch_handing(tx, automation.id, &by, handed, ReadsFrom::Saved)
+        crate::ops::test_support::launch_handing_saved(tx, automation.id, &by, handed)
     }
 
     fn titled(title: &str) -> HandedAtLaunch {
@@ -1732,7 +1732,8 @@ mod tests {
     #[test]
     fn a_trigger_files_its_task_and_starts_a_run_once_due() {
         use crate::model::TriggerWhen;
-        use crate::ops::automation_run::{fire, triggers_due, TriggersDue};
+        use crate::ops::automation_run::{triggers_due, TriggersDue};
+        use crate::ops::test_support::fire_saved as fire;
         use crate::time::Timestamp;
         with_tx(|tx| {
             let (automation, take, _) = entry(tx);
@@ -1757,6 +1758,7 @@ mod tests {
             let under_way = |tx: &WriteTx<'_>| read::automation_run_ids_under_way(tx.conn(), automation.id).expect("read");
 
             let early = Timestamp(due.0 - chrono::Duration::seconds(1));
+            crate::ops::test_support::save_draft(tx, automation.id);
             assert_eq!(triggers_due(tx.conn(), early).expect("ask"), TriggersDue { next_at: Some(due), ..TriggersDue::default() });
             assert!(fire(tx, trigger_id, &by, early, None, None, &[]).expect("fire").is_none(), "not before it is due");
             assert!(under_way(tx).is_empty(), "and no run");
@@ -1794,7 +1796,8 @@ mod tests {
     #[test]
     fn a_trigger_that_cannot_file_its_task_keeps_why() {
         use crate::model::TriggerWhen;
-        use crate::ops::automation_run::{fire, refused};
+        use crate::ops::automation_run::refused;
+        use crate::ops::test_support::fire_saved as fire;
         with_tx(|tx| {
             let (automation, _, _) = entry(tx);
             let trigger = automation::NewTrigger {
@@ -1855,7 +1858,8 @@ mod tests {
     #[test]
     fn each_trigger_of_an_automation_is_asked_on_its_own() {
         use crate::model::{AutomationTrigger, TriggerWhen};
-        use crate::ops::automation_run::{fire, triggers_due};
+        use crate::ops::automation_run::triggers_due;
+        use crate::ops::test_support::fire_saved as fire;
         with_tx(|tx| {
             let (automation, _, _) = entry(tx);
             crate::ops::test_support::room_for(tx, automation.id, 4);
@@ -1883,6 +1887,7 @@ mod tests {
             assert_eq!(kept, vec![first.clone(), second.clone()], "both, in their order");
 
             let due = first.next_at;
+            crate::ops::test_support::save_draft(tx, automation.id);
             assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![first.id, second.id], "both due at once");
             let claude = ["claude".to_string()];
             let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
@@ -1914,7 +1919,7 @@ mod tests {
     #[test]
     fn a_trigger_files_its_task_under_its_role_and_names_itself_in_the_timeline() {
         use crate::model::TriggerWhen;
-        use crate::ops::automation_run::fire;
+        use crate::ops::test_support::fire_saved as fire;
         use crate::time::Timestamp;
         with_tx(|tx| {
             let (automation, take, project) = entry(tx);
@@ -1981,7 +1986,8 @@ mod tests {
     #[test]
     fn an_idle_trigger_files_once_no_run_is_under_way() {
         use crate::model::TriggerWhen;
-        use crate::ops::automation_run::{fire, triggers_due};
+        use crate::ops::automation_run::triggers_due;
+        use crate::ops::test_support::fire_saved as fire;
         use crate::ops::automation_stop::{stop, Ending};
         use crate::time::Timestamp;
         with_tx(|tx| {
@@ -2039,7 +2045,8 @@ mod tests {
     #[test]
     fn a_trigger_with_a_condition_files_only_while_few_enough_tasks_match() {
         use crate::model::{TriggerCondition, TriggerWhen};
-        use crate::ops::automation_run::{fire, triggers_due};
+        use crate::ops::automation_run::triggers_due;
+        use crate::ops::test_support::fire_saved as fire;
         use crate::ops::test_support::mk_task_in;
         with_tx(|tx| {
             let (automation, _, project) = entry(tx);
@@ -2063,6 +2070,7 @@ mod tests {
             let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
 
             let waiting = mk_task_in(tx, "待っている", Some(project));
+            crate::ops::test_support::save_draft(tx, automation.id);
             assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![trigger_id], "one todo, fewer than two");
             assert!(fire(tx, trigger_id, &by, due, None, None, &[]).expect("fire").is_some(), "so it files one");
             let then = TriggerWhen::Tasks.after(due);
@@ -2152,6 +2160,7 @@ mod tests {
             let written = set.triggers[0].clone();
             let kept = read::automation_trigger(tx.conn(), written.id).expect("read").expect("there");
             assert_eq!(kept.condition.as_ref().and_then(|c| c.role_id), Some(research.id), "read back as written");
+            crate::ops::test_support::save_draft(tx, automation.id);
             let counted = |tx: &WriteTx<'_>| trigger_check(tx.conn(), written.id, kept.next_at).expect("check").condition;
             assert_eq!(counted(tx), Some(ConditionCount { matched: 1, below: 2 }), "only 調査係's todo");
 
@@ -2227,6 +2236,7 @@ mod tests {
             };
             let written = automation::trigger_set(tx, automation.id, Some(trigger)).expect("trigger").triggers[0].clone();
             mk_task_in(tx, "待っている", Some(project));
+            crate::ops::test_support::save_draft(tx, automation.id);
             let check = |tx: &WriteTx<'_>, at: Timestamp| trigger_check(tx.conn(), written.id, at).expect("check");
             let early = Timestamp(written.next_at.0 - chrono::Duration::seconds(1));
 
@@ -2358,7 +2368,8 @@ mod tests {
     #[test]
     fn a_trigger_with_a_script_files_only_once_its_script_said_yes() {
         use crate::model::{StepScript, TriggerWhen};
-        use crate::ops::automation_run::{fire, triggers_due, ScriptWrote, ScriptsSaid, TriggerScripts};
+        use crate::ops::automation_run::{triggers_due, ScriptWrote, ScriptsSaid, TriggerScripts};
+        use crate::ops::test_support::fire_saved as fire;
         with_tx(|tx| {
             let (automation, _, _) = entry(tx);
             // Named by its full path, as a program is written; it is never run here.
@@ -2387,6 +2398,7 @@ mod tests {
 
             let script = StepScript { program: judge, args: Vec::new(), timeout_minutes: 5 };
             let scripts = TriggerScripts { ask: Some(script.clone()), write: None };
+            crate::ops::test_support::save_draft(tx, automation.id);
             let found = triggers_due(tx.conn(), due).expect("ask");
             assert!(found.due.is_empty(), "not fired before its script is asked");
             assert_eq!(found.ask, vec![(trigger_id, scripts.clone())]);
@@ -2412,7 +2424,8 @@ mod tests {
     #[test]
     fn a_trigger_files_the_task_its_file_says() {
         use crate::model::TriggerWhen;
-        use crate::ops::automation_run::{fire, read_trigger_file, refused, triggers_due, TriggerFileSaid};
+        use crate::ops::automation_run::{read_trigger_file, refused, triggers_due, TriggerFileSaid};
+        use crate::ops::test_support::fire_saved as fire;
         with_tx(|tx| {
             let (automation, take, _) = entry(tx);
             let dir = std::env::temp_dir().join(format!("amenbo-trigger-file-{}", std::process::id()));
@@ -2437,6 +2450,7 @@ mod tests {
             let claude = ["claude".to_string()];
             let by = Launcher { default_agent: None, startable: Some(&claude), models: nothing_asked(), workspace_open: None, by: None };
 
+            crate::ops::test_support::save_draft(tx, automation.id);
             assert_eq!(triggers_due(tx.conn(), due).expect("ask").due, vec![trigger_id], "nothing to run first");
             let missing = read_trigger_file(&kept(tx).task).expect_err("no file there to read");
             assert!(missing.to_string().contains(&format!("the file '{shown}' is not there")), "{missing}");
@@ -2478,7 +2492,8 @@ mod tests {
     #[test]
     fn a_trigger_files_the_task_its_program_wrote() {
         use crate::model::{StepScript, TriggerWhen};
-        use crate::ops::automation_run::{fire, triggers_due, ScriptWrote, ScriptsSaid, TriggerScripts};
+        use crate::ops::automation_run::{triggers_due, ScriptWrote, ScriptsSaid, TriggerScripts};
+        use crate::ops::test_support::fire_saved as fire;
         with_tx(|tx| {
             let (automation, take, _) = entry(tx);
             // Named by its full path, as a program is written; it is never run here.
@@ -2511,6 +2526,7 @@ mod tests {
                 timeout_minutes: crate::model::DEFAULT_SCRIPT_TIMEOUT_MINUTES,
             };
             let scripts = TriggerScripts { ask: None, write: Some(script.clone()) };
+            crate::ops::test_support::save_draft(tx, automation.id);
             let found = triggers_due(tx.conn(), due).expect("ask");
             assert!(found.due.is_empty(), "not fired before its program has written the task");
             assert_eq!(found.ask, vec![(trigger_id, scripts.clone())]);
@@ -2536,7 +2552,8 @@ mod tests {
     #[test]
     fn a_stopped_automations_trigger_files_nothing() {
         use crate::model::TriggerWhen;
-        use crate::ops::automation_run::{fire, triggers_due, TriggersDue};
+        use crate::ops::automation_run::{triggers_due, TriggersDue};
+        use crate::ops::test_support::fire_saved as fire;
         with_tx(|tx| {
             let (automation, _, _) = entry(tx);
             let trigger = automation::NewTrigger {
@@ -2579,7 +2596,7 @@ mod tests {
     #[test]
     fn a_trigger_refused_at_launch_files_nothing() {
         use crate::model::TriggerWhen;
-        use crate::ops::automation_run::fire;
+        use crate::ops::test_support::fire_saved as fire;
         with_tx(|tx| {
             let (automation, _, project) = entry(tx);
             let trigger = automation::NewTrigger {

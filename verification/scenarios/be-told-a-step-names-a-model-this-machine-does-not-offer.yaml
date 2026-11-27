@@ -82,6 +82,8 @@ steps_gui:
     with:
       target: auto
 
+  - { type: action, domain: automation, op: save, with: { target: auto } }
+
   # Ready, with a model named that is not here. Nobody has asked the agent anything, so the step is
   # not judged on it — and this half of the road is the one that says the silence is kept as silence.
   - type: assert

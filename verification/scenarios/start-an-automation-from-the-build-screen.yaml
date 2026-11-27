@@ -58,6 +58,19 @@ steps_gui:
     with:
       target: auto
 
+  # Never saved, it cannot be started: a run stands on a saved version. That reason is about the
+  # automation as a whole, so its line names no box and is not a press.
+  - type: assert
+    domain: automation
+    op: launch
+    with:
+      ready: false
+      reason: never_saved
+      pressable: false
+      present: true
+
+  - { type: action, domain: automation, op: save, with: { target: auto } }
+
   # Nothing is in the way of this definition, which is what makes the refusal below about the window.
   - type: assert
     domain: automation

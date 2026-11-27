@@ -4243,7 +4243,8 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "wire-add", required: &["from_port", "to_port"], refs: &["target", "to"], strings: &["exit", "from_port", "to_port"], binds: true },
     //
     // Saving it as its next version (`automation save`), which is what a start reads: one never saved
-    // is refused at the start (`conflict`). The save asks the launch check, and is refused
+    // is refused at the start (`conflict` at a terminal), and on screen its start press is held shut
+    // with `never_saved` listed under the head. The save asks the launch check, and is refused
     // (`not_ready_automation`) while anything is unmet — bar the agents and models this machine has,
     // which only a start and a run picking up the newer version ask. On screen it is the build
     // screen's Save.
@@ -4267,7 +4268,7 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "start", required: &[], refs: &["target"], strings: &[], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "pause", required: &[], refs: &["target"], strings: &[], binds: false },
     // A run paused at the end of an action goes on from the copy it has. One paused before its next
-    // task is copied down afresh from the automation as it now stands and starts at that copy's
+    // task is copied down afresh from the automation's newest saved version and starts at that copy's
     // entry — checked first as a launch is, and refused (`not_ready_automation`) with the run left
     // paused when the check finds anything unmet.
     OpSpec { kind: Kind::Action, domain: Domain::Automation, op: "resume", required: &[], refs: &["target"], strings: &[], binds: false },
@@ -4639,9 +4640,10 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `pressable` is whether that reason's line is a press. A reason about one box is: pressing it
     // picks that box out on the picture and opens its panel, or opens the action the gap is inside
-    // (`press-reason`). The two about the
-    // automation as a whole name no box and are a line to read, which is what `pressable: false`
-    // reads — a build that drew every line as a press would open nothing for those two.
+    // (`press-reason`). The ones about the
+    // automation as a whole (`never_saved` among them) name no box and are a line to read, which is
+    // what `pressable: false` reads — a build that drew every line as a press would open nothing for
+    // those.
     OpSpec { kind: Kind::Assert, domain: Domain::Automation, op: "launch", required: &["ready"], refs: &[], strings: &["reason", "box", "at"], binds: false },
     // Pressing one of those reasons, named by its code and by the box it names (`box`), the way
     // `launch` reads it. What the press does is the picture's: that box is picked out and its panel
@@ -5044,6 +5046,9 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // An action saved before it is placed, so the placement stands on that version rather than on
     // rows anyone can still write — a world a road about moving placements between versions starts in.
     (Domain::Automation, "action-save"),
+    // An automation saved once it is built, so a road that starts it from a screen with no build
+    // screen open (the list's row) has a saved version to start: a start reads nothing else.
+    (Domain::Automation, "save"),
     (Domain::Automation, "place-add"),
     (Domain::Automation, "agent-set"),
     (Domain::Automation, "exit-add"),

@@ -1809,7 +1809,8 @@ pub fn automation_detail(id: i64) -> Result<Option<AutomationDetailDto>, CmdErro
 }
 
 /// Whether this automation could be started, and what is in the way — core's launch check, named for
-/// a screen ([`amenbo_core::ops::automation_run::check`]).
+/// a screen ([`amenbo_core::ops::automation_run::check_launch`]). One nobody has saved is not, and says
+/// so first: a run stands on a saved version.
 ///
 /// `agents` is what this machine can start ([`crate::wake::wake_choices`]). `null` is "the face could
 /// not ask", and then no step is judged on its agent: a reason drawn off an answer nobody got would
@@ -1832,7 +1833,7 @@ pub fn automation_launch_check(
     let _perf = amenbo_core::perf::Timer::start("automation_launch_check");
     let store = open_store_read()?;
     let default_agent = store.automation_default_agent(id)?;
-    let unmet = automation_run::check(
+    let unmet = automation_run::check_launch(
         store.read_model().conn(),
         id,
         agents.as_deref(),

@@ -84,6 +84,8 @@ steps_gui:
       setting: 秒
       value: "5"
 
+  - { type: action, domain: automation, op: save, with: { target: auto } }
+
   - type: action
     domain: automation
     op: start

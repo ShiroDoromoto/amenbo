@@ -66,6 +66,8 @@ steps_gui:
     with:
       target: auto
 
+  - { type: action, domain: automation, op: save, with: { target: auto } }
+
   # No task to take: the launch opens and no run does, and the screen goes to the launch's pane.
   - type: action
     domain: automation

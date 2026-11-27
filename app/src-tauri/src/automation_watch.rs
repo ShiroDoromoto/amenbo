@@ -16,7 +16,8 @@
 //! **What one look costs.** One read of the runs that are running, and one read per run of what it is
 //! waiting for — a few more where a step is under way, for whether it is a wait whose time has come
 //! (`AMB-D-983`) and for the task it may have taken. A look is a handful of small reads on tables with
-//! tens of rows in them, through a connection the thread keeps.
+//! tens of rows in them, through a connection the thread keeps. The one read that walks tasks — whether
+//! a launch has one to take — is used again while nothing has been committed since (`launches_to_top_up`).
 //!
 //! **No run waits for a task here, and no automation as a whole either** (`AMB-D-1126`). A run whose
 //! built-in would wait ends where it comes to it, and its seat is free again; the launch standing fills
@@ -76,6 +77,12 @@ const WHILE_WAITING: Duration = Duration::from_secs(30);
 /// without this its programs would be started again on every look.
 const SCRIPT_ASKED_AGAIN: Duration = Duration::from_secs(60 * amenbo_core::model::MIN_TRIGGER_EVERY_MINUTES as u64);
 
+/// How long the launches to top up are answered from what was found last rather than asked again,
+/// while nothing has been committed to the store since ([`KeptTopUps`]). Not for ever, because a task
+/// comes to be takeable with nothing written at all — its start date or time arriving (`AMB-D-1082`) —
+/// and it is this long at most before a launch is given a run for it.
+const TOP_UPS_KEPT: Duration = Duration::from_secs(30);
+
 /// **Where a trigger's scripts stand**, by trigger: running on a thread of their own, or answered and
 /// left until they may be asked again.
 enum Asking {
@@ -119,10 +126,14 @@ pub(crate) fn wake() {
 /// read opens it again.
 ///
 /// In a static rather than on the thread's stack, because a swap asks for it from another thread.
+///
+/// **`opened` counts the connections opened**, so a `PRAGMA data_version` read through one is never
+/// compared with one read through another (`AMB-D-1220`): the two mean nothing side by side.
 struct Held {
     store: Option<amenbo_core::Store>,
     path: PathBuf,
     file: (u64, u64),
+    opened: u64,
 }
 
 static HELD: OnceLock<Mutex<Held>> = OnceLock::new();
@@ -132,7 +143,7 @@ fn held() -> std::sync::MutexGuard<'static, Held> {
         // Registered where the connection is born, as the change-detection one is: Windows refuses to
         // replace a file anybody still has open, and core asks before it swaps.
         amenbo_core::swap_lock::release_before_swap(release_for_swap);
-        Mutex::new(Held { store: None, path: PathBuf::new(), file: (0, 0) })
+        Mutex::new(Held { store: None, path: PathBuf::new(), file: (0, 0), opened: 0 })
     });
     // A read that panicked left nothing half-done here worth refusing over: the connection is opened
     // again where it is in doubt.
@@ -178,6 +189,13 @@ pub(crate) fn release_orphaned() {
 fn read<T>(
     f: impl FnOnce(&amenbo_core::Store) -> Result<T, crate::error::CmdError>,
 ) -> Result<T, crate::error::CmdError> {
+    read_counted(|store, _| f(store))
+}
+
+/// [`read`], handing `f` which connection it reads through as well ([`Held`]'s `opened`).
+fn read_counted<T>(
+    f: impl FnOnce(&amenbo_core::Store, u64) -> Result<T, crate::error::CmdError>,
+) -> Result<T, crate::error::CmdError> {
     crate::migrate::gate()?;
     let paths = amenbo_core::config::Paths::resolve()?;
     let mut held = held();
@@ -190,10 +208,11 @@ fn read<T>(
         None => {
             held.path = paths.store_file.clone();
             held.file = file;
+            held.opened = held.opened.wrapping_add(1);
             amenbo_core::Store::open_read_at(paths)?
         }
     };
-    let out = f(&store);
+    let out = f(&store, held.opened);
     if out.is_ok() {
         held.store = Some(store);
     }
@@ -215,10 +234,13 @@ pub fn watch(app: tauri::AppHandle) {
     let mut asking = HashMap::new();
     // The launches whose next run was refused, and when each is asked again. A pace, like `held`.
     let mut refused = HashMap::new();
+    // What the last look found of the launches to top up. Thrown away by a nudge too, so a press in the
+    // app is answered from the store as it is now.
+    let mut top_ups = None;
     loop {
         // A failure is not fatal and not a reason to stop looking: the store may be mid-swap, or a
         // run may have been deleted between the two reads. The next look is a second away.
-        let pause = match advance(&app, &mut held, &mut asking, &mut refused) {
+        let pause = match advance(&app, &mut held, &mut asking, &mut refused, &mut top_ups) {
             Ok(pause) => pause,
             Err(e) => {
                 log::warn!("the automation watch could not look: {e}");
@@ -228,6 +250,7 @@ pub fn watch(app: tauri::AppHandle) {
         if sleep(pause) {
             held.clear();
             refused.clear();
+            top_ups = None;
         }
     }
 }
@@ -292,9 +315,10 @@ fn advance(
     held: &mut HashMap<i64, Instant>,
     asking: &mut HashMap<i64, Asking>,
     refused: &mut HashMap<i64, Instant>,
+    top_ups: &mut Option<KeptTopUps>,
 ) -> Result<Duration, crate::error::CmdError> {
     let (mut starts, next_trigger) = triggers_to_fire(held, asking)?;
-    starts.extend(launches_to_top_up(refused)?);
+    starts.extend(launches_to_top_up(refused, top_ups)?);
     start_in_turn(starts, held, refused);
     let running =
         read(|store| Ok(amenbo_core::store_engine::read::automation_run_ids_running(store.read_model().conn())?))?;
@@ -544,24 +568,71 @@ fn ask(trigger: i64, scripts: TriggerScripts) -> Asking {
 /// **The running launches to give one more run on this look, where a role has a free seat and a task to
 /// take** ([`amenbo_core::ops::automation_run::top_ups_due`]), each with since when that task has waited.
 ///
-/// Asked every look, as the runs are. A launch stays running with no run going until a person stops
-/// it, so what is asked is kept small: a few small reads, and for each role with a free seat the tasks
-/// it would take read oldest made first until none can have waited longer. A launch whose run was
-/// refused is in `refused` and is not asked again until `WHILE_WAITING` has passed, rather than every
-/// second with a warning each time.
-fn launches_to_top_up(refused: &mut HashMap<i64, Instant>) -> Result<Vec<Start>, crate::error::CmdError> {
+/// Looked at every look, as the runs are. A launch stays running with no run going until a person stops
+/// it, and what is asked of it — for each role with a free seat, the tasks it would take read oldest
+/// made first until none can have waited longer — is the dearest read a look makes. So **it is asked
+/// again only where the answer may have moved** ([`KeptTopUps`]): something committed to the store
+/// since, a launch running or refused that was not, or `TOP_UPS_KEPT` gone by. Otherwise the last
+/// answer is used again as it was, its `since` with it (`AMB-D-1145`).
+///
+/// A launch whose run was refused is in `refused` and is not asked again until `WHILE_WAITING` has
+/// passed, rather than every second with a warning each time.
+fn launches_to_top_up(
+    refused: &mut HashMap<i64, Instant>,
+    kept: &mut Option<KeptTopUps>,
+) -> Result<Vec<Start>, crate::error::CmdError> {
     let now = Instant::now();
     refused.retain(|_, due| now < *due);
-    let due = read(|store| {
+    let due = read_counted(|store, connection| {
         let conn = store.read_model().conn();
-        let running: Vec<i64> = amenbo_core::store_engine::read::automation_launches_running(conn)?
+        // Read before the launches: a commit landing between the two leaves an answer kept under the
+        // older number, which the next look then finds moved and asks again.
+        let data_version = amenbo_core::store_engine::read::data_version(conn)?;
+        let launches: Vec<i64> = amenbo_core::store_engine::read::automation_launches_running(conn)?
             .into_iter()
             .map(|launch| launch.id)
             .filter(|launch| !refused.contains_key(launch))
             .collect();
-        Ok(amenbo_core::ops::automation_run::top_ups_due(conn, &running)?)
+        let asked = TopUpsAsked { connection, data_version, launches };
+        if let Some(due) = still_kept(kept.as_ref(), &asked, now) {
+            return Ok(due.to_vec());
+        }
+        let due = amenbo_core::ops::automation_run::top_ups_due(conn, &asked.launches)?;
+        *kept = Some(KeptTopUps { asked, until: now + TOP_UPS_KEPT, due: due.clone() });
+        Ok(due)
     })?;
     Ok(due.into_iter().map(|due| Start { since: due.since, what: Starting::TopUp(due.launch_id) }).collect())
+}
+
+/// **What the launches to top up were asked under**: through which connection, at which
+/// `PRAGMA data_version` read through it, and for which launches.
+///
+/// `data_version` moves on any other connection's commit and never on this one's (`AMB-D-1220`), and
+/// this one only reads — so a top-up this thread starts, written through a connection of its own, moves
+/// it as a write from a terminal does.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct TopUpsAsked {
+    connection: u64,
+    data_version: i64,
+    launches: Vec<i64>,
+}
+
+/// **The launches to top up as the last look found them** ([`launches_to_top_up`]), kept until
+/// `until`, an empty answer the same as any — a launch with no task to take is what most looks find.
+struct KeptTopUps {
+    asked: TopUpsAsked,
+    until: Instant,
+    due: Vec<amenbo_core::ops::automation_run::TopUpDue>,
+}
+
+/// **The kept answer, where it was asked under the same as now and is not out of date** — `None` where
+/// it must be asked again.
+fn still_kept<'a>(
+    kept: Option<&'a KeptTopUps>,
+    asked: &TopUpsAsked,
+    now: Instant,
+) -> Option<&'a [amenbo_core::ops::automation_run::TopUpDue]> {
+    kept.filter(|kept| kept.asked == *asked && now < kept.until).map(|kept| kept.due.as_slice())
 }
 
 /// **End the terminal of a run that is over** — completed, failed or canceled — and forget what was
@@ -626,4 +697,66 @@ fn give_up(run: i64) -> Result<(), crate::error::CmdError> {
         )?;
     log::info!("run {} had nowhere left to go and was stopped", ended.run.id);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use amenbo_core::ops::automation_run::TopUpDue;
+
+    fn asked(connection: u64, data_version: i64, launches: &[i64]) -> TopUpsAsked {
+        TopUpsAsked { connection, data_version, launches: launches.to_vec() }
+    }
+
+    fn kept(asked: TopUpsAsked, until: Instant, due: Vec<TopUpDue>) -> KeptTopUps {
+        KeptTopUps { asked, until, due }
+    }
+
+    #[test]
+    fn the_same_ask_inside_its_time_is_answered_from_what_was_kept() {
+        let now = Instant::now();
+        let due = vec![TopUpDue { launch_id: 7, since: amenbo_core::time::Timestamp::now() }];
+        let k = kept(asked(1, 5, &[7, 8]), now + TOP_UPS_KEPT, due.clone());
+        assert_eq!(still_kept(Some(&k), &asked(1, 5, &[7, 8]), now), Some(due.as_slice()));
+    }
+
+    #[test]
+    fn an_empty_answer_is_kept_like_any() {
+        let now = Instant::now();
+        let k = kept(asked(1, 5, &[7]), now + TOP_UPS_KEPT, Vec::new());
+        assert_eq!(still_kept(Some(&k), &asked(1, 5, &[7]), now), Some(&[][..]));
+    }
+
+    #[test]
+    fn a_commit_since_asks_again() {
+        let now = Instant::now();
+        let k = kept(asked(1, 5, &[7]), now + TOP_UPS_KEPT, Vec::new());
+        assert_eq!(still_kept(Some(&k), &asked(1, 6, &[7]), now), None);
+    }
+
+    #[test]
+    fn another_connection_asks_again_even_at_the_same_number() {
+        let now = Instant::now();
+        let k = kept(asked(1, 5, &[7]), now + TOP_UPS_KEPT, Vec::new());
+        assert_eq!(still_kept(Some(&k), &asked(2, 5, &[7]), now), None);
+    }
+
+    #[test]
+    fn other_launches_ask_again() {
+        let now = Instant::now();
+        let k = kept(asked(1, 5, &[7, 8]), now + TOP_UPS_KEPT, Vec::new());
+        assert_eq!(still_kept(Some(&k), &asked(1, 5, &[7]), now), None);
+    }
+
+    #[test]
+    fn an_answer_out_of_date_asks_again_with_nothing_committed() {
+        let now = Instant::now();
+        let k = kept(asked(1, 5, &[7]), now + TOP_UPS_KEPT, Vec::new());
+        assert_eq!(still_kept(Some(&k), &asked(1, 5, &[7]), now + TOP_UPS_KEPT), None);
+    }
+
+    #[test]
+    fn nothing_kept_asks() {
+        assert_eq!(still_kept(None, &asked(1, 5, &[7]), Instant::now()), None);
+    }
 }

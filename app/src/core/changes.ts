@@ -16,7 +16,7 @@
 //     re-read.
 //   - an unknown dataset (a new table with nowhere to fold into)
 //   - too much has piled up (a full re-read is cheaper than draining the pages)
-// The caller (`watchStore`) reads this and falls to `reconcile("gap")`.
+// The caller (`readStoreChange` in `snapshot`) reads this and falls to `reconcile("gap")`.
 import { inTauri } from "./snapshot";
 import { invoke } from "./ipc";
 

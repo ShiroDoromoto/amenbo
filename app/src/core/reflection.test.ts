@@ -1,5 +1,5 @@
 // Deciding what counts as an external change — firing only for those, and thinning out our own writes — is
-// `watchStore`'s job (`sig === lastSignature`), and it depends on the Tauri host, so it is out of unit scope; the
+// `readStoreChange`'s job (`sig === lastSignature`), and it depends on the Tauri host, so it is out of unit scope; the
 // bridge below is called after that gate. What is pinned here is the pub-sub contract and nothing else.
 import { describe, it, expect } from "vitest";
 

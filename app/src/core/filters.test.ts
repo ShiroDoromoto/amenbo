@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decisionFilterDimensions, filterDimensions, parseRefQuery, passesFilters, selectionKey } from "./filters";
+import { decisionFilterDimensions, filterDimensions, parseRefQuery, passesFilters, selectionFilter, selectionKey } from "./filters";
 import type { DecisionDto } from "../bindings/bindings";
 import type { TaskCard } from "../mock/types";
 
@@ -90,6 +90,30 @@ describe("filters: an axis narrows to the set chosen on it (AMB-D-655)", () => {
   it("narrows nothing on an axis whose chosen values have all gone stale", () => {
     // A value left behind by a deleted dimension value must not empty the board.
     expect(passesFilters(todo, dims, { status: ["retired"] })).toBe(true);
+  });
+});
+
+describe("selectionFilter: the selection as core's filter expression", () => {
+  const dim = {
+    id: 1, name: "カテゴリー", notes: "", cardinality: "single" as const, role: "none" as const, ordered: false,
+    showOnCard: false, required: false,
+    sequential: false, appliesTo: "both" as const,
+    values: [{ id: 11, name: "バグ", closed: false }, { id: 12, name: "機能", closed: false }],
+  };
+  const dims = filterDimensions([dim], {});
+
+  it("writes each narrowing axis once, its values joined by a comma", () => {
+    expect(selectionFilter(dims, { assignee: ["me", "none"], priority: ["high"] }))
+      .toBe("assignee:none,me priority:high");
+  });
+
+  it("writes a classification axis once per value, and leaves out the axes it is told to skip", () => {
+    expect(selectionFilter(dims, { status: ["done"], "dim:1": ["11", "12"] }, ["status"]))
+      .toBe("dim:1=11 dim:1=12");
+  });
+
+  it("drops values that name no option, and is empty when nothing narrows", () => {
+    expect(selectionFilter(dims, { "dim:1": ["99"], status: [] })).toBe("");
   });
 });
 

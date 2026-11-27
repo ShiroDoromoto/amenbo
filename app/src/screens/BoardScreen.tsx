@@ -8,7 +8,7 @@ import {
 } from "../components/atoms";
 import { isClosed, STATUS_COLUMNS } from "../core/status";
 import { Pager, usePager } from "../components/Pager";
-import { useTaskPage, useTaskSearchIds } from "../core/reads";
+import { useTaskPage, useTaskSearchIds, type TaskPage } from "../core/reads";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { useSingleFlightPerKey } from "../core/singleFlight";
 import { FirstLoop } from "../components/FirstLoop";
@@ -26,7 +26,7 @@ import { TimelineView } from "./TimelineView";
 import { errText, statusLabel, t, tf, viewLabel } from "../core/i18n";
 import type { ComposeTarget } from "../shell/AppShell";
 import {
-  filterDimensions, parseRefQuery, passesFilters, selectionKey,
+  filterDimensions, parseRefQuery, passesFilters, selectionFilter, selectionKey,
   type DimAssignments, type FilterSelection,
 } from "../core/filters";
 import { fetchProjectDimensionAssignments } from "../core/mutations";
@@ -45,8 +45,10 @@ const VIEWS: View[] = ["list", "board", "calendar", "timeline"];
 // stays empty). A fresh `{}` per render would re-render every card for nothing.
 const NO_ASSIGNMENTS: DimAssignments = {};
 
-// Order of the closed column: most recently completed first (RFC3339 sorts lexicographically = chronologically).
-// Tasks with no completion time sink to the bottom — which is where the rejected land, having none by definition.
+// Order of the closed column when it is drawn from the whole page (`closedFromWhole`, while a search narrows the
+// board): most recently completed first (RFC3339 sorts lexicographically = chronologically). Tasks with no
+// completion time sink to the bottom — which is where the rejected land, having none by definition. The capped
+// read gets the same order from core (`closedFromHeads`).
 function byCompletedDesc(a: TaskCard, b: TaskCard): number {
   const av = a.completedAt ?? "";
   const bv = b.completedAt ?? "";
@@ -71,6 +73,27 @@ const movableStatus = (t: TaskCard) => !t.draft;
 // carries only the most recent N and sends the rest to the list view through the "see closed in list" affordance.
 const DONE_COLUMN_CAP = 20;
 
+// What the closed column draws: its first cards, and the two counts its head carries — the done as the
+// column's count, and the rejected beside it (`AMB-D-397`).
+type ClosedColumn = { cards: TaskCard[]; done: number; rejected: number };
+const NO_PAGE: TaskPage = { tasks: [], totalMatched: 0 };
+
+// The column from the two heads core read: the done newest first, then the rejected below them.
+function closedFromHeads(done: TaskPage, rejected: TaskPage): ClosedColumn {
+  return {
+    cards: [...done.tasks, ...rejected.tasks].slice(0, DONE_COLUMN_CAP),
+    done: done.totalMatched,
+    rejected: rejected.totalMatched,
+  };
+}
+
+// The column from a page that holds the closed whole (while a search is narrowing the board).
+function closedFromWhole(tasks: TaskCard[]): ClosedColumn {
+  const closed = tasks.filter((t) => isClosed(t.status)).sort(byCompletedDesc);
+  const rejected = closed.filter((t) => t.status === "rejected").length;
+  return { cards: closed.slice(0, DONE_COLUMN_CAP), done: closed.length - rejected, rejected };
+}
+
 // The other columns must not grow the DOM without bound either: the same cap-plus-affordance the closed column
 // uses keeps every task from being mounted (see BOARD_COLUMN_CAP in ./boardLayout).
 
@@ -79,7 +102,8 @@ const DONE_COLUMN_CAP = 20;
  * view is the project's default (`project.view`, persisted from the settings screen); switching views from the
  * header is transient and does not rewrite `project.view`. Tasks are fetched one project at a time via task_page
  * (the whole store is never held), and the filter chips are layered on client-side (bounded by the size of a
- * project).
+ * project). The board's closed column is the exception: it is read as its counts and its newest
+ * `DONE_COLUMN_CAP` cards, with the filter chips written into core's query.
  *
  * **The search is core's, not the client's.** A task ref (`AMB-T-<n>`, the bare `#<n>` / `T-<n>`, or — this
  * box reading the task side — a number alone) pins that task without asking core at all. The pin is added
@@ -193,7 +217,15 @@ export function BoardScreen({
   // match, it does not stand in for it. `null` back from the hook is "nothing was asked", which is not the
   // same as "nothing matched".
   const { hits, error: searchError } = useTaskSearchIds(projectId, rawQ);
-  const { tasks: all } = useTaskPage({ projectId, sort: "order" });
+  // What has closed grows without bound, so the board does not read it whole: the closed column is read
+  // as its counts and its first DONE_COLUMN_CAP cards (`closed`, below), and the page here holds only
+  // what is open. Everywhere else the page is the project whole — the list, calendar and timeline draw the
+  // closed too, and a search narrows by ids that only the whole page can be matched against.
+  const closedCapped = view === "board" && rawQ === "";
+  const { tasks: all } = useTaskPage({ projectId, sort: "order", filter: closedCapped ? "done:false" : "" });
+  // Whether the project holds anything at all, asked of the store rather than of `all`, which on the
+  // board is the open part only.
+  const { totalMatched: projectSize } = useTaskPage({ projectId, limit: 0 });
   // The board is the task side, so an axis narrowed to decisions is not one of its axes at all
   // (`AMB-D-789`) — filtered once, here, and everything downstream follows: the filter chips, the
   // cards' own chips and the assignments read for them.
@@ -250,6 +282,23 @@ export function BoardScreen({
       Number(t.id) === pinnedId || hits === null || hits.has(Number(t.id)),
     )
     .sort((a, b) => Number(Number(b.id) === pinnedId) - Number(Number(a.id) === pinnedId));
+  // The closed column's head, read by core with the filter chips written into the query, so the counts
+  // it draws are the narrowed ones without the rest being read. Done and rejected are read apart: the
+  // rejected have no completion time, and `-completed` would put them first rather than below the done.
+  // The status axis is answered here instead of in the query — a column that status narrows away is
+  // simply empty.
+  const closedFilter = selectionFilter(dims, sel, ["status"]);
+  const closedLimit = closedCapped ? DONE_COLUMN_CAP : 0;
+  const doneHead = useTaskPage({
+    projectId, filter: `status:done ${closedFilter}`.trim(), sort: "-completed", limit: closedLimit,
+  });
+  const rejectedHead = useTaskPage({
+    projectId, filter: `status:rejected ${closedFilter}`.trim(), sort: "order", limit: closedLimit,
+  });
+  const wanted = (st: Status) => !sel.status?.length || sel.status.includes(st);
+  const closed: ClosedColumn = closedCapped
+    ? closedFromHeads(wanted("done") ? doneHead : NO_PAGE, wanted("rejected") ? rejectedHead : NO_PAGE)
+    : closedFromWhole(tasks);
   // view=list (the flat list) is windowed by the pager, which resets to the first page when the view or filters
   // change. usePager is a Hook, so it has to sit above the early-return guard below: if the open project is
   // deleted and `project` flips defined→undefined, the number of Hooks must stay the same (Rules of Hooks — a
@@ -266,19 +315,19 @@ export function BoardScreen({
   //
   // `firstLoop`: a project with nothing in it yet gets the first loop instead of empty columns
   // (`AMB-D-414`) — the one push that puts something on it. The question is about the project, not about
-  // the view: `all` is the project's whole page, narrowed by nothing at all, so an empty `all` is the
-  // project itself being empty, where an empty `tasks` may only be the search or the filter chips biting.
+  // the view: `projectSize` counts the project narrowed by nothing at all, so a zero is the project itself
+  // being empty, where an empty `tasks` may only be the search or the filter chips biting.
   // Outside Tauri there is no folder to open a terminal in, so the browser iteration keeps its bare columns.
   const notice = pickBoardNotice({
     linkFolder: inTauri() && folders.answered && folders.live.length === 0,
-    firstLoop: all.length === 0 && inTauri(),
+    firstLoop: projectSize === 0 && inTauri(),
     agentHookWiring: wiring.waiting.length > 0,
   });
   // Whether the columns give way to the notice, rather than standing under it. They give way only where
   // there is nothing in them and the notice is the whole of what there is to do here — empty columns under
   // a "link a folder" warning is a screen saying nothing twice. A project that holds tasks keeps its board
   // whatever is standing above it: a notice is a band over the work, not a replacement for it.
-  const bareBoard = all.length === 0 && (notice === "linkFolder" || notice === "firstLoop");
+  const bareBoard = projectSize === 0 && (notice === "linkFolder" || notice === "firstLoop");
   if (!project) return <div className="placeholder">{t("board.notFound")}</div>;
   // One value on one axis, turned on or off. Selecting is what composes the question (`AMB-D-655`), so
   // nothing here is exclusive: the values pile up within the axis, and an axis left empty narrows nothing.
@@ -425,18 +474,17 @@ export function BoardScreen({
             // fifth one (`AMB-D-397`). It keeps the "done" heading and count — a rejected task is not an
             // achievement and must not be counted as one — and says how many rejected ride along beside it.
             const isDone = st === "done";
-            const colTasks = tasks.filter((t) => (isDone ? isClosed(t.status) : t.status === st));
-            // Newest completion first; a rejection has no completion time at all, so the rejected sink
-            // below the done — which is the order to read them in anyway. The todo column is read top-down as
-            // "what to take next", so there what is ready rises above what is still waiting on a premise.
-            const sorted = isDone
-              ? colTasks.slice().sort(byCompletedDesc)
+            // Newest completion first, the rejected below the done (`closed`, above). The todo column is read
+            // top-down as "what to take next", so there what is ready rises above what is still waiting on a
+            // premise.
+            const colTasks = isDone ? [] : tasks.filter((t) => t.status === st);
+            const cards = isDone
+              ? closed.cards
               : st === "todo" ? colTasks.slice().sort(byReadyFirst) : colTasks;
-            const cards = isDone ? sorted.slice(0, DONE_COLUMN_CAP) : sorted;
-            const rejected = isDone ? colTasks.filter((t) => t.status === "rejected").length : 0;
-            const overflow = isDone && sorted.length > DONE_COLUMN_CAP
+            const closedTotal = closed.done + closed.rejected;
+            const overflow = isDone && closedTotal > DONE_COLUMN_CAP
               ? {
-                  total: sorted.length,
+                  total: closedTotal,
                   // The list narrowed to what this column holds — both terminals, selected together, as
                   // the CLI would ask for them (`status:done,rejected`).
                   onSeeAll: () => { setSel((s) => ({ ...s, status: ["done", "rejected"] })); setView("list"); },
@@ -448,8 +496,8 @@ export function BoardScreen({
                 name={statusLabel(st)}
                 cards={cards}
                 chips={chips}
-                count={isDone ? colTasks.length - rejected : undefined}
-                note={rejected > 0 ? tf("board.rejectedCount", { n: rejected }) : undefined}
+                count={isDone ? closed.done : undefined}
+                note={isDone && closed.rejected > 0 ? tf("board.rejectedCount", { n: closed.rejected }) : undefined}
                 overflow={overflow}
                 selectedTaskId={selectedTaskId}
                 onSelectTask={onSelectTask}

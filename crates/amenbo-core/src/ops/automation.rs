@@ -2622,6 +2622,45 @@ pub(crate) fn let_finished_rounds_go_past(tx: &WriteTx<'_>, run: &crate::model::
     Ok(gone)
 }
 
+/// How many of the copies of the steps a build before v154 took ([`let_copies_go`]) one run's end lets
+/// go of at most.
+pub const COPIES_LET_GO_PER_RUN_END: usize = 2_500;
+
+/// **Let the copies of the steps a build before v154 took go from the store, a few at a time** — the
+/// oldest [`COPIES_LET_GO_PER_RUN_END`] rows of `automation_run_def`, of every run. Answers how many
+/// went. Asked as each run ends (`ops::automation_stop`'s `ended`), after the runs past what a role keeps
+/// and the detail of finished runs, and sharing the room they left in the feed.
+///
+/// - **Nothing reads a copy any more** (`AMB-D-1219`): a run reads the saved version it points at, and a
+///   run log written before v154 keeps its own copies under `defs/`. So every copy may go — a run under
+///   way's and an unseen failure's too — and none is written to the run log on the way.
+/// - **A few at a time, never all in one write**: a store carries hundreds of thousands of them. Each
+///   deletion is one row of the change feed, so a cap of its own holds each write to a share of the window
+///   the feed keeps ([`crate::store_engine::CHANGE_FEED_RETAIN`]) — the room a reader is given
+///   ([`FeedRoom`]) grows with the whole store, these rows among it.
+/// - **Not in a migration** (`AMB-D-1166`): there, every row would go to the change feed at once.
+/// - **It stops before the change feed outruns a reader the feed waits for**, as [`let_old_runs_go`]
+///   does ([`FeedRoom`]), between one row and the next. What is left goes the next time.
+pub(crate) fn let_copies_go(tx: &WriteTx<'_>) -> Result<usize> {
+    let_copies_go_past(tx, COPIES_LET_GO_PER_RUN_END, crate::store_engine::CHANGE_FEED_RETAIN / 2)
+}
+
+/// [`let_copies_go`], letting at most `limit` go and stopping once the feed is `room` rows past the
+/// reader the feed waits for ([`FeedRoom`]).
+pub(crate) fn let_copies_go_past(tx: &WriteTx<'_>, limit: usize, room: i64) -> Result<usize> {
+    let conn = tx.conn();
+    let feed = FeedRoom::of(conn, room)?;
+    let mut gone = 0;
+    for id in read::automation_run_def_ids_oldest(conn, limit)? {
+        if feed.is_full(tx) {
+            break;
+        }
+        tx.delete_record("automation_run_def", id)?;
+        gone += 1;
+    }
+    Ok(gone)
+}
+
 /// **Let the detail of one finished run's rounds go**, each round whose file the run log holds, oldest
 /// first, until the feed is full ([`FeedRoom::is_full`]). Answers how many rounds went.
 ///

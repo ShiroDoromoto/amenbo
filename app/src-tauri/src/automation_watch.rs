@@ -122,7 +122,7 @@ pub(crate) fn wake() {
 struct Held {
     store: Option<amenbo_core::Store>,
     path: PathBuf,
-    file: (u128, u64),
+    file: (u64, u64),
 }
 
 static HELD: OnceLock<Mutex<Held>> = OnceLock::new();

@@ -401,7 +401,13 @@ pub fn done(
     if let Some(task_id) = owed_to.filter(|_| !withheld) {
         crate::ops::comment::add_report_comment(tx, task_id, ActorKind::Ai, report, ended.id)?;
     }
-    if !took_a_task {
+    // Only the step that went looking for a task can have found none. A stretch whose task was deleted
+    // under the run reads as about nothing too, yet the steps that walked it did, and the run log is
+    // written per stretch.
+    let took_one_here = produced
+        .iter()
+        .any(|v| v.direction == AutomationPortDirection::Out && v.kind == AutomationPortKind::TaskTake);
+    if !took_a_task && !took_one_here && super::automation_step::takes_a_fresh_task(&def, &exits)? {
         no_task_after_all(tx, &ended, stretch.as_ref(), now)?;
     }
     whats_next(tx, &def, &ended, taken.id)
@@ -1235,6 +1241,60 @@ mod tests {
                 read::automation_run_task(tx.conn(), stretch_id).expect("read").is_none(),
                 "a stretch of a run about nothing is not kept",
             );
+        });
+    }
+
+    /// **A step after the round's task was deleted stays on the stretch.** The stretch's task reads
+    /// empty once the task is gone, but the step did not go looking for one, so it is still part of the
+    /// round, and the run log written per stretch carries it.
+    #[test]
+    fn a_step_after_its_task_was_deleted_stays_on_the_stretch() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let first = opened(tx, &run, &p.first);
+            let task = a_task(tx, p.project, "消される");
+            take(tx, first.run_step.id, task.id).expect("take");
+            done(tx, first.run_step.id, way_out(tx, first.run_step.id, "found"), "Looked at it.")
+                .expect("first done");
+            let stretch_id = first.run_step.run_task_id.expect("a stretch was opened");
+
+            crate::ops::task::delete(tx, task.id, ActorKind::Human).expect("a person deletes the task");
+
+            let second = opened(tx, &run, &p.second);
+            assert_eq!(second.run_step.run_task_id, Some(stretch_id), "the second step opens on the stretch");
+            done(tx, second.run_step.id, None, "Fixed it.").expect("second done");
+
+            let ended = read::automation_run_step(tx.conn(), second.run_step.id)
+                .expect("read")
+                .expect("the execution");
+            assert_eq!(ended.run_task_id, Some(stretch_id), "it did not go looking for a task");
+            assert!(
+                read::automation_run_task(tx.conn(), stretch_id).expect("read").is_some(),
+                "the stretch is kept",
+            );
+        });
+    }
+
+    /// **The step that took the task stays on its stretch even if the task is deleted before it ends.**
+    #[test]
+    fn a_step_whose_taken_task_was_deleted_under_it_stays_on_the_stretch() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let run = a_run(tx, &p.automation);
+            let step = opened(tx, &run, &p.first);
+            let stretch_id = step.run_step.run_task_id.expect("a stretch was opened");
+            let task = a_task(tx, p.project, "消される");
+            take(tx, step.run_step.id, task.id).expect("take");
+            crate::ops::task::delete(tx, task.id, ActorKind::Human).expect("a person deletes the task");
+
+            done(tx, step.run_step.id, way_out(tx, step.run_step.id, "found"), "Looked at it.")
+                .expect("done");
+
+            let ended = read::automation_run_step(tx.conn(), step.run_step.id)
+                .expect("read")
+                .expect("the execution");
+            assert_eq!(ended.run_task_id, Some(stretch_id), "it found one, and took it");
         });
     }
 

@@ -7705,6 +7705,18 @@ pub fn automation_launches_not_ended(conn: &Connection) -> Result<Vec<crate::mod
     automation_rows(conn, L.table, &pred, &[Sort::by(L.id)], super::hydrate::automation_launch_row)
 }
 
+/// **The launches that have ended with no run left**, across every automation, oldest first — the ones
+/// the let-go of old runs deletes once their runs have gone (`ops::automation`'s `let_old_runs_go_past`).
+pub fn automation_launch_ids_ended_without_runs(conn: &Connection) -> Result<Vec<i64>> {
+    use crate::model::AutomationLaunchStatus as S;
+    const L: col::automation_launch::Cols = col::automation_launch::ALL;
+    const R: col::automation_run::Cols = col::automation_run::ALL;
+    // A NULL in the set would make `NOT IN` match nothing, so the runs launched by none are left out.
+    let with_runs = IdSet::of(R.table, R.launch_id).filter(Pred::is_not_null(R.launch_id));
+    let pred = Pred::eq(L.status, S::Ended.as_str()).and(!Pred::is_in_any(L.id, [with_runs]));
+    select_ids(conn, L.id, Some(&pred))
+}
+
 /// **Every run one launch started**, oldest first, whatever it stands at now.
 pub fn automation_launch_run_ids(conn: &Connection, launch_id: i64) -> Result<Vec<i64>> {
     const R: col::automation_run::Cols = col::automation_run::ALL;
@@ -7889,7 +7901,7 @@ pub fn automation_run_ids_in_project(conn: &Connection, project_id: i64) -> Resu
     select_ids(conn, R.id, Some(&Pred::eq(R.project_id, project_id)))
 }
 
-/// The copies of the steps a build before v153 took for one run, which hold the run until they go
+/// The copies of the steps a build before v154 took for one run, which hold the run until they go
 /// with it (`ops::automation::run_delete`).
 pub fn automation_run_def_ids(conn: &Connection, run_id: i64) -> Result<Vec<i64>> {
     const D: col::automation_run_def::Cols = col::automation_run_def::ALL;

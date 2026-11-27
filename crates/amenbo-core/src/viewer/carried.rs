@@ -87,12 +87,13 @@ pub struct Carried {
     /// nowhere else, and setup knows it only because it is the one that placed the Worker (`AMB-D-1167`).
     /// Zero is "neither has happened yet", not "an old Worker".
     pub build: i64,
-    /// Whether the server holds run rows a build before the Worker's build 4 placed there: `None` is
+    /// Whether the server holds an automation's working rows an older build placed there: `None` is
     /// "not read yet", `Some(false)` "none", `Some(true)` "some".
     ///
     /// **It is read once per server.** Pointing the store at a server it has not sent to throws this row
     /// away ([`forget()`]), so the next server is read anew and no other one is ever read twice. Pressing
-    /// setup again at the same server keeps it.
+    /// setup again at the same server keeps it. The v153 migration sent it back to `None` once, when an
+    /// automation's launch rows joined those looked for.
     pub strays: Option<bool>,
     /// Where in the server's ordering a reading of it that stopped part way got to — the `seq` to read on
     /// from, in decimal — so the next turn goes on from there. `None` is "from the beginning".

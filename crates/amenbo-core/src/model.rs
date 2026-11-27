@@ -3036,7 +3036,7 @@ pub struct AutomationRun {
     /// `AMB-D-1219`) — the newest saved one at launch, moved on only where the run takes up a newer one
     /// before its next round ([`crate::ops::automation_run::take_up_newer`]). A saved version is never
     /// written on, so the run reads it as it was launched on. `None` on a run that had ended before runs
-    /// pointed at a version (v153).
+    /// pointed at a version (v154).
     #[serde(default)]
     pub automation_version: Option<i64>,
     /// **Amenbo's own default agent as it stood for this run**
@@ -3054,7 +3054,7 @@ pub struct AutomationRun {
 /// ([`AutomationRunStep::def_key`]) and what a step as a run reads it is found by
 /// ([`AutomationRunDef::key`]).
 ///
-/// Each part is `None` only on a step execution carried in from a copy that named none (v153).
+/// Each part is `None` only on a step execution carried in from a copy that named none (v154).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct RunDefKey {
     #[serde(default)]
@@ -3070,7 +3070,7 @@ pub struct RunDefKey {
 /// run of one version reads the same. The three JSON fields hold what has no field of its own — the ways
 /// out and each one's outputs, the step's inputs, and the settings' answers — and are read back whole.
 ///
-/// A build before v153 wrote one of these down per step for every run (`automation_run_def`). Those rows
+/// A build before v154 wrote one of these down per step for every run (`automation_run_def`). Those rows
 /// carry their own `id` and `run_id`, and a run log written then keeps them under their id
 /// ([`crate::run_log`]); one assembled now belongs to no row, and its `id` is 0.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -3107,7 +3107,7 @@ pub struct AutomationRunDef {
     #[serde(default)]
     pub builtin_version: Option<i64>,
     /// The saved version of the automation this step was read from ([`AutomationVersion::version`]).
-    /// `None` only on a copy a build before v153 took from a draft.
+    /// `None` only on a copy a build before v154 took from a draft.
     #[serde(default)]
     pub automation_version: Option<i64>,
     /// The script the step was, or `None` for one that was not ([`StepScript`]).

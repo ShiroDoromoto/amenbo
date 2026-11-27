@@ -1653,7 +1653,7 @@ pub const STEPS: &[Step] = &[
         //
         // **The index on `automation_run_step.run_def_id` is made only where the column is there**: a
         // store raised from before the automation tables were created has them created in the live shape,
-        // which v153 took the column out of (`let_go_of_what_ended_runs_kept`).
+        // which v154 took the column out of (`let_go_of_what_ended_runs_kept`).
         apply: Apply::Custom(let_go_of_what_ended_runs_kept),
     },
     Step {
@@ -1692,6 +1692,15 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 153,
+        name: "read the server for leftover automation rows again, now that an automation's launch rows are among them",
+        // **Sent back to "not read yet".** A device that read its server, or deleted what it found, did
+        // so while only `automation_run*` keys counted, so the launch rows an older build placed are still
+        // there; reading again from the beginning finds and deletes them. What the day spent and where the
+        // sending stands stay as they are. No task is touched.
+        apply: Apply::Custom(read_the_server_again_for_leftover_launches),
+    },
+    Step {
+        to: 154,
         name: "point each run at the saved version it reads, and each step execution at the step of that version it ran, in place of the run's copies",
         // `AMB-D-1219`: a run copies nothing of the definition any more, and reads the saved version it
         // names as it stands. The copies already written stay where they are (`automation_run_def`) —
@@ -1701,7 +1710,7 @@ pub const STEPS: &[Step] = &[
     },
 ];
 
-/// v153: `automation_run.automation_version` and `default_agent`, and `automation_run_step`'s
+/// v154: `automation_run.automation_version` and `default_agent`, and `automation_run_step`'s
 /// `automation_version`, `placement_id` and `step_id` in place of `run_def_id` (`AMB-D-1219`).
 ///
 /// - **Each step execution names what its copy names**: the copy's saved version, its placement and its
@@ -1718,7 +1727,7 @@ pub const STEPS: &[Step] = &[
 ///   is there**, v68's guard and v80's: a store raised from before the automation tables were created has
 ///   them created in the live shape.
 fn point_each_run_at_its_version(ctx: &Ctx<'_>) -> Result<()> {
-    /// The declaration `automation_run_step.run_def_id` carries up to v152, and the one it is loosened
+    /// The declaration `automation_run_step.run_def_id` carries up to v153, and the one it is loosened
     /// to before it goes — frozen text, like every step's.
     const BY_COPY: &str = "run_def_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_run_def(id) ON DELETE RESTRICT \
                            ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED";
@@ -1774,9 +1783,10 @@ fn point_each_run_at_its_version(ctx: &Ctx<'_>) -> Result<()> {
             .optional()?
             .flatten();
         let Some(version) = version else { continue };
-        if !chosen.contains_key(&(automation_id, version)) {
-            let held = chosen_in(tx, automation_id, version)?;
-            chosen.insert((automation_id, version), held);
+        if let std::collections::btree_map::Entry::Vacant(e) =
+            chosen.entry((automation_id, version))
+        {
+            e.insert(chosen_in(tx, automation_id, version)?);
         }
         let mut copied: Vec<(Option<i64>, Option<i64>, String)> = Vec::new();
         {
@@ -1829,7 +1839,7 @@ fn point_each_run_at_its_version(ctx: &Ctx<'_>) -> Result<()> {
     Ok(())
 }
 
-/// What one saved version chose for its steps itself, read for v153: the (placement, step) pairs a
+/// What one saved version chose for its steps itself, read for v154: the (placement, step) pairs a
 /// choice names an agent for, and the agents its roles fall back to.
 #[derive(Default)]
 struct Chosen {
@@ -1860,7 +1870,7 @@ fn chosen_in(tx: &Transaction<'_>, automation_id: i64, version: i64) -> Result<C
     })
 }
 
-/// **The default agent a run's last copy was read with**, as v153 recovers it from `copied` — that copy's
+/// **The default agent a run's last copy was read with**, as v154 recovers it from `copied` — that copy's
 /// (placement, step, agent), the agent never empty. A step chose its agent where it was placed, else
 /// fell back to its role's, else to Amenbo's own default; the copy kept only the agent it ended up
 /// with. So the steps no choice of their own names ([`Chosen::steps`]) are what fell back, and of those,
@@ -1934,7 +1944,7 @@ const LET_GO_OF_WHAT_ENDED_RUNS_KEPT: &str =
 /// v148: let go of what an ended run kept of its steps ([`LET_GO_OF_WHAT_ENDED_RUNS_KEPT`]), with an
 /// index on `automation_run_step.run_def_id` for the step's length where that column is there. A store
 /// raised from before the automation tables were created has `automation_run_step` created in the live
-/// shape, with no such column since v153, and nothing in it to let go.
+/// shape, with no such column since v154, and nothing in it to let go.
 fn let_go_of_what_ended_runs_kept(ctx: &Ctx<'_>) -> Result<()> {
     let tx = ctx.tx;
     let by_def = column_names(tx, "automation_run_step")?.iter().any(|c| c == "run_def_id");
@@ -2693,6 +2703,24 @@ fn let_the_carrier_count_what_the_reread_would_cost(ctx: &Ctx<'_>) -> Result<()>
     }
     tx.execute_batch(
         "UPDATE viewer_send SET strays_read_to = NULL WHERE strays = 1 AND strays_gone_at IS NULL;",
+    )?;
+    Ok(())
+}
+
+/// v153: what `viewer_send` knows of the server's leftover automation rows goes back to "not read yet",
+/// "not deleted yet", "none counted" and "not held back", so the next turn reads the server again.
+///
+/// **What was read before counted only `automation_run*` keys.** `automation_launch*` joined the rows the
+/// Viewer is not sent afterwards, and a server read once — whether it held run rows or not — is never
+/// read again, so the launch rows an older build placed would stay there for good.
+///
+/// `spent`, `spent_on`, `placed`, `seq`, `version` and `build` are left as they are: what the day spent
+/// and where the sending stands do not change. The table is this device's alone, so the change feed is
+/// not written.
+fn read_the_server_again_for_leftover_launches(ctx: &Ctx<'_>) -> Result<()> {
+    ctx.tx.execute_batch(
+        "UPDATE viewer_send SET strays = NULL, strays_read_to = NULL, strays_gone_at = NULL, \
+         keys_kept = NULL, reread_waits = NULL;",
     )?;
     Ok(())
 }
@@ -16883,6 +16911,62 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// v153: a carrier that read its server for leftover rows, or finished deleting them, reads it again
+    /// from the beginning, and what the day spent and where the sending stands stay as they are.
+    #[test]
+    fn a_carrier_left_before_v153_reads_the_server_again_for_leftover_launches() {
+        // (strays, strays_read_to, strays_gone_at, keys_kept, reread_waits) as v152 left them
+        type Case = (Option<i64>, Option<&'static str>, Option<&'static str>, Option<i64>, Option<i64>);
+        type Left = (Option<i64>, Option<String>, Option<String>, Option<i64>, Option<i64>);
+        let cases: [Case; 4] = [
+            (Some(1), None, Some("2026-11-16T00:00:00Z"), Some(0), Some(0)),
+            (Some(0), None, None, None, None),
+            (Some(1), Some("40"), None, Some(2000), Some(1)),
+            (None, Some("40"), None, None, None),
+        ];
+        for (at, (strays, read_to, gone_at, kept, waits)) in cases.into_iter().enumerate() {
+            let dir = scratch(&format!("viewer-strays-again-{at}"));
+            let engine = store_at(&dir, 152);
+            engine
+                .conn()
+                .execute(
+                    "INSERT INTO viewer_send (id, version, placed, seq, spent, spent_on, build, strays, \
+                     strays_read_to, strays_gone_at, keys_kept, reread_waits)
+                     VALUES (1, 12, 12, 41, 300, '2026-11-27', 4, ?1, ?2, ?3, ?4, ?5)",
+                    rusqlite::params![strays, read_to, gone_at, kept, waits],
+                )
+                .unwrap();
+
+            run(&engine, &dir, steps_through(153), &mut crate::progress::ignore).unwrap();
+
+            assert_eq!(engine.format_version().unwrap(), 153);
+            let row: Left = engine
+                .conn()
+                .query_row(
+                    "SELECT strays, strays_read_to, strays_gone_at, keys_kept, reread_waits \
+                     FROM viewer_send WHERE id = 1",
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+                )
+                .unwrap();
+            assert_eq!(row, (None, None, None, None, None), "case {at}: the server is read again");
+            let kept: (i64, i64, i64, i64, Option<String>, i64) = engine
+                .conn()
+                .query_row(
+                    "SELECT version, placed, seq, spent, spent_on, build FROM viewer_send WHERE id = 1",
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
+                )
+                .unwrap();
+            assert_eq!(
+                kept,
+                (12, 12, 41, 300, Some("2026-11-27".into()), 4),
+                "case {at}: the sending stands where it was"
+            );
+            std::fs::remove_dir_all(&dir).ok();
+        }
+    }
+
     /// v151: where the carrier was left at v150 reads as "none counted" and "not held back", a deleting
     /// part way through reads again from the beginning, what is written afterwards comes back, and the
     /// holding back takes no word but yes or no.
@@ -17118,15 +17202,15 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// v153: each step execution names what its copy named — the version, the placement and the step —
+    /// v154: each step execution names what its copy named — the version, the placement and the step —
     /// and `run_def_id` goes, with its reference. A run not over, a failure nobody has seen and a run that
     /// still keeps a step are given the version of the last copy they took, and the default agent that
     /// copy was read with: the agent of the steps that chose none of their own and fell back to no role's.
     /// A run that is over and keeps no step is given neither. The copies stay.
     #[test]
-    fn each_run_points_at_the_version_its_last_copy_was_taken_from_at_v153() {
+    fn each_run_points_at_the_version_its_last_copy_was_taken_from_at_v154() {
         let dir = scratch("runs-point-at-versions");
-        let engine = store_at(&dir, 152);
+        let engine = store_at(&dir, 153);
         let at = "2026-11-27T00:00:00Z";
         engine
             .conn()
@@ -17157,9 +17241,9 @@ mod tests {
         let copies_before: i64 =
             engine.conn().query_row("SELECT COUNT(*) FROM automation_run_def", [], |r| r.get(0)).unwrap();
 
-        run(&engine, &dir, steps_through(153), &mut crate::progress::ignore).unwrap();
+        run(&engine, &dir, steps_through(154), &mut crate::progress::ignore).unwrap();
 
-        assert_eq!(engine.format_version().unwrap(), 153);
+        assert_eq!(engine.format_version().unwrap(), 154);
         let columns = |table: &str| -> Vec<String> {
             let conn = engine.conn();
             let mut stmt = conn.prepare("SELECT name FROM pragma_table_info(?1)").unwrap();

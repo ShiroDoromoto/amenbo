@@ -2644,7 +2644,7 @@ fn switches(moves: &[AutomationRunStep]) -> Vec<(i64, Option<i64>, Option<i64>)>
     found
 }
 
-/// A saved version by its number, and a step a build before v153 copied from a draft as that.
+/// A saved version by its number, and a step a build before v154 copied from a draft as that.
 fn version_label(version: Option<i64>) -> String {
     match version {
         Some(n) => format!("version {n}"),

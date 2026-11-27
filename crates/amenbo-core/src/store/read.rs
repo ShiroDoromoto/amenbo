@@ -1037,7 +1037,7 @@ impl Store {
         self.reachable(&format!("automation run #{run_id}"), |c| {
             super::owner::automation_run(c, run_id)
         })?;
-        Ok(crate::ops::automation_run::current_defs(self.engine.conn(), run_id)?)
+        crate::ops::automation_run::current_defs(self.engine.conn(), run_id)
     }
 
     /// **One run read back whole** — every round, every step execution with its values and every step
@@ -1049,7 +1049,7 @@ impl Store {
             super::owner::automation_run(c, run_id)
         })?;
         let runs = self.engine.run_logs().map(|place| place.runs.as_path());
-        Ok(crate::run_log::detail(self.engine.conn(), runs, run_id)?)
+        crate::run_log::detail(self.engine.conn(), runs, run_id)
     }
 
     /// **What one of a step's declared outputs carries**, by its id — `None` where the step declares

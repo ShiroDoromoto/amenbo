@@ -1222,7 +1222,7 @@ mod tests {
              VALUES ('automation_run', ?1, 'url', 'https://example.com/issue', 'human', 'a0', ?2, ?2)",
             rusqlite::params![run, at],
         );
-        // A copy of a step a build before v153 took, which a project still carries until it is let go.
+        // A copy of a step a build before v154 took, which a project still carries until it is let go.
         put(
             "INSERT INTO automation_run_def \
                  (run_id, placement_id, step_id, name, prompt, automation_version, agent, model, \

@@ -132,9 +132,6 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   automation_launch_role: ["automationRuns"],
   // A run being launched, moving on or ending moves the row the "running" tab draws for it.
   automation_run: ["automationRuns"],
-  // The copies of the steps a build before v153 took for a run. Nothing writes one now, and nothing on
-  // screen reads one — a run reads the saved version it points at — so it is folded to nothing.
-  automation_run_def: [],
   // The stretch a run is spending on one task, and each step it opens. Both move what the "running"
   // tab says a run is on — which task, which step, how far in — so both fold to that tab's scope.
   automation_run_task: ["automationRuns"],

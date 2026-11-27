@@ -1662,18 +1662,18 @@ datasets! {
         // The saved version of the automation the run reads (`automation_version.version`, `AMB-D-1219`):
         // the newest saved one at launch, moved on only where the run takes up a newer one before its next
         // round. The run copies nothing of it, since a saved version is never written on. NULL on a run
-        // that had ended before runs pointed at a version (v153).
+        // that had ended before runs pointed at a version (v154).
         automation_version: col(INT_OPT),
         // Amenbo's own default agent as it stood for the run — the one setting of this machine's a step
         // falls back to, kept on the run so the version reads as it did at launch. Set again where the run
-        // takes up a newer version. NULL where none was set, and on a run that had ended before v153.
+        // takes up a newer version. NULL where none was set, and on a run that had ended before v154.
         default_agent: col(OPT),
     }
 
     // **The step as it was at launch, copied** — one row per step of the automation, written by a build
     // that copied the definition onto each run. Nothing writes one now: a run points at a saved version
     // (`automation_run.automation_version`) and reads it as it stands, a saved version never being
-    // written on (`AMB-D-1219`). The rows already here are kept until they are let go (v153 read the
+    // written on (`AMB-D-1219`). The rows already here are kept until they are let go (v154 read the
     // version and the steps of each run off them).
     //
     // The three JSON columns hold what has no columns of its own — the ways out and each one's ports,
@@ -1802,7 +1802,7 @@ datasets! {
     // the placement `placement_id`, as version `automation_version` of the automation holds it
     // (`AMB-D-1219`). Plain ids, for the reason `automation_run_def.placement_id` is: the record still
     // says what ran once the placement is taken off. A step of an earlier round may name an earlier
-    // version than the run does now. NULL only where the copy it was opened from named none (v153).
+    // version than the run does now. NULL only where the copy it was opened from named none (v154).
     //
     // `exit_id` is the way out it left by, NULL while it is running. It keys the way out as the step
     // that version holds does, and its name is read from there: the live row may since have been
@@ -2154,11 +2154,12 @@ plain_tables! {
     /// out in time is not copied out at all. `placed` is the number the server was last left standing at,
     /// `seq` the ordering it answered with, and `version` the backlog version last sent.
     ///
-    /// The last three are about **the server's leftover run rows** — `automation_run_*` keys a build
-    /// before the Worker's build 4 placed there, and nothing reads any more. `strays` is whether any are
-    /// there: `NULL` is "not read yet", `0` "none", `1` "some". It is read once per server, which is why
-    /// it lives here: pointing the store at a server it has not sent to throws this row away, and the
-    /// next server is read anew.
+    /// The last three are about **the server's leftover automation rows** — `automation_launch*` and
+    /// `automation_run*` keys an older build placed there, and nothing reads any more. `strays` is whether
+    /// any are there: `NULL` is "not read yet", `0` "none", `1` "some". It is read once per server, which
+    /// is why it lives here: pointing the store at a server it has not sent to throws this row away, and
+    /// the next server is read anew. v153 sent every device back to "not read yet" once, when
+    /// `automation_launch*` joined the keys looked for.
     /// `strays_read_to` is the `seq` a reading that stopped part way got to, in decimal (`NULL` is "from
     /// the beginning"), and `strays_gone_at` is the moment the last of those rows was deleted from the server
     /// (`NULL` is "not yet"), so deleting a few a day can go on across days and stop once it is done.

@@ -740,8 +740,8 @@ fn new_stretch(
 ///   step of a round is handed what the round before produced. A file handed on loses the file too, as
 ///   it hangs off the step that made it and goes with it. The run log holds the round it came from, and
 ///   the file's bytes.
-/// - **The blobs** of the files that go are left to the store's sweep ([`crate::store::Store::gc_blobs`]):
-///   reclaiming them belongs after the commit, and nothing here outlives it.
+/// - **The blobs** of the files that go are reclaimed once the commit succeeds, those no other attachment
+///   points at ([`WriteTx::let_blobs_go`]).
 fn let_go_of_a_round(tx: &WriteTx<'_>, run_id: i64, before: &AutomationRunTask, now: Timestamp) -> Result<()> {
     let Some(place) = tx.run_logs() else { return Ok(()) };
     let conn = tx.conn();
@@ -762,7 +762,8 @@ fn let_go_of_a_round(tx: &WriteTx<'_>, run_id: i64, before: &AutomationRunTask, 
 }
 
 /// **Let the step executions `going` go from the store** — their values, the files attached to them and
-/// the executions themselves. A value handed on from one of them to a step that stays keeps its value
+/// the executions themselves. The blobs of those files are reclaimed after the commit
+/// ([`WriteTx::let_blobs_go`]). A value handed on from one of them to a step that stays keeps its value
 /// and loses where it came from; a file handed on loses the file too, as it hangs off the step that made
 /// it. What [`let_go_of_a_round`] and the let-go of a finished run's rounds
 /// (`ops::automation`'s `let_rounds_of_a_finished_run_go`) share.
@@ -786,7 +787,7 @@ pub(crate) fn let_steps_go(tx: &WriteTx<'_>, going: &[i64], now: Timestamp) -> R
         crate::ops::emit_update(tx, record::automation_run_value(&value), record::automation_run_value(&cut))?;
     }
     for step in going {
-        crate::ops::sweep_polymorphic(tx, AttachmentTarget::AutomationRunStep, *step)?;
+        tx.let_blobs_go(crate::ops::sweep_polymorphic(tx, AttachmentTarget::AutomationRunStep, *step)?);
         tx.delete_record("automation_run_step", *step)?;
     }
     Ok(())
@@ -1515,6 +1516,9 @@ mod tests {
                 ActorKind::Ai,
             )
             .expect("a file on the first round");
+            let blob = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+            crate::ops::attachment::add_blob(tx, AttachmentTarget::AutomationRunStep, b1.id, blob, "notes.txt", None, 1, ActorKind::Ai)
+                .expect("a blob on the first round");
             let round_1 = read::automation_run_task_last(tx.conn(), run.id).expect("read").expect("round 1");
             let now = Timestamp::now();
             let pass = crate::model::AutomationRunPass {
@@ -1549,10 +1553,12 @@ mod tests {
             };
             emit_create(tx, record::automation_run_value(&from_before)).expect("handed across rounds");
 
+            assert!(tx.take_blobs_let_go().is_empty(), "no round has gone yet");
             let (a3, b3) = a_round(tx, &p, &run);
             written(tx);
 
             assert_eq!(steps_left(tx, &run), vec![a2.id, b2.id, a3.id, b3.id]);
+            assert_eq!(tx.take_blobs_let_go(), vec![blob.to_string()], "its blob is reclaimed once this commits");
             assert!(read::automation_run_values_of(tx.conn(), a1.id).expect("values").is_empty());
             assert!(read::automation_run_values_of(tx.conn(), b1.id).expect("values").is_empty());
             assert!(read::attachments_for_target(tx.conn(), AttachmentTarget::AutomationRunStep, b1.id)

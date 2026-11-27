@@ -5339,7 +5339,7 @@ pub struct AutomationRunCardDto {
     pub(crate) stopped_reason: Option<&'static str>,
     /// **The saved version of the automation the run points at** (`AMB-D-1219`) — what it goes on
     /// from, and what it last moved to at its entry (`AMB-D-1015`). Absent on a run that points at
-    /// none — one that had ended before runs pointed at a version (v153) — and on a run whose seat has
+    /// none — one that had ended before runs pointed at a version (v154) — and on a run whose seat has
     /// no entry on that version.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]

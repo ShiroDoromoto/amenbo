@@ -13,8 +13,9 @@
 //!
 //! **What is placed is what the store holds, one record per row, sealed.** The Worker runs somewhere the
 //! reader merely rents, so it is handed ciphertext and an ordering and nothing that says what any of it
-//! means ([`super::sealing`]). An automation run's working rows are the exception: the phone shows none
-//! of them, so they are not placed at all ([`WITHHELD_FROM_THE_VIEWER`]).
+//! means ([`super::sealing`]). An automation's working rows — its launches and its runs — are the
+//! exception: the phone shows none of them, so they are not placed at all
+//! ([`WITHHELD_FROM_THE_VIEWER`]).
 //!
 //! **A server set up before that may still hold them**, and nothing on it reads them any more. Whether it
 //! does is read once per server, a few pages a turn, and kept on this device ([`look_for_strays`]). Where
@@ -65,15 +66,17 @@ pub const RECORDS_PER_WRITE: usize = 500;
 /// The tables the Viewer is never sent, on top of what [`crate::export::WITHHELD_ON_THE_WAY_OUT`] keeps on
 /// this machine for every road out.
 ///
-/// **They are an automation run's working rows**: the run, the copy of its definition, the tasks it
-/// carried, its passes, its steps and the values they handed on. The phone shows none of them, and they
-/// are written on every step of every run — sent, they are what fills the feed this carrier reads and the
-/// server it writes to. They stay on the export's road, which is why this is a list of its own rather than
-/// more lines on that one.
+/// **They are an automation's working rows**: a launch and the headcount it holds for each role, and a
+/// run — the run, the copy of its definition, the tasks it carried, its passes, its steps and the values
+/// they handed on. The phone shows none of them, and they are written on every launch and every step of
+/// every run — sent, they are what fills the feed this carrier reads and the server it writes to. They
+/// stay on the export's road, which is why this is a list of its own rather than more lines on that one.
 ///
 /// Both halves of a turn answer to it — the feed's stretch and the whole picture — and so does what was
 /// queued before it was drawn ([`super::carried::drop_withheld`]).
 pub(super) const WITHHELD_FROM_THE_VIEWER: &[&str] = &[
+    "automation_launch",
+    "automation_launch_role",
     "automation_run",
     "automation_run_def",
     "automation_run_pass",
@@ -91,14 +94,14 @@ fn carried_to_the_viewer(dataset: &str) -> bool {
 /// that is where the ids in it go next: a page that was drained can always be read back in one ask.
 const CHANGES_PER_READ: i64 = crate::sync_snapshot::RECORDS_PER_READ as i64;
 
-/// How many pages of the server's keys one turn reads while it looks for a run's leftover rows, or while
-/// it deletes them. A page is at most the Worker's `PER_KEY_PAGE` keys, so a turn reads at most twenty
-/// thousand, and a server holding more is read on from where the last turn stopped.
+/// How many pages of the server's keys one turn reads while it looks for an automation's leftover rows, or
+/// while it deletes them. A page is at most the Worker's `PER_KEY_PAGE` keys, so a turn reads at most
+/// twenty thousand, and a server holding more is read on from where the last turn stopped.
 const STRAY_PAGES_PER_TURN: usize = 10;
 
 /// The first build of the Worker that deletes the keys it is handed (`DELETE /records`). A server
-/// answering as an older one has no such door, so a run's leftover rows on it are left alone until it is
-/// set up again — which is what [`super::asks_for_setup_again`] says out loud.
+/// answering as an older one has no such door, so an automation's leftover rows on it are left alone until
+/// it is set up again — which is what [`super::asks_for_setup_again`] says out loud.
 pub(super) const BUILD_THAT_TAKES_KEYS_OUT: i64 = 4;
 
 /// The first build of the Worker whose `reread` costs next to nothing: it moves where its holdings begin
@@ -437,8 +440,8 @@ pub fn carry_at(store: &Store, now: DateTime<Utc>) -> Result<Sent> {
     // A queue filled before a key's older version was taken off as the newer was queued still holds
     // them, and each would cost the day's rows (`AMB-T-5812`).
     store.fold_viewer()?;
-    // A queue filled before the run's working rows were withheld from the Viewer still holds them. Once
-    // they are gone nothing puts them back, so every later turn finds nothing to take.
+    // A queue filled before an automation's working rows were withheld from the Viewer still holds
+    // them. Once they are gone nothing puts them back, so every later turn finds nothing to take.
     store.drop_viewer_withheld()?;
 
     // **Once per server, and never in the way of the sending.** A server that cannot be read this turn is
@@ -447,8 +450,8 @@ pub fn carry_at(store: &Store, now: DateTime<Utc>) -> Result<Sent> {
         if let Err(rebuffed) = look_for_strays(&server, &mut left) {
             tracing::info!(
                 error = %rebuffed.in_words(now),
-                "could not finish reading whether the Viewer's server holds a run's leftover rows — \
-                 the next turn reads on"
+                "could not finish reading whether the Viewer's server holds an automation's leftover \
+                 rows — the next turn reads on"
             );
         }
         store.set_viewer_carried(&left)?;
@@ -466,9 +469,9 @@ pub fn carry_at(store: &Store, now: DateTime<Utc>) -> Result<Sent> {
         store.set_viewer_carried(&left)?;
     }
 
-    // **Only once the ordinary sending has nothing left.** Deleting a run's leftover rows spends the same
-    // day's rows the sending does, so it takes what the sending did not need and never the other way
-    // round: a day that runs out on it leaves the next change to go after midnight UTC.
+    // **Only once the ordinary sending has nothing left.** Deleting an automation's leftover rows spends
+    // the same day's rows the sending does, so it takes what the sending did not need and never the other
+    // way round: a day that runs out on it leaves the next change to go after midnight UTC.
     let waiting = store.viewer_waiting()?;
     if waiting == 0
         && strays_to_clear(&left)
@@ -481,13 +484,13 @@ pub fn carry_at(store: &Store, now: DateTime<Utc>) -> Result<Sent> {
             Ok(taken) if taken > 0 || left.strays_gone_at.is_some() => tracing::info!(
                 taken,
                 done = left.strays_gone_at.is_some(),
-                "deleted a run's leftover rows from the Viewer's server"
+                "deleted an automation's leftover rows from the Viewer's server"
             ),
             Ok(_) => {}
             Err(rebuffed) => tracing::info!(
                 error = %rebuffed.in_words(now),
-                "could not finish deleting a run's leftover rows from the Viewer's server — the next \
-                 turn goes on"
+                "could not finish deleting an automation's leftover rows from the Viewer's server — the \
+                 next turn goes on"
             ),
         }
     }
@@ -524,8 +527,8 @@ fn the_number_to_send(version: i64, left: &Carried) -> i64 {
     }
 }
 
-/// Read the server's keys for a run's working rows a build before the Worker's build 4 placed there, and
-/// write down in `left` whether any are there.
+/// Read the server's keys for an automation's working rows an older build placed there, and write down in
+/// `left` whether any are there.
 ///
 /// **One is enough.** The reading stops at the first key whose dataset is in [`WITHHELD_FROM_THE_VIEWER`],
 /// whether what the server last heard of it was a write or a delete: either is a row that is still there.
@@ -553,8 +556,8 @@ fn look_for_strays(server: &Server, left: &mut Carried) -> std::result::Result<(
     Ok(())
 }
 
-/// Whether this device has a run's leftover rows to delete from its server: it found some, has not
-/// finished deleting them, and the server answers as a build that can.
+/// Whether this device has an automation's leftover rows to delete from its server: it found some, has
+/// not finished deleting them, and the server answers as a build that can.
 ///
 /// **Zero is "not known"**, as everywhere [`Carried::build`] is read, and is not taken as new enough.
 fn strays_to_clear(left: &Carried) -> bool {
@@ -563,8 +566,8 @@ fn strays_to_clear(left: &Carried) -> bool {
         && left.build >= BUILD_THAT_TAKES_KEYS_OUT
 }
 
-/// Delete from the server the run's working rows a build before the Worker's build 4 placed there, and
-/// answer how many keys went.
+/// Delete from the server the automation's working rows an older build placed there, and answer how many
+/// keys went.
 ///
 /// **The keys are chosen here, and the Worker deletes what it is handed.** The server is read from the
 /// beginning of its ordering, page by page as [`look_for_strays`] reads it, and every key whose dataset is
@@ -577,7 +580,7 @@ fn strays_to_clear(left: &Carried) -> bool {
 ///
 /// **Once the last page is behind it, every phone is asked to read again** (`reread`). The Worker moves
 /// where its holdings begin up to where they stand, so a phone reading on from before that is answered
-/// `409`, throws its copy away — the run's rows with it — and reads the store again. Only then is
+/// `409`, throws its copy away — the automation rows with it — and reads the store again. Only then is
 /// `strays_gone_at` written, which is what says this is done.
 ///
 /// **That one request is not bounded by asking between requests.** A build 5 Worker moves its holdings
@@ -644,7 +647,7 @@ fn clear_strays(
     Ok(taken)
 }
 
-/// How many keys on a page stay on the server once its run rows are deleted.
+/// How many keys on a page stay on the server once its automation rows are deleted.
 fn kept_on(page: &KeysHeld) -> i64 {
     page.records.iter().filter(|record| !is_a_stray(&record.key)).count() as i64
 }
@@ -662,7 +665,7 @@ fn where_the_strays_were_read_to(left: &Carried) -> i64 {
     left.strays_read_to.as_deref().and_then(|at| at.parse::<i64>().ok()).unwrap_or(0)
 }
 
-/// Whether a key on the server is one of a run's working rows.
+/// Whether a key on the server is one of an automation's working rows.
 fn is_a_stray(key: &str) -> bool {
     key.split_once('/').is_some_and(|(dataset, _)| !carried_to_the_viewer(dataset))
 }
@@ -1415,15 +1418,19 @@ mod tests {
         assert!(carried_out_of(unpositioned.as_bytes()).is_err());
     }
 
-    /// **An automation run's working rows are not sent to the Viewer**, and the list that says so is the
-    /// registry's own `automation_run*` tables, no more and no fewer — a table added beside them is one
-    /// this list has to be told about.
+    /// **An automation's working rows are not sent to the Viewer**, and the list that says so is the
+    /// registry's own `automation_launch*` and `automation_run*` tables, no more and no fewer — a table
+    /// added beside them is one this list has to be told about.
     #[test]
-    fn the_viewer_is_sent_none_of_a_runs_working_rows() {
+    fn the_viewer_is_sent_none_of_an_automations_working_rows() {
         let in_the_schema: Vec<&str> = crate::store_engine::schema::DATASETS
             .iter()
             .map(|d| d.name)
-            .filter(|name| *name == "automation_run" || name.starts_with("automation_run_"))
+            .filter(|name| {
+                ["automation_launch", "automation_run"]
+                    .iter()
+                    .any(|family| *name == *family || name.starts_with(&format!("{family}_")))
+            })
             .collect();
         let mut withheld = WITHHELD_FROM_THE_VIEWER.to_vec();
         withheld.sort_unstable();
@@ -2154,6 +2161,76 @@ mod tests {
         carry_at(&store, at("2026-11-16T01:00:00Z")).unwrap();
         assert_eq!(key_reads(&host), 1);
         assert_eq!(removals(&host).len(), 2);
+    }
+
+    /// **A device that finished deleting a run's rows deletes an automation's launch rows once v153 sends
+    /// it back to "not read yet"**, and does not send them again. Before that the server is never read
+    /// again, so the launch rows an older build placed would stay there.
+    #[test]
+    fn a_server_cleared_of_run_rows_is_read_again_for_launch_rows() {
+        let mut store = store_at("strays-launch");
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        set_up(&mut store, &host);
+        holding_strays(
+            &store,
+            Carried { strays_gone_at: Some("2026-11-01T00:00:00Z".into()), ..Carried::default() },
+        );
+        host.set_reply(
+            "/records?since=0&keys=1",
+            keys_page(
+                &[
+                    ("task/1", "put"),
+                    ("automation_launch/2", "put"),
+                    ("automation_launch_role/3", "put"),
+                    ("automation_launch/4", "del"),
+                ],
+                12,
+                false,
+            ),
+        );
+        host.set_replies("/records", [removed(10, 3), removed(20, 1)]);
+
+        carry_at(&store, at("2026-11-16T00:00:00Z")).unwrap();
+        assert_eq!(key_reads(&host), 0, "a server already cleared is not read again on its own");
+
+        // What v153 writes: the reading and the deleting both go back to "not yet".
+        store
+            .set_viewer_carried(&Carried {
+                strays: None,
+                strays_read_to: None,
+                strays_gone_at: None,
+                keys_kept: 0,
+                reread_waits: false,
+                ..store.viewer_carried().unwrap()
+            })
+            .unwrap();
+        // A queue filled before the launch rows were withheld still holds one.
+        store.enqueue_viewer(&[waiting("automation_launch/5")]).unwrap();
+
+        let sent = carry_at(&store, at("2026-11-16T01:00:00Z")).unwrap();
+
+        assert_eq!(sent.placed, 0, "the launch row in the queue is not sent");
+        assert_eq!(store.viewer_waiting().unwrap(), 0);
+        let sent = removals(&host);
+        assert_eq!(sent.len(), 2);
+        assert_eq!(
+            sent[0]["keys"],
+            serde_json::json!(["automation_launch/2", "automation_launch_role/3", "automation_launch/4"])
+        );
+        assert_eq!(sent[0]["reread"], false);
+        assert_eq!(sent[1]["reread"], true);
+        let left = store.viewer_carried().unwrap();
+        assert_eq!(left.strays, Some(true));
+        assert_eq!(left.strays_gone_at.as_deref(), Some("2026-11-16T01:00:00Z"));
+        // Looking for the leftovers and deleting them each read the page once.
+        let reads = key_reads(&host);
+        assert_eq!(reads, 2);
+
+        // Done is done: the next turn reads no page, deletes nothing, and places nothing.
+        carry_at(&store, at("2026-11-16T02:00:00Z")).unwrap();
+        assert_eq!(key_reads(&host), reads);
+        assert_eq!(removals(&host).len(), 2);
+        assert!(placements(&host).is_empty(), "no launch row was placed on the server");
     }
 
     /// More run rows on a page than one request carries go in parts of [`RECORDS_PER_WRITE`].

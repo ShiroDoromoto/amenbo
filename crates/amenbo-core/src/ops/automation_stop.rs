@@ -1229,7 +1229,7 @@ pub fn sweep(tx: &WriteTx<'_>) -> Result<Vec<AutomationRun>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Automation, AutomationPortKind, ERROR_EXIT};
+    use crate::model::{AttachmentTarget, Automation, AutomationPortKind, ERROR_EXIT};
     use crate::ops::automation::{self, EdgeTarget, NewAutomation};
     use crate::ops::automation_report::{done, Next};
     use crate::ops::automation_run::{launch_past_the_task_checks as launch, Launcher};
@@ -1511,6 +1511,17 @@ mod tests {
             let runs: Vec<AutomationRun> = (0..4).map(|_| over(tx, &p, Ending::Canceled)).collect();
             assert!(runs.iter().all(|r| !read::automation_run_task_ids(tx.conn(), r.id).expect("rounds").is_empty()));
             assert!(tx.forgotten_runs().is_empty(), "a role well within what it keeps lets nothing go");
+            let on_step = "1111111111111111111111111111111111111111111111111111111111111111";
+            let on_run = "2222222222222222222222222222222222222222222222222222222222222222";
+            let on_kept = "3333333333333333333333333333333333333333333333333333333333333333";
+            let file = |target, id, hash| {
+                crate::ops::attachment::add_blob(tx, target, id, hash, "notes.txt", None, 1, ActorKind::Ai).expect("a file");
+            };
+            let step_of = |run: &AutomationRun| read::automation_run_step_ids(tx.conn(), run.id).expect("steps")[0];
+            file(AttachmentTarget::AutomationRunStep, step_of(&runs[0]), on_step);
+            file(AttachmentTarget::AutomationRun, runs[0].id, on_run);
+            file(AttachmentTarget::AutomationRunStep, step_of(&runs[2]), on_kept);
+            assert!(tx.take_blobs_let_go().is_empty());
 
             let went = automation::let_old_runs_go_past(tx, &runs[3], 2, ROOM).expect("let go");
 
@@ -1518,6 +1529,11 @@ mod tests {
             assert!(gone(tx, runs[0].id) && gone(tx, runs[1].id));
             assert!(!gone(tx, runs[2].id) && !gone(tx, runs[3].id));
             assert_eq!(forgotten(tx), vec![runs[0].id, runs[1].id], "their folders go once it commits");
+            assert_eq!(
+                tx.take_blobs_let_go(),
+                vec![on_step.to_string(), on_run.to_string()],
+                "the blobs of their files are reclaimed once it commits, and the kept run's are not",
+            );
         });
     }
 
@@ -1582,6 +1598,92 @@ mod tests {
             assert_eq!(automation::let_old_runs_go_past(tx, &going, 0, ROOM).expect("let go"), 2);
             assert!(gone(tx, filed_on_run.id) && gone(tx, filed_on_round.id));
             assert!(!gone(tx, going.id), "a run still going never goes");
+        });
+    }
+
+    /// Whether the launch and how many were in each role for it have gone from the store.
+    fn launch_gone(tx: &WriteTx<'_>, launch_id: i64) -> bool {
+        let launch = read::automation_launch(tx.conn(), launch_id).expect("read");
+        if launch.is_none() {
+            assert!(
+                read::automation_launch_roles(tx.conn(), launch_id).expect("roles").is_empty(),
+                "a launch's roles go with it"
+            );
+        }
+        launch.is_none()
+    }
+
+    /// **An ended launch goes with its last run**, its roles with it — and stays while a run of it is left.
+    #[test]
+    fn an_ended_launch_goes_with_its_last_run() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let runs: Vec<AutomationRun> = (0..2).map(|_| over(tx, &p, Ending::Canceled)).collect();
+            let ended_one = runs[0].launch_id.expect("launched");
+            assert_eq!(runs[1].launch_id, Some(ended_one), "both in one launch");
+            assert!(!read::automation_launch_roles(tx.conn(), ended_one).expect("roles").is_empty());
+            stop_launch(tx, ended_one).expect("stop the launch");
+            let going = a_run(tx, &p.automation);
+            assert_ne!(going.launch_id, Some(ended_one), "a fresh launch");
+
+            assert_eq!(automation::let_old_runs_go_past(tx, &going, 2, ROOM).expect("let go"), 1);
+            assert!(gone(tx, runs[0].id) && !gone(tx, runs[1].id));
+            assert!(!launch_gone(tx, ended_one), "a run of it is left");
+
+            assert_eq!(automation::let_old_runs_go_past(tx, &going, 1, ROOM).expect("let go"), 1);
+            assert!(gone(tx, runs[1].id));
+            assert!(launch_gone(tx, ended_one), "its last run went, and it with it");
+            assert!(!launch_gone(tx, going.launch_id.expect("launched")), "the launch still going stays");
+        });
+    }
+
+    /// **A launch running or paused stays with no run left**, and goes once a person has ended it — the
+    /// let-go after the next run ends picks it up.
+    #[test]
+    fn a_launch_with_no_run_left_goes_only_once_it_has_ended() {
+        with_tx(|tx| {
+            let p = picture(tx, false);
+            let old = over(tx, &p, Ending::Canceled);
+            let launch = old.launch_id.expect("launched");
+            // The run that asks stays whatever happens, so it is put outside the launch.
+            let asking = over(tx, &p, Ending::Canceled);
+            let asking = rewrite(tx, asking.id, |r| r.launch_id = None);
+
+            assert_eq!(automation::let_old_runs_go_past(tx, &asking, 0, ROOM).expect("let go"), 1);
+            assert!(gone(tx, old.id));
+            assert!(!launch_gone(tx, launch), "running, it stays");
+
+            pause_launch(tx, launch).expect("pause");
+            assert_eq!(automation::let_old_runs_go_past(tx, &asking, 0, ROOM).expect("let go"), 0);
+            assert!(!launch_gone(tx, launch), "paused, it stays");
+
+            stop_launch(tx, launch).expect("stop");
+            assert_eq!(automation::let_old_runs_go_past(tx, &asking, 0, ROOM).expect("let go"), 0);
+            assert!(launch_gone(tx, launch), "ended with no run, it goes");
+        });
+    }
+
+    /// **The launch waits for room in the feed, as the runs do** — one whose last run took the room goes
+    /// the next time.
+    #[test]
+    fn letting_a_launch_go_stops_before_the_feed_outruns_a_reader_it_waits_for() {
+        with_tx_on_a_store_of(12_000, |tx| {
+            let p = picture(tx, false);
+            let old = over(tx, &p, Ending::Canceled);
+            let ended_one = old.launch_id.expect("launched");
+            stop_launch(tx, ended_one).expect("stop the launch");
+            let going = a_run(tx, &p.automation);
+            let head = feed_on(tx, 9_000);
+            let edge = edge(tx, head);
+
+            reader_at(tx, "viewer", head + tx.feed_rows_pending() + 1 - edge, true);
+            assert_eq!(automation::let_old_runs_go_past(tx, &going, 0, ROOM).expect("let go"), 1);
+            assert!(gone(tx, old.id));
+            assert!(!launch_gone(tx, ended_one), "the run took the room");
+
+            reader_at(tx, "viewer", head, true);
+            assert_eq!(automation::let_old_runs_go_past(tx, &going, 0, ROOM).expect("let go"), 0);
+            assert!(launch_gone(tx, ended_one), "it went the next time");
         });
     }
 
@@ -1821,10 +1923,14 @@ mod tests {
             };
 
             let tx = engine.write().expect("write");
+            let blob = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+            crate::ops::attachment::add_blob(&tx, AttachmentTarget::AutomationRunStep, step, blob, "notes.txt", None, 1, ActorKind::Ai)
+                .expect("a file on its last round");
             let used = read::automation_run_step(tx.conn(), step).expect("read").expect("the step").def_key();
             let second = over(&tx, &p, Ending::Completed);
 
             assert!(steps_left(&tx, first.id).is_empty(), "the round the run log holds lets its detail go");
+            assert_eq!(tx.take_blobs_let_go(), vec![blob.to_string()], "its blob is reclaimed once this commits");
             assert!(read::automation_run_values_of(tx.conn(), step).expect("values").is_empty());
             assert!(read::automation_run(tx.conn(), first.id).expect("read").is_some(), "the run row stays");
             assert_eq!(read::automation_run_task_ids(tx.conn(), first.id).expect("rounds").len(), 1, "its round row stays");

@@ -2439,7 +2439,7 @@ pub(crate) fn launch_delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 
 /// Delete one run and everything filed under it — the values each step execution carried, the
 /// executions themselves with whatever was attached to them, the tasks the run worked on, and the copies
-/// of the steps a build before v153 took for it. Returns the blob hashes
+/// of the steps a build before v154 took for it. Returns the blob hashes
 /// those attachments pointed at, for the caller to reclaim once the transaction commits. **Its folder in
 /// the run log goes too**, once the transaction commits ([`WriteTx::forget_run`]).
 ///
@@ -2486,7 +2486,8 @@ pub(crate) fn run_delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
 }
 
 /// **How many runs one role keeps** — the newest of them. A run bound to no role, its role deleted since,
-/// is kept in a group of its own per automation, which keeps as many.
+/// is kept in a group of its own per automation, which keeps as many. A launch has no cap of its own: an
+/// ended one goes once its last run has ([`let_old_runs_go`]).
 pub const RUNS_KEPT_PER_ROLE: usize = 1_000;
 
 /// **Let the old runs of one role go** — those of `run`'s role past the newest [`RUNS_KEPT_PER_ROLE`],
@@ -2509,8 +2510,12 @@ pub const RUNS_KEPT_PER_ROLE: usize = 1_000;
 ///   switched off, one that has read nothing yet, one with no server, or one so far behind that re-reading
 ///   the whole store is the cheaper road — reads the whole store again anyway, and with none waited for it
 ///   is this operation's own rows that are held to half the window.
-/// - **The blobs** of the files that go are left to the store's sweep ([`crate::store::Store::gc_blobs`]),
-///   as a round's are: reclaiming them belongs after the commit.
+/// - **An ended launch goes once no run is left in it** ([`launch_delete`]), after the runs — of every
+///   automation, not only `run`'s, so a launch a person stopped after its last run had gone goes too. A
+///   launch still running or paused stays, however few runs it has: a person ends it
+///   (`ops::automation_stop`'s `stop_launch`, `cancel_launch`). Not counted in the answer.
+/// - **The blobs** of the files that go are reclaimed once the commit succeeds, those no other attachment
+///   points at ([`WriteTx::let_blobs_go`]), as a round's are.
 pub(crate) fn let_old_runs_go(tx: &WriteTx<'_>, run: &crate::model::AutomationRun) -> Result<usize> {
     let_old_runs_go_past(tx, run, RUNS_KEPT_PER_ROLE, crate::store_engine::CHANGE_FEED_RETAIN / 2)
 }
@@ -2529,8 +2534,16 @@ pub(crate) fn let_old_runs_go_past(tx: &WriteTx<'_>, run: &crate::model::Automat
         if feed.is_full(tx) {
             break;
         }
-        run_delete(tx, old.id)?;
+        tx.let_blobs_go(run_delete(tx, old.id)?);
         gone += 1;
+    }
+    // A launch whose last run has just gone, and one that ended with no run left in it before, goes
+    // after its runs, within the same room: what is left goes the next time.
+    for launch in read::automation_launch_ids_ended_without_runs(conn)? {
+        if feed.is_full(tx) {
+            break;
+        }
+        launch_delete(tx, launch)?;
     }
     Ok(gone)
 }
@@ -2616,7 +2629,7 @@ pub(crate) fn let_finished_rounds_go_past(tx: &WriteTx<'_>, run: &crate::model::
 ///   seen it** (`AMB-D-989`): until then its last step's screen is what the person looks at. Any other
 ///   run lets nothing go, and so does an engine with no run log or a run with no folder in it.
 /// - **The order** is a round's let-go's ([`super::automation_step::let_steps_go`]).
-/// - **The blobs** of the files that go are left to the store's sweep ([`crate::store::Store::gc_blobs`]).
+/// - **The blobs** of the files that go are reclaimed once the commit succeeds ([`WriteTx::let_blobs_go`]).
 pub(crate) fn let_rounds_of_a_finished_run_go(tx: &WriteTx<'_>, run: &crate::model::AutomationRun, feed: &FeedRoom) -> Result<usize> {
     use crate::model::AutomationRunStatus as S;
     let Some(place) = tx.run_logs() else { return Ok(0) };

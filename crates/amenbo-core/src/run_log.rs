@@ -16,7 +16,7 @@
 //!   each step a round ran, as the run read it off the saved version it ran on (`AMB-D-1219`), written
 //!   the first time a round uses it. A run picked up on a newer version (`AMB-D-1015`) writes that
 //!   version's steps beside the older ones. Writing them into every round would repeat the same text
-//!   round after round. A build before v153 wrote the run's copies of the steps here instead, under
+//!   round after round. A build before v154 wrote the run's copies of the steps here instead, under
 //!   their row ids (`defs/<id>.json`), and its round files name a step's copy by that id
 //!   (`run_def_id`); both are still read ([`detail`]).
 //! - **The files handed between steps**, `files/<attachment id>`: the bytes of each blob attachment,
@@ -225,7 +225,7 @@ pub struct StepDetail {
 ///
 /// **The steps the executions ran** are read from the run's folder where it holds them, and off the saved
 /// versions they name otherwise ([`crate::ops::automation_run::defs_named`]). A round file a build before
-/// v153 wrote names the run's copy of a step by its row id, and that copy is in the folder under the same
+/// v154 wrote names the run's copy of a step by its row id, and that copy is in the folder under the same
 /// id: the execution is given the version, the placement and the step the copy names.
 ///
 /// `runs` is `<base>/runs`, or `None` for a store that keeps no run log, which reads the store alone.
@@ -269,7 +269,7 @@ pub fn detail(conn: &rusqlite::Connection, runs: Option<&Path>, run_id: i64) -> 
 /// The step executions of one round, read from its file in the run's folder `dir`. `None` where there
 /// is no file, or it cannot be read whole — a `warn`, and the caller reads the store instead.
 ///
-/// An execution a build before v153 wrote names the copy of its step by row id (`run_def_id`) rather
+/// An execution a build before v154 wrote names the copy of its step by row id (`run_def_id`) rather
 /// than by version and step: it is given the key `copies` holds for that id ([`RunDefKey`]).
 fn read_round(dir: &Path, seq: i64, copies: &std::collections::BTreeMap<i64, RunDefKey>) -> Option<Vec<StepDetail>> {
     let path = dir.join(round_file_name(seq));
@@ -311,7 +311,7 @@ fn read_round(dir: &Path, seq: i64, copies: &std::collections::BTreeMap<i64, Run
 }
 
 /// The steps written in the run's folder `dir` — under either name ([`def_path`], and a build before
-/// v153's `<id>.json`). One that cannot be read is a `warn` and is left out.
+/// v154's `<id>.json`). One that cannot be read is a `warn` and is left out.
 fn read_defs(dir: &Path) -> Vec<AutomationRunDef> {
     let Ok(entries) = std::fs::read_dir(dir.join("defs")) else { return Vec::new() };
     let mut defs = Vec::new();

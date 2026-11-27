@@ -505,8 +505,6 @@ CREATE TABLE IF NOT EXISTS automation_run (
     trigger_id BIGINT REFERENCES automation_trigger(id) ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     incident_task_id BIGINT REFERENCES task(id) ON DELETE SET NULL ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     start_key TEXT,
-    automation_version BIGINT,
-    default_agent TEXT,
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
 );
@@ -568,6 +566,7 @@ CREATE TABLE IF NOT EXISTS automation_run_pass (
 CREATE TABLE IF NOT EXISTS automation_run_step (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     run_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_run(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
+    run_def_id BIGINT NOT NULL DEFAULT 0 REFERENCES automation_run_def(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     run_task_id BIGINT REFERENCES automation_run_task(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,
     seq BIGINT NOT NULL DEFAULT 0,
     exit_id BIGINT,
@@ -578,9 +577,6 @@ CREATE TABLE IF NOT EXISTS automation_run_step (
     started_at TEXT CHECK(started_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     ended_at TEXT CHECK(ended_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     exit_code BIGINT,
-    automation_version BIGINT,
-    placement_id BIGINT,
-    step_id BIGINT,
     created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),
     updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')
 );
